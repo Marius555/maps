@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-08T10:00:00.000Z",
+  "mapId": "dev-fixture",
+  "name": "Dev fixture",
+  "slug": "dev-fixture",
+  "styleUrl": "https://tiles.openfreemap.org/styles/liberty",
+  "attribution": "© <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noreferrer\">OpenStreetMap</a> contributors · tiles by <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noreferrer\">OpenFreeMap</a>",
+  "center": { "lat": 54.687, "lng": 25.28, "zoom": 11 },
+  "bounds": { "west": 25.24, "south": 54.66, "east": 25.32, "north": 54.71 },
+  "categories": [
+    { "id": "shops", "label": "Shops", "color": "#e8590c" },
+    { "id": "depots", "label": "Depots", "color": "#1c7ed6" }
+  ],
+  "places": [
+    {
+      "id": "p1",
+      "name": "Gedimino flagship",
+      "lat": 54.6872,
+      "lng": 25.2797,
+      "address": "Gedimino pr. 9, Vilnius",
+      "category": "shops",
+      "description": "Open late on Thursdays.",
+      "phone": "+370 600 00001",
+      "url": "https://example.com/gedimino"
+    },
+    {
+      "id": "p2",
+      "name": "Old town corner",
+      "lat": 54.6795,
+      "lng": 25.2891,
+      "address": "Pilies g. 22, Vilnius",
+      "category": "shops",
+      "email": "oldtown@example.com"
+    },
+    {
+      "id": "p3",
+      "name": "Užupis kiosk",
+      "lat": 54.6809,
+      "lng": 25.2963,
+      "address": "Užupio g. 3, Vilnius",
+      "category": "shops"
+    },
+    {
+      "id": "p4",
+      "name": "Naujamiestis depot",
+      "lat": 54.6701,
+      "lng": 25.2545,
+      "address": "Savanorių pr. 1, Vilnius",
+      "category": "depots",
+      "description": "Trade counter only."
+    },
+    {
+      "id": "p5",
+      "name": "Šnipiškės depot",
+      "lat": 54.7011,
+      "lng": 25.2731,
+      "address": "Konstitucijos pr. 20, Vilnius",
+      "category": "depots"
+    },
+    {
+      "id": "p6",
+      "name": "Antakalnis pickup",
+      "lat": 54.7042,
+      "lng": 25.3129,
+      "address": "Antakalnio g. 40, Vilnius"
+    },
+    {
+      "id": "p7",
+      "name": "Cluster test A",
+      "lat": 54.6875,
+      "lng": 25.28,
+      "address": "Beside the flagship",
+      "category": "shops"
+    },
+    {
+      "id": "p8",
+      "name": "Cluster test B",
+      "lat": 54.6878,
+      "lng": 25.2804,
+      "address": "Also beside the flagship",
+      "category": "shops"
+    }
+  ],
+  "settings": { "clustering": true, "search": true, "filters": true, "nearest": true },
+  "allowedDomains": []
+}

@@ -1,26 +1,230 @@
 @import "tailwindcss";
+@import "@heroui/styles";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/*
+ * Declaring --font-sans in :root alone makes it a CSS variable but NOT a
+ * Tailwind v4 theme token — the `font-sans` utility would keep resolving to
+ * Tailwind's default stack and the font choice would look ignored. This block
+ * is what wires the two together.
+ *
+ * The variable itself is set below; app/layout.tsx loads Instrument Sans.
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-instrument-sans);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+
+/*
+ * Theme.
+ *
+ * Only the tokens we deliberately differ from are listed. Everything else —
+ * `--accent-soft`, `--surface-hover`, `--default-hover`, `--border-secondary`,
+ * `--separator-secondary`, and the three shadow tokens — is left to
+ * @heroui/styles, because its defaults are already neutral and several are
+ * derived (`--accent-soft` is `color-mix(accent 15%)`, so it tracks the accent
+ * for free). Overriding them by hand would be one more thing to keep in sync.
+ *
+ * Two rules govern the palette:
+ *
+ * 1. The accent is the interface's only chromatic voice. Every neutral is a true
+ *    grey at zero chroma. The previous palette tinted every neutral at the
+ *    accent's own hue, which made every page read pinkish and muddy.
+ * 2. `--radius` is a multiplier, not a value. @heroui/styles derives the whole
+ *    Tailwind radius scale from it (`--radius-xl` is `calc(var(--radius) * 1.5)`
+ *    and so on), so `rounded-*` utilities and HeroUI components share one
+ *    source. At 0.75rem everything was 1.5x oversized and buttons rendered as
+ *    pills; 0.5rem is the scale the components were designed against.
+ *
+ * @see https://heroui.com/docs/react/getting-started/theming
+ */
+
+:root,
+.light,
+.default,
+[data-theme="light"],
+[data-theme="default"] {
+  --accent: oklch(64.37% 0.2195 36.18);
+  --accent-foreground: oklch(99.11% 0 0);
+  --focus: oklch(64.37% 0.2195 36.18);
+
+  /* Neutrals. Zero chroma throughout — see rule 1 above. */
+  --background: oklch(97.5% 0 0);
+  --foreground: oklch(21% 0 0);
+  /*
+   * 50%, not the 55% a generator suggests: `text-muted` carries most of the
+   * secondary copy in this app at text-xs, and 55% lands around 3.5:1 on the
+   * page background, under the 4.5:1 AA floor. This is ~4.6:1.
+   */
+  --muted: oklch(50% 0 0);
+  --border: oklch(92% 0 0);
+  --separator: oklch(94% 0 0);
+  --default: oklch(94% 0 0);
+  --default-foreground: oklch(21% 0 0);
+  --scrollbar: oklch(87% 0 0);
+
+  /* Elevation is a lightness step, not a border: canvas → secondary → surface. */
+  --surface: oklch(100% 0 0);
+  --surface-foreground: oklch(21% 0 0);
+  --surface-secondary: oklch(96% 0 0);
+  --surface-secondary-foreground: oklch(21% 0 0);
+  --surface-tertiary: oklch(93.5% 0 0);
+  --surface-tertiary-foreground: oklch(21% 0 0);
+
+  --overlay: oklch(100% 0 0);
+  --overlay-foreground: oklch(21% 0 0);
+  --segment: oklch(100% 0 0);
+  --segment-foreground: oklch(21% 0 0);
+
+  --field-background: oklch(100% 0 0);
+  --field-foreground: oklch(21% 0 0);
+  --field-placeholder: oklch(56% 0 0);
+  --field-border: transparent;
+
+  --success: oklch(73.29% 0.1976 124.69);
+  --success-foreground: oklch(21.03% 0.0059 124.69);
+  /*
+   * Amber, not the generator's hue 46: at 46 warning sat 10 degrees from the
+   * vermilion accent, so a warning chip read as a primary action.
+   */
+  --warning: oklch(80% 0.155 85);
+  --warning-foreground: oklch(24% 0.04 85);
+  --danger: oklch(65.32% 0.2378 359.62);
+  --danger-foreground: oklch(99.11% 0 0);
+
+  /* Multiplier for the whole radius scale — see rule 2. `--field-radius` is
+     deliberately unset so it derives to calc(var(--radius) * 1.5). */
+  --radius: 0.5rem;
+
+  --font-sans: var(--font-instrument-sans);
+}
+
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Lifted and desaturated: chroma 0.22 at 64% blooms against near-black.
+     Same hue, same identity. */
+  --accent: oklch(67% 0.19 36.18);
+  --accent-foreground: oklch(99.11% 0 0);
+  --focus: oklch(67% 0.19 36.18);
+
+  --background: oklch(14% 0 0);
+  --foreground: oklch(97% 0 0);
+  --muted: oklch(68% 0 0);
+  --border: oklch(28% 0 0);
+  --separator: oklch(25% 0 0);
+  --default: oklch(27% 0 0);
+  --default-foreground: oklch(97% 0 0);
+  --scrollbar: oklch(40% 0 0);
+
+  /* Inverted from light: surfaces are *lighter* than the canvas, because dark
+     mode has no shadow to elevate with. */
+  --surface: oklch(19% 0 0);
+  --surface-foreground: oklch(97% 0 0);
+  --surface-secondary: oklch(23% 0 0);
+  --surface-secondary-foreground: oklch(97% 0 0);
+  --surface-tertiary: oklch(26% 0 0);
+  --surface-tertiary-foreground: oklch(97% 0 0);
+
+  --overlay: oklch(21% 0 0);
+  --overlay-foreground: oklch(97% 0 0);
+  --segment: oklch(30% 0 0);
+  --segment-foreground: oklch(97% 0 0);
+
+  --field-background: oklch(19% 0 0);
+  --field-foreground: oklch(97% 0 0);
+  --field-placeholder: oklch(60% 0 0);
+  --field-border: transparent;
+
+  --success: oklch(76% 0.19 124.69);
+  --success-foreground: oklch(21.03% 0.0059 124.69);
+  --warning: oklch(82% 0.145 85);
+  --warning-foreground: oklch(24% 0.04 85);
+  --danger: oklch(64% 0.21 359.62);
+  --danger-foreground: oklch(99.11% 0 0);
+}
+
+/*
+ * Map pins.
+ *
+ * Plain CSS rather than React: markers are DOM elements handed to MapLibre, and
+ * Week 3 will put hundreds of them on a map.
+ */
+.map-pin {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  /* Draggable pins advertise it. Falls back to pointer where drag is disabled. */
+  cursor: grab;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.map-pin:active,
+.map-pin--dragging {
+  cursor: grabbing;
+}
+
+.map-pin__dot {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 9999px;
+  /* --pin-color is set inline per marker from its category. */
+  background: var(--pin-color, var(--accent));
+  border: 2px solid var(--accent-foreground);
+  box-shadow: 0 1px 4px oklch(0% 0 0 / 0.35);
+  transition: transform 120ms ease-out;
+}
+
+.map-pin:hover .map-pin__dot,
+.map-pin--selected .map-pin__dot {
+  transform: scale(1.35);
+}
+
+/* Lifted while held, so the pin reads as detached from the map beneath it. */
+.map-pin--dragging .map-pin__dot {
+  transform: scale(1.5);
+  box-shadow: 0 6px 12px oklch(0% 0 0 / 0.4);
+}
+
+.map-pin:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 9999px;
+}
+
+/* The drop. Motion here is feedback — it says "that landed" (§8). */
+.map-pin__pulse {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 9999px;
+  background: var(--pin-color, var(--accent));
+  opacity: 0;
+  animation: map-pin-drop 420ms ease-out 1;
+}
+
+@keyframes map-pin-drop {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.2);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  .map-pin__pulse {
+    animation: none;
+  }
+  .map-pin__dot {
+    transition: none;
+  }
 }

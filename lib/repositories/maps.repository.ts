@@ -1,0 +1,219 @@
+import "server-only";
+
+import { ID, Permission, Query, Role } from "node-appwrite";
+
+import { admin } from "@/lib/appwrite/admin";
+import { TABLES } from "@/lib/appwrite/config";
+import { isConflict, isNotFound, toRepositoryError } from "@/lib/appwrite/errors";
+import { env } from "@/lib/env";
+import { deleteSnapshots } from "@/lib/snapshot/storage";
+import { randomSuffix, slugify } from "@/lib/utils/slug";
+import type { CreateMapInput, UpdateMapInput } from "@/lib/validation/map.schema";
+import type { RepoContext } from "./context";
+import { ConflictError, NotFoundError, PlanLimitError } from "./errors";
+import { toAppMap } from "./mappers";
+import { PLAN_LIMITS, getUserPlan } from "./plan-limits";
+import type { AppMap, MapRow } from "./types";
+
+const MAX_MAPS_PER_PAGE = 100;
+const SLUG_ATTEMPTS = 3;
+
+/** Row permissions the owner gets on everything they create. */
+function ownerPermissions(userId: string): string[] {
+  return [
+    Permission.read(Role.user(userId)),
+    Permission.update(Role.user(userId)),
+    Permission.delete(Role.user(userId)),
+  ];
+}
+
+export async function listMaps(ctx: RepoContext): Promise<AppMap[]> {
+  try {
+    const result = await admin.tablesDB.listRows<MapRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.maps,
+      queries: [
+        Query.equal("userId", ctx.userId),
+        Query.orderDesc("$createdAt"),
+        Query.limit(MAX_MAPS_PER_PAGE),
+      ],
+    });
+
+    return result.rows.map(toAppMap);
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+/**
+ * A map that exists but belongs to someone else is reported as missing, never as
+ * forbidden. A 403 would confirm the id is real; a 404 leaks nothing.
+ */
+export async function getMap(ctx: RepoContext, mapId: string): Promise<AppMap> {
+  let row: MapRow;
+
+  try {
+    row = await admin.tablesDB.getRow<MapRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.maps,
+      rowId: mapId,
+    });
+  } catch (error) {
+    if (isNotFound(error)) throw new NotFoundError("That map doesn't exist.");
+    throw toRepositoryError(error);
+  }
+
+  if (row.userId !== ctx.userId) throw new NotFoundError("That map doesn't exist.");
+
+  return toAppMap(row);
+}
+
+export async function countMaps(ctx: RepoContext): Promise<number> {
+  try {
+    // One row over the wire; `total` still reports the real count.
+    const result = await admin.tablesDB.listRows<MapRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.maps,
+      queries: [Query.equal("userId", ctx.userId), Query.limit(1)],
+      total: true,
+    });
+
+    return result.total;
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+export async function createMap(
+  ctx: RepoContext,
+  input: CreateMapInput,
+): Promise<AppMap> {
+  const plan = await getUserPlan(ctx.userId);
+  const limit = PLAN_LIMITS[plan].maps;
+
+  if ((await countMaps(ctx)) >= limit) {
+    throw new PlanLimitError("maps", limit, plan);
+  }
+
+  const base = slugify(input.name);
+
+  // Slugs are globally unique, so a "is this taken?" pre-check is both a race and
+  // a read of other users' rows. Let the unique index decide and retry on 409.
+  for (let attempt = 0; attempt < SLUG_ATTEMPTS; attempt += 1) {
+    const slug = attempt === 0 ? base : `${base}-${randomSuffix()}`;
+
+    try {
+      const row = await admin.tablesDB.createRow<MapRow>({
+        databaseId: env.databaseId,
+        tableId: TABLES.maps,
+        rowId: ID.unique(),
+        data: {
+          userId: ctx.userId,
+          name: input.name,
+          slug,
+          style: input.style,
+          defaultLat: input.defaultLat,
+          defaultLng: input.defaultLng,
+          defaultZoom: input.defaultZoom,
+          categories: "[]",
+          settings: "{}",
+          allowedDomains: [],
+        },
+        permissions: ownerPermissions(ctx.userId),
+      });
+
+      return toAppMap(row);
+    } catch (error) {
+      if (isConflict(error)) continue;
+      throw toRepositoryError(error);
+    }
+  }
+
+  throw new ConflictError("That name is already taken. Try a different one.");
+}
+
+export async function updateMap(
+  ctx: RepoContext,
+  mapId: string,
+  input: UpdateMapInput,
+): Promise<AppMap> {
+  const before = await getMap(ctx, mapId);
+
+  // `categories` is a JSON text column, so it has to be serialised. Everything
+  // else maps straight onto its column.
+  const { categories, ...rest } = input;
+  const data: Record<string, unknown> = { ...rest };
+  if (categories) data.categories = JSON.stringify(categories);
+
+  try {
+    const row = await admin.tablesDB.updateRow<MapRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.maps,
+      rowId: mapId,
+      data,
+    });
+
+    // Places reference a category by id. Dropping a category without clearing
+    // those references would leave locations tagged with something the legend
+    // can no longer explain.
+    if (categories) {
+      const removed = before.categories
+        .map((category) => category.id)
+        .filter((id) => !categories.some((category) => category.id === id));
+
+      await clearCategoryFromPlaces(mapId, removed);
+    }
+
+    return toAppMap(row);
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+/**
+ * One bulk update per removed category. Appwrite has no "set to '' where in
+ * (...)" so this is a small loop, and deleting several categories at once is
+ * rare enough not to optimise.
+ */
+async function clearCategoryFromPlaces(
+  mapId: string,
+  categoryIds: string[],
+): Promise<void> {
+  for (const categoryId of categoryIds) {
+    await admin.tablesDB.updateRows({
+      databaseId: env.databaseId,
+      tableId: TABLES.places,
+      data: { category: "" },
+      queries: [Query.equal("mapId", mapId), Query.equal("category", categoryId)],
+    });
+  }
+}
+
+export async function deleteMap(ctx: RepoContext, mapId: string): Promise<void> {
+  await getMap(ctx, mapId);
+
+  try {
+    // Snapshots first. They are world-readable by design, so a deleted map that
+    // kept its live snapshot would carry on serving the customer's locations to
+    // anyone holding the URL.
+    await deleteSnapshots(mapId);
+
+    // Places next: a map row deleted before its places would orphan them with
+    // no owner left to find them by.
+    await admin.tablesDB.deleteRows({
+      databaseId: env.databaseId,
+      tableId: TABLES.places,
+      queries: [Query.equal("mapId", mapId)],
+    });
+
+    await admin.tablesDB.deleteRow({
+      databaseId: env.databaseId,
+      tableId: TABLES.maps,
+      rowId: mapId,
+    });
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+export { ownerPermissions };

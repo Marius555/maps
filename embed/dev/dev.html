@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Embed harness</title>
+    <style>
+      body {
+        margin: 0 auto;
+        padding: 32px 16px 64px;
+        max-width: 900px;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        color: #1b1d21;
+      }
+      code {
+        background: #f1f3f5;
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+      .note {
+        color: #656b76;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Embed harness</h1>
+    <p class="note">
+      Renders the built embed against <code>dev.json</code>, a fixture snapshot —
+      no Appwrite, no login, no publish. Source lives in <code>embed/dev/</code>
+      and is copied into the build output by Vite&rsquo;s
+      <code>publicDir</code>, so it never reaches a production deploy.
+    </p>
+    <p class="note">
+      Run <code>npm run build:embed</code>, start the dev server, then open
+      <code>/embed/dev.html</code>.
+    </p>
+    <p class="note">
+      Checklist: pins coloured by category (uncategorised ones grey), the pair
+      beside the flagship clusters at low zoom, clicking a pin opens a popup, the
+      category chips filter and refit, search narrows by name or address, a
+      no-match search says so, and OpenStreetMap attribution shows exactly once.
+      Set <code>allowedDomains</code> to something other than localhost and the
+      map should refuse to render, warning to the console only.
+    </p>
+
+    <p class="note">Text below the script, to prove the map is inserted in place:</p>
+
+    <script
+      type="module"
+      src="/embed/map.js"
+      data-snapshot="/embed/dev.json"
+      data-height="520"
+    ></script>
+
+    <p class="note">…and this paragraph should sit under the map.</p>
+  </body>
+</html>

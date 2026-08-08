@@ -1,0 +1,37 @@
+"use client";
+
+import { Button, Tooltip } from "@heroui/react";
+import type { LucideIcon } from "lucide-react";
+import type { ComponentProps } from "react";
+
+/**
+ * An icon-only button that is still labelled.
+ *
+ * `label` is mandatory and feeds both `aria-label` and the tooltip, so an
+ * icon-only control can never ship without an accessible name — the failure mode
+ * these invite.
+ *
+ * `delay={0}` because HeroUI's default is 700ms, which is far too slow for a
+ * toolbar or a row action: the user has moved on before the label appears.
+ */
+export function IconButton({
+  label,
+  icon: Icon,
+  variant = "tertiary",
+  size = "sm",
+  placement = "top",
+  ...props
+}: {
+  label: string;
+  icon: LucideIcon;
+  placement?: "top" | "bottom" | "left" | "right";
+} & Omit<ComponentProps<typeof Button>, "children" | "isIconOnly">) {
+  return (
+    <Tooltip delay={0}>
+      <Button aria-label={label} isIconOnly size={size} variant={variant} {...props}>
+        <Icon aria-hidden="true" className="size-4" />
+      </Button>
+      <Tooltip.Content placement={placement}>{label}</Tooltip.Content>
+    </Tooltip>
+  );
+}
