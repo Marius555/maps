@@ -1,12 +1,21 @@
 import { isValidLngLat, roundCoord } from "@/lib/map/geo";
-import { ATTRIBUTION_HTML, STYLE_URLS } from "@/lib/map/style";
+import {
+  ATTRIBUTION_HTML,
+  AUTO_STYLE,
+  STYLE_URLS,
+  isAutoMapStyle,
+  isDarkMapStyle,
+  resolveMapStyle,
+  type MapStyleKey,
+} from "@/lib/map/style";
 import type { AppMap, Place } from "@/lib/repositories/types";
+import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
+import { isEmptyHours } from "@/packages/shared/hours";
 import type {
   MapSnapshot,
   SnapshotBounds,
   SnapshotCategory,
   SnapshotPlace,
-  SnapshotSettings,
 } from "@/packages/shared/snapshot";
 
 /**
@@ -25,13 +34,6 @@ export type BuildSnapshotResult = {
    * dropping one.
    */
   skipped: Place[];
-};
-
-const DEFAULT_SETTINGS: SnapshotSettings = {
-  clustering: true,
-  search: true,
-  filters: true,
-  nearest: true,
 };
 
 export function buildSnapshot(
@@ -60,7 +62,7 @@ export function buildSnapshot(
       mapId: map.id,
       name: map.name,
       slug: map.slug,
-      styleUrl: STYLE_URLS[map.style],
+      ...basemapFields(map.style),
       attribution: ATTRIBUTION_HTML,
       center: {
         lat: map.defaultLat,
@@ -72,10 +74,39 @@ export function buildSnapshot(
         .filter((category) => used.has(category.id))
         .map(toSnapshotCategory),
       places: usable.map(toSnapshotPlace),
-      settings: readSettings(map.settings),
+      settings: readEmbedSettings(map.settings),
       allowedDomains: map.allowedDomains,
     },
     skipped,
+  };
+}
+
+/**
+ * The basemap half of the snapshot: one resolved URL, plus either "the visitor
+ * decides" or the fixed answer.
+ *
+ * Auto ships a single URL and `autoDark`, with no `theme`. There is no second
+ * URL to ship, because Auto's dark half is this same style recoloured in the
+ * browser (lib/map/darken-style.ts) — and whether to recolour it is only known
+ * once a visitor's browser reports its colour scheme. A pinned basemap ships the
+ * URL and the answer, because it is the same for everyone.
+ *
+ * Resolved to a URL rather than a key for the same reason as before: moving to
+ * our own PMTiles on R2 becomes a republish, not a redeploy of every customer's
+ * embed (packages/shared/snapshot.ts).
+ */
+function basemapFields(
+  style: MapStyleKey,
+): Pick<MapSnapshot, "styleUrl" | "autoDark" | "theme"> {
+  if (isAutoMapStyle(style)) {
+    return { styleUrl: STYLE_URLS[AUTO_STYLE], autoDark: true };
+  }
+
+  const resolved = resolveMapStyle(style);
+
+  return {
+    styleUrl: STYLE_URLS[resolved],
+    theme: isDarkMapStyle(resolved) ? "dark" : "light",
   };
 }
 
@@ -103,6 +134,9 @@ function toSnapshotPlace(place: Place): SnapshotPlace {
   if (place.phone) snapshot.phone = place.phone;
   if (place.email) snapshot.email = place.email;
   if (place.url) snapshot.url = place.url;
+  // An all-closed week is the same as no hours at all, and shipping seven nulls
+  // per place would be pure weight on a 3,000-place map.
+  if (!isEmptyHours(place.hours)) snapshot.hours = place.hours ?? undefined;
   if (place.photoUrl) snapshot.photoUrl = place.photoUrl;
 
   return snapshot;
@@ -131,20 +165,3 @@ function boundsOf(places: Place[]): SnapshotBounds | null {
   };
 }
 
-/**
- * `settings` is a free-form JSON column that may have been written by an older
- * build or edited in the console, so every flag falls back to its default
- * rather than trusting the stored shape.
- */
-function readSettings(settings: Record<string, unknown>): SnapshotSettings {
-  return {
-    clustering: readFlag(settings.clustering, DEFAULT_SETTINGS.clustering),
-    search: readFlag(settings.search, DEFAULT_SETTINGS.search),
-    filters: readFlag(settings.filters, DEFAULT_SETTINGS.filters),
-    nearest: readFlag(settings.nearest, DEFAULT_SETTINGS.nearest),
-  };
-}
-
-function readFlag(value: unknown, fallback: boolean): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}

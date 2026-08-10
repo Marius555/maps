@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 
 import type { Place } from "@/lib/repositories/types";
 import type {
@@ -9,6 +10,7 @@ import type {
 } from "@/lib/validation/place.schema";
 import { apiFetch } from "./fetcher";
 import { queryKeys } from "./keys";
+import { mergePlaceFields, patchedKeys } from "./place-cache";
 
 type PlacesPage = {
   places: Place[];
@@ -18,6 +20,19 @@ type PlacesPage = {
 
 /** Guard against an unbounded loop if the server ever returns a stuck cursor. */
 const MAX_PAGES = 50;
+
+/**
+ * Marks a row that exists only in the cache, waiting on its create round trip.
+ *
+ * Exported because the UI has to be able to tell one apart: an optimistic place
+ * is showing a placeholder name and an empty address, and the list renders a
+ * skeleton for it rather than the placeholder (components/places/place-list.tsx).
+ */
+const TEMP_PLACE_ID_PREFIX = "temp-";
+
+export function isOptimisticPlaceId(placeId: string): boolean {
+  return placeId.startsWith(TEMP_PLACE_ID_PREFIX);
+}
 
 /**
  * Every place on the map, as one array.
@@ -53,6 +68,26 @@ export function usePlaces(mapId: string, initialData?: Place[]) {
   });
 }
 
+/**
+ * The places array as the cache holds it *now*, not as of the last render.
+ *
+ * A callback rather than a value, because the caller that needs it is a pointer
+ * handler deciding what to call the pin it is about to create — and a value
+ * closed over at render time is one drop out of date the moment two land in
+ * quick succession, which is how two pins ended up as the same "Location 4".
+ *
+ * Keyed on `mapId` rather than on the key array, which is a fresh object every
+ * render and would defeat the memo.
+ */
+export function usePlacesSnapshot(mapId: string): () => Place[] {
+  const queryClient = useQueryClient();
+
+  return useCallback(
+    () => queryClient.getQueryData<Place[]>(queryKeys.places.list(mapId)) ?? [],
+    [queryClient, mapId],
+  );
+}
+
 export function useCreatePlace(mapId: string) {
   const queryClient = useQueryClient();
   const listKey = queryKeys.places.list(mapId);
@@ -74,7 +109,7 @@ export function useCreatePlace(mapId: string) {
 
       const now = new Date().toISOString();
       const optimistic: Place = {
-        id: `temp-${crypto.randomUUID()}`,
+        id: `${TEMP_PLACE_ID_PREFIX}${crypto.randomUUID()}`,
         mapId,
         name: input.name,
         lat: input.lat,
@@ -85,11 +120,13 @@ export function useCreatePlace(mapId: string) {
         phone: input.phone ?? null,
         email: input.email ?? null,
         url: input.url ?? null,
+        hours: input.hours ?? null,
         photoId: null,
         // A place can't have a photo before it exists.
         photoUrl: null,
         sortOrder: input.sortOrder ?? 0,
-        geocodeConfidence: null,
+        geocodeConfidence: input.geocodeConfidence ?? null,
+        addressParts: input.addressParts ?? null,
         geocodeStatus: input.geocodeStatus ?? "manual",
         createdAt: now,
         updatedAt: now,
@@ -119,8 +156,21 @@ export function useCreatePlace(mapId: string) {
       );
     },
 
+    /*
+     * Marked stale, not refetched.
+     *
+     * `places.all` prefix-matches the list key, so this used to re-page the whole
+     * map (up to 50 requests) after every dropped pin — and that reply, computed
+     * before the reverse geocoder had answered, replaced the array the address
+     * was about to land in. `onSuccess` already installs the server's own row, so
+     * there was nothing for the refetch to reconcile; anything else is picked up
+     * on the next mount.
+     */
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.places.all(mapId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.places.all(mapId),
+        refetchType: "none",
+      });
     },
   });
 }
@@ -128,6 +178,15 @@ export function useCreatePlace(mapId: string) {
 export function useUpdatePlace(mapId: string) {
   const queryClient = useQueryClient();
   const listKey = queryKeys.places.list(mapId);
+
+  /** Rewrite one row, leaving every other row's identity untouched. */
+  const patchRow = (placeId: string, update: (place: Place) => Place) => {
+    queryClient.setQueryData<Place[]>(listKey, (places = []) =>
+      places.map((existing) =>
+        existing.id === placeId ? update(existing) : existing,
+      ),
+    );
+  };
 
   return useMutation({
     mutationFn: async ({
@@ -149,24 +208,38 @@ export function useUpdatePlace(mapId: string) {
     // places array re-renders, then jumps forward again on response.
     onMutate: async ({ placeId, input }) => {
       await queryClient.cancelQueries({ queryKey: listKey });
-      const previous = queryClient.getQueryData<Place[]>(listKey);
 
-      queryClient.setQueryData<Place[]>(listKey, (places = []) =>
-        places.map((existing) =>
-          existing.id === placeId ? { ...existing, ...input } : existing,
-        ),
-      );
+      /*
+       * This row's prior values, not a snapshot of the whole list. A list-wide
+       * snapshot meant one failed PATCH rolled back every other edit that had
+       * landed beside it while this one was in flight — dragging two pins and
+       * having the first fail undid the second as well.
+       */
+      const previous = queryClient
+        .getQueryData<Place[]>(listKey)
+        ?.find((place) => place.id === placeId);
 
-      return { previous };
+      patchRow(placeId, (existing) => ({ ...existing, ...input }));
+
+      return { placeId, keys: patchedKeys(input), previous };
     },
 
+    // Only what this request changed, and only on its own row.
     onError: (_error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(listKey, context.previous);
+      if (!context?.previous) return;
+
+      const { placeId, keys, previous } = context;
+      patchRow(placeId, (existing) => mergePlaceFields(existing, previous, keys));
     },
 
-    onSuccess: (place) => {
-      queryClient.setQueryData<Place[]>(listKey, (places = []) =>
-        places.map((existing) => (existing.id === place.id ? place : existing)),
+    /*
+     * Merged field by field rather than replacing the row. See
+     * lib/query/place-cache.ts — two writes to one place overlap routinely here,
+     * and a whole-row replace let the slower reply revert the faster one's field.
+     */
+    onSuccess: (place, _variables, context) => {
+      patchRow(place.id, (existing) =>
+        mergePlaceFields(existing, place, context.keys),
       );
     },
   });
@@ -194,8 +267,13 @@ export function useDeletePlace(mapId: string) {
     onError: (_error, _placeId, context) => {
       if (context?.previous) queryClient.setQueryData(listKey, context.previous);
     },
+    // Same reasoning as the create above: the optimistic filter is already
+    // correct and the response carries no body to reconcile against.
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.places.all(mapId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.places.all(mapId),
+        refetchType: "none",
+      });
     },
   });
 }

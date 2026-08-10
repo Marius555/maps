@@ -92,6 +92,9 @@ export const TABLES = [
       integer("sortOrder", { min: 0, xdefault: 0 }),
       float("geocodeConfidence", { min: 0, max: 1 }),
       enumeration("geocodeStatus", GEOCODE_STATUSES, { xdefault: "manual" }),
+      // The geocoder's answer in parts — postcode, city, country, OSM ids. JSON
+      // for the same reason `hours` is: it is read whole and never queried on.
+      text("addressParts"),
     ],
     indexes: [
       { key: "idx_places_mapId", type: "key", columns: ["mapId"], orders: ["asc"] },

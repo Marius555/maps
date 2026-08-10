@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { latSchema, lngSchema } from "./common";
+
 /**
  * A single request per batch is capped deliberately.
  *
@@ -22,6 +24,29 @@ export const geocodeSearchSchema = z.object({
     .optional(),
 });
 
+/**
+ * Coordinates → address, for a pin the user has just dropped or dragged.
+ *
+ * `road` is what the editor measured against the basemap tiles it had already
+ * drawn — the street the pin is genuinely standing on. The geocoder cannot
+ * derive it (see lib/map/nearest-road.ts), and it is optional because plenty of
+ * callers have no map: a CSV import has coordinates and nothing else.
+ *
+ * Bounded like any other client input. The names come from a vector tile rather
+ * than from a text field, but they still arrive over HTTP and are still a
+ * stranger's to send.
+ */
+export const reverseGeocodeSchema = z.object({
+  lat: latSchema,
+  lng: lngSchema,
+  road: z
+    .object({
+      names: z.array(z.string().trim().min(1).max(255)).min(1).max(8),
+      distanceM: z.number().min(0).max(100_000),
+    })
+    .nullish(),
+});
+
 export const geocodeBatchSchema = z.object({
   rows: z
     .array(
@@ -37,4 +62,5 @@ export const geocodeBatchSchema = z.object({
 });
 
 export type GeocodeSearchInput = z.infer<typeof geocodeSearchSchema>;
+export type ReverseGeocodeInput = z.infer<typeof reverseGeocodeSchema>;
 export type GeocodeBatchInput = z.infer<typeof geocodeBatchSchema>;

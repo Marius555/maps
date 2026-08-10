@@ -39,22 +39,36 @@ export function SidebarNavItem({
       onClick={onNavigate}
       aria-current={isActive ? "page" : undefined}
       title={isCollapsed ? label : undefined}
-      className={`flex min-h-9 items-center gap-2.5 rounded-2xl px-2.5 text-sm transition-colors ${
+      /*
+       * Named explicitly rather than by its contents. The visible label is a
+       * zero-width element when collapsed, and whether a browser keeps a
+       * zero-area node in the accessibility tree is not something to bet a
+       * nav item's only name on.
+       */
+      aria-label={label}
+      className={`flex min-h-9 items-center rounded-2xl px-2.5 text-sm transition-[color,background-color] duration-[var(--duration-fast)] ${
         isActive
           ? "bg-default font-medium text-foreground"
           : "text-muted hover:bg-default/60 hover:text-foreground"
-      } ${isCollapsed ? "justify-center" : ""}`}
+      } ${isCollapsed ? "justify-center gap-0" : "gap-2.5"}`}
     >
       <Icon aria-hidden="true" className="size-5 shrink-0" />
 
-      {isCollapsed ? (
-        <span className="sr-only">{label}</span>
-      ) : (
-        <>
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-          <NavPending />
-        </>
-      )}
+      {/*
+       * Collapsed to zero width rather than swapped for an `sr-only` span. The
+       * label is still in the accessibility tree at `opacity: 0`, so nothing is
+       * lost, and the rail no longer pops its text out a frame before the panel
+       * starts narrowing.
+       */}
+      <span
+        className={`min-w-0 flex-1 truncate transition-[max-width,opacity] duration-[var(--duration-panel)] ease-[var(--ease-out-fluid)] ${
+          isCollapsed ? "max-w-0 opacity-0" : "max-w-full opacity-100"
+        }`}
+      >
+        {label}
+      </span>
+
+      <NavPending />
     </Link>
   );
 }

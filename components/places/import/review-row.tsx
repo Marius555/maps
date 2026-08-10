@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Chip, Input, TextField } from "@heroui/react";
+import { motion } from "motion/react";
 
 import { formatCoords } from "@/lib/map/geo";
 import type { DraftPlace } from "@/lib/csv/draft-places";
@@ -29,7 +30,11 @@ export function ReviewRow({
   const isPlaced = draft.lat !== null && draft.lng !== null;
 
   return (
-    <li
+    <motion.li
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15, ease: [0, 0, 0.2, 1] }}
       className={`space-y-2 rounded-xl border p-3 transition-colors ${
         isSelected ? "border-accent bg-surface-secondary" : "border-border"
       }`}
@@ -87,7 +92,7 @@ export function ReviewRow({
       {draft.problem ? (
         <p className="text-xs text-danger">{draft.problem}</p>
       ) : null}
-    </li>
+    </motion.li>
   );
 }
 

@@ -16,7 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run test",
-    "setup:appwrite": "node --env-file=.env scripts/setup-appwrite.mjs"
+    "setup:appwrite": "node --env-file=.env scripts/setup-appwrite.mjs",
+    "migrate:auto-style": "node --env-file=.env scripts/migrate-auto-style.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.4",

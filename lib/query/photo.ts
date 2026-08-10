@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Place } from "@/lib/repositories/types";
 import { apiFetch, apiUpload } from "./fetcher";
 import { queryKeys } from "./keys";
+import { PHOTO_KEYS, mergePlaceFields } from "./place-cache";
 
 /**
  * Photo upload and removal.
@@ -46,6 +47,12 @@ export function useRemovePlacePhoto(mapId: string) {
   });
 }
 
+/**
+ * These endpoints change the photo and nothing else, so only the photo fields
+ * are taken from the reply. Replacing the whole row let an upload land on top of
+ * an address the reverse geocoder had written a moment earlier, and revert it —
+ * the same defect described in lib/query/place-cache.ts.
+ */
 function patchPlace(
   queryClient: ReturnType<typeof useQueryClient>,
   mapId: string,
@@ -54,6 +61,10 @@ function patchPlace(
   queryClient.setQueryData<Place[]>(
     queryKeys.places.list(mapId),
     (places = []) =>
-      places.map((existing) => (existing.id === place.id ? place : existing)),
+      places.map((existing) =>
+        existing.id === place.id
+          ? mergePlaceFields(existing, place, PHOTO_KEYS)
+          : existing,
+      ),
   );
 }

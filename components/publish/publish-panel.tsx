@@ -1,5 +1,6 @@
 "use client";
 
+import { PreviewPanel } from "@/components/preview/preview-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionPanel } from "@/components/ui/section-panel";
 import { useMap } from "@/lib/query/maps";
@@ -7,6 +8,7 @@ import { usePlaces } from "@/lib/query/places";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { hasUnpublishedChanges } from "@/lib/snapshot/staleness";
 import { AllowedDomainsForm } from "./allowed-domains-form";
+import { EmbedSettingsForm } from "./embed-settings-form";
 import { EmbedSnippet } from "./embed-snippet";
 import { PublishAction } from "./publish-action";
 import { PublishStatus } from "./publish-status";
@@ -52,7 +54,11 @@ export function PublishPanel({
         ) : null}
       </SectionPanel>
 
+      <PreviewPanel map={map} places={places} />
+
       {map.snapshotUrl ? <EmbedSnippet snapshotUrl={map.snapshotUrl} /> : null}
+
+      <EmbedSettingsForm key={`settings-${map.id}`} map={map} />
 
       <AllowedDomainsForm key={map.id} map={map} />
     </div>

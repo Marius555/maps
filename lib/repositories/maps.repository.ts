@@ -139,11 +139,12 @@ export async function updateMap(
 ): Promise<AppMap> {
   const before = await getMap(ctx, mapId);
 
-  // `categories` is a JSON text column, so it has to be serialised. Everything
-  // else maps straight onto its column.
-  const { categories, ...rest } = input;
+  // `categories` and `settings` are JSON text columns, so they have to be
+  // serialised. Everything else maps straight onto its column.
+  const { categories, settings, ...rest } = input;
   const data: Record<string, unknown> = { ...rest };
   if (categories) data.categories = JSON.stringify(categories);
+  if (settings) data.settings = JSON.stringify(settings);
 
   try {
     const row = await admin.tablesDB.updateRow<MapRow>({

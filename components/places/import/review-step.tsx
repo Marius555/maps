@@ -16,6 +16,7 @@ import { roundCoord } from "@/lib/map/geo";
 import type { AppMap } from "@/lib/repositories/types";
 import { useImportStore } from "@/lib/stores/import-store";
 import { ReviewRow } from "./review-row";
+import { AnimatePresence } from "motion/react";
 
 /** Built per branch rather than by patching plurals into one sentence. */
 function reviewSentence(count: number): string {
@@ -138,16 +139,23 @@ export function ReviewStep({
       ) : null}
 
       <ul className="max-h-96 space-y-2 overflow-y-auto pr-1">
-        {listed.map((draft: DraftPlace) => (
-          <ReviewRow
-            key={draft.key}
-            draft={draft}
-            isSelected={draft.key === selectedKey}
-            onSelect={() => setSelectedKey(draft.key)}
-            onChange={(patch) => patchDraft(draft.key, patch)}
-            onRemove={() => removeDraft(draft.key)}
-          />
-        ))}
+        {/*
+         * Rows fade out as they are removed, and as they leave the filtered set
+         * when "only rows that need attention" is on — fixing a row and watching
+         * it go is the feedback that says the fix took.
+         */}
+        <AnimatePresence initial={false}>
+          {listed.map((draft: DraftPlace) => (
+            <ReviewRow
+              key={draft.key}
+              draft={draft}
+              isSelected={draft.key === selectedKey}
+              onSelect={() => setSelectedKey(draft.key)}
+              onChange={(patch) => patchDraft(draft.key, patch)}
+              onRemove={() => removeDraft(draft.key)}
+            />
+          ))}
+        </AnimatePresence>
       </ul>
 
       {importError ? <ErrorMessage error={importError} /> : null}

@@ -3,9 +3,9 @@
 import { Button, FieldError, Input, Label, TextField } from "@heroui/react";
 import { useState } from "react";
 
+import { GeocodeResultList } from "@/components/geocode/geocode-result-list";
 import { ErrorMessage } from "@/components/ui/error-message";
 import type { GeocodeCandidate } from "@/lib/geocoding/types";
-import { formatCoords } from "@/lib/map/geo";
 import { useGeocodeSearch } from "@/lib/query/geocode";
 
 /**
@@ -79,36 +79,14 @@ export function AddressSearchField({
 
       {search.error ? <ErrorMessage error={search.error} /> : null}
 
-      {candidates?.length === 0 ? (
-        <p className="text-xs text-muted" role="status">
-          No matches for that address. Try adding a city or postcode, or drag the
-          pin instead.
-        </p>
-      ) : null}
-
-      {candidates && candidates.length > 0 ? (
-        <ul className="space-y-1" aria-label="Address matches">
-          {candidates.map((candidate, index) => (
-            <li key={`${candidate.lat},${candidate.lng},${index}`}>
-              <button
-                type="button"
-                className="min-h-11 w-full rounded-lg border border-border px-3 py-2 text-left transition-colors hover:bg-surface-secondary"
-                onClick={() => {
-                  onPick(candidate);
-                  setCandidates(null);
-                }}
-              >
-                <span className="block text-sm text-foreground">
-                  {candidate.label || "Unnamed match"}
-                </span>
-                <span className="block text-xs tabular-nums text-muted">
-                  {formatCoords(candidate.lat, candidate.lng)}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <GeocodeResultList
+        candidates={candidates}
+        emptyMessage="No matches for that address. Try adding a city or postcode, or drag the pin instead."
+        onPick={(candidate) => {
+          onPick(candidate);
+          setCandidates(null);
+        }}
+      />
     </div>
   );
 }

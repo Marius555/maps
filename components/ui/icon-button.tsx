@@ -20,16 +20,22 @@ export function IconButton({
   variant = "tertiary",
   size = "sm",
   placement = "top",
+  iconClassName = "size-4",
   ...props
 }: {
   label: string;
   icon: LucideIcon;
   placement?: "top" | "bottom" | "left" | "right";
+  /**
+   * For the rare button that is not toolbar-sized. The geocode results put one
+   * inline on a `text-xs` line, where a 16px glyph is bigger than the row.
+   */
+  iconClassName?: string;
 } & Omit<ComponentProps<typeof Button>, "children" | "isIconOnly">) {
   return (
     <Tooltip delay={0}>
       <Button aria-label={label} isIconOnly size={size} variant={variant} {...props}>
-        <Icon aria-hidden="true" className="size-4" />
+        <Icon aria-hidden="true" className={iconClassName} />
       </Button>
       <Tooltip.Content placement={placement}>{label}</Tooltip.Content>
     </Tooltip>

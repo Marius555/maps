@@ -15,6 +15,9 @@
   --lm-foreground: #1b1d21;
   --lm-muted: #656b76;
   --lm-border: #e2e5ea;
+  /* Text sitting *on* --lm-foreground, which the status pill inverts onto. */
+  --lm-on-foreground: #ffffff;
+  --lm-focus: #1c7ed6;
   --lm-radius: 10px;
   --lm-shadow: 0 1px 2px rgba(16, 18, 22, 0.08), 0 8px 24px rgba(16, 18, 22, 0.08);
 
@@ -36,6 +39,79 @@
 .lm-root *::before,
 .lm-root *::after {
   box-sizing: border-box;
+}
+
+/*
+ * Dark chrome, for maps published on a dark basemap.
+ *
+ * Keyed off the snapshot's own `theme`, which is derived from the basemap and
+ * not from anyone's UI preference — a visitor to a stockist's website has no
+ * idea what theme the map's owner built it in, and switching their panels out
+ * from under them by `prefers-color-scheme` would be a different map depending on
+ * who looked at it.
+ *
+ * Only the colour tokens are redefined. Every rule below reads them, so the
+ * whole panel system follows from these eight lines.
+ */
+.lm-root--dark {
+  --lm-surface: #17181a;
+  --lm-foreground: #f2f3f5;
+  --lm-muted: #a2a8b3;
+  --lm-border: #2c2f35;
+  --lm-on-foreground: #17181a;
+  --lm-focus: #4dabf7;
+  --lm-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/*
+ * MapLibre's own controls, which ship light-only CSS: white button groups, dark
+ * SVG icons and a translucent-white attribution bar.
+ *
+ * The attribution rules are not cosmetic. OpenStreetMap and tile-provider credit
+ * has to be visible on every rendered map (CLAUDE.md §12), and illegible is as
+ * good as absent.
+ */
+.lm-root--dark .maplibregl-ctrl-group {
+  background: var(--lm-surface);
+  border: 1px solid var(--lm-border);
+}
+
+.lm-root--dark .maplibregl-ctrl-group button + button {
+  border-top-color: var(--lm-border);
+}
+
+.lm-root--dark .maplibregl-ctrl-group button:not(:disabled):hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* The icons are dark-stroked SVG data URIs, so no property can recolour them —
+   inverting the rendered result is the only lever. */
+.lm-root--dark .maplibregl-ctrl-icon,
+.lm-root--dark .maplibregl-ctrl-attrib-button {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+.lm-root--dark .maplibregl-ctrl-attrib {
+  background-color: rgba(23, 24, 26, 0.8);
+  color: var(--lm-muted);
+}
+
+.lm-root--dark .maplibregl-ctrl-attrib a {
+  color: var(--lm-foreground);
+}
+
+.lm-root--dark .maplibregl-popup-content {
+  background: var(--lm-surface);
+  color: var(--lm-foreground);
+}
+
+.lm-root--dark .maplibregl-popup-tip {
+  border-top-color: var(--lm-surface);
+  border-bottom-color: var(--lm-surface);
+}
+
+.lm-root--dark .maplibregl-popup-close-button {
+  color: var(--lm-muted);
 }
 
 .lm-canvas {
@@ -118,7 +194,7 @@
 }
 
 .lm-root :focus-visible {
-  outline: 2px solid #1c7ed6;
+  outline: 2px solid var(--lm-focus);
   outline-offset: 2px;
 }
 
@@ -134,7 +210,7 @@
   padding: 7px 12px;
   border-radius: 8px;
   background: var(--lm-foreground);
-  color: #ffffff;
+  color: var(--lm-on-foreground);
   box-shadow: var(--lm-shadow);
 }
 
@@ -196,6 +272,66 @@
   margin: 0 0 4px;
   font-size: 13px;
   color: var(--lm-muted);
+}
+
+/* Opening hours.
+
+   A <details>, so the seven rows cost nothing until asked for. The summary
+   marker is removed on both engines — the row already reads as expandable, and
+   the default triangle sits badly against a status word. */
+.lm-popup__hours {
+  margin-top: 6px;
+}
+
+.lm-popup__hours-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.lm-popup__hours-summary::-webkit-details-marker {
+  display: none;
+}
+
+.lm-popup__hours-state {
+  font-weight: 600;
+  color: var(--lm-muted);
+}
+
+.lm-popup__hours-state--open {
+  color: #2b8a3e;
+}
+
+.lm-popup__hours-today {
+  color: var(--lm-muted);
+}
+
+.lm-popup__hours-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 10px;
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--lm-muted);
+}
+
+.lm-popup__hours-day {
+  margin: 0;
+}
+
+.lm-popup__hours-time {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.lm-popup__hours-day--today,
+.lm-popup__hours-time--today {
+  font-weight: 600;
+  color: var(--lm-foreground, inherit);
 }
 
 .lm-popup__actions {

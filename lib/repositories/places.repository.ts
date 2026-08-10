@@ -6,6 +6,7 @@ import { admin } from "@/lib/appwrite/admin";
 import { TABLES } from "@/lib/appwrite/config";
 import { isNotFound, toRepositoryError } from "@/lib/appwrite/errors";
 import { env } from "@/lib/env";
+import { serialiseHours } from "@/packages/shared/hours";
 import type {
   CreatePlaceInput,
   UpdatePlaceInput,
@@ -16,6 +17,15 @@ import { toPlace } from "./mappers";
 import { getMap, ownerPermissions } from "./maps.repository";
 import { PLAN_LIMITS, getUserPlan } from "./plan-limits";
 import type { Page, Place, PlaceRow } from "./types";
+
+/**
+ * Structured column → its JSON string, with "nothing" stored as null rather than
+ * as "{}" — so an empty object and a never-geocoded row read back the same.
+ */
+function serialiseJson(value: object | null | undefined): string | null {
+  if (!value || Object.keys(value).length === 0) return null;
+  return JSON.stringify(value);
+}
 
 /** Appwrite's hard ceiling for a single page. */
 const MAX_PAGE_SIZE = 100;
@@ -174,8 +184,11 @@ export async function createPlace(
         phone: input.phone ?? null,
         email: input.email ?? null,
         url: input.url ?? null,
+        hours: serialiseHours(input.hours ?? null),
         sortOrder: input.sortOrder,
         geocodeStatus: input.geocodeStatus,
+        geocodeConfidence: input.geocodeConfidence ?? null,
+        addressParts: serialiseJson(input.addressParts),
       },
       permissions: ownerPermissions(ctx.userId),
     });
@@ -236,8 +249,11 @@ export async function createPlaces(
           phone: input.phone ?? null,
           email: input.email ?? null,
           url: input.url ?? null,
+          hours: serialiseHours(input.hours ?? null),
           sortOrder: existing + start + offset,
           geocodeStatus: input.geocodeStatus,
+          geocodeConfidence: input.geocodeConfidence ?? null,
+        addressParts: serialiseJson(input.addressParts),
         })),
       });
 
@@ -258,12 +274,27 @@ export async function updatePlace(
 ): Promise<Place> {
   await getPlace(ctx, mapId, placeId);
 
+  /*
+   * `hours` and `addressParts` are the fields whose domain shape is not their
+   * column shape — structured here, a JSON string in Appwrite. Spread the rest
+   * through untouched so a PATCH carrying one field still writes only that field,
+   * and only add a key back when the request actually carried it.
+   */
+  const { hours, addressParts, ...rest } = input;
+  const data = {
+    ...rest,
+    ...(hours === undefined ? {} : { hours: serialiseHours(hours) }),
+    ...(addressParts === undefined
+      ? {}
+      : { addressParts: serialiseJson(addressParts) }),
+  };
+
   try {
     const row = await admin.tablesDB.updateRow<PlaceRow>({
       databaseId: env.databaseId,
       tableId: TABLES.places,
       rowId: placeId,
-      data: input,
+      data,
     });
 
     return toPlace(row);

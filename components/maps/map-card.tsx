@@ -32,7 +32,9 @@ export function MapCard({
   const extraCategories = map.categories.length - VISIBLE_CATEGORIES;
 
   return (
-    <div className="group flex h-full flex-col gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-muted/40">
+    // The lift is a single pixel on purpose: enough to say the whole card is
+    // pressable, not enough to make a grid of them feel restless.
+    <div className="group flex h-full flex-col gap-3 rounded-xl border border-border bg-surface p-4 transition-[color,background-color,border-color,box-shadow,transform] duration-[var(--duration-fast)] ease-[var(--ease-out)] hover:-translate-y-px hover:border-muted/40 hover:shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <h3 className="min-w-0 text-sm font-medium text-foreground">
           {/* The pseudo-element makes the whole card the link target while

@@ -33,9 +33,31 @@ export type Precision = keyof typeof PRECISION_CONFIDENCE;
 /** Unknown precision is treated as street-level minus a penalty, not as good. */
 const UNKNOWN_CONFIDENCE = 0.45;
 
+/**
+ * How far a reverse match may be from the pin before it stops being about it.
+ *
+ * Precision alone says how *specific* a feature is, never how *near*. That is
+ * fine for a forward search, where the query is text and there is no coordinate
+ * to be near — but it is exactly wrong for a dropped pin, where a `house` feature
+ * a hundred metres away on the next street scored 0.95, the same as the building
+ * the pin is standing on. That is the "wrong street, stated confidently" bug: it
+ * looked answered, so nobody checked it.
+ *
+ * Inside `NEAR_M` the match is about this pin and keeps its full score. Past
+ * `FAR_M` it is about somewhere else, and retains `FAR_FACTOR` of it — reduced,
+ * not zeroed, because the street is usually still right even when the building
+ * isn't. Between the two it tapers, so nothing flips at a threshold.
+ */
+const NEAR_M = 10;
+const FAR_M = 150;
+const FAR_FACTOR = 0.45;
+
 export function confidenceFor(
   precision: string | null | undefined,
-  { hasHouseNumber = false }: { hasHouseNumber?: boolean } = {},
+  {
+    hasHouseNumber = false,
+    distanceM,
+  }: { hasHouseNumber?: boolean; distanceM?: number } = {},
 ): number {
   const base =
     precision && precision in PRECISION_CONFIDENCE
@@ -44,11 +66,28 @@ export function confidenceFor(
 
   // A street match carrying the house number we asked for is effectively a
   // rooftop match; without one it is the middle of the road.
-  if (hasHouseNumber && base < PRECISION_CONFIDENCE.house) {
-    return Math.min(PRECISION_CONFIDENCE.house, base + 0.2);
-  }
+  const promoted =
+    hasHouseNumber && base < PRECISION_CONFIDENCE.house
+      ? Math.min(PRECISION_CONFIDENCE.house, base + 0.2)
+      : base;
 
-  return base;
+  return promoted * distanceFactor(distanceM);
+}
+
+/**
+ * 1 when the match is on top of the pin, `FAR_FACTOR` when it is far away.
+ *
+ * An omitted distance is not "distance zero" — a forward search has no pin to
+ * measure against, and penalising it would be inventing a fact. It returns 1 so
+ * `search()` scores exactly as it did before this existed.
+ */
+function distanceFactor(distanceM: number | undefined): number {
+  if (distanceM === undefined || !Number.isFinite(distanceM)) return 1;
+  if (distanceM <= NEAR_M) return 1;
+  if (distanceM >= FAR_M) return FAR_FACTOR;
+
+  const travelled = (distanceM - NEAR_M) / (FAR_M - NEAR_M);
+  return 1 - travelled * (1 - FAR_FACTOR);
 }
 
 /**

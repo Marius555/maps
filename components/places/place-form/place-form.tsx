@@ -15,7 +15,9 @@ import {
   placeFormSchema,
   type PlaceFormValues,
 } from "@/lib/validation/place.schema";
+import { emptyHours } from "@/packages/shared/hours";
 import { AddressSearchField } from "./address-search-field";
+import { HoursField } from "./hours-field/hours-field";
 import { PhotoField } from "./photo-field";
 
 /**
@@ -54,6 +56,8 @@ export function PlaceForm({
       phone: place.phone ?? "",
       email: place.email ?? "",
       url: place.url ?? "",
+      // The form always holds seven days; `null` on the place means none set yet.
+      hours: place.hours ?? emptyHours(),
       lat: place.lat,
       lng: place.lng,
     },
@@ -162,6 +166,18 @@ export function PlaceForm({
         label="Website"
         type="url"
         placeholder="https://example.com"
+      />
+
+      <Controller
+        control={control}
+        name="hours"
+        render={({ field }) => (
+          <HoursField
+            value={field.value}
+            error={errors.hours?.message}
+            onChange={field.onChange}
+          />
+        )}
       />
 
       <div className="flex justify-end gap-2">

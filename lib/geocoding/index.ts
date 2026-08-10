@@ -16,6 +16,6 @@ export function getGeocoder(): GeocodeProvider {
   return provider;
 }
 
-export { GeocoderError } from "./photon";
+export { GeocoderError, isRetryable, isTimeout } from "./photon";
 export { HIGH_CONFIDENCE, needsReview, statusFor } from "./confidence";
 export type { GeocodeCandidate, GeocodeProvider, GeocodeQuery } from "./types";

@@ -26,16 +26,24 @@ export function embedSnippet({
   scriptUrl,
   snapshotUrl,
   height = DEFAULT_EMBED_HEIGHT,
+  target,
+  eager = false,
 }: {
   scriptUrl: string;
   snapshotUrl: string;
   height?: number;
+  /** CSS selector to render into, instead of inserting a container in place. */
+  target?: string;
+  /** Skip lazy loading. Only the in-dashboard preview needs this. */
+  eager?: boolean;
 }): string {
   // type="module" is required, not stylistic: MapLibre v6 ships ESM only, so the
   // bundle is a module. Modules are deferred by default, hence no `async`.
   return (
     `<script type="module" src="${escapeAttribute(scriptUrl)}"` +
     ` data-snapshot="${escapeAttribute(snapshotUrl)}"` +
+    (target ? ` data-target="${escapeAttribute(target)}"` : "") +
+    (eager ? " data-eager" : "") +
     ` data-height="${height}"></script>`
   );
 }

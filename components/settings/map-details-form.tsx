@@ -5,15 +5,15 @@ import { Button } from "@heroui/react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { SelectControl } from "@/components/ui/select-control";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { FormTextField } from "@/components/ui/form-field";
 import { SectionPanel } from "@/components/ui/section-panel";
-import { MAP_STYLES, STYLE_LABELS } from "@/lib/map/style";
+import { MAP_STYLES } from "@/lib/map/style";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { useUpdateMap } from "@/lib/query/maps";
 import type { AppMap } from "@/lib/repositories/types";
 import { formatCoords } from "@/lib/map/geo";
+import { BasemapPicker } from "./basemap-picker";
 
 /**
  * Name and basemap. Both are the whole of "map details" — the default view is set
@@ -79,12 +79,7 @@ export function MapDetailsForm({ map }: { map: AppMap }) {
           control={control}
           name="style"
           render={({ field }) => (
-            <SelectControl
-              label="Basemap"
-              options={MAP_STYLES.map((style) => ({
-                id: style,
-                label: STYLE_LABELS[style],
-              }))}
+            <BasemapPicker
               value={field.value}
               error={errors.style?.message}
               onChange={field.onChange}

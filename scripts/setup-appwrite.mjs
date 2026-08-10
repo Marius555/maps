@@ -293,6 +293,15 @@ async function setupTable(table) {
  * list as "allow anything", so a bucket created without one ends up restricted
  * to the schema's list the first time this runs. That is the intent — the app
  * only ever uploads those types — but it is a real change, not a no-op.
+ *
+ * `fileSecurity` belongs in the widening set for a reason worth spelling out.
+ * With it off, Appwrite ignores per-file permissions entirely and consults only
+ * the bucket's own, which we deliberately leave empty. Every upload then carries
+ * `read("any")` that does nothing, and an anonymous GET on a photo or a
+ * published snapshot answers 401 — a broken image in the dashboard and a dead
+ * embed on a customer's site. Turning it on grants exactly the access each file
+ * already asks for and takes none away, so it is safe to reconcile; a bucket
+ * created by hand in the console defaults to off, which is how this happens.
  */
 async function reconcileBucket(bucket, id) {
   let current;
@@ -308,8 +317,9 @@ async function reconcileBucket(bucket, id) {
     (extension) => !current.allowedFileExtensions.includes(extension),
   );
   const needsSize = current.maximumFileSize < bucket.maximumFileSize;
+  const needsFileSecurity = bucket.fileSecurity && !current.fileSecurity;
 
-  if (missing.length === 0 && !needsSize) {
+  if (missing.length === 0 && !needsSize && !needsFileSecurity) {
     skip(`bucket ${id} settings`);
     return;
   }
@@ -317,13 +327,17 @@ async function reconcileBucket(bucket, id) {
   const changes = [
     missing.length > 0 ? `+${missing.join(", +")}` : null,
     needsSize ? `max ${Math.round(bucket.maximumFileSize / 1024 / 1024)}MB` : null,
+    needsFileSecurity ? "file security on" : null,
   ].filter(Boolean);
 
   await create(`bucket ${id} settings (${changes.join(", ")})`, () =>
     storage.updateBucket({
       bucketId: id,
       name: current.name,
-      fileSecurity: current.fileSecurity,
+      // Sent explicitly: updateBucket resets anything omitted, and the bucket's
+      // own permissions staying empty is the point — access is per file.
+      permissions: current.$permissions,
+      fileSecurity: bucket.fileSecurity || current.fileSecurity,
       maximumFileSize: Math.max(current.maximumFileSize, bucket.maximumFileSize),
       allowedFileExtensions: [
         ...new Set([...current.allowedFileExtensions, ...bucket.allowedFileExtensions]),

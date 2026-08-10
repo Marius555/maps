@@ -1,8 +1,17 @@
+import type { StyleSpecification } from "maplibre-gl";
 import maplibreCss from "maplibre-gl/dist/maplibre-gl.css?inline";
+
+import { loadMapStyle } from "@/packages/shared/load-style";
 import type { MapSnapshot, SnapshotPlace } from "@/packages/shared/snapshot";
 
 import { isDomainAllowed } from "./allowlist";
-import { readConfig, warn, type EmbedConfig } from "./config";
+import {
+  readConfig,
+  readFocusPlaceId,
+  warn,
+  whenVisible,
+  type EmbedConfig,
+} from "./config";
 import { el } from "./dom";
 import { createFilters, matchesCategories } from "./filters";
 import { nearestPlace, formatDistance, distanceKm } from "./geo";
@@ -63,6 +72,11 @@ async function mount(script: HTMLScriptElement): Promise<void> {
   const container = resolveContainer(script, config);
   if (!container) return;
 
+  // Before the fetch, not just before the render: a page with four maps below
+  // the fold should make no requests at all until they are scrolled towards.
+  // The container is already sized, so nothing shifts when the map arrives.
+  await whenVisible(container, config.eager);
+
   let snapshot: MapSnapshot;
 
   try {
@@ -81,7 +95,7 @@ async function mount(script: HTMLScriptElement): Promise<void> {
   }
 
   injectStyles();
-  render(container, snapshot);
+  await render(container, snapshot);
 }
 
 /**
@@ -111,8 +125,38 @@ function resolveContainer(
   return container;
 }
 
-function render(container: HTMLElement, snapshot: MapSnapshot): void {
-  const root = el("div", "lm-root");
+async function render(
+  container: HTMLElement,
+  snapshot: MapSnapshot,
+): Promise<void> {
+  const isDark = resolveTheme(snapshot);
+
+  /*
+   * Auto's dark basemap is its light one recoloured here in the browser, not a
+   * second style on the server — see lib/map/darken-style.ts for why (the stock
+   * dark style carries no POI layers at all and its labels sit under the AA
+   * contrast floor).
+   *
+   * `snapshot.autoDark` is what gates it, not `isDark` alone: a map pinned to
+   * `dark` or `fiord` is already dark and must not be inverted a second time.
+   *
+   * Still no metered call in the visitor's path (CLAUDE.md §2) — this is the
+   * same static style file MapLibre would have fetched itself, read by us first.
+   */
+  let style: string | StyleSpecification;
+
+  try {
+    style = (await loadMapStyle(
+      snapshot.styleUrl,
+      isDark && snapshot.autoDark === true,
+    )) as string | StyleSpecification;
+  } catch {
+    // A working light map beats no map, and a stranger's site must never sprout
+    // our diagnostics.
+    style = snapshot.styleUrl;
+  }
+
+  const root = el("div", isDark ? "lm-root lm-root--dark" : "lm-root");
   root.style.height = "100%";
 
   const canvas = el("div", "lm-canvas");
@@ -126,8 +170,36 @@ function render(container: HTMLElement, snapshot: MapSnapshot): void {
   root.append(canvas, toolbar, status);
   container.replaceChildren(root);
 
-  const map = createMap(canvas, snapshot);
+  const map = createMap(canvas, snapshot, {
+    style,
+    focusPlaceId: readFocusPlaceId(),
+  });
   wireControls({ map, snapshot, toolbar, status });
+}
+
+/**
+ * Light or dark, for both the basemap and the panels.
+ *
+ * `autoDark` means the owner chose Auto, and Auto means *the person looking* — so
+ * the visitor's own colour scheme decides. Otherwise the owner pinned a basemap
+ * and `theme` carries the answer they published. Absent means light, which is
+ * what snapshots written before either field existed get: they are immutable and
+ * still being served to live sites.
+ *
+ * Resolved once, at boot, and never revisited. Following a mid-visit OS theme
+ * change would mean `setStyle`, and this map draws its places as a GeoJSON
+ * source with cluster and point layers that `setStyle` drops — re-adding them on
+ * `styledata` is real complexity for a rare event a reload already fixes. The
+ * editor makes the opposite call for the opposite reason: there, pins are DOM
+ * markers that survive a restyle, and the owner toggles the theme constantly.
+ */
+function resolveTheme(snapshot: MapSnapshot): boolean {
+  if (!snapshot.autoDark) return snapshot.theme === "dark";
+
+  return (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
 }
 
 function wireControls({

@@ -26,10 +26,14 @@ export function draftToPlace(draft: DraftPlace, mapId: string): Place {
     phone: draft.phone || null,
     email: draft.email || null,
     url: draft.url || null,
+    // A CSV column for opening hours would need a format to parse; imports set
+    // them afterwards, per location.
+    hours: null,
     photoId: null,
     photoUrl: null,
     sortOrder: draft.rowNumber,
     geocodeConfidence: draft.confidence,
+    addressParts: null,
     geocodeStatus: toGeocodeStatus(draft.status),
     createdAt: now,
     updatedAt: now,
@@ -59,6 +63,9 @@ export function draftToCreateInput(
     url: draft.url || undefined,
     sortOrder: 0,
     geocodeStatus: toGeocodeStatus(draft.status),
+    // The review step already showed this; saving it is what lets a row still say
+    // "check this" a week later, rather than only on the screen that geocoded it.
+    geocodeConfidence: draft.confidence,
   };
 }
 

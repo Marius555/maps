@@ -33,8 +33,13 @@ const eslintConfig = defineConfig([
   // websites. It gets MapLibre, pmtiles and our own code — nothing else. Stated
   // as a rule rather than a convention, because the cost of breaking it is
   // invisible until someone measures the bundle.
+  //
+  // /packages/shared is held to the same list, not because it ships to visitors
+  // itself, but because whatever it imports the embed inherits. It is the one
+  // directory both build targets read, so it is the one place a dependency could
+  // reach the visitor without anyone importing it from /embed.
   {
-    files: ["embed/**/*.ts"],
+    files: ["embed/**/*.ts", "packages/shared/**/*.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -62,8 +67,9 @@ const eslintConfig = defineConfig([
             {
               group: ["@/lib/*", "@/components/*", "@/app/*"],
               message:
-                "Only type-only imports from @/packages/shared may cross into " +
-                "the embed (CLAUDE.md §4). Copy the handful of lines instead.",
+                "Only @/packages/shared may cross into the embed (CLAUDE.md §4) " +
+                "— and what it holds must be types, or vanilla TS with no " +
+                "dependencies. Move the code there, or copy the lines.",
             },
           ],
         },

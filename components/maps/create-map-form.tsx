@@ -8,6 +8,8 @@ import { useForm } from "react-hook-form";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { FormTextField } from "@/components/ui/form-field";
 import { DEFAULT_CENTER } from "@/lib/config";
+// `auto` is the default, so a new map already follows whoever is looking at it —
+// there is no theme to read here any more.
 import { DEFAULT_MAP_STYLE } from "@/lib/map/style";
 import { useCreateMap } from "@/lib/query/maps";
 import { applyFieldErrors } from "@/lib/query/form-errors";

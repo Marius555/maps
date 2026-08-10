@@ -24,18 +24,26 @@ export function EditorSidebar({
   categoriesById,
   placeLimit,
   selectedPlaceId,
+  pendingAddressIds,
+  failedAddressIds,
   error,
   onSelect,
   onEdit,
+  onRetryAddress,
 }: {
   mapId: string;
   places: Place[];
   categoriesById: Map<string, MapCategory>;
   placeLimit: number;
   selectedPlaceId: string | null;
+  /** Locations still waiting on a reverse geocode — see PlaceList. */
+  pendingAddressIds?: ReadonlySet<string>;
+  /** Locations whose reverse geocode came back with nothing — see PlaceList. */
+  failedAddressIds?: ReadonlySet<string>;
   error: unknown;
   onSelect: (placeId: string) => void;
   onEdit: (placeId: string) => void;
+  onRetryAddress?: (placeId: string) => void;
 }) {
   return (
     <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:w-80 lg:shrink-0">
@@ -58,8 +66,11 @@ export function EditorSidebar({
           places={places}
           categoriesById={categoriesById}
           selectedPlaceId={selectedPlaceId}
+          pendingAddressIds={pendingAddressIds}
+          failedAddressIds={failedAddressIds}
           onSelect={onSelect}
           onEdit={onEdit}
+          onRetryAddress={onRetryAddress}
         />
       </ScrollShadow>
     </aside>

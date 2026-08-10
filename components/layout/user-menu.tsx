@@ -41,6 +41,8 @@ export function UserMenu({
 }) {
   const router = useRouter();
   const logout = useLogout();
+  // The cross-fade needs no coordination here: globals.css transitions the
+  // registered colour tokens on :root, so changing the theme is enough.
   const { theme, setTheme } = useTheme();
 
   const initials = getInitials(user.name, user.email);
@@ -56,25 +58,29 @@ export function UserMenu({
       <Button
         aria-label="Account menu"
         variant="tertiary"
-        className={`h-auto w-full gap-2 rounded-xl px-2 py-1.5 ${
-          isCollapsed ? "justify-center" : "justify-start"
+        className={`h-auto w-full rounded-xl px-2 py-1.5 ${
+          isCollapsed ? "justify-center gap-0" : "justify-start gap-2"
         }`}
       >
         <Avatar size="sm">
           <Avatar.Fallback>{initials}</Avatar.Fallback>
         </Avatar>
 
-        {/* Hidden when collapsed, but the avatar and aria-label still identify it. */}
-        {isCollapsed ? null : (
-          <span className="min-w-0 flex-1 text-left">
-            <span className="block truncate text-sm font-medium text-foreground">
-              {user.name || "Account"}
-            </span>
-            <span className="block truncate text-xs font-normal text-muted">
-              {user.email}
-            </span>
+        {/* Collapsed to zero width rather than unmounted, so it travels with the
+            panel. The avatar and aria-label identify the control either way. */}
+        <span
+          aria-hidden={isCollapsed}
+          className={`min-w-0 flex-1 overflow-hidden text-left transition-[max-width,opacity] duration-[var(--duration-panel)] ease-[var(--ease-out-fluid)] ${
+            isCollapsed ? "max-w-0 opacity-0" : "max-w-full opacity-100"
+          }`}
+        >
+          <span className="block truncate text-sm font-medium text-foreground">
+            {user.name || "Account"}
           </span>
-        )}
+          <span className="block truncate text-xs font-normal text-muted">
+            {user.email}
+          </span>
+        </span>
       </Button>
 
       <Dropdown.Popover placement="top start" className="min-w-56">

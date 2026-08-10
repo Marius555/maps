@@ -1,6 +1,11 @@
 import { DEFAULT_MAP_STYLE, isMapStyleKey } from "@/lib/map/style";
 import { photoViewUrl } from "@/lib/storage/photo-url";
-import { GEOCODE_STATUSES, type GeocodeStatus } from "@/lib/validation/place.schema";
+import { parseHours } from "@/packages/shared/hours";
+import {
+  GEOCODE_STATUSES,
+  type AddressParts,
+  type GeocodeStatus,
+} from "@/lib/validation/place.schema";
 import type { AppMap, MapCategory, MapRow, Place, PlaceRow } from "./types";
 
 /**
@@ -57,11 +62,18 @@ export function toPlace(row: PlaceRow): Place {
     phone: row.phone ?? null,
     email: row.email ?? null,
     url: row.url ?? null,
+    // parseHours holds the same never-throw contract as parseJson above, and adds
+    // shape checking on top of it — a hand-edited row degrades to closed days.
+    hours: parseHours(row.hours),
     photoId: row.photoId ?? null,
     photoUrl: photoViewUrl(row.photoId),
     sortOrder: row.sortOrder ?? 0,
     geocodeConfidence: row.geocodeConfidence ?? null,
     geocodeStatus: toGeocodeStatus(row.geocodeStatus),
+    // Same never-throw contract as the JSON above: a row written before this
+    // column existed, or hand-edited in the console, reads as "no parts" rather
+    // than taking the whole list down.
+    addressParts: parseJson<AddressParts | null>(row.addressParts, null),
     createdAt: row.$createdAt,
     updatedAt: row.$updatedAt,
   };

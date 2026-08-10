@@ -95,6 +95,18 @@
      deliberately unset so it derives to calc(var(--radius) * 1.5). */
   --radius: 0.5rem;
 
+  /*
+   * Two durations, not a scale. `fast` is a state change you barely register —
+   * hover, selection, a colour settling. `panel` is geometry moving, which needs
+   * long enough to read as travel rather than a jump.
+   *
+   * Both sit either side of @heroui/styles' own .15s, so our motion and the
+   * components' built-in enter/exit animations belong to the same vocabulary.
+   * Easing comes from HeroUI's --ease-* tokens for the same reason.
+   */
+  --duration-fast: 150ms;
+  --duration-panel: 220ms;
+
   --font-sans: var(--font-instrument-sans);
 }
 
@@ -142,6 +154,177 @@
   --warning-foreground: oklch(24% 0.04 85);
   --danger: oklch(64% 0.21 359.62);
   --danger-foreground: oklch(99.11% 0 0);
+}
+
+/*
+ * Theme cross-fade.
+ *
+ * Custom properties don't animate unless they're registered with a type, so
+ * these six are. Once registered, transitioning them on :root interpolates the
+ * *values*, and every element reading `var(--surface)` follows along by
+ * inheritance — the whole UI cross-fades with no per-element rule at all.
+ *
+ * The previous approach put a `transition` shorthand on `.theme-transition *`
+ * with `!important`, toggled around setTheme by a hook and a timer. It worked,
+ * and it was a trap: an important shorthand on every element clobbers any
+ * transition already running, so switching theme mid-way through the sidebar's
+ * width animation would have killed it outright. This version has nothing to
+ * clobber and no timing to coordinate.
+ *
+ * Only colours are registered. `--radius` and the duration tokens are read at
+ * layout time and have no business interpolating.
+ *
+ * The transition is gated on `data-theme-ready`, which is set after the first
+ * paint (components/providers/app-providers.tsx). Without the gate, whether dark
+ * mode fades in on every page load would depend on whether Next happened to put
+ * its stylesheet before or after the pre-paint script in <head> — the theme
+ * would already be computed as light when the script adds `.dark`, and the
+ * transition would dutifully animate the change the script exists to hide.
+ */
+@property --background {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(97.5% 0 0);
+}
+@property --foreground {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(21% 0 0);
+}
+@property --surface {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(100% 0 0);
+}
+@property --surface-secondary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(96% 0 0);
+}
+@property --border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(92% 0 0);
+}
+@property --muted {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(50% 0 0);
+}
+
+:root[data-theme-ready] {
+  transition:
+    --background var(--duration-fast) var(--ease-out),
+    --foreground var(--duration-fast) var(--ease-out),
+    --surface var(--duration-fast) var(--ease-out),
+    --surface-secondary var(--duration-fast) var(--ease-out),
+    --border var(--duration-fast) var(--ease-out),
+    --muted var(--duration-fast) var(--ease-out);
+}
+
+/*
+ * The canvas stretches horizontally to its container, whatever pixel width
+ * MapLibre last gave it.
+ *
+ * MapLibre sizes the canvas in pixels, from the container's size at the moment
+ * `resize()` last ran. Width is the axis that actually animates — the nav sidebar
+ * — so between the frame growing and the debounced resize landing
+ * (components/map/use-maplibre.ts) this covers what would otherwise be a bare
+ * strip. The cost is one debounce interval of non-uniformly scaled map.
+ *
+ * Height is deliberately *not* here. `height: 100%` of a container that has
+ * somehow ended up zero-height renders nothing at all — no canvas, no controls,
+ * no error — which is precisely the failure that hid a zero-height container for
+ * an entire evening. Left alone, the canvas keeps MapLibre's own pixel height and
+ * a broken container shows a wrong map instead of no map. Visibly wrong beats
+ * invisibly wrong.
+ */
+.maplibregl-canvas {
+  width: 100% !important;
+}
+
+/*
+ * MapLibre's own chrome in dark mode.
+ *
+ * maplibre-gl.css is light-only — white control groups, dark SVG icons and a
+ * translucent-white attribution bar. Over the dark basemap all three read as
+ * bright rectangles pasted onto the map.
+ *
+ * The attribution rules are not cosmetic: OpenStreetMap and tile-provider credit
+ * must be visible on every rendered map (§12), and illegible is as good as
+ * absent.
+ */
+.dark .maplibregl-ctrl-group,
+[data-theme="dark"] .maplibregl-ctrl-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.dark .maplibregl-ctrl-group button + button,
+[data-theme="dark"] .maplibregl-ctrl-group button + button {
+  border-top-color: var(--border);
+}
+
+.dark .maplibregl-ctrl-group button:not(:disabled):hover,
+[data-theme="dark"] .maplibregl-ctrl-group button:not(:disabled):hover {
+  background-color: var(--surface-secondary);
+}
+
+/* The icons ship as dark-stroked SVG data URIs, so they cannot be recoloured by
+   a property — inverting the rendered result is the only lever. */
+.dark .maplibregl-ctrl-icon,
+[data-theme="dark"] .maplibregl-ctrl-icon {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+.dark .maplibregl-ctrl-attrib,
+[data-theme="dark"] .maplibregl-ctrl-attrib {
+  background-color: color-mix(in oklch, var(--surface) 80%, transparent);
+  color: var(--muted);
+}
+
+.dark .maplibregl-ctrl-attrib a,
+[data-theme="dark"] .maplibregl-ctrl-attrib a {
+  color: var(--foreground);
+}
+
+.dark .maplibregl-ctrl-attrib-button,
+[data-theme="dark"] .maplibregl-ctrl-attrib-button {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/*
+ * The place card's offset from its pin.
+ *
+ * The anchor itself is a zero-size point that components/map/use-map-anchor.ts
+ * moves with the map; this positions the card beside it. `data-flip` is written
+ * by that same hook when the pin is too close to the frame's right edge for a
+ * 256px card to fit, so the card opens on the left instead of half off-screen.
+ *
+ * `--map-anchor-shift` is the vertical half of the same idea, and it is a length
+ * rather than an attribute because the answer is a number of pixels, not one of
+ * two sides: the card is centred on its pin until doing so would hang it out of
+ * the frame, and then it is nudged back by however much it takes.
+ */
+.map-card-anchor__card {
+  position: absolute;
+  left: 22px;
+  transform: translateY(calc(-50% + var(--map-anchor-shift, 0px)));
+}
+
+.map-card-anchor[data-flip="left"] .map-card-anchor__card {
+  left: auto;
+  right: 22px;
+}
+
+/*
+ * How tall the card may get before its body scrolls, written by the same hook
+ * from the map frame's height. The fallback matters: the card is rendered in the
+ * commit before the hook's first measurement, and an uncapped frame of that is a
+ * flash of a card taller than the map.
+ */
+.map-card {
+  max-height: var(--map-anchor-max-height, 24rem);
 }
 
 /*
@@ -220,11 +403,108 @@
   }
 }
 
+/*
+ * The pin carried between the toolbar and the map.
+ *
+ * Not a `.map-pin`. What is held is the same icon the button it came out of
+ * carries (lucide's map-pin), so the gesture is one object moving rather than a
+ * button here and a dot appearing there. What lands is still a dot, because that
+ * is what the published map draws — a marker is a position, and a pin in transit
+ * is a thing in a hand.
+ *
+ * One size variable drives the box *and* both offsets. The offsets used to be
+ * hardcoded next to a hardcoded width, so changing the size silently moved the
+ * pin off the pointer — the kind of coupling that is only ever found by eye.
+ */
+.map-pin-ghost {
+  --pin-ghost-size: 2rem;
+  /*
+   * A teardrop's position is its tip, not its middle. lucide's map-pin tips at
+   * (12, 21.8) in its 24-unit box: half way across, 90.8% of the way down.
+   */
+  --pin-ghost-tip-x: 50%;
+  --pin-ghost-tip-y: 90.8%;
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  width: var(--pin-ghost-size);
+  height: var(--pin-ghost-size);
+  margin-left: calc(var(--pin-ghost-size) * -0.5);
+  margin-top: calc(var(--pin-ghost-size) * -0.908);
+  /* A pin under the pointer must not be what the drop lands on. */
+  pointer-events: none;
+}
+
+/*
+ * Two elements, and the split is the whole trick. The outer one carries position
+ * and nothing else, rewritten on every pointer sample; this one carries the look,
+ * and is the only one with a transition on it. Putting the transition on the
+ * outer element instead would smooth the pointer-following itself — the pin would
+ * lag the cursor, which reads as a dropped frame rather than as easing.
+ *
+ * It scales about the tip, so the point the pin is promising stays under the
+ * pointer for the whole lift instead of sliding into place.
+ */
+.map-pin-ghost__pin {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: var(--pin-ghost-tip-x) var(--pin-ghost-tip-y);
+  /* Sized and faded like the 16px icon still sitting in the button. */
+  transform: scale(0.5);
+  opacity: 0.5;
+  transition:
+    transform var(--duration-fast) var(--ease-out-fluid),
+    opacity var(--duration-fast) var(--ease-out-fluid);
+  filter: drop-shadow(0 4px 6px oklch(0% 0 0 / 0.35));
+}
+
+/* Added one reflow after the ghost is in the document, so the browser has an
+   initial state to animate away from. */
+.map-pin-ghost--lifted .map-pin-ghost__pin {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.map-pin-ghost__pin svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Filled rather than lucide's stroked outline: a line drawing disappears over a
+   busy basemap, and this has to be legible over every tile it crosses. */
+.map-pin-ghost__pin path {
+  fill: var(--accent);
+  stroke: var(--accent-foreground);
+  stroke-width: 1.5;
+}
+
+.map-pin-ghost__pin circle {
+  fill: var(--accent-foreground);
+}
+
+/*
+ * Reduced motion, once, for everything.
+ *
+ * This used to name `.map-pin__pulse` and `.map-pin__dot` specifically, which
+ * meant every new transition had to remember to opt out and none of them did.
+ * The blanket rule is the one the embed already ships (embed/src/styles.css) —
+ * §8 asks for `prefers-reduced-motion` respected *everywhere*, and a rule that
+ * has to be re-applied by hand is a rule that will be missed.
+ *
+ * 0.01ms rather than `none`: animations still fire their `animationend` events,
+ * so anything sequencing off them keeps working instead of hanging.
+ */
 @media (prefers-reduced-motion: reduce) {
-  .map-pin__pulse {
-    animation: none;
-  }
-  .map-pin__dot {
-    transition: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

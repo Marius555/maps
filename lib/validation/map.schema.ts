@@ -5,6 +5,7 @@ import { DEFAULT_MAP_STYLE, MAP_STYLES } from "@/lib/map/style";
 import { categoriesSchema } from "./category.schema";
 import { latSchema, lngSchema, zoomSchema } from "./common";
 import { allowedDomainsSchema } from "./domain.schema";
+import { embedSettingsSchema } from "./embed-settings.schema";
 
 export const createMapSchema = z.object({
   name: z
@@ -30,6 +31,7 @@ export const updateMapSchema = z
     defaultLng: lngSchema,
     defaultZoom: zoomSchema,
     categories: categoriesSchema,
+    settings: embedSettingsSchema,
     allowedDomains: allowedDomainsSchema,
   })
   .partial()

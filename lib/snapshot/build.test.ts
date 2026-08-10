@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { AUTO_STYLE, CONCRETE_MAP_STYLES } from "@/lib/map/style";
 import type { AppMap, MapCategory, Place } from "@/lib/repositories/types";
+import { emptyHours } from "@/packages/shared/hours";
 import { buildSnapshot } from "./build";
 
 const GENERATED_AT = "2026-08-08T10:00:00.000Z";
@@ -39,10 +41,12 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     phone: null,
     email: null,
     url: null,
+    hours: null,
     photoId: null,
     photoUrl: null,
     sortOrder: 0,
     geocodeConfidence: null,
+    addressParts: null,
     geocodeStatus: "ok",
     createdAt: GENERATED_AT,
     updatedAt: GENERATED_AT,
@@ -77,6 +81,90 @@ describe("buildSnapshot", () => {
     expect(snapshot.styleUrl).toContain("positron");
   });
 
+  it("resolves every pinned basemap to its own URL", () => {
+    for (const style of CONCRETE_MAP_STYLES) {
+      const { snapshot } = buildSnapshot(makeMap({ style }), [], GENERATED_AT);
+
+      expect(snapshot.styleUrl).toMatch(/^https:\/\//);
+      expect(snapshot.styleUrl).toContain(style);
+      // A pinned basemap is the same for everyone, so there is nothing to decide
+      // at view time.
+      expect(snapshot.autoDark).toBeUndefined();
+    }
+  });
+
+  /**
+   * The embed colours its own panels from this. For a pinned basemap it is
+   * decided at publish time and travels in the snapshot; for Auto it cannot be,
+   * which is what the next test is about.
+   */
+  it("marks dark basemaps so the embed can match its chrome", () => {
+    expect(buildSnapshot(makeMap({ style: "dark" }), [], GENERATED_AT).snapshot.theme).toBe(
+      "dark",
+    );
+    expect(buildSnapshot(makeMap({ style: "fiord" }), [], GENERATED_AT).snapshot.theme).toBe(
+      "dark",
+    );
+    expect(
+      buildSnapshot(makeMap({ style: "liberty" }), [], GENERATED_AT).snapshot.theme,
+    ).toBe("light");
+  });
+
+  /**
+   * Auto ships one basemap and no verdict. There is no second URL because the
+   * dark half is this one recoloured in the visitor's browser — and whether to
+   * recolour it depends on their own colour scheme, which is not knowable when
+   * the snapshot is written. So `theme` must be absent, or the embed would have
+   * a stale answer sitting next to the live one.
+   */
+  it("ships one basemap, a flag and no fixed theme for Auto", () => {
+    const { snapshot } = buildSnapshot(makeMap({ style: "auto" }), [], GENERATED_AT);
+
+    expect(snapshot.styleUrl).toContain(AUTO_STYLE);
+    expect(snapshot.autoDark).toBe(true);
+    expect(snapshot.theme).toBeUndefined();
+  });
+
+  it("defaults every embed control to on when settings were never written", () => {
+    // What every map created before the settings form existed looks like:
+    // `settings: "{}"` at creation and nothing after it.
+    const { snapshot } = buildSnapshot(makeMap({ settings: {} }), [], GENERATED_AT);
+
+    expect(snapshot.settings).toEqual({
+      clustering: true,
+      search: true,
+      filters: true,
+      nearest: true,
+    });
+  });
+
+  it("carries stored embed controls through to the snapshot", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ settings: { clustering: false, nearest: false } }),
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.settings.clustering).toBe(false);
+    expect(snapshot.settings.nearest).toBe(false);
+    // Absent keys still fall back rather than becoming undefined.
+    expect(snapshot.settings.search).toBe(true);
+    expect(snapshot.settings.filters).toBe(true);
+  });
+
+  it("ignores a settings value of the wrong type rather than publishing it", () => {
+    const { snapshot } = buildSnapshot(
+      // The column is free-form JSON, so it may have been hand-edited in the
+      // Appwrite console or written by an older build.
+      makeMap({ settings: { clustering: "yes", search: null } }),
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.settings.clustering).toBe(true);
+    expect(snapshot.settings.search).toBe(true);
+  });
+
   it("omits empty optional fields instead of writing nulls", () => {
     const { snapshot } = buildSnapshot(makeMap(), [makePlace()], GENERATED_AT);
     const [place] = snapshot.places;
@@ -107,6 +195,33 @@ describe("buildSnapshot", () => {
       url: "https://example.com",
       photoUrl: "https://cdn.example.com/photo.jpg",
     });
+  });
+
+  it("publishes opening hours, and omits a week with nothing in it", () => {
+    const week = emptyHours();
+    week[0] = { open: "09:00", close: "17:00" };
+
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [makePlace({ id: "open", hours: week }), makePlace({ id: "none" })],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.places[0].hours).toEqual(week);
+
+    // Not `hours: null`, and not seven nulls: absent. Across 3,000 places those
+    // keys are a meaningful slice of what a visitor downloads.
+    expect(snapshot.places[1]).not.toHaveProperty("hours");
+  });
+
+  it("omits an all-closed week, which means the same as no hours", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [makePlace({ hours: emptyHours() })],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.places[0]).not.toHaveProperty("hours");
   });
 
   it("drops places whose coordinates are unusable and reports them", () => {

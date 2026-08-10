@@ -6,8 +6,10 @@ import {
   Popup,
   type GeoJSONSource,
   type MapGeoJSONFeature,
+  type StyleSpecification,
 } from "maplibre-gl";
 
+import { collapseAttribution } from "@/packages/shared/attribution";
 import type { MapSnapshot, SnapshotPlace } from "@/packages/shared/snapshot";
 
 import { buildPopup } from "./popup";
@@ -49,18 +51,44 @@ export type MapHandle = {
   destroy: () => void;
 };
 
+export type CreateMapOptions = {
+  /**
+   * The basemap, already resolved by the caller: a URL for MapLibre to fetch, or
+   * a recoloured style object for an Auto map being viewed in dark. Resolved
+   * outside because it may need a fetch, and a constructor cannot await.
+   */
+  style: string | StyleSpecification;
+  /**
+   * A place to open on instead of the whole map, from `?place=<id>` on the host
+   * page. Unknown ids are ignored, which is what lets several maps share a page.
+   */
+  focusPlaceId?: string | null;
+};
+
 export function createMap(
   container: HTMLElement,
   snapshot: MapSnapshot,
+  { style, focusPlaceId = null }: CreateMapOptions,
 ): MapHandle {
   const map = new MapLibreMap({
     container,
-    style: snapshot.styleUrl,
+    style,
     center: [snapshot.center.lng, snapshot.center.lat],
     zoom: snapshot.center.zoom,
-    // Attribution for OpenStreetMap and the tile provider is non-negotiable on
-    // every rendered map, the embed included (CLAUDE.md §12).
-    attributionControl: { compact: false, customAttribution: snapshot.attribution },
+    /*
+     * Credit for OpenStreetMap and the tile provider is non-negotiable on every
+     * rendered map, the embed included (CLAUDE.md §12) — but compact, so it is
+     * one small ⓘ on a customer's page rather than a bar of text glaring off a
+     * dark basemap. Expanding it is one click, which is the affordance OSM's
+     * attribution guidance expects for constrained space.
+     *
+     * No `customAttribution`: the tile source's own TileJSON already credits
+     * OpenFreeMap, OpenMapTiles and OpenStreetMap. Passing `snapshot.attribution`
+     * as well printed all three a second time, joined by a pipe — that was the
+     * doubled line. `snapshot.attribution` stays in the contract because
+     * snapshots are immutable, it is just no longer the thing that renders it.
+     */
+    attributionControl: { compact: true },
   });
 
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
@@ -70,7 +98,17 @@ export function createMap(
   );
   // No AttributionControl is added here on purpose: the `attributionControl`
   // map option above already creates one. Adding a second renders the credit
-  // twice, stacked.
+  // twice, stacked — a different doubling from the one described above, and
+  // both were live at once.
+
+  /*
+   * ...and `compact: true` only makes it collapsible, not collapsed. MapLibre
+   * renders it open until the visitor first touches the map, so on a customer's
+   * page the credit lands as a full line of text. Started collapsed instead —
+   * still present, still one click away. See packages/shared/attribution.ts.
+   */
+  map.on("load", () => collapseAttribution(map.getContainer()));
+  map.on("styledata", () => collapseAttribution(map.getContainer()));
 
   // A map on someone's landing page must not swallow the page scroll.
   map.scrollZoom.disable();
@@ -107,7 +145,25 @@ export function createMap(
     addLayers(map, snapshot);
     wireInteractions(map, (place) => showPopup(place));
 
-    if (snapshot.bounds) fitBounds(map, snapshot.bounds);
+    /*
+     * A deep link replaces the opening view rather than animating away from it.
+     * Fitting the whole map and then flying to one pin shows the visitor a
+     * journey they didn't ask for and delays the thing they followed the link
+     * for — so this jumps, and only the popup announces itself.
+     */
+    const focused = focusPlaceId
+      ? places.find((place) => place.id === focusPlaceId)
+      : undefined;
+
+    if (focused) {
+      map.jumpTo({
+        center: [focused.lng, focused.lat],
+        zoom: Math.max(snapshot.center.zoom, FOCUS_ZOOM),
+      });
+      showPopup(focused);
+    } else if (snapshot.bounds) {
+      fitBounds(map, snapshot.bounds);
+    }
   });
 
   const showPopup = (place: SnapshotPlace) => {

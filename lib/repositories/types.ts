@@ -1,7 +1,8 @@
 import type { Models } from "node-appwrite";
 
 import type { MapStyleKey } from "@/lib/map/style";
-import type { GeocodeStatus } from "@/lib/validation/place.schema";
+import type { OpeningHours } from "@/packages/shared/hours";
+import type { AddressParts, GeocodeStatus } from "@/lib/validation/place.schema";
 
 /**
  * Raw Appwrite row shapes. These stay inside /lib/repositories.
@@ -41,6 +42,7 @@ export type PlaceRow = Models.Row & {
   sortOrder?: number | null;
   geocodeConfidence?: number | null;
   geocodeStatus?: string | null;
+  addressParts?: string | null;
 };
 
 /** Domain shapes. Everything outside /lib/repositories sees only these. */
@@ -80,6 +82,8 @@ export type Place = {
   phone: string | null;
   email: string | null;
   url: string | null;
+  /** Null when no day has been filled in — see packages/shared/hours.ts. */
+  hours: OpeningHours | null;
   photoId: string | null;
   /**
    * Resolved from photoId on the server. Clients render this directly rather than
@@ -89,6 +93,11 @@ export type Place = {
   sortOrder: number;
   geocodeConfidence: number | null;
   geocodeStatus: GeocodeStatus;
+  /**
+   * The geocoder's answer in parts, or null when no geocoder ever spoke for this
+   * row. The postcode under the street in the locations list comes from here.
+   */
+  addressParts: AddressParts | null;
   createdAt: string;
   updatedAt: string;
 };
