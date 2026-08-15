@@ -6,6 +6,7 @@ import { categoriesSchema } from "./category.schema";
 import { latSchema, lngSchema, zoomSchema } from "./common";
 import { allowedDomainsSchema } from "./domain.schema";
 import { embedSettingsSchema } from "./embed-settings.schema";
+import { pinIconsSchema } from "./pin-icon.schema";
 
 export const createMapSchema = z.object({
   name: z
@@ -31,6 +32,7 @@ export const updateMapSchema = z
     defaultLng: lngSchema,
     defaultZoom: zoomSchema,
     categories: categoriesSchema,
+    pinIcons: pinIconsSchema,
     settings: embedSettingsSchema,
     allowedDomains: allowedDomainsSchema,
   })

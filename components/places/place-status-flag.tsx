@@ -1,6 +1,6 @@
 import { Chip } from "@heroui/react";
 
-import { HIGH_CONFIDENCE } from "@/lib/geocoding/confidence";
+import { isApproximate } from "@/lib/geocoding/confidence";
 import type { GeocodeStatus } from "@/lib/validation/place.schema";
 
 /**
@@ -18,13 +18,20 @@ import type { GeocodeStatus } from "@/lib/validation/place.schema";
  * `geocodeConfidence`.
  *
  * Telling them apart matters because they ask for opposite things: "check the
- * pin" is useless advice about a pin the user placed on purpose.
+ * pin" is useless advice about a pin the user placed on purpose. It is also why
+ * only two of the three are chips. A chip is a sentence, and a sentence is the
+ * right weight for "this pin might be in the wrong place" — but the third case is
+ * a pin that is exactly where it should be, missing a house number, and giving
+ * that the same size and shape as a real problem made every hand-dropped pin look
+ * broken. It is an amber ring instead: visible at a glance, silent until asked.
+ * The marker on the map stays plain — a ring on the canvas reads as a note about
+ * the *position*, which is the one thing that is not wrong here.
  *
- * Nothing renders when both are settled — a chip on every row would be noise.
+ * Nothing renders when everything is settled — a flag on every row would be noise.
  * `variant="soft"` pairs the status colour with its own foreground, which is the
  * only legible way to use these tokens (see place-count-badge.tsx).
  */
-export function PlaceStatusChip({
+export function PlaceStatusFlag({
   status,
   confidence,
 }: {
@@ -54,23 +61,26 @@ export function PlaceStatusChip({
     );
   }
 
-  /*
-   * Only for a pin someone placed. An "ok" row was geocoded from a full address
-   * and already carries a house number; re-flagging it on the same threshold
-   * would put a chip on rows that are exactly as precise as we promised.
-   */
-  if (
-    status === "manual" &&
-    typeof confidence === "number" &&
-    confidence < HIGH_CONFIDENCE
-  ) {
+  if (isApproximate(status, confidence)) {
+    /*
+     * A native `title` rather than a HeroUI Tooltip, and the same one the marker
+     * carries. HeroUI's is React Aria, whose trigger has to be a focusable
+     * component — this is a 14px ring, not a control, and making it pressable to
+     * win a nicer tooltip would put it in the tab order as something you can
+     * activate and nothing happens. `role="img"` with a name is what a screen
+     * reader gets, since `title` alone on a non-focusable element reaches nobody.
+     *
+     * The amber comes from `--warning`, whose foreground partner is near-black and
+     * so unusable as text (see place-count-badge.tsx) — as a border it needs no
+     * partner, and holds against both the surface and a selected row's tint.
+     */
     return (
-      <StatusChip
-        color="warning"
-        title="We matched this pin to the street, not to a building. Add the house number if you know it."
-      >
-        Approximate
-      </StatusChip>
+      <span
+        role="img"
+        aria-label="Approximate address"
+        title="Approximate — we matched this pin to the street, not to a building. Add the house number if you know it."
+        className="size-3.5 shrink-0 rounded-full border-2 border-[var(--warning)]"
+      />
     );
   }
 

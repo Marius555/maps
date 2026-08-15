@@ -19,6 +19,7 @@ import { emptyHours } from "@/packages/shared/hours";
 import { AddressSearchField } from "./address-search-field";
 import { HoursField } from "./hours-field/hours-field";
 import { PhotoField } from "./photo-field";
+import { PinField } from "./pin-field";
 
 /**
  * Edits one location.
@@ -52,6 +53,7 @@ export function PlaceForm({
       name: place.name,
       address: place.address,
       category: place.category,
+      icon: place.icon,
       description: place.description ?? "",
       phone: place.phone ?? "",
       email: place.email ?? "",
@@ -141,6 +143,18 @@ export function PlaceForm({
             options={categoryOptions}
             value={field.value}
             error={errors.category?.message}
+            onChange={field.onChange}
+          />
+        )}
+      />
+
+      <Controller
+        control={control}
+        name="icon"
+        render={({ field }) => (
+          <PinField
+            value={field.value}
+            pinIcons={map.pinIcons}
             onChange={field.onChange}
           />
         )}

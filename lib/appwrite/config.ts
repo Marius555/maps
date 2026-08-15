@@ -12,5 +12,7 @@ export const SESSION_COOKIE = `a_session_${APPWRITE_PROJECT_ID}`;
 export const TABLES = {
   maps: "maps",
   places: "places",
+  shapes: "shapes",
+  groups: "groups",
   subscriptions: "subscriptions",
 } as const;

@@ -16,7 +16,12 @@
  * without a network round trip.
  */
 
-import { metresBetween, metresToBounds } from "@/lib/geo/metres";
+import {
+  boundsSpanM,
+  metresBetween,
+  metresInsideBounds,
+  metresToBounds,
+} from "@/lib/geo/metres";
 import { matchesRoad } from "@/lib/map/nearest-road";
 import type { NearestRoad } from "@/lib/map/nearest-road";
 
@@ -105,6 +110,82 @@ export function selectReverseFeature(
 }
 
 /**
+ * How far inside a footprint the pin must be before the thing is what it is
+ * standing on rather than what it is standing next to.
+ *
+ * Photon gives a bounding box, never a polygon, and an angled building's box
+ * reaches over the pavement and part of the road. Every one of those false hits
+ * is within a couple of metres of an edge; a person marking their shop drops the
+ * pin somewhere in the middle of it. Five metres separates the two without
+ * excluding anything genuinely small — a kiosk's box is still ~10m across.
+ */
+const VENUE_INSET_M = 5;
+
+/**
+ * Past this diagonal, a footprint is an area rather than a venue.
+ *
+ * Reverse lookups routinely contain administrative and postal polygons — the
+ * same Vilnius response that produced the address bug contained a postcode area
+ * covering 99km². Containment cannot rule those out, since they genuinely do
+ * contain the pin. 400m keeps a museum, a hotel or a small campus and drops
+ * anything district-sized.
+ */
+const VENUE_MAX_SPAN_M = 400;
+
+/**
+ * The named place the pin is standing inside, if it is standing inside one.
+ *
+ * A separate question from `selectReverseFeature` above, and separate on
+ * purpose. That one answers "what is the address here", and two of its rules
+ * throw a venue name away as a side effect of getting the address right:
+ * `asStreet` clears `name` so the street can lead the line, and `agreesWith`
+ * discards a whole building when the tiles name a different nearest road — which
+ * is the correct call for a street and the wrong one for a landmark, since a
+ * building set back from its own street is still the building the pin is in.
+ *
+ * So the name is asked for on its own, from the same features, and the address
+ * rules are left exactly as they were. What comes back is not an address and
+ * never becomes one: it lands in `addressParts.name`, which the locations list
+ * prints after the postcode (lib/places/place-labels.ts).
+ *
+ * No road-agreement check here. `agreesWith` exists to catch a box that reaches
+ * across a road, and `VENUE_INSET_M` catches that same case directly — without
+ * needing a map to have been loaded, and without punishing a corner building for
+ * its own geometry.
+ */
+export function selectVenue(
+  features: readonly PhotonFeature[],
+  point: { lat: number; lng: number },
+): string | null {
+  const venues = features
+    .map((feature) => describe(feature, point))
+    .filter((candidate): candidate is Candidate => candidate !== null)
+    .filter(isVenue);
+
+  return nearest(venues)?.properties.name ?? null;
+}
+
+/**
+ * Named, not a street, not an area, and genuinely under the pin.
+ *
+ * The `name` requirement does most of the work: an unnamed building is nothing
+ * this line can say, and a street carries its name in `name` too — which is why
+ * streets are excluded explicitly rather than by having no name.
+ */
+function isVenue(candidate: Candidate): boolean {
+  const { properties } = candidate;
+
+  if (!properties.name || candidate.isStreet) return false;
+  if (candidate.spanM > VENUE_MAX_SPAN_M) return false;
+
+  // A node has no footprint to be inside, so proximity is all there is — the
+  // same rule, and the same threshold, that `isNearNode` uses for addresses.
+  return candidate.spanM > 0
+    ? candidate.insideM >= VENUE_INSET_M
+    : candidate.centroidM <= POINT_HIT_M;
+}
+
+/**
  * A building the geocoder picked is only believable if the tiles agree the pin is
  * on its street.
  *
@@ -137,6 +218,16 @@ type Candidate = {
   /** A footprintless feature close enough to be what the pin is on. */
   isNearNode: boolean;
   isStreet: boolean;
+  /**
+   * How far inside the footprint the pin is, and how big that footprint is.
+   *
+   * Kept apart from `containsPin` rather than folded into it: the address rules
+   * were tuned against that flag's exact meaning, and the venue question below
+   * needs a stricter reading of "inside" than they do. Both zero when the feature
+   * has no footprint at all.
+   */
+  insideM: number;
+  spanM: number;
 };
 
 function describe(
@@ -180,6 +271,8 @@ function describe(
     containsPin: canBeSite && extent !== null && distanceM === 0,
     isNearNode: canBeSite && extent === null && centroidM <= POINT_HIT_M,
     isStreet: isStreet(properties),
+    insideM: extent ? metresInsideBounds(point, extent) : 0,
+    spanM: extent ? boundsSpanM(extent) : 0,
   };
 }
 

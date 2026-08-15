@@ -3,37 +3,40 @@
 import { AnimatePresence } from "motion/react";
 import { useState } from "react";
 
-import { isOptimisticPlaceId, useDeletePlace } from "@/lib/query/places";
 import type { MapCategory, Place } from "@/lib/repositories/types";
+import { useDeletePlace } from "@/lib/query/places";
 import { DeletePlaceDialog } from "./delete-place-dialog";
 import { PlaceListEmpty } from "./place-list-empty";
 import { PlaceListItem } from "./place-list-item";
 
+/**
+ * The Locations tab's list: flat, search-filtered, no grouping.
+ *
+ * The editor sidebar used to render through this too, twice over — once per
+ * group and once for the loose rows — which is what made a location's row live
+ * in a different component depending on its `groupId`, and moving between the
+ * two impossible to animate. That panel builds its own single list now
+ * (components/editor/locations-panel/locations-list.tsx) out of the same
+ * `PlaceListItem` rows, so a location still looks and behaves identically in
+ * both places.
+ *
+ * What is left here is genuinely flat: a page-width list of every location that
+ * matches the search, with no groups to belong to and nothing to drop onto.
+ */
 export function PlaceList({
   mapId,
   places,
   categoriesById,
   selectedPlaceId,
-  pendingAddressIds,
-  failedAddressIds,
   onSelect,
   onEdit,
-  onRetryAddress,
 }: {
   mapId: string;
   places: Place[];
   categoriesById: Map<string, MapCategory>;
   selectedPlaceId: string | null;
-  /**
-   * Locations whose address is still being looked up, from whoever dropped the
-   * pin. Optional: the Locations page renders saved rows and never has any.
-   */
-  pendingAddressIds?: ReadonlySet<string>;
-  /** Locations whose lookup answered with nothing. Optional for the same reason. */
-  failedAddressIds?: ReadonlySet<string>;
   onSelect: (placeId: string) => void;
   onEdit: (placeId: string) => void;
-  onRetryAddress?: (placeId: string) => void;
 }) {
   const deletePlace = useDeletePlace(mapId);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -47,11 +50,11 @@ export function PlaceList({
 
   return (
     <>
-      <ul className="space-y-0.5">
+      <ul>
         {/*
          * `initial={false}` so opening a map with 300 locations doesn't fade all
-         * 300 in — only rows that appear *after* the list is on screen animate,
-         * which is exactly the set the user did something to.
+         * 300 in — only rows that appear *after* the list is on screen, which is
+         * exactly the set the user did something to.
          */}
         <AnimatePresence initial={false}>
           {places.map((place) => (
@@ -60,25 +63,9 @@ export function PlaceList({
               place={place}
               category={categoriesById.get(place.category)}
               isSelected={place.id === selectedPlaceId}
-              /*
-               * Two windows, one skeleton. The temporary id covers the row that
-               * exists only in the cache while its create is in flight; the set
-               * covers the reverse geocode that runs once the row is real.
-               */
-              isAddressPending={
-                isOptimisticPlaceId(place.id) ||
-                (pendingAddressIds?.has(place.id) ?? false)
-              }
-              hasAddressFailed={failedAddressIds?.has(place.id) ?? false}
-              isDeleting={
-                deletePlace.isPending && deletePlace.variables === place.id
-              }
               onSelect={() => onSelect(place.id)}
               onEdit={() => onEdit(place.id)}
               onDelete={() => setPendingDeleteId(place.id)}
-              onRetryAddress={
-                onRetryAddress ? () => onRetryAddress(place.id) : undefined
-              }
             />
           ))}
         </AnimatePresence>

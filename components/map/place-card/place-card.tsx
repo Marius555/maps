@@ -76,7 +76,12 @@ export function PlaceCard({
         <AnimatePresence>
           {place ? (
             <motion.div
-              key={place.id}
+              // Constant, not `place.id` — see ShapeCard for the whole story.
+              // Keyed on the id, picking a second location mounts the new card
+              // while the old one is still exiting, and the previous location's
+              // card ghosts through the new one. The card is one surface that
+              // changes subject; the animation marks it opening and closing.
+              key="card"
               initial={
                 prefersReducedMotion
                   ? { opacity: 0 }

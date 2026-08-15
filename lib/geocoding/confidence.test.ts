@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   HIGH_CONFIDENCE,
+  PRECISION_CONFIDENCE,
   confidenceFor,
+  isApproximate,
   needsReview,
   statusFor,
 } from "./confidence";
@@ -157,5 +159,37 @@ describe("needsReview", () => {
     expect(needsReview("failed")).toBe(true);
     expect(needsReview("ok")).toBe(false);
     expect(needsReview("manual")).toBe(false);
+  });
+});
+
+describe("isApproximate", () => {
+  it("flags a hand-placed pin whose address only reached the street", () => {
+    expect(isApproximate("manual", PRECISION_CONFIDENCE.street)).toBe(true);
+    expect(isApproximate("manual", HIGH_CONFIDENCE - 0.01)).toBe(true);
+  });
+
+  it("leaves a hand-placed pin that landed on a building alone", () => {
+    expect(isApproximate("manual", HIGH_CONFIDENCE)).toBe(false);
+    expect(isApproximate("manual", PRECISION_CONFIDENCE.house)).toBe(false);
+  });
+
+  /*
+   * The one that makes this narrower than a plain threshold. An "ok" row was
+   * geocoded from an address the customer typed and is as precise as we promised;
+   * flagging it here would put a ring on rows with nothing wrong with them.
+   */
+  it("says nothing about a geocoded row, however it scored", () => {
+    for (const status of ["ok", "low", "failed"] as const) {
+      expect(isApproximate(status, 0.1)).toBe(false);
+      expect(isApproximate(status, 0.99)).toBe(false);
+    }
+  });
+
+  it("treats a row no geocoder ever spoke for as settled", () => {
+    // Null is "we never asked", not "we asked and got nothing" — the second is
+    // `failed`. Inventing doubt from an absent number would ring every row
+    // imported before reverse geocoding existed.
+    expect(isApproximate("manual", null)).toBe(false);
+    expect(isApproximate("manual", undefined)).toBe(false);
   });
 });

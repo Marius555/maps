@@ -18,6 +18,20 @@ export const zoomSchema = z
 export const idSchema = z.string().trim().min(1).max(36);
 
 /**
+ * Plain hex, shared by categories and custom pins.
+ *
+ * Both are user data that travels into the published snapshot and gets read by
+ * the embed on someone else's site, where our CSS variables do not exist — so
+ * neither may be stored as a theme token.
+ */
+export const hexColorSchema = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Pick a colour, or enter a hex value like #e8590c.")
+  // Stored lowercase so two spellings of one colour compare equal.
+  .transform((value) => value.toLowerCase());
+
+/**
  * Appwrite caps a page at 100 rows, so anything larger would be silently
  * truncated. Reject it here instead.
  */

@@ -77,6 +77,7 @@ export function useDeleteMap() {
       );
       queryClient.removeQueries({ queryKey: queryKeys.maps.detail(mapId) });
       queryClient.removeQueries({ queryKey: queryKeys.places.all(mapId) });
+      queryClient.removeQueries({ queryKey: queryKeys.shapes.all(mapId) });
     },
   });
 }

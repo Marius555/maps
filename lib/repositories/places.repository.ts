@@ -180,6 +180,7 @@ export async function createPlace(
         lng: input.lng,
         address: input.address,
         category: input.category,
+        icon: input.icon,
         description: input.description ?? null,
         phone: input.phone ?? null,
         email: input.email ?? null,
@@ -189,6 +190,7 @@ export async function createPlace(
         geocodeStatus: input.geocodeStatus,
         geocodeConfidence: input.geocodeConfidence ?? null,
         addressParts: serialiseJson(input.addressParts),
+        groupId: input.groupId ?? "",
       },
       permissions: ownerPermissions(ctx.userId),
     });
@@ -245,6 +247,7 @@ export async function createPlaces(
           lng: input.lng,
           address: input.address,
           category: input.category,
+          icon: input.icon,
           description: input.description ?? null,
           phone: input.phone ?? null,
           email: input.email ?? null,

@@ -47,9 +47,11 @@ export class ConflictError extends RepositoryError {
  * Thrown when a plan limit is hit. Carries the structured facts so the message
  * is composed in exactly one place.
  */
+export type LimitedResource = "maps" | "places" | "shapes";
+
 export class PlanLimitError extends RepositoryError {
   constructor(
-    readonly resource: "maps" | "places",
+    readonly resource: LimitedResource,
     readonly limit: number,
     readonly plan: PlanId,
   ) {
@@ -57,13 +59,19 @@ export class PlanLimitError extends RepositoryError {
   }
 }
 
+/** What each resource is called in a sentence, singular and plural. */
+const NOUNS: Record<LimitedResource, [string, string]> = {
+  maps: ["map", "maps"],
+  places: ["location", "locations"],
+  shapes: ["shape", "shapes"],
+};
+
 function planLimitMessage(
-  resource: "maps" | "places",
+  resource: LimitedResource,
   limit: number,
   plan: PlanId,
 ): string {
-  const noun = resource === "maps" ? "map" : "location";
-  const plural = resource === "maps" ? "maps" : "locations";
+  const [noun, plural] = NOUNS[resource];
   const counted = limit === 1 ? `${limit} ${noun}` : `all ${limit} ${plural}`;
 
   return (

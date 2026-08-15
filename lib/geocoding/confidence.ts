@@ -111,3 +111,27 @@ export function statusFor(
 export function needsReview(status: GeocodeStatus): boolean {
   return status === "low" || status === "failed";
 }
+
+/**
+ * A pin someone placed themselves whose *address* only reached the street.
+ *
+ * The opposite failure from `needsReview`, and the distinction is the whole point:
+ * there the position is suspect and the fix is to drag the pin. Here the position
+ * is exactly right — a person put it there — and it is the address read back off
+ * the map that is short a house number, because reverse geocoding only reaches a
+ * building when the pin is standing on one.
+ *
+ * Only for "manual". An "ok" row was geocoded from a full address the customer
+ * typed and already carries its number; flagging it on the same threshold would
+ * mark rows that are exactly as precise as we promised.
+ */
+export function isApproximate(
+  status: GeocodeStatus,
+  confidence: number | null | undefined,
+): boolean {
+  return (
+    status === "manual" &&
+    typeof confidence === "number" &&
+    confidence < HIGH_CONFIDENCE
+  );
+}

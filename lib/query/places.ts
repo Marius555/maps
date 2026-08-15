@@ -116,6 +116,7 @@ export function useCreatePlace(mapId: string) {
         lng: input.lng,
         address: input.address ?? "",
         category: input.category ?? "",
+        icon: input.icon ?? "",
         description: input.description ?? null,
         phone: input.phone ?? null,
         email: input.email ?? null,
@@ -128,6 +129,7 @@ export function useCreatePlace(mapId: string) {
         geocodeConfidence: input.geocodeConfidence ?? null,
         addressParts: input.addressParts ?? null,
         geocodeStatus: input.geocodeStatus ?? "manual",
+        groupId: input.groupId ?? "",
         createdAt: now,
         updatedAt: now,
       };

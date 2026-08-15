@@ -34,6 +34,8 @@ const ctx = { userId: USER_ID };
 
 /** How many places the map already has. Set per test. */
 let existingPlaceCount = 0;
+/** How many shapes the map already has. Set per test. */
+let existingShapeCount = 0;
 /** The row `plan-limits` reads. Empty array means the free plan. */
 let subscriptionRows: { plan?: string; status?: string }[] = [];
 
@@ -42,6 +44,7 @@ beforeEach(() => {
   vi.resetModules();
 
   existingPlaceCount = 0;
+  existingShapeCount = 0;
   subscriptionRows = [];
 
   getRow.mockImplementation(async () => ({
@@ -57,18 +60,20 @@ beforeEach(() => {
     defaultZoom: 11,
   }));
 
-  // Both the subscription read and the place count go through listRows, so the
+  // The subscription read and both entity counts go through listRows, so the
   // mock branches on which table was asked for.
   listRows.mockImplementation(async ({ tableId }: { tableId: string }) => {
     if (tableId === "subscriptions") {
       return { rows: subscriptionRows, total: subscriptionRows.length };
     }
 
+    if (tableId === "shapes") return { rows: [], total: existingShapeCount };
+
     return { rows: [], total: existingPlaceCount };
   });
 
   createRow.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
-    $id: "place-new",
+    $id: "row-new",
     $createdAt: "2026-01-01T00:00:00.000Z",
     $updatedAt: "2026-01-01T00:00:00.000Z",
     ...data,
@@ -97,8 +102,10 @@ const placeInput = (name: string) => ({
   lng: 25.28,
   address: "",
   category: "",
+  icon: "",
   sortOrder: 0,
   geocodeStatus: "manual" as const,
+  groupId: "",
 });
 
 describe("createPlace", () => {
@@ -201,5 +208,74 @@ describe("createPlaces", () => {
 
     await expect(createPlaces(ctx, MAP_ID, [])).resolves.toEqual([]);
     expect(createRows).not.toHaveBeenCalled();
+  });
+});
+
+describe("createShape", () => {
+  const shapeInput = (name: string) => ({
+    name,
+    geometry: { kind: "circle" as const, lng: 25.28, lat: 54.687, radius: 800 },
+    color: "#1c7ed6",
+    opacity: 0.2,
+    sortOrder: 0,
+    groupId: "",
+  });
+
+  async function shapes() {
+    return import("./shapes.repository");
+  }
+
+  it("allows a shape below the free plan's limit", async () => {
+    existingShapeCount = PLAN_LIMITS.free.shapes - 1;
+    const { createShape } = await shapes();
+
+    await expect(createShape(ctx, MAP_ID, shapeInput("Zone"))).resolves.toMatchObject({
+      name: "Zone",
+    });
+    expect(createRow).toHaveBeenCalledOnce();
+  });
+
+  it("refuses the shape that would exceed the limit", async () => {
+    existingShapeCount = PLAN_LIMITS.free.shapes;
+    const { createShape } = await shapes();
+
+    await expect(createShape(ctx, MAP_ID, shapeInput("Zone"))).rejects.toMatchObject({
+      code: "plan_limit_reached",
+      status: 403,
+    });
+    expect(createRow).not.toHaveBeenCalled();
+  });
+
+  it("counts shapes against the shape limit, not the place one", async () => {
+    // A map full of locations must not block a first shape, and vice versa.
+    existingPlaceCount = PLAN_LIMITS.free.places;
+    existingShapeCount = 0;
+    const { createShape } = await shapes();
+
+    await expect(createShape(ctx, MAP_ID, shapeInput("Zone"))).resolves.toBeTruthy();
+  });
+
+  it("splits the geometry into a kind column and a payload", async () => {
+    const { createShape } = await shapes();
+
+    await createShape(ctx, MAP_ID, shapeInput("Zone"));
+
+    const { data } = createRow.mock.calls[0][0];
+    expect(data.kind).toBe("circle");
+    // The kind is not repeated inside the payload — one discriminator, no second
+    // copy to disagree with it.
+    expect(JSON.parse(data.geometry)).toEqual({
+      lng: 25.28,
+      lat: 54.687,
+      radius: 800,
+    });
+  });
+
+  it("uses the paid limit for an active paid subscription", async () => {
+    subscriptionRows = [{ plan: "starter", status: "active" }];
+    existingShapeCount = PLAN_LIMITS.free.shapes + 5;
+    const { createShape } = await shapes();
+
+    await expect(createShape(ctx, MAP_ID, shapeInput("Zone"))).resolves.toBeTruthy();
   });
 });

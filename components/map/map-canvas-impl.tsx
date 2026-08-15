@@ -2,18 +2,33 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { LngLatBounds, type MapMouseEvent } from "maplibre-gl";
+import {
+  LngLatBounds,
+  type MapMouseEvent,
+  type Map as MapLibreMap,
+} from "maplibre-gl";
 import { useReducedMotion } from "motion/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
+import {
+  boundsIntersectBox,
+  isPointInBox,
+  type SelectBox as Box,
+} from "@/lib/map/marquee";
 import { nearestRoad } from "@/lib/map/nearest-road";
 import type { NearestRoad } from "@/lib/map/nearest-road";
 import { registerPmtilesProtocol } from "@/lib/map/pmtiles";
 import type { MapStyleKey } from "@/lib/map/style";
 import { configureMaplibreWorker } from "@/lib/map/worker";
-import type { MapCategory, Place } from "@/lib/repositories/types";
-import type { Viewport } from "@/lib/stores/editor-store";
+import type { MapCategory, Place, Shape } from "@/lib/repositories/types";
+import type { Selection, Viewport } from "@/lib/stores/editor-store";
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
+import { shapeBounds, type ShapeBounds } from "@/packages/shared/shapes";
 import { PlaceCard } from "./place-card/place-card";
+import { SelectBox, type SelectBoxHandle } from "./select-box/select-box";
+import { useSelectBox } from "./select-box/use-select-box";
+import { MapShapes, type MapShapesProps } from "./shapes/map-shapes";
+import { SHAPE_HIT_LAYERS } from "./shapes/shape-layers";
 import { useMaplibre } from "./use-maplibre";
 import { usePlaceMarkers } from "./use-place-markers";
 
@@ -45,6 +60,12 @@ export type MapHandle = {
   getViewport: () => Viewport;
   /** Eases to a place, zooming in if the current zoom is further out than `zoom`. */
   flyTo: (target: { lng: number; lat: number }, options?: { zoom?: number }) => void;
+  /**
+   * Frames a box. What `flyTo` is to a pin, this is to an area: a shape has an
+   * extent, and flying to its centre at a fixed zoom would show the middle of a
+   * region without showing that it is one.
+   */
+  fitBounds: (bounds: ShapeBounds) => void;
   /**
    * What a point on the screen is, geographically. `null` when that point is not
    * over the map at all — which is what a pin dragged out of the toolbar and
@@ -88,7 +109,20 @@ export type MapCanvasProps = {
    * keeps its bare map. Same idiom as `fitToPlaces` above.
    */
   showPlaceCard?: boolean;
-  colorFor?: (place: Place) => string | undefined;
+  /**
+   * A pin's colour, decided in full by the caller — category, group, or the
+   * custom pin's own, which is handed in as the second argument rather than
+   * applied behind the resolver's back. See `paint` in use-place-markers.ts.
+   */
+  colorFor?: (place: Place, pinColor?: string) => string | undefined;
+  /**
+   * The map's own pins, for resolving a place's `custom:` icon id.
+   *
+   * Not derived from `colorFor` and not optional-by-accident: the import review
+   * step reuses this canvas for drafts on a map it has not loaded, and those
+   * drafts are all plain pins anyway.
+   */
+  pinIcons?: CustomPinIcon[];
   /** The card needs the whole category, not just the colour the pins take. */
   categoryFor?: (place: Place) => MapCategory | undefined;
   /** `null` clears the selection — a click on the basemap, closing the card. */
@@ -98,8 +132,35 @@ export type MapCanvasProps = {
   onMapClick: (coords: { lng: number; lat: number }) => void;
   /** Omit to make pins fixed. Supplying it is what enables dragging. */
   onMovePlace?: (placeId: string, coords: { lng: number; lat: number }) => void;
+  /**
+   * Areas drawn on the map — circles and polygons — and everything that edits
+   * them. Omit it and the canvas has no shape layer at all, which is what the
+   * import review and the preview want.
+   *
+   * A prop group rather than a dozen loose props: this is one feature, it either
+   * arrives whole or not at all, and the two callers who don't want it shouldn't
+   * have to pass twelve undefineds to say so.
+   */
+  shapes?: MapShapesProps;
+  /**
+   * Picking several objects at once, and the marquee that does it.
+   *
+   * A prop group for the same reason `shapes` is: it is one feature, and the
+   * import review and the preview want none of it.
+   */
+  selection?: MapSelectionProps;
   /** Hands the parent the map handle once there is a map to hand over. */
   onReady?: (handle: MapHandle) => void;
+};
+
+export type MapSelectionProps = {
+  /** Everything currently picked out, so the pins and shapes can show it. */
+  selected: Selection;
+  /** True while the select tool is armed. */
+  isSelecting: boolean;
+  onSelect: (selection: Selection) => void;
+  /** Leaves the tool — Escape, or a press that never became a drag. */
+  onStopSelecting: () => void;
 };
 
 export default function MapCanvasImpl({
@@ -112,7 +173,10 @@ export default function MapCanvasImpl({
   fitToPlaces,
   showPlaceCard,
   colorFor,
+  pinIcons,
   categoryFor,
+  shapes,
+  selection,
   onSelectPlace,
   onEditPlace,
   onMapClick,
@@ -131,12 +195,28 @@ export default function MapCanvasImpl({
   const selectedPlace =
     places.find((place) => place.id === selectedPlaceId) ?? null;
 
+  /*
+   * Sets rather than arrays, because both consumers ask "is this one in it?"
+   * once per object per render — a 500-place map would otherwise be 500 linear
+   * scans of a list that can hold 500 ids.
+   */
+  const selectedPlaceIds = useMemo(
+    () => new Set(selection?.selected.placeIds ?? []),
+    [selection?.selected.placeIds],
+  );
+  const selectedShapeIds = useMemo(
+    () => new Set(selection?.selected.shapeIds ?? []),
+    [selection?.selected.shapeIds],
+  );
+
   usePlaceMarkers({
     map,
     isReady,
     places,
     selectedPlaceId,
+    selectedPlaceIds,
     colorFor,
+    pinIcons,
     onSelect: onSelectPlace,
     onMove: onMovePlace,
   });
@@ -145,12 +225,18 @@ export default function MapCanvasImpl({
   // Assigned in an effect, not during render — refs are not render output.
   const clickHandler = useRef(onMapClick);
   const selectHandler = useRef(onSelectPlace);
+  const selectShapeHandler = useRef(shapes?.onSelectShape);
   const addingRef = useRef(isAdding);
+  const drawingRef = useRef(shapes?.drawMode ?? null);
+  const selectingRef = useRef(selection?.isSelecting ?? false);
 
   useEffect(() => {
     clickHandler.current = onMapClick;
     selectHandler.current = onSelectPlace;
+    selectShapeHandler.current = shapes?.onSelectShape;
     addingRef.current = isAdding;
+    drawingRef.current = shapes?.drawMode ?? null;
+    selectingRef.current = selection?.isSelecting ?? false;
   });
 
   useEffect(() => {
@@ -158,11 +244,41 @@ export default function MapCanvasImpl({
     if (!instance || !isReady) return;
 
     const handleClick = (event: MapMouseEvent) => {
+      // A drawing tool owns every click while it is armed — the polygon tool
+      // reads them as vertices, and neither tool wants this one clearing the
+      // selection or dropping a pin behind it.
+      if (drawingRef.current) return;
+
+      /*
+       * So does the select tool, and here it is load-bearing rather than tidy: a
+       * marquee ends with a pointerup the browser also reports as a click, and
+       * that click would land in the branch below and clear the selection the
+       * drag had just made — every time, on every marquee.
+       */
+      if (selectingRef.current) return;
+
       if (!addingRef.current) {
-        // Browse mode: a click on the basemap is a click away from whatever was
-        // selected, which is what closes the card. Clicks on a pin never reach
-        // here — the marker's own listener stops them (use-place-markers.ts).
+        /*
+         * Browse mode: a click on the basemap is a click away from whatever was
+         * selected, which is what closes the card. Clicks on a pin never reach
+         * here — the marker's own listener stops them (use-place-markers.ts) —
+         * but a shape is style geometry, not an element, so a click on one
+         * arrives here as well as at the shape layer's own handler. Asking what
+         * is under the pointer is how this tells the two apart, and it does not
+         * depend on which listener happened to be registered first.
+         */
+        const onShape =
+          Boolean(instance.getLayer(SHAPE_HIT_LAYERS[0])) &&
+          instance.queryRenderedFeatures(event.point, {
+            layers: SHAPE_HIT_LAYERS,
+          }).length > 0;
+
+        // A place and a shape are never selected at once, so either way the
+        // location's card closes. The shape's only closes when the click landed
+        // on neither — when it landed on a shape, the shape layer's own handler
+        // is about to open that one's card.
         selectHandler.current(null);
+        if (!onShape) selectShapeHandler.current?.(null);
         return;
       }
 
@@ -174,6 +290,41 @@ export default function MapCanvasImpl({
       instance.off("click", handleClick);
     };
   }, [map, isReady]);
+
+  const selectBox = useRef<SelectBoxHandle>(null);
+
+  /*
+   * The current places and shapes, for a pointer handler that runs outside
+   * React. Same idiom as the handler refs above: the marquee's effect is bound
+   * to the tool being armed, not to the data, and a closure over the arrays
+   * would be one render out of date by the time a drag ended.
+   */
+  const placesRef = useRef(places);
+  const shapesRef = useRef(shapes?.shapes);
+  const selectHandlerRef = useRef(selection?.onSelect);
+
+  useEffect(() => {
+    placesRef.current = places;
+    shapesRef.current = shapes?.shapes;
+    selectHandlerRef.current = selection?.onSelect;
+  });
+
+  useSelectBox({
+    map,
+    isReady,
+    isActive: selection?.isSelecting ?? false,
+    onPreview: (box) => selectBox.current?.show(box),
+    onCancel: () => selection?.onStopSelecting(),
+    onSelect: (box) => {
+      const instance = map.current;
+      if (!instance) return;
+
+      selectHandlerRef.current?.({
+        placeIds: pickPlaces(instance, placesRef.current, box),
+        shapeIds: pickShapes(instance, shapesRef.current ?? [], box),
+      });
+    },
+  });
 
   /**
    * Fit once, not on every places change: refitting would yank the view back
@@ -267,6 +418,26 @@ export default function MapCanvasImpl({
         }
       },
 
+      fitBounds: (bounds) => {
+        const instance = map.current;
+        if (!instance) return;
+
+        instance.fitBounds(
+          [
+            [bounds.west, bounds.south],
+            [bounds.east, bounds.north],
+          ],
+          {
+            padding: 64,
+            // A degenerate box — a polygon whose points all coincide — has zero
+            // area and would otherwise zoom to maximum.
+            maxZoom: 17,
+            duration: prefersReducedMotion ? 0 : 700,
+            essential: true,
+          },
+        );
+      },
+
       flyTo: (target, options) => {
         const instance = map.current;
         if (!instance) return;
@@ -327,8 +498,39 @@ export default function MapCanvasImpl({
          * anywhere. A percentage height does not care what `position` is, which is
          * why this is the form that survives.
          */
-        className={`h-full w-full ${isAdding ? "cursor-crosshair" : ""}`}
+        /*
+         * `maplibregl-crosshair`, not Tailwind's `cursor-crosshair`.
+         *
+         * The cursor the pointer actually reads is the one on
+         * `.maplibregl-canvas-container.maplibregl-interactive`, a *child* of
+         * this element, and maplibre-gl.css sets it to `grab` — (0,2,0) against
+         * a utility class's (0,1,0). So a cursor class here is dead over the
+         * canvas, which is why arming a tool still showed a hand. MapLibre ships
+         * this class for exactly this case: its own selectors reach the child
+         * and the `:active` state, so it beats both `grab` and `grabbing`.
+         *
+         * Third time this file has lost to maplibre-gl.css on specificity — see
+         * the `h-full` note below for the second.
+         */
+        className={`h-full w-full ${
+          isAdding || shapes?.drawMode || selection?.isSelecting
+            ? "maplibregl-crosshair"
+            : ""
+        }`}
       />
+
+      {selection ? <SelectBox ref={selectBox} /> : null}
+
+      {/* Before the place card, so a shape's card never covers a location's —
+          the pins are what the map is mostly about. */}
+      {shapes ? (
+        <MapShapes
+          map={map}
+          isReady={isReady}
+          selectedShapeIds={selectedShapeIds}
+          {...shapes}
+        />
+      ) : null}
 
       {showPlaceCard ? (
         <PlaceCard
@@ -344,4 +546,69 @@ export default function MapCanvasImpl({
       ) : null}
     </div>
   );
+}
+
+/**
+ * Which pins the box caught.
+ *
+ * A pin is selected when its own point is inside the box. Its marker is 36px
+ * wide on screen, but the pin *is* the point — grazing the edge of a ball with
+ * the corner of a marquee is not a selection anyone meant to make.
+ */
+function pickPlaces(
+  instance: MapLibreMap,
+  places: readonly Place[],
+  box: Box,
+): string[] {
+  const picked: string[] = [];
+
+  for (const place of places) {
+    if (isPointInBox(instance.project([place.lng, place.lat]), box)) {
+      picked.push(place.id);
+    }
+  }
+
+  return picked;
+}
+
+/**
+ * Which shapes the box caught — anything whose extent it touches.
+ *
+ * Projected corner by corner rather than compared in degrees, because the box is
+ * a rectangle on the screen and the map may be rotated. `project` does not
+ * preserve which corner is which under rotation, so the four are min/maxed back
+ * into a screen-space box rather than assumed.
+ */
+function pickShapes(
+  instance: MapLibreMap,
+  shapes: readonly Shape[],
+  box: Box,
+): string[] {
+  const picked: string[] = [];
+
+  for (const shape of shapes) {
+    const bounds = shapeBounds(shape.geometry);
+    if (!bounds) continue;
+
+    const corners = [
+      instance.project([bounds.west, bounds.north]),
+      instance.project([bounds.east, bounds.north]),
+      instance.project([bounds.east, bounds.south]),
+      instance.project([bounds.west, bounds.south]),
+    ];
+
+    const xs = corners.map((corner) => corner.x);
+    const ys = corners.map((corner) => corner.y);
+
+    const onScreen: Box = {
+      x1: Math.min(...xs),
+      y1: Math.min(...ys),
+      x2: Math.max(...xs),
+      y2: Math.max(...ys),
+    };
+
+    if (boundsIntersectBox(onScreen, box)) picked.push(shape.id);
+  }
+
+  return picked;
 }

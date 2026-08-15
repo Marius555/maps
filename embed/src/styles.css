@@ -250,6 +250,17 @@
   font-weight: 600;
 }
 
+/* A shape's card leads with its colour, because that is what ties the card to the
+   wash of colour it opened from — the name alone cannot, when three overlap. */
+.lm-popup__swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--lm-shape-color, var(--lm-muted));
+}
+
 .lm-popup__category {
   display: inline-block;
   margin-bottom: 4px;

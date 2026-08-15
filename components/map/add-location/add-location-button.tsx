@@ -1,48 +1,83 @@
 "use client";
 
-import { Button } from "@heroui/react";
+import { Button, Popover } from "@heroui/react";
 import { MapPin } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { allPinIcons } from "@/lib/map/pin-pages";
+import { PinGrid } from "./pin-grid";
 import { useDragToAdd } from "./use-drag-to-add";
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 
 /**
  * Two ways to add a location, one control.
  *
- * Drag the pin onto the map and let go, and it lands where you dropped it —
- * which is the gesture people already know from every other map they use, and it
- * says where the pin is going before it goes there.
- *
- * Click instead of dragging and it arms the older sticky add mode: the cursor
- * becomes a crosshair and every click on the map drops a pin until Esc. That
+ * Press it and a grid of pins opens. Drag one of those onto the map and it lands
+ * where you let go, wearing that pin — the gesture people already know from every
+ * other map they use, and it says what the pin will be before it is one. Press a
+ * tile instead and the older sticky add mode arms with that icon: the cursor
+ * becomes a crosshair and every click on the map drops another until Esc. That
  * path stays because dragging is a pointer gesture and a map builder has to be
  * usable from the keyboard (§8) — and because dropping forty pins in a row is
- * genuinely faster when you are not dragging each one out of the toolbar.
+ * genuinely faster when you are not dragging each one out of a menu.
  *
- * The two cannot both fire from one press, hence `consumeDidDrag`: React Aria
- * raises `onPress` on pointer-up regardless of how far the pointer travelled, so
- * without it every drag would also toggle add mode on the way out.
+ * This is the only pin control on the toolbar. There was a second one beside it
+ * holding the full set, back when this one held four slots; the grid holds both
+ * now, and see pin-grid.tsx for why that is one question rather than two.
+ *
+ * The button itself is still a drag source carrying a plain pin, so the gesture
+ * that existed before this menu did keeps working unchanged. It is no longer the
+ * only route to one, though — the grid's first cell is the same pin, reachable
+ * without knowing the button could be dragged at all.
+ *
+ * The two cannot both fire from one press, hence `consumeDidDrag` — React Aria
+ * raises its press on pointer-up regardless of how far the pointer travelled, so
+ * without it every drag would also open the menu on the way out. The guard lives
+ * in `onOpenChange` rather than in a press handler because that is now the only
+ * thing a press does here: the flag is read-clears, and two consumers of it would
+ * leave one reading false.
  */
 export function AddLocationButton({
   isAdding,
+  addIcon,
+  recentIcons,
+  pinIcons,
   isBusy,
-  isDisabled,
-  onToggleAdd,
+  onPickIcon,
+  onStopAdding,
   onDropPin,
   onDraggingChange,
+  onOpenStudio,
 }: {
   isAdding: boolean;
+  /** The icon add mode is armed with. */
+  addIcon: string;
+  /** The pins that earn a place on page one — see lib/map/recent-pins.ts. */
+  recentIcons: string[];
+  /** The map's own pins, for drawing a `custom:` id in the grid and the ghost. */
+  pinIcons: CustomPinIcon[];
   isBusy: boolean;
-  /** At the plan's place limit — the control stays visible, and inert. */
-  isDisabled?: boolean;
-  onToggleAdd: () => void;
-  onDropPin: (clientX: number, clientY: number) => void;
+  onPickIcon: (icon: string) => void;
+  onStopAdding: () => void;
+  onDropPin: (clientX: number, clientY: number, icon: string) => void;
   /** Lets the map say what to do with the pin now in the air. */
   onDraggingChange?: (isDragging: boolean) => void;
+  onOpenStudio: () => void;
 }) {
-  const { isDragging, handleProps, consumeDidDrag } = useDragToAdd({
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [page, setPage] = useState(0);
+
+  const icons = useMemo(
+    () => allPinIcons(pinIcons, recentIcons),
+    [pinIcons, recentIcons],
+  );
+
+  const { isDragging, dragProps, consumeDidDrag } = useDragToAdd({
     onDrop: onDropPin,
-    isDisabled,
+    // A pin in the air needs the map underneath it, not a menu. The drag itself
+    // survives the close: its listeners are on the window, not on the tile.
+    onDragStart: () => setIsMenuOpen(false),
+    pinIcons,
   });
 
   // Twice a gesture, not per pointer sample — the position never comes through
@@ -52,60 +87,113 @@ export function AddLocationButton({
   }, [isDragging, onDraggingChange]);
 
   return (
-    /*
-     * The pointer listeners sit on a wrapper rather than on the Button. React
-     * Aria owns the Button's own pointer handling, and adding a second set of
-     * handlers to the same element is how the two end up fighting over which of
-     * them saw the press.
-     *
-     * The pin that follows the pointer is not rendered here: it is a plain DOM
-     * node the hook appends to the body for the length of the gesture, because
-     * it moves with every pointer sample and React does not need to know.
-     */
-    <span {...handleProps} className="inline-flex">
-      <Button
-        size="sm"
-        variant={isAdding ? "primary" : "tertiary"}
-        aria-pressed={isAdding}
-        isPending={isBusy}
-        isDisabled={isDisabled}
-        className={isDragging ? "cursor-grabbing" : "cursor-grab"}
-        onPress={() => {
-          if (consumeDidDrag()) return;
-          onToggleAdd();
-        }}
-      >
-        {/* Faded, not hidden: the icon is in the air, and what stays behind reads
-            as the socket it came out of rather than as a second pin. */}
-        <MapPin
-          aria-hidden="true"
-          className={`size-4 transition-opacity duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ${
-            isDragging ? "opacity-30" : "opacity-100"
-          }`}
-        />
+    <Popover.Root
+      isOpen={isMenuOpen}
+      onOpenChange={(open) => {
+        // The press that ended a drag is not a press on the control.
+        if (open && consumeDidDrag()) return;
+        // While add mode is armed the button is a stop button, not a menu.
+        if (open && isAdding) {
+          onStopAdding();
+          return;
+        }
 
-        {/*
-         * The label folds away while a pin is being dragged, so the control
-         * becomes the icon that is now travelling. It comes back on release; a
-         * plain click never collapses it, which is what keeps "Stop adding"
-         * readable for anyone using the sticky add mode instead of the gesture.
-         *
-         * `max-width`, not `width` — it animates reliably from an auto-sized flex
-         * child, the same idiom the nav sidebar's labels use. The text stays in
-         * the DOM throughout, so the button keeps its accessible name.
-         *
-         * The negative margin cancels the Button's own `gap-2`. Without it the
-         * label reaches zero width and leaves half a centimetre of nothing behind,
-         * and the button stops short of closing up.
-         */}
-        <span
-          className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ${
-            isDragging ? "-ms-2 max-w-0 opacity-0" : "ms-0 max-w-40 opacity-100"
-          }`}
+        // Reopening on page three, having forgotten there were three, is the one
+        // way paging can leave someone unable to find a pin they can see exists.
+        if (open) setPage(0);
+
+        setIsMenuOpen(open);
+      }}
+    >
+      {/*
+       * The pointer listeners sit on a wrapper rather than on the Button. React
+       * Aria owns the Button's own pointer handling, and adding a second set of
+       * handlers to the same element is how the two end up fighting over which
+       * of them saw the press.
+       *
+       * The pin that follows the pointer is not rendered here: it is a plain DOM
+       * node the hook appends to the body for the length of the gesture, because
+       * it moves with every pointer sample and React does not need to know.
+       *
+       * It drags a *plain* pin, not the armed icon, because the button draws a
+       * plain pin — what you drag should be what you can see you are dragging.
+       * The grid is where a shaped pin comes from.
+       */}
+      <span {...dragProps("")} className="inline-flex">
+        <Button
+          size="sm"
+          variant={isAdding ? "primary" : "tertiary"}
+          aria-pressed={isAdding}
+          isPending={isBusy}
+          className={isDragging ? "cursor-grabbing" : "cursor-grab"}
         >
-          {isAdding ? "Stop adding" : "Add location"}
-        </span>
-      </Button>
-    </span>
+          {/* Faded, not hidden: the icon is in the air, and what stays behind
+              reads as the socket it came out of rather than as a second pin. */}
+          <MapPin
+            aria-hidden="true"
+            className={`size-4 transition-opacity duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ${
+              isDragging ? "opacity-30" : "opacity-100"
+            }`}
+          />
+
+          {/*
+           * The label folds away for two independent reasons, and both leave the
+           * control as the pin icon alone.
+           *
+           * A pin being dragged: the control becomes the icon that is now
+           * travelling, and it comes back on release. A plain press never
+           * collapses it, which is what keeps "Stop adding" readable for anyone
+           * using the sticky add mode instead of the gesture.
+           *
+           * The toolbar's search being open: the two cannot both have the width
+           * on a narrow map, and a search you asked for beats a label you have
+           * already read. That one is a CSS `group-has-`, watching the
+           * `data-search-open` the search puts on itself — a boolean threaded
+           * from a sibling, through the toolbar, and back down here would be
+           * three components knowing about one, to say what the cascade already
+           * knows.
+           *
+           * `max-width`, not `width` — it animates reliably from an auto-sized
+           * flex child, the same idiom the nav sidebar's labels use. The text
+           * stays in the DOM throughout, so the button keeps its accessible name.
+           *
+           * The negative margin cancels the Button's own `gap-2`. Without it the
+           * label reaches zero width and leaves half a centimetre of nothing
+           * behind, and the button stops short of closing up.
+           */}
+          <span
+            className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] group-has-[[data-search-open]]/toolbar:-ms-2 group-has-[[data-search-open]]/toolbar:max-w-0 group-has-[[data-search-open]]/toolbar:opacity-0 ${
+              isDragging ? "-ms-2 max-w-0 opacity-0" : "ms-0 max-w-40 opacity-100"
+            }`}
+          >
+            {isAdding ? "Stop adding" : "Add location"}
+          </span>
+        </Button>
+      </span>
+
+      <Popover.Content placement="bottom start">
+        <Popover.Dialog aria-label="Choose a pin">
+          <PinGrid
+            page={page}
+            icons={icons}
+            pinIcons={pinIcons}
+            armedIcon={addIcon}
+            isAdding={isAdding}
+            dragProps={dragProps}
+            onPageChange={setPage}
+            onPick={(icon) => {
+              setIsMenuOpen(false);
+              onPickIcon(icon);
+            }}
+            onOpenStudio={() => {
+              // The studio owns the screen from here: a popover still hanging off
+              // the toolbar behind a modal is a second dialog nobody dismissed.
+              setIsMenuOpen(false);
+              onOpenStudio();
+            }}
+          />
+        </Popover.Dialog>
+      </Popover.Content>
+    </Popover.Root>
   );
 }

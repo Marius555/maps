@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { embedScriptUrl, embedSnippet } from "@/lib/embed/snippet";
 import { buildPreviewSnapshot } from "@/lib/snapshot/preview";
-import type { AppMap, Place } from "@/lib/repositories/types";
+import type { AppMap, Place, Shape } from "@/lib/repositories/types";
 
 /**
  * The published map, as a visitor would get it, without publishing.
@@ -26,24 +26,27 @@ import type { AppMap, Place } from "@/lib/repositories/types";
 export function EmbedPreview({
   map,
   places,
+  shapes,
   className,
 }: {
   map: AppMap;
   places: Place[];
+  shapes: Shape[];
   className?: string;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
 
   /*
-   * Serialised here, and used as the effect's dependency, because `places` is a
-   * fresh array on every react-query refetch even when nothing changed. Keying
-   * the iframe on object identity would tear the map down and rebuild it —
-   * losing the visitor's pan, zoom and open popup — on a background refetch that
-   * changed nothing. Comparing the JSON compares what actually matters.
+   * Serialised here, and used as the effect's dependency, because `places` and
+   * `shapes` are fresh arrays on every react-query refetch even when nothing
+   * changed. Keying the iframe on object identity would tear the map down and
+   * rebuild it — losing the visitor's pan, zoom and open popup — on a background
+   * refetch that changed nothing. Comparing the JSON compares what actually
+   * matters.
    */
   const snapshotJson = useMemo(
-    () => JSON.stringify(buildPreviewSnapshot(map, places)),
-    [map, places],
+    () => JSON.stringify(buildPreviewSnapshot(map, places, shapes)),
+    [map, places, shapes],
   );
 
   /*

@@ -14,8 +14,9 @@
  * - `email`/`url` are varchar, not Appwrite's native email/url column types.
  *   Those types reject the empty string, which would 400 every place saved
  *   without contact details. Zod validates the format instead.
- * - Long, never-queried values (`categories`, `settings`, `description`, `hours`,
- *   `snapshotUrl`) are `text`: stored off-page, so they don't eat the 64KB row limit.
+ * - Long, never-queried values (`categories`, `pinIcons`, `settings`, `description`,
+ *   `hours`, `snapshotUrl`) are `text`: stored off-page, so they don't eat the 64KB
+ *   row limit.
  */
 
 /** @typedef {{ key: string, type: string } & Record<string, unknown>} Column */
@@ -40,6 +41,7 @@ const enumeration = (key, elements, opts = {}) => ({
 });
 
 export const GEOCODE_STATUSES = ["ok", "low", "failed", "manual"];
+export const SHAPE_KINDS = ["circle", "polygon"];
 export const PLANS = ["free", "starter", "pro"];
 export const SUBSCRIPTION_STATUSES = [
   "active",
@@ -62,6 +64,10 @@ export const TABLES = [
       float("defaultLng", { required: true, min: -180, max: 180 }),
       float("defaultZoom", { required: true, min: 0, max: 24 }),
       text("categories"),
+      // The pins the customer built: name, colour, and either a built-in glyph
+      // or their own logo inlined as a data URI. Capped in code at 8 pins of 6KB
+      // (lib/validation/pin-icon.schema.ts), so worst case is ~64KB of text.
+      text("pinIcons"),
       text("settings"),
       // 253 is the maximum length of a DNS name.
       varchar("allowedDomains", 253, { array: true }),
@@ -83,6 +89,11 @@ export const TABLES = [
       float("lng", { required: true, min: -180, max: 180 }),
       varchar("address", 512, { xdefault: "" }),
       varchar("category", 64, { xdefault: "" }),
+      // Which icon the pin wears: a built-in id, or `custom:<pinIconId>` naming
+      // one of the map's own pins. A plain string, not an enum, so an unknown id
+      // degrades to a plain pin instead of failing a write — which is what a
+      // place keeps doing after the custom pin it named is deleted.
+      varchar("icon", 64, { xdefault: "" }),
       text("description"),
       varchar("phone", 32),
       varchar("email", 254),
@@ -95,11 +106,85 @@ export const TABLES = [
       // The geocoder's answer in parts — postcode, city, country, OSM ids. JSON
       // for the same reason `hours` is: it is read whole and never queried on.
       text("addressParts"),
+      // Which group this location belongs to, or "" for none — the same way
+      // `category` and `icon` already spell "nothing chosen".
+      varchar("groupId", 36, { xdefault: "" }),
     ],
     indexes: [
       { key: "idx_places_mapId", type: "key", columns: ["mapId"], orders: ["asc"] },
       {
         key: "idx_places_map_sort",
+        type: "key",
+        columns: ["mapId", "sortOrder"],
+        orders: ["asc", "asc"],
+      },
+    ],
+  },
+  {
+    // Areas rather than points: a delivery radius, a service region, a campus
+    // boundary. A row per shape rather than JSON on the map, because a polygon
+    // ring is unbounded text and dragging a vertex would otherwise rewrite the
+    // whole map document.
+    id: "shapes",
+    name: "Shapes",
+    columns: [
+      varchar("mapId", 36, { required: true }),
+      varchar("name", 128, { required: true }),
+      // The discriminator, and it lives only here. The geometry column holds the
+      // payload alone, so there is no second copy of the kind to disagree with
+      // this one.
+      enumeration("kind", SHAPE_KINDS, { required: true }),
+      text("description"),
+      // Its own colour, not a category's. Categories are a locations taxonomy —
+      // filtering "Cafés" in the embed must not make a boundary disappear.
+      varchar("color", 7, { xdefault: "#1c7ed6" }),
+      // A fill dark enough to read as a region, light enough to see the map
+      // through. The stroke is drawn at full opacity regardless.
+      float("opacity", { min: 0, max: 1, xdefault: 0.2 }),
+      // A circle's centre and radius, or a polygon's ring. JSON for the same
+      // reason `hours` is: read whole, never queried on, and unbounded in length.
+      text("geometry", { required: true }),
+      integer("sortOrder", { min: 0, xdefault: 0 }),
+      // Same column, same meaning, same "" for none as on places. A group holds
+      // both kinds, which is the point of it.
+      varchar("groupId", 36, { xdefault: "" }),
+    ],
+    indexes: [
+      { key: "idx_shapes_mapId", type: "key", columns: ["mapId"], orders: ["asc"] },
+      {
+        key: "idx_shapes_map_sort",
+        type: "key",
+        columns: ["mapId", "sortOrder"],
+        orders: ["asc", "asc"],
+      },
+    ],
+  },
+  {
+    // Locations and shapes the owner has bundled together — a region, a
+    // franchise, a campus. Editor-only: groups are never written to a published
+    // snapshot, because a visitor cannot see or act on one, and bytes in the
+    // snapshot are bytes in every embed (§2, §4).
+    //
+    // A row rather than JSON on the map, for the reason shapes are: the members
+    // point *here* by id, so grouping one location is a one-column PATCH on that
+    // location instead of a rewrite of a list on the map document.
+    //
+    // No plan limit. Groups cannot outnumber the places and shapes they contain,
+    // which are limited already, and §6's table has no row for them.
+    id: "groups",
+    name: "Groups",
+    columns: [
+      varchar("mapId", 36, { required: true }),
+      varchar("name", 128, { required: true }),
+      // Used to tint the group's row and its members' selection ring in the
+      // editor. Not a category colour and not a shape's — it never reaches a map.
+      varchar("color", 7, { xdefault: "#495057" }),
+      integer("sortOrder", { min: 0, xdefault: 0 }),
+    ],
+    indexes: [
+      { key: "idx_groups_mapId", type: "key", columns: ["mapId"], orders: ["asc"] },
+      {
+        key: "idx_groups_map_sort",
         type: "key",
         columns: ["mapId", "sortOrder"],
         orders: ["asc", "asc"],

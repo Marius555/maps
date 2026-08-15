@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   REVERSE_MAX_DISTANCE_M,
   selectReverseFeature,
+  selectVenue,
 } from "./reverse-select";
 import type { PhotonFeature } from "./reverse-select";
 
@@ -373,5 +374,165 @@ describe("selectReverseFeature", () => {
 
     expect(match?.properties.street).toBe("Sinagogų g.");
     expect(match?.properties.housenumber).toBeUndefined();
+  });
+});
+
+/**
+ * The venue name is a different question from the address, and these are the
+ * cases where the two answers disagree.
+ *
+ * The reported bug: adding a location through the address search showed the
+ * landmark under the postcode, and dropping a pin on the same building showed
+ * only the postcode. The address rules were throwing the name away — `asStreet`
+ * clears it, and `agreesWith` discards a whole building when the tiles name a
+ * different nearest road. Neither should cost a landmark its name.
+ */
+const M_PER_DEG_LAT = 111_320;
+const mPerDegLng = (lat: number) => M_PER_DEG_LAT * Math.cos((lat * Math.PI) / 180);
+
+type Sides = { west: number; east: number; north: number; south: number };
+
+/** A footprint, described by how far past the pin it reaches on each side. */
+function boxAround(
+  point: { lat: number; lng: number },
+  { west, east, north, south }: Sides,
+): [number, number, number, number] {
+  const perLng = mPerDegLng(point.lat);
+
+  return [
+    point.lng - west / perLng,
+    point.lat + north / M_PER_DEG_LAT,
+    point.lng + east / perLng,
+    point.lat - south / M_PER_DEG_LAT,
+  ];
+}
+
+/** A node `metres` east of the pin, with no footprint of its own. */
+function nodeEastOfPin(name: string, metres: number): PhotonFeature {
+  return building(
+    { name, street: "Pylimo g." },
+    [PIN.lng + metres / mPerDegLng(PIN.lat), PIN.lat],
+  );
+}
+
+const SQUARE_20M: Sides = { west: 20, east: 20, north: 20, south: 20 };
+
+describe("selectVenue", () => {
+  it("names the venue the pin is standing well inside", () => {
+    const museum = building(
+      { housenumber: "1", street: "A. Goštauto g.", name: "Vytautas Kasiulis Museum of Art" },
+      [25.2852, 54.6744],
+      boxAround(PIN, SQUARE_20M),
+    );
+
+    expect(selectVenue([museum], PIN)).toBe("Vytautas Kasiulis Museum of Art");
+  });
+
+  it("ignores a footprint the pin is only just inside", () => {
+    /*
+     * The pavement case, and the whole reason for the inset. Photon publishes a
+     * bounding box rather than a polygon, so an angled building's box reaches
+     * over the footway and the road — a pin one metre in from an edge is beside
+     * the building, not in it, and naming it would be a confident lie.
+     */
+    const overreaching = building(
+      { street: "A. Goštauto g.", name: "Vytautas Kasiulis Museum of Art" },
+      [25.2852, 54.6744],
+      boxAround(PIN, { west: 1, east: 60, north: 60, south: 60 }),
+    );
+
+    expect(selectVenue([overreaching], PIN)).toBeNull();
+  });
+
+  it("ignores a street, which carries its name in the same field", () => {
+    const road = street("Pylimo g.", [25.2852, 54.6744], boxAround(PIN, SQUARE_20M));
+
+    expect(selectVenue([road], PIN)).toBeNull();
+  });
+
+  it("ignores an area far too big to be a venue", () => {
+    // The postcode polygon that swallowed 99km² of Vilnius, and any district
+    // like it: it really does contain the pin, so only its size rules it out.
+    const district = building(
+      { name: "Senamiestis" },
+      [25.2852, 54.6744],
+      boxAround(PIN, { west: 5000, east: 5000, north: 5000, south: 5000 }),
+    );
+
+    expect(selectVenue([district], PIN)).toBeNull();
+  });
+
+  it("ignores a building with no name to give", () => {
+    const anonymous = building(
+      { housenumber: "56", street: "Pylimo g." },
+      [25.2852, 54.6744],
+      boxAround(PIN, SQUARE_20M),
+    );
+
+    expect(selectVenue([anonymous], PIN)).toBeNull();
+  });
+
+  it("names a footprintless node sitting on top of the pin", () => {
+    // A shop mapped as a single point has no footprint to be inside, so
+    // proximity is all there is — the same 10m the address rules use.
+    expect(selectVenue([nodeEastOfPin("Skalvija", 3)], PIN)).toBe("Skalvija");
+  });
+
+  it("ignores a node too far away to be what the pin is on", () => {
+    expect(selectVenue([nodeEastOfPin("Zenoteca", 40)], PIN)).toBeNull();
+  });
+
+  it("prefers the nearer of two venues that both contain the pin", () => {
+    // A unit inside a block: both footprints hold the pin, and the one whose
+    // own point is nearer is the one it was dropped on.
+    const block = building(
+      { name: "Europa Business Centre", street: "Konstitucijos pr." },
+      [25.2857, 54.6749],
+      boxAround(PIN, { west: 60, east: 60, north: 60, south: 60 }),
+    );
+    const unit = building(
+      { name: "Skalvija", street: "Konstitucijos pr." },
+      [25.28522, 54.67442],
+      boxAround(PIN, SQUARE_20M),
+    );
+
+    expect(selectVenue([block, unit], PIN)).toBe("Skalvija");
+  });
+
+  it("returns null for an empty response", () => {
+    expect(selectVenue([], PIN)).toBeNull();
+  });
+
+  it("skips features with unusable geometry rather than throwing", () => {
+    const broken: PhotonFeature = { properties: { name: "Nowhere", type: "house" } };
+
+    expect(selectVenue([broken], PIN)).toBeNull();
+  });
+
+  /*
+   * The regression itself, both halves in one case.
+   *
+   * The tiles measure a different street from the museum's postal one — a corner
+   * building, or one set back — so `agreesWith` rejects it and the address
+   * correctly falls through to the road the pin is actually on. The name must
+   * survive that, because the pin is still inside the museum.
+   */
+  it("names a venue whose address the tiles overruled", () => {
+    const museum = building(
+      { housenumber: "1", street: "A. Goštauto g.", name: "Vytautas Kasiulis Museum of Art" },
+      [25.2852, 54.6744],
+      boxAround(PIN, SQUARE_20M),
+    );
+    const measured = street("Pylimo g.", [25.28525, 54.67443], [25.2851, 54.6745, 25.2854, 54.6743]);
+    const road = { names: ["Pylimo g."], distanceM: 2 };
+
+    const match = selectReverseFeature([museum, measured], PIN, road);
+
+    // The address is the street the tiles measured, with no borrowed number...
+    expect(match?.properties.street).toBe("Pylimo g.");
+    expect(match?.properties.housenumber).toBeUndefined();
+    // ...and the landmark is still named, which is what the row's second line
+    // prints after the postcode.
+    expect(selectVenue([museum, measured], PIN)).toBe("Vytautas Kasiulis Museum of Art");
   });
 });

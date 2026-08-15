@@ -2,7 +2,7 @@
 
 import { Modal } from "@heroui/react";
 
-import type { AppMap, Place } from "@/lib/repositories/types";
+import type { AppMap, Place, Shape } from "@/lib/repositories/types";
 import { EmbedPreview } from "./embed-preview";
 
 /**
@@ -14,11 +14,13 @@ import { EmbedPreview } from "./embed-preview";
 export function PreviewDialog({
   map,
   places,
+  shapes,
   isOpen,
   onOpenChange,
 }: {
   map: AppMap;
   places: Place[];
+  shapes: Shape[];
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -40,6 +42,7 @@ export function PreviewDialog({
             <EmbedPreview
               map={map}
               places={places}
+              shapes={shapes}
               className="h-[60dvh] min-h-64"
             />
           </Modal.Body>

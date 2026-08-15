@@ -6,9 +6,11 @@ import { Container } from "@/components/ui/container";
 import { requireUser } from "@/lib/auth/current-user";
 import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
+import { listAllGroups } from "@/lib/repositories/groups.repository";
 import { loadMap } from "@/lib/repositories/load-map";
 import { listAllPlaces } from "@/lib/repositories/places.repository";
 import { PLAN_LIMITS, getUserPlan } from "@/lib/repositories/plan-limits";
+import { listAllShapes } from "@/lib/repositories/shapes.repository";
 
 export async function generateMetadata(
   props: PageProps<"/maps/[id]">,
@@ -49,6 +51,8 @@ export default async function MapEditorPage(props: PageProps<"/maps/[id]">) {
       <MapEditor
         map={data.map}
         initialPlaces={data.places}
+        initialShapes={data.shapes}
+        initialGroups={data.groups}
         placeLimit={data.placeLimit}
       />
     </Container>
@@ -60,11 +64,27 @@ async function loadEditor(
   mapId: string,
   userId: string,
 ) {
-  const [map, places, plan] = await Promise.all([
+  const [map, places, shapes, groups, plan] = await Promise.all([
     loadMap(userId, mapId),
     listAllPlaces(ctx, mapId),
+    listAllShapes(ctx, mapId),
+    listAllGroups(ctx, mapId),
     getUserPlan(userId),
   ]);
 
-  return { map, places, placeLimit: PLAN_LIMITS[plan].places };
+  return {
+    map,
+    places,
+    shapes,
+    groups,
+    placeLimit: PLAN_LIMITS[plan].places,
+    // No shape limit either, and for a different reason than groups: the sidebar
+    // stopped showing a shapes badge when shapes moved inline with the
+    // locations, so nothing reads it. The server still enforces it on create and
+    // `toastPlanLimit` still says so — `PLAN_LIMITS[plan].shapes` is one line
+    // away if a badge ever wants it back.
+    //
+    // No group limit: a group cannot outnumber the places and shapes in it, and
+    // those are limited already. See §6's table, which has no row for groups.
+  };
 }

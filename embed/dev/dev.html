@@ -38,12 +38,24 @@
       <code>/embed/dev.html</code>.
     </p>
     <p class="note">
-      Checklist: pins coloured by category (uncategorised ones grey), the pair
-      beside the flagship clusters at low zoom, clicking a pin opens a popup, the
-      category chips filter and refit, search narrows by name or address, a
-      no-match search says so, and OpenStreetMap attribution shows exactly once.
-      Set <code>allowedDomains</code> to something other than localhost and the
-      map should refuse to render, warning to the console only.
+      Checklist: pins coloured by category (uncategorised ones grey), the four
+      locations with an <code>icon</code> drawn as large balls with a white glyph
+      and the rest as small ones, every pin centred on its own coordinate, the
+      pair beside the flagship clusters at low zoom (mixing both sizes into one
+      bubble), clicking either one opens a popup clear of the pin, the category
+      chips filter and refit, search narrows by name or address, a no-match
+      search says so, and OpenStreetMap attribution shows exactly once. Set
+      <code>allowedDomains</code> to something other than localhost and the map
+      should refuse to render, warning to the console only.
+    </p>
+    <p class="note">
+      Shapes: a blue circle around the flagship and an orange polygon over the
+      old town, both drawn <em>under</em> every pin and cluster, both keeping
+      their outline solid while the fill stays translucent. The circle must hold
+      its ground distance across zoom levels — pinch in and out and it should
+      cover the same streets, not the same number of pixels. Clicking a fill
+      opens its card where you clicked; clicking a pin that sits inside a shape
+      must still open the pin's card, not the shape's.
     </p>
 
     <p class="note">Text below the script, to prove the map is inserted in place:</p>

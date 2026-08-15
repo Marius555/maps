@@ -4,7 +4,8 @@ import { Map as MapLibreMap, Marker } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 
 import type { Place } from "@/lib/repositories/types";
-import { createPinElement, setPinSelected } from "./pin-marker";
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
+import { createPinElement, setPinIcon, setPinSelected } from "./pin-marker";
 
 /**
  * Keeps the map's markers in sync with the places array by diffing, not by
@@ -16,6 +17,8 @@ export function usePlaceMarkers({
   isReady,
   places,
   selectedPlaceId,
+  selectedPlaceIds,
+  pinIcons,
   colorFor,
   onSelect,
   onMove,
@@ -24,17 +27,36 @@ export function usePlaceMarkers({
   isReady: boolean;
   places: Place[];
   selectedPlaceId: string | null;
-  /** Category colour, resolved by the caller. Undefined falls back to --accent. */
-  colorFor?: (place: Place) => string | undefined;
+  /**
+   * Pins picked out by the marquee or a group. They wear the same ring a clicked
+   * pin does — the difference between one and many is which card opens, not how
+   * the marker looks.
+   */
+  selectedPlaceIds?: ReadonlySet<string>;
+  /** The map's own pins, for resolving a place's `custom:` icon id. */
+  pinIcons?: CustomPinIcon[];
+  /**
+   * The pin's colour, resolved entirely by the caller. Undefined falls back to
+   * --accent.
+   *
+   * The pin's own colour is handed *in* rather than applied here — see `paint`.
+   * Memoise it: its identity is what tells this hook the colours have moved.
+   */
+  colorFor?: (place: Place, pinColor?: string) => string | undefined;
   onSelect: (placeId: string) => void;
   /** Fired once, on drop. Dragging is how a bad geocode gets corrected (§7). */
   onMove?: (placeId: string, coords: { lng: number; lat: number }) => void;
 }) {
   const markers = useRef(new globalThis.Map<string, Marker>());
-  // Held in refs so a new callback identity doesn't rebuild every marker.
+  /*
+   * Held in refs because the marker's own listeners close over them once, when
+   * the marker is created, and must go on calling whatever the latest render
+   * passed. `colorFor` is deliberately *not* one of these: it decides what is
+   * drawn rather than what happens on an event, so it belongs in the diff
+   * effect's dependencies — see the note there.
+   */
   const onSelectRef = useRef(onSelect);
   const onMoveRef = useRef(onMove);
-  const colorForRef = useRef(colorFor);
   /**
    * Markers the pointer is currently holding. A background refetch landing
    * mid-drag would otherwise call setLngLat and yank the pin out of the user's
@@ -45,7 +67,6 @@ export function usePlaceMarkers({
   useEffect(() => {
     onSelectRef.current = onSelect;
     onMoveRef.current = onMove;
-    colorForRef.current = colorFor;
   });
 
   useEffect(() => {
@@ -69,12 +90,12 @@ export function usePlaceMarkers({
         }
 
         element.setAttribute("aria-label", place.name);
-        setPinColor(element, colorForRef.current?.(place));
+        paint(element, place, pinIcons, colorFor);
         continue;
       }
 
       const element = createPinElement(place.name);
-      setPinColor(element, colorForRef.current?.(place));
+      paint(element, place, pinIcons, colorFor);
 
       // A drag ends with a mouseup on the element, which the browser then
       // reports as a click. Without this flag, dropping a pin would also
@@ -121,13 +142,31 @@ export function usePlaceMarkers({
       markers.current.delete(id);
       dragging.current.delete(id);
     }
-  }, [map, isReady, places, onMove]);
+    /*
+     * `pinIcons` and `colorFor` are both here, and for the same reason: each of
+     * them can change while the places array stays identical. A pin recoloured in
+     * the studio changes the drawing; a group recoloured in its rename dialog
+     * changes what every member is painted (see `colorFor` in map-editor.tsx).
+     *
+     * `colorFor` used to be left out and read from the ref instead, which is the
+     * bug that made a group's new colour reach the sidebar dots and the shapes
+     * but not the pins — those only caught up when something else happened to
+     * write the places array, such as dragging one of them into the group.
+     * `use-shape-layers.ts` had it right all along.
+     *
+     * Re-running costs nothing: the loop below diffs, so an unchanged marker is
+     * repainted in place rather than rebuilt, and no drop animation restarts.
+     */
+  }, [map, isReady, places, pinIcons, onMove, colorFor]);
 
   useEffect(() => {
     for (const [id, marker] of markers.current) {
-      setPinSelected(marker.getElement(), id === selectedPlaceId);
+      setPinSelected(
+        marker.getElement(),
+        id === selectedPlaceId || (selectedPlaceIds?.has(id) ?? false),
+      );
     }
-  }, [selectedPlaceId, places]);
+  }, [selectedPlaceId, selectedPlaceIds, places]);
 
   useEffect(() => {
     const current = markers.current;
@@ -140,7 +179,38 @@ export function usePlaceMarkers({
   }, []);
 }
 
-/** Category colour as an inline custom property the pin CSS reads. */
+/**
+ * The marker's whole appearance, in one place.
+ *
+ * The shape is read off the place — an icon is the location's own — and the
+ * colour is decided by the caller, in full.
+ *
+ * It used to be decided half here: a custom pin brings its own colour, and this
+ * function preferred it over whatever the resolver returned. That was the whole
+ * rule while there were only two candidates, and it broke the moment there was a
+ * third — a group's colour has to beat a custom pin's, and this layer had no way
+ * to know that. So the pin's colour is passed *in* as one more input and the
+ * resolver ranks all three (see map-editor.tsx). One place owns the order.
+ *
+ * A marker says shape and colour and nothing else. An approximate address is a
+ * note about the *address*, not the position, so it stays on the list row and the
+ * place card, where there is room to say what it means.
+ */
+function paint(
+  element: HTMLElement,
+  place: Place,
+  pinIcons: CustomPinIcon[] | undefined,
+  colorFor: ((place: Place, pinColor?: string) => string | undefined) | undefined,
+): void {
+  const pin = setPinIcon(element, place.icon, pinIcons);
+  // A custom pin without its own colour is `null`, which is the same thing as
+  // "no opinion" here and must not read as a colour to rank.
+  const pinColor = pin?.color ?? undefined;
+
+  setPinColor(element, colorFor?.(place, pinColor) ?? pinColor);
+}
+
+/** Pin colour as an inline custom property the pin CSS reads. */
 function setPinColor(element: HTMLElement, color: string | undefined): void {
   if (color) {
     element.style.setProperty("--pin-color", color);

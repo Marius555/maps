@@ -5,7 +5,7 @@ import { Skeleton } from "@heroui/react";
 import { CategoryDot } from "@/components/categories/category-badge";
 import { placeSecondLine } from "@/lib/places/place-labels";
 import type { MapCategory, Place } from "@/lib/repositories/types";
-import { PlaceStatusChip } from "./place-status-chip";
+import { PlaceStatusFlag } from "./place-status-flag";
 
 /**
  * What a row says about the location it stands for, in its three states.
@@ -21,11 +21,22 @@ import { PlaceStatusChip } from "./place-status-chip";
 export function PlaceRowLabel({
   place,
   category,
+  dotColor,
   isPending,
   hasFailed,
 }: {
   place: Place;
   category: MapCategory | undefined;
+  /**
+   * Overrides the category colour, and only a group does it.
+   *
+   * A grouped location's pin takes its group's colour on the map, so the dot has
+   * to follow: the same object showing purple on the canvas and red in the list
+   * is two answers to one question. The dot is still drawn when the place has no
+   * category at all, because in a group it is saying which group, not which
+   * category.
+   */
+  dotColor?: string;
   /** The lookup is still out. */
   isPending: boolean;
   /** The lookup came back with nothing, and the row has to say so. */
@@ -38,12 +49,13 @@ export function PlaceRowLabel({
    * not a jump.
    */
   const secondLine = placeSecondLine(place);
+  const dot = dotColor ?? category?.color;
 
   if (isPending) {
     return (
       <span aria-hidden="true" className="flex min-w-0 flex-col gap-1.5">
         <span className="flex min-w-0 items-center gap-1.5">
-          {category ? <CategoryDot color={category.color} /> : null}
+          {dot ? <CategoryDot color={dot} /> : null}
           <Skeleton className="h-3.5 w-2/5 rounded-lg" />
         </span>
         <Skeleton className="h-3 w-3/5 rounded-lg" />
@@ -54,11 +66,11 @@ export function PlaceRowLabel({
   return (
     <>
       <span className="flex min-w-0 items-center gap-1.5">
-        {category ? <CategoryDot color={category.color} /> : null}
+        {dot ? <CategoryDot color={dot} /> : null}
         <span className="truncate text-sm font-medium text-foreground">
           {place.address || place.name}
         </span>
-        <PlaceStatusChip
+        <PlaceStatusFlag
           status={place.geocodeStatus}
           confidence={place.geocodeConfidence}
         />

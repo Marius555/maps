@@ -22,6 +22,8 @@ export function draftToPlace(draft: DraftPlace, mapId: string): Place {
     lng: draft.lng ?? 0,
     address: draft.address,
     category: "",
+    // A CSV has no icon column. Imported locations land as plain pins.
+    icon: "",
     description: draft.description || null,
     phone: draft.phone || null,
     email: draft.email || null,
@@ -35,6 +37,9 @@ export function draftToPlace(draft: DraftPlace, mapId: string): Place {
     geocodeConfidence: draft.confidence,
     addressParts: null,
     geocodeStatus: toGeocodeStatus(draft.status),
+    // A CSV has no group column, and the review step has no sidebar to show one
+    // in. Imported locations land loose and are grouped afterwards, if at all.
+    groupId: "",
     createdAt: now,
     updatedAt: now,
   };
@@ -57,6 +62,7 @@ export function draftToCreateInput(
     lng: draft.lng as number,
     address: draft.address,
     category: categoryId,
+    icon: "",
     description: draft.description || undefined,
     phone: draft.phone || undefined,
     email: draft.email || undefined,

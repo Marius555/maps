@@ -5,7 +5,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SectionPanel } from "@/components/ui/section-panel";
 import { useMap } from "@/lib/query/maps";
 import { usePlaces } from "@/lib/query/places";
-import type { AppMap, Place } from "@/lib/repositories/types";
+import { useShapes } from "@/lib/query/shapes";
+import type { AppMap, Place, Shape } from "@/lib/repositories/types";
 import { hasUnpublishedChanges } from "@/lib/snapshot/staleness";
 import { AllowedDomainsForm } from "./allowed-domains-form";
 import { EmbedSettingsForm } from "./embed-settings-form";
@@ -22,12 +23,15 @@ import { PublishStatus } from "./publish-status";
 export function PublishPanel({
   initialMap,
   initialPlaces,
+  initialShapes,
 }: {
   initialMap: AppMap;
   initialPlaces: Place[];
+  initialShapes: Shape[];
 }) {
   const { data: map = initialMap } = useMap(initialMap.id, initialMap);
   const { data: places = initialPlaces } = usePlaces(initialMap.id, initialPlaces);
+  const { data: shapes = initialShapes } = useShapes(initialMap.id, initialShapes);
 
   return (
     <div className="space-y-6">
@@ -43,10 +47,12 @@ export function PublishPanel({
       >
         <PublishStatus
           map={map}
-          hasPendingChanges={hasUnpublishedChanges(map, places)}
+          hasPendingChanges={hasUnpublishedChanges(map, places, shapes)}
         />
 
-        {places.length === 0 ? (
+        {/* A map carrying only shapes publishes something real, so this waits
+            until there is genuinely nothing to put on a customer's site. */}
+        {places.length === 0 && shapes.length === 0 ? (
           <p className="text-xs text-muted">
             This map has no locations yet, so it would publish empty. Add some on
             the Locations tab first.
@@ -54,7 +60,7 @@ export function PublishPanel({
         ) : null}
       </SectionPanel>
 
-      <PreviewPanel map={map} places={places} />
+      <PreviewPanel map={map} places={places} shapes={shapes} />
 
       {map.snapshotUrl ? <EmbedSnippet snapshotUrl={map.snapshotUrl} /> : null}
 

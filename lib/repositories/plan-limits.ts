@@ -9,9 +9,9 @@ import { env } from "@/lib/env";
 
 /** CLAUDE.md §6. Enforced in the repositories, never only in the UI. */
 export const PLAN_LIMITS = {
-  free: { maps: 1, places: 10 },
-  starter: { maps: 3, places: 300 },
-  pro: { maps: 15, places: 3000 },
+  free: { maps: 1, places: 10, shapes: 3 },
+  starter: { maps: 3, places: 300, shapes: 50 },
+  pro: { maps: 15, places: 3000, shapes: 250 },
 } as const;
 
 export type PlanId = keyof typeof PLAN_LIMITS;

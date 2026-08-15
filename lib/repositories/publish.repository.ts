@@ -10,6 +10,7 @@ import type { RepoContext } from "./context";
 import { toAppMap } from "./mappers";
 import { getMap } from "./maps.repository";
 import { listAllPlaces } from "./places.repository";
+import { listAllShapes } from "./shapes.repository";
 import type { AppMap, MapRow } from "./types";
 
 /**
@@ -22,6 +23,8 @@ export type PublishResult = {
   map: AppMap;
   /** Locations written into the snapshot. */
   publishedCount: number;
+  /** Shapes written into the snapshot. */
+  publishedShapeCount: number;
   /** Locations left out because their coordinates were unusable. */
   skippedCount: number;
   /**
@@ -40,10 +43,13 @@ export async function publishMap(
 ): Promise<PublishResult> {
   // Ownership first — nothing is generated for a map the caller can't publish.
   const map = await getMap(ctx, mapId);
-  const places = await listAllPlaces(ctx, mapId);
+  const [places, shapes] = await Promise.all([
+    listAllPlaces(ctx, mapId),
+    listAllShapes(ctx, mapId),
+  ]);
 
   const generatedAt = new Date().toISOString();
-  const { snapshot, skipped } = buildSnapshot(map, places, generatedAt);
+  const { snapshot, skipped } = buildSnapshot(map, places, shapes, generatedAt);
 
   // Storage before the row. If the upload fails the map stays exactly as it was,
   // still pointing at the previous snapshot, and the embed keeps serving it.
@@ -60,6 +66,7 @@ export async function publishMap(
     return {
       map: toAppMap(row),
       publishedCount: snapshot.places.length,
+      publishedShapeCount: snapshot.shapes?.length ?? 0,
       skippedCount: skipped.length,
       skippedNames: skipped.slice(0, MAX_REPORTED_SKIPS).map((place) => place.name),
     };

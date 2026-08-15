@@ -3,7 +3,7 @@
 import { X } from "lucide-react";
 
 import { CategoryBadge } from "@/components/categories/category-badge";
-import { PlaceStatusChip } from "@/components/places/place-status-chip";
+import { PlaceStatusFlag } from "@/components/places/place-status-flag";
 import { placeSecondLine } from "@/lib/places/place-labels";
 import type { MapCategory, Place } from "@/lib/repositories/types";
 
@@ -70,7 +70,7 @@ export function PlaceCardHeader({
 
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {category ? <CategoryBadge category={category} size="sm" /> : null}
-            <PlaceStatusChip
+            <PlaceStatusFlag
               status={place.geocodeStatus}
               confidence={place.geocodeConfidence}
             />

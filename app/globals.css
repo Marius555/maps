@@ -306,6 +306,12 @@
  * two sides: the card is centred on its pin until doing so would hang it out of
  * the frame, and then it is nudged back by however much it takes.
  */
+/*
+ * 22px clears a pin, whose whole width is its own 36px ball. Only pins anchor
+ * this way — a shape is an *area*, and no single offset from its centre keeps a
+ * card off it at every zoom, so the shape card is docked in the map's corner
+ * instead. See components/map/shapes/shape-card/shape-card.tsx.
+ */
 .map-card-anchor__card {
   position: absolute;
   left: 22px;
@@ -325,6 +331,69 @@
  */
 .map-card {
   max-height: var(--map-anchor-max-height, 24rem);
+}
+
+/*
+ * Shape handles — the grab points on a selected circle or polygon.
+ *
+ * Plain CSS for the same reason the pins are: these are DOM elements handed to
+ * MapLibre, created in components/map/shapes/use-shape-handles.ts.
+ *
+ * White with a dark ring, rather than the shape's own colour. A handle has to be
+ * findable against the fill it is sitting on, and the fill is whatever colour the
+ * customer chose — including, sometimes, white.
+ */
+.shape-handle {
+  --shape-handle-size: 0.875rem;
+
+  width: var(--shape-handle-size);
+  height: var(--shape-handle-size);
+  border-radius: 9999px;
+  background: var(--surface);
+  border: 2px solid var(--foreground);
+  box-shadow: 0 1px 4px oklch(0% 0 0 / 0.35);
+  cursor: grab;
+  transition: transform 120ms ease-out;
+}
+
+/* The one that moves the whole circle reads as its centre, not as another
+   vertex — a dot in the middle of the ring says "this is the middle". */
+.shape-handle--centre {
+  --shape-handle-size: 1.125rem;
+}
+
+.shape-handle--centre::after {
+  content: "";
+  display: block;
+  width: 0.25rem;
+  height: 0.25rem;
+  margin: auto;
+  position: relative;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 9999px;
+  background: var(--foreground);
+}
+
+/* East–west, because that is the only direction this handle travels in. */
+.shape-handle--radius {
+  cursor: ew-resize;
+}
+
+.shape-handle:hover {
+  transform: scale(1.2);
+}
+
+.shape-handle:active,
+.shape-handle--dragging {
+  cursor: grabbing;
+  transform: scale(1.3);
+  box-shadow: 0 6px 12px oklch(0% 0 0 / 0.4);
+}
+
+.shape-handle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 /*
@@ -351,9 +420,12 @@
   cursor: grabbing;
 }
 
+/* 1rem to match the embed's `circle-radius: 8`. The two used to differ by 2px,
+   which is invisible in isolation and obvious the moment the editor's preview
+   panel puts the real embed beside the editor's own canvas. */
 .map-pin__dot {
-  width: 0.875rem;
-  height: 0.875rem;
+  width: 1rem;
+  height: 1rem;
   border-radius: 9999px;
   /* --pin-color is set inline per marker from its category. */
   background: var(--pin-color, var(--accent));
@@ -371,6 +443,63 @@
 .map-pin--dragging .map-pin__dot {
   transform: scale(1.5);
   box-shadow: 0 6px 12px oklch(0% 0 0 / 0.4);
+}
+
+/*
+ * A location that chose an icon: the same ball, bigger, with a glyph knocked out
+ * of it. Bigger because a glyph legible at 16px would be a smudge — the size is
+ * the difference between "a place is here" and "this kind of place is here".
+ *
+ * The dot is hidden rather than not rendered, so a marker can gain or lose an
+ * icon without its element being rebuilt — rebuilding restarts the drop
+ * animation, and the marker layer diffs precisely to avoid that.
+ *
+ * No positional correction. MapLibre anchors this element by its centre and a
+ * ball marks its position with its centre, so the two agree with nothing in
+ * between. The teardrop this replaced needed a -40.83% nudge to put its *tip* on
+ * the coordinate, and that number had to be repeated in every transform below.
+ */
+.map-pin--icon .map-pin__dot,
+.map-pin--icon .map-pin__pulse {
+  display: none;
+}
+
+.map-pin__shape {
+  --map-pin-size: 2.25rem;
+
+  display: block;
+  width: var(--map-pin-size);
+  height: var(--map-pin-size);
+  transition: transform 120ms ease-out;
+  filter: drop-shadow(0 2px 3px oklch(0% 0 0 / 0.4));
+}
+
+.map-pin__shape svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Filled rather than lucide's stroked outline: a line drawing disappears over a
+   busy basemap, and this has to be legible over every tile it crosses. */
+.map-pin__shape .pin-svg__body {
+  fill: var(--pin-color, var(--accent));
+  stroke: var(--accent-foreground);
+  stroke-width: 1.5;
+}
+
+.map-pin__shape .pin-svg__glyph {
+  stroke: var(--accent-foreground);
+}
+
+.map-pin:hover .map-pin__shape,
+.map-pin--selected .map-pin__shape {
+  transform: scale(1.15);
+}
+
+.map-pin--dragging .map-pin__shape {
+  transform: scale(1.25);
+  filter: drop-shadow(0 6px 8px oklch(0% 0 0 / 0.45));
 }
 
 .map-pin:focus-visible {
@@ -406,24 +535,16 @@
 /*
  * The pin carried between the toolbar and the map.
  *
- * Not a `.map-pin`. What is held is the same icon the button it came out of
- * carries (lucide's map-pin), so the gesture is one object moving rather than a
- * button here and a dot appearing there. What lands is still a dot, because that
- * is what the published map draws — a marker is a position, and a pin in transit
- * is a thing in a hand.
+ * Not a `.map-pin`, but the same drawing: both build their SVG from
+ * packages/shared/pin-icons.ts, so what is held is what lands.
  *
- * One size variable drives the box *and* both offsets. The offsets used to be
- * hardcoded next to a hardcoded width, so changing the size silently moved the
- * pin off the pointer — the kind of coupling that is only ever found by eye.
+ * Centred on the pointer in both axes, because a ball marks its position with
+ * its middle. The teardrop this replaced hung 90.8% of its height below the
+ * cursor to put its tip there, and that number was repeated in a margin, a
+ * transform-origin and the embed's canvas crop.
  */
 .map-pin-ghost {
   --pin-ghost-size: 2rem;
-  /*
-   * A teardrop's position is its tip, not its middle. lucide's map-pin tips at
-   * (12, 21.8) in its 24-unit box: half way across, 90.8% of the way down.
-   */
-  --pin-ghost-tip-x: 50%;
-  --pin-ghost-tip-y: 90.8%;
 
   position: fixed;
   top: 0;
@@ -432,7 +553,7 @@
   width: var(--pin-ghost-size);
   height: var(--pin-ghost-size);
   margin-left: calc(var(--pin-ghost-size) * -0.5);
-  margin-top: calc(var(--pin-ghost-size) * -0.908);
+  margin-top: calc(var(--pin-ghost-size) * -0.5);
   /* A pin under the pointer must not be what the drop lands on. */
   pointer-events: none;
 }
@@ -444,14 +565,14 @@
  * outer element instead would smooth the pointer-following itself — the pin would
  * lag the cursor, which reads as a dropped frame rather than as easing.
  *
- * It scales about the tip, so the point the pin is promising stays under the
- * pointer for the whole lift instead of sliding into place.
+ * It scales about its centre, which is the point it is promising, so that point
+ * stays under the pointer for the whole lift instead of sliding into place.
  */
 .map-pin-ghost__pin {
   display: block;
   width: 100%;
   height: 100%;
-  transform-origin: var(--pin-ghost-tip-x) var(--pin-ghost-tip-y);
+  transform-origin: center;
   /* Sized and faded like the 16px icon still sitting in the button. */
   transform: scale(0.5);
   opacity: 0.5;
@@ -476,14 +597,136 @@
 
 /* Filled rather than lucide's stroked outline: a line drawing disappears over a
    busy basemap, and this has to be legible over every tile it crosses. */
-.map-pin-ghost__pin path {
-  fill: var(--accent);
+.map-pin-ghost__pin .pin-svg__body {
+  fill: var(--pin-color, var(--accent));
   stroke: var(--accent-foreground);
   stroke-width: 1.5;
 }
 
-.map-pin-ghost__pin circle {
-  fill: var(--accent-foreground);
+.map-pin-ghost__pin .pin-svg__glyph {
+  stroke: var(--accent-foreground);
+}
+
+/*
+ * The tile previews in the add menu.
+ *
+ * The same `pinSvg` markup the ghost and the markers use, at button scale — so
+ * the thing pressed, the thing dragged and the thing that lands are one drawing
+ * rendered three times, not three drawings that happen to look alike.
+ */
+.pin-preview {
+  display: block;
+  /* Large enough that the glyph inside the head is legible at a glance — at the
+     1.5rem this started at, the head is under 6px and every icon looked alike. */
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+/*
+ * Bigger, for the two places a pin is the thing being *chosen* rather than
+ * listed: the studio's carousels, and the card that previews an uploaded logo.
+ * At tile size a logo shrunk into a 36px pin is a smudge you have to trust.
+ *
+ * Fluid up to a cap rather than a fixed size per breakpoint. It sits in a
+ * carousel slot that is a quarter of whatever the arrows beside the track leave,
+ * so every fixed size here was a number derived by hand from that arithmetic —
+ * one that silently overflows the tile the next time anything in the row changes
+ * width. Filling the slot cannot be wrong; the cap is what stops a two-pin row
+ * from drawing them at dinner-plate size.
+ */
+.pin-preview--lg {
+  width: 100%;
+  max-width: 3.5rem;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.pin-preview--xl {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+
+.pin-preview svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * Fill only — no ring, no shadow.
+ *
+ * The map versions of this pin wear a white outline because they have to survive
+ * whatever tile is beneath them. Here the ground is a white dialog, so the ring
+ * separates the pin from nothing and reads as a badge drawn around it.
+ *
+ * `--pin-color` rather than a flat accent: a custom pin brings its own colour,
+ * and a tile that previewed it in the wrong one would be lying about what lands.
+ */
+.pin-preview .pin-svg__body {
+  fill: var(--pin-color, var(--accent));
+}
+
+.pin-preview .pin-svg__glyph {
+  stroke: var(--accent-foreground);
+}
+
+/*
+ * An uploaded logo in the pin's head, rounded off.
+ *
+ * Unscoped, unlike everything above it, and deliberately: the marker, the drag
+ * ghost and the tile previews all render the same `pinSvg` markup, and the shape
+ * of the image is part of the drawing rather than part of where it is shown.
+ * Three scoped copies is three chances for them to drift apart.
+ *
+ * CSS rather than a `<clipPath>` in the SVG, because a clip path needs an id —
+ * and an id is either shared across five hundred markers and dangling the moment
+ * the one that declared it is removed from the DOM, or unique per marker and five
+ * hundred more definitions of the same circle. Where `clip-path` is unsupported
+ * the image stays square, which still fits inside the head (IMAGE_CIRCLE in
+ * packages/shared/pin-icons.ts sizes it to).
+ */
+.pin-svg__image {
+  clip-path: circle(50%);
+}
+
+/*
+ * A row that shows four things and scrolls to the rest.
+ *
+ * Plain CSS rather than utilities on the component, for two reasons. The width
+ * is a `calc` over the gap count that reads as noise inline, and — the reason it
+ * matters — an unlayered class beats Tailwind's `@layer utilities`, so this can
+ * be handed to a third-party component (HeroUI's ColorSwatchPicker) as its own
+ * layout without losing to the classes that component ships with.
+ *
+ * Overflow scrolling *is* the mobile story: it gives touch swipe for free, and
+ * the reduced-motion block at the bottom of this file already overrides
+ * `scroll-behavior`, so the arrows stop animating for anyone who asked.
+ */
+.carousel-track {
+  display: flex;
+  gap: 0.5rem;
+  /* An item of the row that holds the arrows: take what they leave, and be
+     allowed to shrink. Without `min-width: 0` a flex item refuses to go below
+     its content, and the track would push the arrows off the dialog instead of
+     scrolling. */
+  flex: 1 1 0%;
+  min-width: 0;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  /* The arrows are the affordance. A 15px Windows scrollbar under a row of
+     tiles inside a dialog reads as a rendering fault, not as a control. */
+  scrollbar-width: none;
+}
+
+.carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+/* Four visible, so three gaps to subtract. */
+.carousel-track > * {
+  flex: 0 0 calc((100% - 1.5rem) / 4);
+  scroll-snap-align: start;
 }
 
 /*

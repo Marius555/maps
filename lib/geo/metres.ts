@@ -48,6 +48,49 @@ export function metresToBounds(
 }
 
 /**
+ * How far inside the box the point sits — its distance to the nearest edge, and
+ * zero when it is outside or on one.
+ *
+ * The mirror of `metresToBounds`, and needed because that one collapses the
+ * whole interior to zero: it cannot tell "in the middle of the museum" from
+ * "one metre inside the box, standing on the pavement". Photon publishes a
+ * bounding box rather than a footprint, and an angled building's box reaches
+ * across the road beside it — so *how far* inside is the only thing separating a
+ * pin on the building from a pin near it.
+ */
+export function metresInsideBounds(
+  point: LngLat,
+  [west, north, east, south]: Bounds,
+): number {
+  const insideLng = Math.min(point.lng - west, east - point.lng);
+  const insideLat = Math.min(point.lat - south, north - point.lat);
+
+  if (insideLng <= 0 || insideLat <= 0) return 0;
+
+  // The nearest edge, not the diagonal: the shortest way out is perpendicular
+  // to one side, and hypot of the two would overstate it on every point.
+  return Math.min(
+    insideLat * METRES_PER_DEGREE_LAT,
+    insideLng * metresPerDegreeLng(point.lat),
+  );
+}
+
+/**
+ * The box's diagonal.
+ *
+ * A size check, for telling a building from an administrative area. Photon
+ * answers a reverse lookup with whatever contains the point, and that has
+ * included a postcode polygon covering 99 square kilometres of Vilnius —
+ * containment alone cannot rule it out, but its span can.
+ */
+export function boundsSpanM([west, north, east, south]: Bounds): number {
+  return Math.hypot(
+    (north - south) * METRES_PER_DEGREE_LAT,
+    (east - west) * metresPerDegreeLng((north + south) / 2),
+  );
+}
+
+/**
  * Distance from a point to a line segment, clamped to the segment's ends.
  *
  * This is the measurement that reads a street off the map: a road is a polyline,

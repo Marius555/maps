@@ -25,6 +25,29 @@ export type SnapshotCategory = {
   color: string;
 };
 
+/**
+ * One of the map's own pins, flattened for the embed.
+ *
+ * No label: the legend is built from categories, and a pin's name exists only so
+ * its owner can tell two of them apart in the dashboard. Sending it would be
+ * bytes on every visitor's download for something nothing renders.
+ *
+ * `image` is the whole logo, inlined as a data URI. That is a deliberate cost —
+ * a few KB per pin, once, rather than a request per visitor (§2) — and it is the
+ * only form the embed can draw with no CSP surface: handed to `createImageBitmap`
+ * through a Blob, it loads no URL at all.
+ */
+export type SnapshotPinIcon = {
+  /** Matches the `custom:<id>` a place carries in `icon`. */
+  id: string;
+  /** Hex. Overrides the category colour — a custom pin is a finished design. */
+  color: string;
+  /** A built-in icon id from ./pin-icons.ts. Absent when this pin is an image. */
+  glyph?: string;
+  /** A `data:image/…;base64,…` URI. Absent when this pin is a glyph. */
+  image?: string;
+};
+
 export type SnapshotPlace = {
   id: string;
   name: string;
@@ -33,6 +56,16 @@ export type SnapshotPlace = {
   address?: string;
   /** Category id, matching SnapshotCategory.id. Absent when uncategorised. */
   category?: string;
+  /**
+   * Icon id: a built-in from ./pin-icons.ts, or `custom:<id>` matching a
+   * SnapshotPinIcon below. Absent for a plain pin, which is what the embed draws
+   * for an id it doesn't recognise too.
+   *
+   * Optional, and it has to stay that way for the same reason `hours` does:
+   * snapshots are immutable, so every file published before this field existed
+   * is still live on a customer's site and must keep parsing.
+   */
+  icon?: string;
   description?: string;
   phone?: string;
   email?: string;
@@ -48,6 +81,32 @@ export type SnapshotPlace = {
   /** Public storage URL, composed on the server so no bucket id ships. */
   photoUrl?: string;
 };
+
+/**
+ * An area on the published map — a delivery radius, a service region, a boundary.
+ *
+ * A discriminated union rather than a flat row of optional numbers, so the embed
+ * gets the same exhaustive `kind` switch the editor does and cannot read a
+ * radius off a polygon. The geometry is turned into points by ./shapes.ts, which
+ * both targets call — a circle drawn with a different number of segments in each
+ * would be two visibly different circles in the editor's preview panel.
+ *
+ * The ring itself is not stored here. A 64-point circle is 64 coordinates the
+ * embed can generate from three numbers, and shipping them would be about 1.5KB
+ * per circle on every visitor's download to save a loop.
+ */
+export type SnapshotShape = {
+  id: string;
+  name: string;
+  /** Hex, already resolved — the embed fills straight from this. */
+  color: string;
+  /** 0–1. The fill only; the outline is always drawn solid. */
+  opacity: number;
+  description?: string;
+} & (
+  | { kind: "circle"; lat: number; lng: number; radius: number }
+  | { kind: "polygon"; points: [number, number][] }
+);
 
 /** Which of the embed's optional controls are switched on. */
 export type SnapshotSettings = {
@@ -110,7 +169,24 @@ export type MapSnapshot = {
   /** Extent of the places, or null when the map has none. */
   bounds: SnapshotBounds | null;
   categories: SnapshotCategory[];
+  /**
+   * The map's own pins, and only the ones a published place actually wears.
+   *
+   * Optional, and it has to stay that way for the same reason `hours` and `theme`
+   * are: snapshots are immutable, so every file published before this field
+   * existed is still live on a customer's site and must keep parsing.
+   */
+  pinIcons?: SnapshotPinIcon[];
   places: SnapshotPlace[];
+  /**
+   * Areas drawn on the map, under the pins.
+   *
+   * Optional, and it has to stay that way for the same reason `hours`, `theme`
+   * and `pinIcons` are: snapshots are immutable, so every file published before
+   * this field existed is still live on a customer's site and must keep parsing.
+   * The version stays `1` — the embed's fetch rejects anything else outright.
+   */
+  shapes?: SnapshotShape[];
   settings: SnapshotSettings;
   /**
    * Hostnames allowed to embed this map. Empty means "anywhere".

@@ -8,6 +8,7 @@ import { isConflict, isNotFound, toRepositoryError } from "@/lib/appwrite/errors
 import { env } from "@/lib/env";
 import { deleteSnapshots } from "@/lib/snapshot/storage";
 import { randomSuffix, slugify } from "@/lib/utils/slug";
+import { CUSTOM_PIN_PREFIX } from "@/packages/shared/pin-icons";
 import type { CreateMapInput, UpdateMapInput } from "@/lib/validation/map.schema";
 import type { RepoContext } from "./context";
 import { ConflictError, NotFoundError, PlanLimitError } from "./errors";
@@ -116,6 +117,7 @@ export async function createMap(
           defaultLng: input.defaultLng,
           defaultZoom: input.defaultZoom,
           categories: "[]",
+          pinIcons: "[]",
           settings: "{}",
           allowedDomains: [],
         },
@@ -139,11 +141,12 @@ export async function updateMap(
 ): Promise<AppMap> {
   const before = await getMap(ctx, mapId);
 
-  // `categories` and `settings` are JSON text columns, so they have to be
-  // serialised. Everything else maps straight onto its column.
-  const { categories, settings, ...rest } = input;
+  // `categories`, `pinIcons` and `settings` are JSON text columns, so they have
+  // to be serialised. Everything else maps straight onto its column.
+  const { categories, pinIcons, settings, ...rest } = input;
   const data: Record<string, unknown> = { ...rest };
   if (categories) data.categories = JSON.stringify(categories);
+  if (pinIcons) data.pinIcons = JSON.stringify(pinIcons);
   if (settings) data.settings = JSON.stringify(settings);
 
   try {
@@ -162,7 +165,25 @@ export async function updateMap(
         .map((category) => category.id)
         .filter((id) => !categories.some((category) => category.id === id));
 
-      await clearCategoryFromPlaces(mapId, removed);
+      await clearFromPlaces(mapId, "category", removed);
+    }
+
+    /*
+     * The same for pins, though the failure it prevents is quieter: a place
+     * naming a deleted pin already renders as a plain one, because resolvePin
+     * returns null for it. Clearing it anyway keeps the stored data saying what
+     * the map shows, and stops a later pin that happened to reuse the id from
+     * resurrecting itself onto locations nobody assigned it to.
+     */
+    if (pinIcons) {
+      const removed = before.pinIcons
+        .map((icon) => `${CUSTOM_PIN_PREFIX}${icon.id}`)
+        .filter(
+          (id) =>
+            !pinIcons.some((icon) => `${CUSTOM_PIN_PREFIX}${icon.id}` === id),
+        );
+
+      await clearFromPlaces(mapId, "icon", removed);
     }
 
     return toAppMap(row);
@@ -172,20 +193,21 @@ export async function updateMap(
 }
 
 /**
- * One bulk update per removed category. Appwrite has no "set to '' where in
- * (...)" so this is a small loop, and deleting several categories at once is
+ * One bulk update per removed value. Appwrite has no "set to '' where in (...)"
+ * so this is a small loop, and deleting several categories or pins at once is
  * rare enough not to optimise.
  */
-async function clearCategoryFromPlaces(
+async function clearFromPlaces(
   mapId: string,
-  categoryIds: string[],
+  column: "category" | "icon",
+  values: string[],
 ): Promise<void> {
-  for (const categoryId of categoryIds) {
+  for (const value of values) {
     await admin.tablesDB.updateRows({
       databaseId: env.databaseId,
       tableId: TABLES.places,
-      data: { category: "" },
-      queries: [Query.equal("mapId", mapId), Query.equal("category", categoryId)],
+      data: { [column]: "" },
+      queries: [Query.equal("mapId", mapId), Query.equal(column, value)],
     });
   }
 }
@@ -199,13 +221,15 @@ export async function deleteMap(ctx: RepoContext, mapId: string): Promise<void> 
     // anyone holding the URL.
     await deleteSnapshots(mapId);
 
-    // Places next: a map row deleted before its places would orphan them with
-    // no owner left to find them by.
-    await admin.tablesDB.deleteRows({
-      databaseId: env.databaseId,
-      tableId: TABLES.places,
-      queries: [Query.equal("mapId", mapId)],
-    });
+    // Places and shapes next: a map row deleted before its children would orphan
+    // them with no owner left to find them by.
+    for (const tableId of [TABLES.places, TABLES.shapes]) {
+      await admin.tablesDB.deleteRows({
+        databaseId: env.databaseId,
+        tableId,
+        queries: [Query.equal("mapId", mapId)],
+      });
+    }
 
     await admin.tablesDB.deleteRow({
       databaseId: env.databaseId,

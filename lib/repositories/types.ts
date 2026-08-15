@@ -2,6 +2,8 @@ import type { Models } from "node-appwrite";
 
 import type { MapStyleKey } from "@/lib/map/style";
 import type { OpeningHours } from "@/packages/shared/hours";
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
+import type { ShapeGeometry } from "@/packages/shared/shapes";
 import type { AddressParts, GeocodeStatus } from "@/lib/validation/place.schema";
 
 /**
@@ -20,6 +22,7 @@ export type MapRow = Models.Row & {
   defaultLng: number;
   defaultZoom: number;
   categories?: string | null;
+  pinIcons?: string | null;
   settings?: string | null;
   allowedDomains?: string[] | null;
   publishedAt?: string | null;
@@ -33,6 +36,7 @@ export type PlaceRow = Models.Row & {
   lng: number;
   address?: string | null;
   category?: string | null;
+  icon?: string | null;
   description?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -43,6 +47,26 @@ export type PlaceRow = Models.Row & {
   geocodeConfidence?: number | null;
   geocodeStatus?: string | null;
   addressParts?: string | null;
+  groupId?: string | null;
+};
+
+export type ShapeRow = Models.Row & {
+  mapId: string;
+  name: string;
+  kind: string;
+  description?: string | null;
+  color?: string | null;
+  opacity?: number | null;
+  geometry: string;
+  sortOrder?: number | null;
+  groupId?: string | null;
+};
+
+export type GroupRow = Models.Row & {
+  mapId: string;
+  name: string;
+  color?: string | null;
+  sortOrder?: number | null;
 };
 
 /** Domain shapes. Everything outside /lib/repositories sees only these. */
@@ -62,6 +86,11 @@ export type AppMap = {
   defaultLng: number;
   defaultZoom: number;
   categories: MapCategory[];
+  /**
+   * The pins the customer built — see packages/shared/pin-icons.ts. Shared with
+   * the embed, so the type lives there rather than here.
+   */
+  pinIcons: CustomPinIcon[];
   settings: Record<string, unknown>;
   allowedDomains: string[];
   publishedAt: string | null;
@@ -78,6 +107,14 @@ export type Place = {
   lng: number;
   address: string;
   category: string;
+  /**
+   * Which icon the pin wears, or "" for a plain one. A built-in id from
+   * packages/shared/pin-icons.ts, or `custom:<id>` naming one of the map's own
+   * pins — resolved at render time, never validated against either list on the
+   * way in, so an id this version doesn't recognise draws a plain pin rather than
+   * blocking the save.
+   */
+  icon: string;
   description: string | null;
   phone: string | null;
   email: string | null;
@@ -98,6 +135,56 @@ export type Place = {
    * row. The postcode under the street in the locations list comes from here.
    */
   addressParts: AddressParts | null;
+  /** The group this belongs to, or "" — see the `Group` type below. */
+  groupId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/**
+ * An area on the map, beside the pins.
+ *
+ * The geometry is the discriminated union from packages/shared/shapes.ts, so the
+ * editor and the embed both switch on one shape of data — and so the code that
+ * turns a circle into points has exactly one copy.
+ */
+export type Shape = {
+  id: string;
+  mapId: string;
+  name: string;
+  description: string | null;
+  /** Hex. A shape's own, not a category's — see the schema for why. */
+  color: string;
+  /** 0–1. The fill only; the outline is always drawn solid. */
+  opacity: number;
+  geometry: ShapeGeometry;
+  sortOrder: number;
+  /** The group this belongs to, or "" — see the `Group` type below. */
+  groupId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/**
+ * A bundle of locations and shapes the owner treats as one thing.
+ *
+ * Membership is stored on the members, not here: a `Group` is a name and a
+ * colour, and a place or shape names it in its own `groupId`. That is what makes
+ * grouping one location a single-column PATCH.
+ *
+ * A `groupId` naming a group that no longer exists reads as ungrouped. Deleting
+ * a group deletes one row and leaves its members' ids dangling on purpose — see
+ * groups.repository.ts.
+ *
+ * Editor-only. Nothing about a group reaches a published snapshot.
+ */
+export type Group = {
+  id: string;
+  mapId: string;
+  name: string;
+  /** Hex. Tints the group's row and its members' selection ring in the editor. */
+  color: string;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 };

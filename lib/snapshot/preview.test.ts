@@ -16,6 +16,7 @@ function makeMap(overrides: Partial<AppMap> = {}): AppMap {
     defaultLng: 25.28,
     defaultZoom: 11,
     categories: [],
+    pinIcons: [],
     settings: {},
     allowedDomains: [],
     publishedAt: null,
@@ -35,6 +36,7 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     lng: 25.28,
     address: "Gedimino pr. 1, Vilnius",
     category: "",
+    icon: "",
     description: null,
     phone: null,
     email: null,
@@ -45,6 +47,7 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     sortOrder: 0,
     geocodeConfidence: null,
     addressParts: null,
+    groupId: "",
     geocodeStatus: "ok",
     createdAt: UPDATED_AT,
     updatedAt: UPDATED_AT,
@@ -63,6 +66,7 @@ describe("buildPreviewSnapshot", () => {
     const snapshot = buildPreviewSnapshot(
       makeMap({ allowedDomains: ["example.com"] }),
       [makePlace()],
+      [],
     );
 
     expect(snapshot.allowedDomains).toEqual([]);
@@ -78,8 +82,8 @@ describe("buildPreviewSnapshot", () => {
 
     // Fresh arrays each time, the way react-query hands one back after a
     // refetch that changed nothing.
-    const first = JSON.stringify(buildPreviewSnapshot(map, [makePlace()]));
-    const second = JSON.stringify(buildPreviewSnapshot(map, [makePlace()]));
+    const first = JSON.stringify(buildPreviewSnapshot(map, [makePlace()], []));
+    const second = JSON.stringify(buildPreviewSnapshot(map, [makePlace()], []));
 
     expect(second).toBe(first);
   });
@@ -88,6 +92,7 @@ describe("buildPreviewSnapshot", () => {
     const snapshot = buildPreviewSnapshot(
       makeMap({ style: "dark" }),
       [makePlace({ name: "Harbour kiosk" })],
+      [],
     );
 
     expect(snapshot.version).toBe(1);
@@ -99,10 +104,11 @@ describe("buildPreviewSnapshot", () => {
   });
 
   it("drops places with unusable coordinates, exactly as publishing does", () => {
-    const snapshot = buildPreviewSnapshot(makeMap(), [
-      makePlace(),
-      makePlace({ id: "place-2", lat: Number.NaN, lng: Number.NaN }),
-    ]);
+    const snapshot = buildPreviewSnapshot(
+      makeMap(),
+      [makePlace(), makePlace({ id: "place-2", lat: Number.NaN, lng: Number.NaN })],
+      [],
+    );
 
     expect(snapshot.places).toHaveLength(1);
     expect(snapshot.places[0].id).toBe("place-1");

@@ -5,14 +5,26 @@ import {
   NavigationControl,
   Popup,
   type GeoJSONSource,
+  type LngLatLike,
   type MapGeoJSONFeature,
   type StyleSpecification,
 } from "maplibre-gl";
 
 import { collapseAttribution } from "@/packages/shared/attribution";
-import type { MapSnapshot, SnapshotPlace } from "@/packages/shared/snapshot";
+import { resolvePin, type CustomPinIcon } from "@/packages/shared/pin-icons";
+import { shapePolygon, type ShapeGeometry } from "@/packages/shared/shapes";
+import type {
+  MapSnapshot,
+  SnapshotPlace,
+  SnapshotShape,
+} from "@/packages/shared/snapshot";
 
-import { buildPopup } from "./popup";
+import { buildPopup, buildShapePopup } from "./popup";
+import {
+  pinImageId,
+  registerPinImageBitmaps,
+  registerPinImages,
+} from "./pin-image";
 
 /**
  * The map itself: source, layers, clustering and popups.
@@ -24,12 +36,21 @@ import { buildPopup } from "./popup";
  * Filtering re-sets the source data instead of calling `setFilter`. Clusters are
  * computed by the source, so a layer filter would hide individual pins while the
  * cluster bubbles carried on counting them.
+ *
+ * Places are drawn by one of two layers, never both: a circle for a location
+ * with no icon, a symbol for one with an icon (see ./pin-image.ts). One source
+ * feeds both, so clustering still counts every place regardless of shape.
  */
 
 const SOURCE_ID = "places";
 const CLUSTER_LAYER = "clusters";
 const CLUSTER_COUNT_LAYER = "cluster-count";
 const POINT_LAYER = "place-points";
+const PIN_LAYER = "place-pins";
+
+const SHAPE_SOURCE_ID = "shapes";
+const SHAPE_FILL_LAYER = "shape-fills";
+const SHAPE_LINE_LAYER = "shape-outlines";
 
 /** Past this zoom, show individual pins rather than bubbles. */
 const CLUSTER_MAX_ZOOM = 14;
@@ -43,6 +64,17 @@ const FOCUS_ZOOM = 15;
  * from the first category, and the legend then explained a pin it didn't cover.
  */
 const UNCATEGORISED_COLOR = "#7a828f";
+
+/**
+ * Popup offsets, in pixels above the point.
+ *
+ * Two of them because there are two sizes. Both pins are balls centred on their
+ * coordinate, so each offset is that ball's radius plus the same 6px of air: 8
+ * for the dot, 18 for the 36px icon pin. The icon offset was 40 when the pin was
+ * a teardrop standing on its tip and every pixel of it was *above* the point.
+ */
+const DOT_POPUP_OFFSET = 14;
+const PIN_POPUP_OFFSET = 24;
 
 export type MapHandle = {
   setPlaces: (places: SnapshotPlace[]) => void;
@@ -123,20 +155,65 @@ export function createMap(
   const categories = new Map(
     snapshot.categories.map((category) => [category.id, category]),
   );
-  const popup = new Popup({ closeButton: true, maxWidth: "280px", offset: 14 });
+  const colors = colorsOf(snapshot);
+  const popup = new Popup({
+    closeButton: true,
+    maxWidth: "280px",
+    offset: DOT_POPUP_OFFSET,
+  });
 
   let places = snapshot.places;
   /** Which place the open popup belongs to, so filtering can close a stale one. */
   let openPlaceId: string | null = null;
+  /**
+   * The pin images that exist. Empty until the map loads, which is fine: the
+   * feature builder treats an unregistered pin as a plain dot, and the only call
+   * before load is the one inside the load handler itself.
+   */
+  let pinImages = new Set<string>();
 
   popup.on("close", () => {
     openPlaceId = null;
   });
 
   map.on("load", () => {
+    const pairs = pinPairs(snapshot);
+    const pins = pinsOf(snapshot);
+
+    // Before the source, because the features name the images they need and
+    // MapLibre warns per feature per frame for one that isn't there yet.
+    pinImages = registerPinImages(map, pairs, pins);
+
+    /*
+     * Uploaded logos cannot make that deadline — decoding one is a promise — so
+     * they arrive behind the first frame and the source is fed again once they
+     * land. The alternative is holding every place on the map hostage to one
+     * customer's PNG. Mutated rather than reassigned so `setPlaces`, which reads
+     * this same set on every filter change, needs no telling.
+     */
+    void registerPinImageBitmaps(map, pairs, pins).then((added) => {
+      if (added.size === 0) return;
+
+      for (const id of added) pinImages.add(id);
+
+      const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
+      source?.setData(toFeatureCollection(places, snapshot, pinImages));
+    });
+
+    /*
+     * Shapes first, so their layers sit *under* the places.
+     *
+     * Nothing in this file uses `beforeId` — layers stack in the order they are
+     * added — so anything added after `addLayers` would paint over the pins, and
+     * a translucent wash over a customer's locations is exactly backwards. A map
+     * with no shapes adds nothing at all, which is also every snapshot published
+     * before shapes existed.
+     */
+    addShapeLayers(map, snapshot.shapes ?? []);
+
     map.addSource(SOURCE_ID, {
       type: "geojson",
-      data: toFeatureCollection(places, snapshot),
+      data: toFeatureCollection(places, snapshot, pinImages),
       cluster: snapshot.settings.clustering,
       clusterMaxZoom: CLUSTER_MAX_ZOOM,
       clusterRadius: CLUSTER_RADIUS,
@@ -144,6 +221,9 @@ export function createMap(
 
     addLayers(map, snapshot);
     wireInteractions(map, (place) => showPopup(place));
+    wireShapeInteractions(map, snapshot.shapes ?? [], (shape, at) =>
+      showShapePopup(shape, at),
+    );
 
     /*
      * A deep link replaces the opening view rather than animating away from it.
@@ -166,9 +246,33 @@ export function createMap(
     }
   });
 
+  /**
+   * A shape's card, in the same single Popup the pins use.
+   *
+   * `openPlaceId` is cleared, not just left: it exists so a filter change can
+   * close a popup whose place has been filtered away, and a shape's popup does
+   * not belong to any place. Leaving the previous id set would have the next
+   * filter change decide this popup is stale on the strength of a location that
+   * is no longer what is open.
+   */
+  const showShapePopup = (shape: SnapshotShape, at: LngLatLike) => {
+    openPlaceId = null;
+    popup
+      // No pin to clear, so the card sits on the point that was clicked.
+      .setOffset(0)
+      .setLngLat(at)
+      .setDOMContent(buildShapePopup(shape))
+      .addTo(map);
+  };
+
   const showPopup = (place: SnapshotPlace) => {
     openPlaceId = place.id;
+    // Set per place, not at construction: one Popup instance serves both pin
+    // shapes, and the card has to clear whichever one it is opening over.
     popup
+      .setOffset(
+        pinIdFor(place, colors, pinImages) ? PIN_POPUP_OFFSET : DOT_POPUP_OFFSET,
+      )
       .setLngLat([place.lng, place.lat])
       .setDOMContent(buildPopup(place, categories.get(place.category ?? "")))
       .addTo(map);
@@ -191,7 +295,7 @@ export function createMap(
       const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
       if (!source) return;
 
-      source.setData(toFeatureCollection(next, snapshot));
+      source.setData(toFeatureCollection(next, snapshot, pinImages));
 
       // A popup left open over a pin that has just been filtered away is a card
       // floating on empty map, with a Directions link to somewhere no longer
@@ -265,7 +369,9 @@ function addLayers(map: MapLibreMap, snapshot: MapSnapshot): void {
     id: POINT_LAYER,
     type: "circle",
     source: SOURCE_ID,
-    filter: ["!", ["has", "point_count"]],
+    // Places with an icon are drawn by the symbol layer below. Without the
+    // second clause they would get a dot under the pin as well.
+    filter: ["all", ["!", ["has", "point_count"]], ["!", ["has", "pin"]]],
     paint: {
       // Precomputed per feature, so no match expression has to be rebuilt when
       // categories change.
@@ -275,18 +381,142 @@ function addLayers(map: MapLibreMap, snapshot: MapSnapshot): void {
       "circle-stroke-color": "#ffffff",
     },
   });
+
+  map.addLayer({
+    id: PIN_LAYER,
+    type: "symbol",
+    source: SOURCE_ID,
+    filter: ["all", ["!", ["has", "point_count"]], ["has", "pin"]],
+    layout: {
+      // A ball marks its position with its middle, and the image is the pin's own
+      // square (./pin-image.ts) — so centring it needs no offset to keep in sync.
+      "icon-image": ["get", "pin"],
+      "icon-anchor": "center",
+      /*
+       * Symbol collision is on by default, and it is the wrong default here. Two
+       * shops on the same street would silently cost one of them its pin on a
+       * customer's site — a location that exists, is not filtered, and simply
+       * does not appear. Overlapping pins are the lesser problem, and clustering
+       * already handles the dense case.
+       */
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+    },
+  });
+}
+
+/**
+ * Areas, under the pins.
+ *
+ * One fill layer and one outline, from one source. The circle's ring is generated
+ * here from a centre and a radius by the same function the editor uses
+ * (packages/shared/shapes.ts) — MapLibre's own `circle` layer sizes itself in
+ * pixels, which would make a 2km delivery radius a different distance at every
+ * zoom.
+ *
+ * Returns early on an empty list so a map without shapes carries no source, no
+ * layers and no listeners. That is every snapshot published before this field
+ * existed, and they must be unaffected.
+ */
+function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
+  if (shapes.length === 0) return;
+
+  map.addSource(SHAPE_SOURCE_ID, {
+    type: "geojson",
+    data: {
+      type: "FeatureCollection",
+      features: shapes.map((shape) => ({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: shapePolygon(toGeometry(shape)) },
+        // Flat scalars only — MapLibre serialises features to its worker, and a
+        // nested object does not survive the trip. Same reason a whole place is
+        // stringified into one property below.
+        properties: { id: shape.id, color: shape.color, opacity: shape.opacity },
+      })),
+    },
+  });
+
+  map.addLayer({
+    id: SHAPE_FILL_LAYER,
+    type: "fill",
+    source: SHAPE_SOURCE_ID,
+    paint: {
+      "fill-color": ["get", "color"],
+      "fill-opacity": ["get", "opacity"],
+    },
+  });
+
+  map.addLayer({
+    id: SHAPE_LINE_LAYER,
+    type: "line",
+    source: SHAPE_SOURCE_ID,
+    layout: { "line-join": "round" },
+    paint: {
+      "line-color": ["get", "color"],
+      // Solid whatever the fill is set to: a shape at 5% fill still has to be
+      // findable, and its edge is what makes it so.
+      "line-opacity": 1,
+      "line-width": 2,
+    },
+  });
+}
+
+/** The snapshot's flat shape back into the union both renderers draw from. */
+function toGeometry(shape: SnapshotShape): ShapeGeometry {
+  return shape.kind === "circle"
+    ? { kind: "circle", lng: shape.lng, lat: shape.lat, radius: shape.radius }
+    : { kind: "polygon", points: shape.points };
+}
+
+/**
+ * Clicking an area opens its card.
+ *
+ * The pins are wired the same way, and MapLibre fires both layers' handlers for a
+ * click on a pin that happens to sit inside a shape. The pin wins because its
+ * handler runs second and replaces the popup's content — which is the right
+ * answer: the visitor aimed at the pin, not at the region under it.
+ */
+function wireShapeInteractions(
+  map: MapLibreMap,
+  shapes: SnapshotShape[],
+  /**
+   * Takes where the visitor clicked, not the shape's centre: on a region
+   * spanning the viewport, a card anchored to the middle can be off screen.
+   */
+  onSelect: (shape: SnapshotShape, at: LngLatLike) => void,
+): void {
+  if (shapes.length === 0) return;
+
+  const byId = new Map(shapes.map((shape) => [shape.id, shape]));
+
+  map.on("click", SHAPE_FILL_LAYER, (event) => {
+    const id = event.features?.[0]?.properties?.id;
+    const shape = typeof id === "string" ? byId.get(id) : undefined;
+    if (!shape) return;
+
+    onSelect(shape, event.lngLat);
+  });
+
+  map.on("mouseenter", SHAPE_FILL_LAYER, () => {
+    map.getCanvas().style.cursor = "pointer";
+  });
+  map.on("mouseleave", SHAPE_FILL_LAYER, () => {
+    map.getCanvas().style.cursor = "";
+  });
 }
 
 function wireInteractions(
   map: MapLibreMap,
   onSelect: (place: SnapshotPlace) => void,
 ): void {
-  map.on("click", POINT_LAYER, (event) => {
-    const feature = event.features?.[0];
-    if (!feature) return;
+  for (const layer of [POINT_LAYER, PIN_LAYER]) {
+    map.on("click", layer, (event) => {
+      const feature = event.features?.[0];
+      if (!feature) return;
 
-    onSelect(readPlace(feature));
-  });
+      onSelect(readPlace(feature));
+    });
+  }
 
   map.on("click", CLUSTER_LAYER, (event) => {
     const feature = event.features?.[0];
@@ -302,7 +532,7 @@ function wireInteractions(
     });
   });
 
-  for (const layer of [POINT_LAYER, CLUSTER_LAYER]) {
+  for (const layer of [POINT_LAYER, PIN_LAYER, CLUSTER_LAYER]) {
     map.on("mouseenter", layer, () => {
       map.getCanvas().style.cursor = "pointer";
     });
@@ -310,6 +540,91 @@ function wireInteractions(
       map.getCanvas().style.cursor = "";
     });
   }
+}
+
+/** Category id → hex, with the neutral grey standing in for "uncategorised". */
+function colorsOf(snapshot: MapSnapshot): Map<string, string> {
+  return new Map(
+    snapshot.categories.map((category) => [category.id, category.color]),
+  );
+}
+
+/**
+ * The map's own pins, in the shape the shared resolver reads.
+ *
+ * Widened rather than reimplemented: `resolvePin` is what the dashboard's markers
+ * and drag ghost go through too, and a second lookup here is how the pin a
+ * customer arranged and the pin their visitors get quietly stop matching. The
+ * label is the one field the snapshot drops, and nothing here renders it.
+ */
+function pinsOf(snapshot: MapSnapshot): CustomPinIcon[] {
+  return (snapshot.pinIcons ?? []).map((pin) => ({
+    id: pin.id,
+    label: "",
+    color: pin.color,
+    glyph: pin.glyph ?? "",
+    image: pin.image ?? "",
+  }));
+}
+
+/**
+ * A place's colour: its custom pin's own, or failing that its category's.
+ *
+ * A custom pin is a finished design and brings its colour with it, which is the
+ * one case where the category does not decide. The same `??` runs in the editor
+ * (components/map/use-place-markers.ts) — a map that coloured its pins one way in
+ * the dashboard and another on the customer's site would be the worst kind of bug
+ * to be told about.
+ */
+function colorOf(
+  place: SnapshotPlace,
+  colors: Map<string, string>,
+  pins?: readonly CustomPinIcon[],
+): string {
+  return (
+    resolvePin(place.icon, pins)?.color ??
+    colors.get(place.category ?? "") ??
+    UNCATEGORISED_COLOR
+  );
+}
+
+/**
+ * Every icon-and-colour combination the snapshot needs an image for.
+ *
+ * Built from the snapshot rather than from the currently-visible places: filters
+ * only ever narrow that set, so registering once at load covers every pin the
+ * visitor can reach without re-registering on each chip they press.
+ */
+function pinPairs(snapshot: MapSnapshot): { icon: string; color: string }[] {
+  const colors = colorsOf(snapshot);
+  const pins = pinsOf(snapshot);
+
+  return snapshot.places
+    .filter((place) => Boolean(place.icon))
+    .map((place) => ({
+      icon: place.icon as string,
+      color: colorOf(place, colors, pins),
+    }));
+}
+
+/**
+ * Whether this place is drawn as a shaped pin rather than a dot.
+ *
+ * Asks the same question the feature builder does, by computing the same id.
+ * Tested against the registered images rather than against the place's own
+ * field, so a snapshot naming an icon this version of the embed doesn't ship —
+ * or one that failed to rasterise — falls back to a dot everywhere at once.
+ */
+function pinIdFor(
+  place: SnapshotPlace,
+  colors: Map<string, string>,
+  images: Set<string>,
+  pins?: readonly CustomPinIcon[],
+): string | null {
+  if (!place.icon) return null;
+
+  const id = pinImageId(place.icon, colorOf(place, colors, pins));
+  return images.has(id) ? id : null;
 }
 
 /**
@@ -320,21 +635,29 @@ function wireInteractions(
 function toFeatureCollection(
   places: SnapshotPlace[],
   snapshot: MapSnapshot,
+  images: Set<string>,
 ): GeoJSON.FeatureCollection {
-  const colors = new Map(
-    snapshot.categories.map((category) => [category.id, category.color]),
-  );
+  const colors = colorsOf(snapshot);
+  const pins = pinsOf(snapshot);
 
   return {
     type: "FeatureCollection",
-    features: places.map((place) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [place.lng, place.lat] },
-      properties: {
-        color: colors.get(place.category ?? "") ?? UNCATEGORISED_COLOR,
-        place: JSON.stringify(place),
-      },
-    })),
+    features: places.map((place) => {
+      const pin = pinIdFor(place, colors, images, pins);
+
+      return {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [place.lng, place.lat] },
+        properties: {
+          color: colorOf(place, colors, pins),
+          // Only when the image exists. `icon-image` naming a missing image is a
+          // console warning per feature per frame on a customer's site, and the
+          // pin would be invisible either way — a dot is the better failure.
+          ...(pin ? { pin } : {}),
+          place: JSON.stringify(place),
+        },
+      };
+    }),
   };
 }
 

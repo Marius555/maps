@@ -95,6 +95,18 @@ export function useMapAnchor(
       const shift = Math.min(Math.max(top, MARGIN), lowest) - top;
 
       /*
+       * How much room each side has for the whole card. The frame is
+       * `overflow-hidden`, so a card that does not fit is cut off rather than
+       * scrolled to. `flipWidth` is the card plus the gap that keeps it off the
+       * pin, so a negative number means it does not fit on that side at all.
+       */
+      const roomRight = frame.clientWidth - x - flipWidth;
+      const roomLeft = x - flipWidth;
+
+      // Open on the side that has room; when neither has, on the side with more.
+      const openLeft = roomRight < Math.min(0, roomLeft);
+
+      /*
        * Rounded to whole pixels. Text at a subpixel offset is resampled by the
        * compositor on every frame of a pan, which is exactly the shimmer the rest
        * of this folder exists to avoid.
@@ -111,7 +123,7 @@ export function useMapAnchor(
 
       // An attribute rather than a class: CSS owns which side things open on, and
       // this stays a statement about the geometry.
-      element.dataset.flip = frame.clientWidth - x < flipWidth ? "left" : "right";
+      element.dataset.flip = openLeft ? "left" : "right";
     };
 
     place();

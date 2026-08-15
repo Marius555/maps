@@ -13,6 +13,14 @@
     { "id": "shops", "label": "Shops", "color": "#e8590c" },
     { "id": "depots", "label": "Depots", "color": "#1c7ed6" }
   ],
+  "pinIcons": [
+    {
+      "id": "logo",
+      "color": "#7048e8",
+      "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAB1UlEQVR42u2dWY7FMAgEc/9Le47wpJGhF1ckfwe6sgKG75zzsXQLEQAAABYAfq7/HgBYFjwOSLvg9kBeFd4GxOvCy0EgvBgEwotBILwYBOKLISC+GALCi0EgvhgC4oshIL4YQpr46XZdBZD0srO19cWQcQWAhkCYhQ8OhreFxEcBtGaoZH6pDG1PhY4AaBdf4ue2Ye1VGGMAXhJ/1ectY1ILpywAvCr+iv8AMAfwuvjjOkyeuK2Qdh0AV/+CHolXv/O5qwEk2iABEPctrtyr4H71O8afrtrhDKAxvTkO4JUdMtUAEhL9owAOAPYeQ24AIoqpXAF8DwH4GgFsHwAAAAAAAAAAAAAAAAAAAPgRiwdAKKIAAME4wtHkA0jIFKT+XO0iKZ8CgLIUcVkKhVlUxlGaeIwhPFGcS3m6uDydu8BggwYQhv0HQAAAtqkO+s1G7ZCN2rQqGPKVZh1BzTpoVzPgHw2bwho20bLssj807RP7QNtKsd00bg0GQOviCxcKzbvFdynt68WPSAY4iN9PjDARf6kxxEf8icwYK/H/CYPcxD+HjDIUh0cY5imOSzHOVhyZZaCzOCTemhCJSQi1pwbtU6HtVQr2vrUV0MYtRAAAAFjC9QfgCbP/Ds0RnQAAAABJRU5ErkJggg=="
+    },
+    { "id": "trade", "color": "#0ca678", "glyph": "landmark" }
+  ],
   "places": [
     {
       "id": "p1",
@@ -21,6 +29,7 @@
       "lng": 25.2797,
       "address": "Gedimino pr. 9, Vilnius",
       "category": "shops",
+      "icon": "store",
       "description": "Open late on Thursdays.",
       "phone": "+370 600 00001",
       "url": "https://example.com/gedimino"
@@ -32,6 +41,7 @@
       "lng": 25.2891,
       "address": "Pilies g. 22, Vilnius",
       "category": "shops",
+      "icon": "coffee",
       "email": "oldtown@example.com"
     },
     {
@@ -40,7 +50,18 @@
       "lat": 54.6809,
       "lng": 25.2963,
       "address": "Užupio g. 3, Vilnius",
-      "category": "shops"
+      "category": "shops",
+      "icon": "custom:logo",
+      "description": "Custom image pin — decoded from the snapshot, no request of its own."
+    },
+    {
+      "id": "p9",
+      "name": "Pin that outlived its icon",
+      "lat": 54.6748,
+      "lng": 25.2701,
+      "address": "Naugarduko g. 1, Vilnius",
+      "icon": "custom:deleted",
+      "description": "Names a pin the map no longer has. Must fall back to a dot."
     },
     {
       "id": "p4",
@@ -49,7 +70,8 @@
       "lng": 25.2545,
       "address": "Savanorių pr. 1, Vilnius",
       "category": "depots",
-      "description": "Trade counter only."
+      "icon": "custom:trade",
+      "description": "Trade counter only. Custom glyph pin — keeps its own green, not the depots blue."
     },
     {
       "id": "p5",
@@ -64,7 +86,8 @@
       "name": "Antakalnis pickup",
       "lat": 54.7042,
       "lng": 25.3129,
-      "address": "Antakalnio g. 40, Vilnius"
+      "address": "Antakalnio g. 40, Vilnius",
+      "icon": "bed"
     },
     {
       "id": "p7",
@@ -81,6 +104,34 @@
       "lng": 25.2804,
       "address": "Also beside the flagship",
       "category": "shops"
+    }
+  ],
+  "shapes": [
+    {
+      "id": "s1",
+      "kind": "circle",
+      "name": "Same-day delivery",
+      "color": "#1c7ed6",
+      "opacity": 0.18,
+      "description": "Orders placed before 2pm arrive the same day inside this area.",
+      "lat": 54.687,
+      "lng": 25.28,
+      "radius": 2400
+    },
+    {
+      "id": "s2",
+      "kind": "polygon",
+      "name": "Old town zone",
+      "color": "#e8590c",
+      "opacity": 0.22,
+      "description": "Pedestrian only. Deliveries by handcart.",
+      "points": [
+        [25.2842, 54.6754],
+        [25.2951, 54.6773],
+        [25.2978, 54.6836],
+        [25.2889, 54.6862],
+        [25.2807, 54.6812]
+      ]
     }
   ],
   "settings": { "clustering": true, "search": true, "filters": true, "nearest": true },

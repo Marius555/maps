@@ -5,7 +5,11 @@ import {
   isEmptyHours,
   isOpenNow,
 } from "@/packages/shared/hours";
-import type { SnapshotCategory, SnapshotPlace } from "@/packages/shared/snapshot";
+import type {
+  SnapshotCategory,
+  SnapshotPlace,
+  SnapshotShape,
+} from "@/packages/shared/snapshot";
 
 import { el, link } from "./dom";
 
@@ -51,6 +55,36 @@ export function buildPopup(
 
   const actions = buildActions(place);
   if (actions) body.append(actions);
+
+  root.append(body);
+
+  return root;
+}
+
+/**
+ * The card shown when a visitor clicks a shape.
+ *
+ * Smaller than a place's, because a shape holds less: a name, what it means, and
+ * a swatch tying the card to the wash of colour it came from. No directions link
+ * — an area is not somewhere you can be routed to.
+ *
+ * Same `textContent`-only construction as above, for the same reason: this is
+ * customer text landing on a third party's page.
+ */
+export function buildShapePopup(shape: SnapshotShape): HTMLElement {
+  const root = el("div", "lm-popup");
+  const body = el("div", "lm-popup__body");
+
+  const heading = el("h3", "lm-popup__name", shape.name);
+  const swatch = el("span", "lm-popup__swatch");
+  swatch.style.setProperty("--lm-shape-color", shape.color);
+  heading.prepend(swatch);
+
+  body.append(heading);
+
+  if (shape.description) {
+    body.append(el("p", "lm-popup__description", shape.description));
+  }
 
   root.append(body);
 

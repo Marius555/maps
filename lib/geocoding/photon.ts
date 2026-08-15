@@ -2,7 +2,7 @@ import "server-only";
 
 import { confidenceFor } from "./confidence";
 import type { PhotonFeature, PhotonProperties } from "./reverse-select";
-import { selectReverseFeature } from "./reverse-select";
+import { selectReverseFeature, selectVenue } from "./reverse-select";
 import { createThrottle } from "./throttle";
 import type {
   AddressParts,
@@ -148,6 +148,28 @@ export function createPhotonProvider(options?: {
       const match = selectReverseFeature(features, { lat, lng }, road);
       if (!match) return null;
 
+      const parts = toAddressParts(match.properties);
+
+      /*
+       * The landmark the pin is standing in, asked separately and folded in here.
+       *
+       * Same features, same response, same throttle slot — the question is one of
+       * selection, not of another lookup, so §2 is untouched.
+       *
+       * It fills `name` only when the address match left it empty, which is the
+       * usual case: a pin on a museum resolves its *address* to the street
+       * outside, and `asStreet` clears the name on the way past. When the match
+       * is the venue itself the name is already right and this leaves it alone.
+       *
+       * Nothing else changes. `title` and `label` still lead with the street —
+       * see formatTitle, which says why — and this is the field its comment
+       * promises the name is kept in.
+       */
+      if (!parts.name) {
+        const venue = selectVenue(features, { lat, lng });
+        if (venue) parts.name = venue;
+      }
+
       /*
        * The pin's own coordinates, not the matched feature's. The candidate
        * describes where the user put the pin; handing back the centroid of the
@@ -163,7 +185,7 @@ export function createPhotonProvider(options?: {
           hasHouseNumber: Boolean(match.properties.housenumber),
           distanceM: match.distanceM,
         }),
-        parts: toAddressParts(match.properties),
+        parts,
       };
     },
   };

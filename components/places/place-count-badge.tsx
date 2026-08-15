@@ -11,11 +11,14 @@ import { Chip } from "@heroui/react";
 export function PlaceCountBadge({
   count,
   limit,
+  noun = "locations",
 }: {
   count: number;
   limit: number;
+  /** What is being counted. Shapes have their own limit and their own word. */
+  noun?: string;
 }) {
-  const label = `${count} of ${limit} locations`;
+  const label = `${count} of ${limit} ${noun}`;
 
   if (count >= limit) {
     return (

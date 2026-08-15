@@ -1,4 +1,4 @@
-import type { AppMap, Place } from "@/lib/repositories/types";
+import type { AppMap, Place, Shape } from "@/lib/repositories/types";
 import type { MapSnapshot } from "@/packages/shared/snapshot";
 import { buildSnapshot } from "./build";
 
@@ -22,8 +22,12 @@ import { buildSnapshot } from "./build";
  * compare unequal — which is what the caller uses to decide whether to rebuild
  * the frame at all.
  */
-export function buildPreviewSnapshot(map: AppMap, places: Place[]): MapSnapshot {
-  const { snapshot } = buildSnapshot(map, places, map.updatedAt);
+export function buildPreviewSnapshot(
+  map: AppMap,
+  places: Place[],
+  shapes: Shape[],
+): MapSnapshot {
+  const { snapshot } = buildSnapshot(map, places, shapes, map.updatedAt);
 
   return { ...snapshot, allowedDomains: [] };
 }

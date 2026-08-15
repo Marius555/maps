@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { AUTO_STYLE, CONCRETE_MAP_STYLES } from "@/lib/map/style";
-import type { AppMap, MapCategory, Place } from "@/lib/repositories/types";
+import type { AppMap, MapCategory, Place, Shape } from "@/lib/repositories/types";
 import { emptyHours } from "@/packages/shared/hours";
 import { buildSnapshot } from "./build";
 
@@ -18,6 +18,7 @@ function makeMap(overrides: Partial<AppMap> = {}): AppMap {
     defaultLng: 25.28,
     defaultZoom: 11,
     categories: [],
+    pinIcons: [],
     settings: {},
     allowedDomains: [],
     publishedAt: null,
@@ -37,6 +38,7 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     lng: 25.28,
     address: "Gedimino pr. 1, Vilnius",
     category: "",
+    icon: "",
     description: null,
     phone: null,
     email: null,
@@ -47,7 +49,25 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     sortOrder: 0,
     geocodeConfidence: null,
     addressParts: null,
+    groupId: "",
     geocodeStatus: "ok",
+    createdAt: GENERATED_AT,
+    updatedAt: GENERATED_AT,
+    ...overrides,
+  };
+}
+
+function makeShape(overrides: Partial<Shape> = {}): Shape {
+  return {
+    id: "shape-1",
+    mapId: "map-1",
+    name: "Delivery zone",
+    description: null,
+    color: "#1c7ed6",
+    opacity: 0.2,
+    geometry: { kind: "circle", lng: 25.28, lat: 54.687, radius: 1200 },
+    sortOrder: 0,
+    groupId: "",
     createdAt: GENERATED_AT,
     updatedAt: GENERATED_AT,
     ...overrides,
@@ -62,7 +82,7 @@ const category = (id: string, label: string): MapCategory => ({
 
 describe("buildSnapshot", () => {
   it("carries the map's identity, centre and attribution", () => {
-    const { snapshot } = buildSnapshot(makeMap(), [makePlace()], GENERATED_AT);
+    const { snapshot } = buildSnapshot(makeMap(), [makePlace()], [], GENERATED_AT);
 
     expect(snapshot.version).toBe(1);
     expect(snapshot.generatedAt).toBe(GENERATED_AT);
@@ -75,7 +95,7 @@ describe("buildSnapshot", () => {
   });
 
   it("resolves the style to a full URL so the embed ships no style table", () => {
-    const { snapshot } = buildSnapshot(makeMap({ style: "positron" }), [], GENERATED_AT);
+    const { snapshot } = buildSnapshot(makeMap({ style: "positron" }), [], [], GENERATED_AT);
 
     expect(snapshot.styleUrl).toMatch(/^https:\/\//);
     expect(snapshot.styleUrl).toContain("positron");
@@ -83,7 +103,7 @@ describe("buildSnapshot", () => {
 
   it("resolves every pinned basemap to its own URL", () => {
     for (const style of CONCRETE_MAP_STYLES) {
-      const { snapshot } = buildSnapshot(makeMap({ style }), [], GENERATED_AT);
+      const { snapshot } = buildSnapshot(makeMap({ style }), [], [], GENERATED_AT);
 
       expect(snapshot.styleUrl).toMatch(/^https:\/\//);
       expect(snapshot.styleUrl).toContain(style);
@@ -99,14 +119,14 @@ describe("buildSnapshot", () => {
    * which is what the next test is about.
    */
   it("marks dark basemaps so the embed can match its chrome", () => {
-    expect(buildSnapshot(makeMap({ style: "dark" }), [], GENERATED_AT).snapshot.theme).toBe(
+    expect(buildSnapshot(makeMap({ style: "dark" }), [], [], GENERATED_AT).snapshot.theme).toBe(
       "dark",
     );
-    expect(buildSnapshot(makeMap({ style: "fiord" }), [], GENERATED_AT).snapshot.theme).toBe(
+    expect(buildSnapshot(makeMap({ style: "fiord" }), [], [], GENERATED_AT).snapshot.theme).toBe(
       "dark",
     );
     expect(
-      buildSnapshot(makeMap({ style: "liberty" }), [], GENERATED_AT).snapshot.theme,
+      buildSnapshot(makeMap({ style: "liberty" }), [], [], GENERATED_AT).snapshot.theme,
     ).toBe("light");
   });
 
@@ -118,7 +138,7 @@ describe("buildSnapshot", () => {
    * a stale answer sitting next to the live one.
    */
   it("ships one basemap, a flag and no fixed theme for Auto", () => {
-    const { snapshot } = buildSnapshot(makeMap({ style: "auto" }), [], GENERATED_AT);
+    const { snapshot } = buildSnapshot(makeMap({ style: "auto" }), [], [], GENERATED_AT);
 
     expect(snapshot.styleUrl).toContain(AUTO_STYLE);
     expect(snapshot.autoDark).toBe(true);
@@ -128,7 +148,7 @@ describe("buildSnapshot", () => {
   it("defaults every embed control to on when settings were never written", () => {
     // What every map created before the settings form existed looks like:
     // `settings: "{}"` at creation and nothing after it.
-    const { snapshot } = buildSnapshot(makeMap({ settings: {} }), [], GENERATED_AT);
+    const { snapshot } = buildSnapshot(makeMap({ settings: {} }), [], [], GENERATED_AT);
 
     expect(snapshot.settings).toEqual({
       clustering: true,
@@ -141,6 +161,7 @@ describe("buildSnapshot", () => {
   it("carries stored embed controls through to the snapshot", () => {
     const { snapshot } = buildSnapshot(
       makeMap({ settings: { clustering: false, nearest: false } }),
+      [],
       [],
       GENERATED_AT,
     );
@@ -158,6 +179,7 @@ describe("buildSnapshot", () => {
       // Appwrite console or written by an older build.
       makeMap({ settings: { clustering: "yes", search: null } }),
       [],
+      [],
       GENERATED_AT,
     );
 
@@ -166,13 +188,115 @@ describe("buildSnapshot", () => {
   });
 
   it("omits empty optional fields instead of writing nulls", () => {
-    const { snapshot } = buildSnapshot(makeMap(), [makePlace()], GENERATED_AT);
+    const { snapshot } = buildSnapshot(makeMap(), [makePlace()], [], GENERATED_AT);
     const [place] = snapshot.places;
 
     expect(place).not.toHaveProperty("description");
     expect(place).not.toHaveProperty("phone");
     expect(place).not.toHaveProperty("photoUrl");
+    expect(place).not.toHaveProperty("icon");
     expect(place.address).toBe("Gedimino pr. 1, Vilnius");
+  });
+
+  /*
+   * The icon is the location's own, unlike the colour it takes from its
+   * category, so it travels per place. The embed reads it to decide whether a
+   * place is drawn as a shaped pin or a dot.
+   */
+  it("publishes the icon a location was dropped with", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [makePlace({ icon: "coffee" })],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.places[0].icon).toBe("coffee");
+  });
+
+  /*
+   * Custom pins travel whole — colour and logo included — because the embed has
+   * to draw them on a stranger's site with no second request (§2). That makes
+   * them the heaviest thing in the file per entry, which is why only the ones a
+   * published place actually wears are sent.
+   */
+  describe("custom pins", () => {
+    const glyphPin = {
+      id: "ab12cd34",
+      label: "Flagship",
+      color: "#1c7ed6",
+      glyph: "store",
+      image: "",
+    };
+    const imagePin = {
+      id: "ef56gh78",
+      label: "Logo",
+      color: "#0ca678",
+      glyph: "",
+      image: "data:image/png;base64,iVBORw0KGgo=",
+    };
+
+    it("publishes a pin a location wears, with its colour", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap({ pinIcons: [glyphPin] }),
+        [makePlace({ icon: "custom:ab12cd34" })],
+        [],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.pinIcons).toEqual([
+        { id: "ab12cd34", color: "#1c7ed6", glyph: "store" },
+      ]);
+      expect(snapshot.places[0].icon).toBe("custom:ab12cd34");
+    });
+
+    it("inlines an uploaded image", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap({ pinIcons: [imagePin] }),
+        [makePlace({ icon: "custom:ef56gh78" })],
+        [],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.pinIcons?.[0].image).toBe(imagePin.image);
+      expect(snapshot.pinIcons?.[0]).not.toHaveProperty("glyph");
+      // The name is the owner's business. Nothing in the embed renders it.
+      expect(snapshot.pinIcons?.[0]).not.toHaveProperty("label");
+    });
+
+    it("leaves out a pin no location wears", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap({ pinIcons: [glyphPin, imagePin] }),
+        [makePlace({ icon: "custom:ab12cd34" })],
+        [],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.pinIcons).toHaveLength(1);
+    });
+
+    it("omits the key entirely on a map with no custom pins", () => {
+      const { snapshot } = buildSnapshot(makeMap(), [makePlace()], [], GENERATED_AT);
+
+      expect(snapshot).not.toHaveProperty("pinIcons");
+    });
+
+    /*
+     * The place keeps the id it was saved with; the embed resolves it to nothing
+     * and draws a dot. Rewriting the place here would be the generator quietly
+     * editing customer data on the way past.
+     */
+    it("keeps a place's icon id after the pin it named is gone", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap(),
+        [makePlace({ icon: "custom:deleted" })],
+        [],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.places[0].icon).toBe("custom:deleted");
+      expect(snapshot).not.toHaveProperty("pinIcons");
+    });
   });
 
   it("keeps optional fields that have a value", () => {
@@ -186,6 +310,7 @@ describe("buildSnapshot", () => {
           photoUrl: "https://cdn.example.com/photo.jpg",
         }),
       ],
+      [],
       GENERATED_AT,
     );
 
@@ -204,6 +329,7 @@ describe("buildSnapshot", () => {
     const { snapshot } = buildSnapshot(
       makeMap(),
       [makePlace({ id: "open", hours: week }), makePlace({ id: "none" })],
+      [],
       GENERATED_AT,
     );
 
@@ -218,6 +344,7 @@ describe("buildSnapshot", () => {
     const { snapshot } = buildSnapshot(
       makeMap(),
       [makePlace({ hours: emptyHours() })],
+      [],
       GENERATED_AT,
     );
 
@@ -232,6 +359,7 @@ describe("buildSnapshot", () => {
     const { snapshot, skipped } = buildSnapshot(
       makeMap(),
       [good, broken, outOfRange],
+      [],
       GENERATED_AT,
     );
 
@@ -245,6 +373,7 @@ describe("buildSnapshot", () => {
     const { snapshot } = buildSnapshot(
       makeMap(),
       [makePlace({ geocodeStatus: "manual", geocodeConfidence: null })],
+      [],
       GENERATED_AT,
     );
 
@@ -259,6 +388,7 @@ describe("buildSnapshot", () => {
     const { snapshot } = buildSnapshot(
       map,
       [makePlace({ category: "shops" })],
+      [],
       GENERATED_AT,
     );
 
@@ -272,6 +402,7 @@ describe("buildSnapshot", () => {
     const { snapshot } = buildSnapshot(
       map,
       [makePlace({ category: "shops", lat: Number.POSITIVE_INFINITY })],
+      [],
       GENERATED_AT,
     );
 
@@ -286,6 +417,7 @@ describe("buildSnapshot", () => {
         makePlace({ id: "b", lat: 55.5, lng: 26.5 }),
         makePlace({ id: "c", lat: 54.5, lng: 24.5 }),
       ],
+      [],
       GENERATED_AT,
     );
 
@@ -298,7 +430,7 @@ describe("buildSnapshot", () => {
   });
 
   it("has no bounds when the map has no usable places", () => {
-    const { snapshot } = buildSnapshot(makeMap(), [], GENERATED_AT);
+    const { snapshot } = buildSnapshot(makeMap(), [], [], GENERATED_AT);
 
     expect(snapshot.bounds).toBeNull();
     expect(snapshot.places).toEqual([]);
@@ -308,6 +440,7 @@ describe("buildSnapshot", () => {
     const { snapshot } = buildSnapshot(
       makeMap(),
       [makePlace({ lat: 54.68712345678, lng: 25.28087654321 })],
+      [],
       GENERATED_AT,
     );
 
@@ -316,7 +449,7 @@ describe("buildSnapshot", () => {
   });
 
   it("defaults every embed control to on", () => {
-    const { snapshot } = buildSnapshot(makeMap(), [], GENERATED_AT);
+    const { snapshot } = buildSnapshot(makeMap(), [], [], GENERATED_AT);
 
     expect(snapshot.settings).toEqual({
       clustering: true,
@@ -331,7 +464,7 @@ describe("buildSnapshot", () => {
       settings: { clustering: false, search: "yes", nearest: null },
     });
 
-    const { snapshot } = buildSnapshot(map, [], GENERATED_AT);
+    const { snapshot } = buildSnapshot(map, [], [], GENERATED_AT);
 
     expect(snapshot.settings.clustering).toBe(false);
     // A junk value must not switch a control off; it falls back to the default.
@@ -342,7 +475,7 @@ describe("buildSnapshot", () => {
   it("carries the domain allowlist through untouched", () => {
     const map = makeMap({ allowedDomains: ["example.com", "www.example.com"] });
 
-    const { snapshot } = buildSnapshot(map, [], GENERATED_AT);
+    const { snapshot } = buildSnapshot(map, [], [], GENERATED_AT);
 
     expect(snapshot.allowedDomains).toEqual(["example.com", "www.example.com"]);
   });
@@ -351,6 +484,7 @@ describe("buildSnapshot", () => {
     const { snapshot } = buildSnapshot(
       makeMap(),
       [makePlace({ photoId: "file-1", photoUrl: "https://cdn/x.jpg" })],
+      [],
       GENERATED_AT,
     );
 
@@ -360,5 +494,138 @@ describe("buildSnapshot", () => {
     expect(snapshot.places[0]).not.toHaveProperty("mapId");
     expect(snapshot.places[0]).not.toHaveProperty("geocodeStatus");
     expect(snapshot.places[0]).not.toHaveProperty("sortOrder");
+  });
+
+  describe("shapes", () => {
+    it("omits the key entirely when there are none", () => {
+      const { snapshot } = buildSnapshot(makeMap(), [makePlace()], [], GENERATED_AT);
+
+      // Absent, not `[]`. Every snapshot published before shapes existed says
+      // absent, and the embed has to read the two the same way.
+      expect(snapshot).not.toHaveProperty("shapes");
+    });
+
+    it("publishes a circle as a centre and a radius, not as a ring", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap(),
+        [],
+        [makeShape({ description: "Same-day delivery." })],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.shapes).toEqual([
+        {
+          id: "shape-1",
+          name: "Delivery zone",
+          color: "#1c7ed6",
+          opacity: 0.2,
+          description: "Same-day delivery.",
+          kind: "circle",
+          lat: 54.687,
+          lng: 25.28,
+          radius: 1200,
+        },
+      ]);
+    });
+
+    it("drops an empty description rather than serialising it", () => {
+      const { snapshot } = buildSnapshot(makeMap(), [], [makeShape()], GENERATED_AT);
+
+      expect(snapshot.shapes?.[0]).not.toHaveProperty("description");
+      expect(snapshot.shapes?.[0]).not.toHaveProperty("mapId");
+      expect(snapshot.shapes?.[0]).not.toHaveProperty("sortOrder");
+    });
+
+    it("rounds coordinates and radius", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap(),
+        [],
+        [
+          makeShape({
+            geometry: {
+              kind: "circle",
+              lng: 25.2812345678,
+              lat: 54.6871234567,
+              radius: 1200.6,
+            },
+          }),
+        ],
+        GENERATED_AT,
+      );
+
+      const shape = snapshot.shapes?.[0];
+      if (shape?.kind !== "circle") throw new Error("expected a circle");
+
+      expect(shape.lng).toBe(25.281235);
+      expect(shape.lat).toBe(54.687123);
+      expect(shape.radius).toBe(1201);
+    });
+
+    it("publishes a polygon's ring", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap(),
+        [],
+        [
+          makeShape({
+            geometry: {
+              kind: "polygon",
+              points: [
+                [25.27, 54.68],
+                [25.29, 54.68],
+                [25.28, 54.7],
+              ],
+            },
+          }),
+        ],
+        GENERATED_AT,
+      );
+
+      const shape = snapshot.shapes?.[0];
+      if (shape?.kind !== "polygon") throw new Error("expected a polygon");
+
+      expect(shape.points).toHaveLength(3);
+    });
+
+    it("leaves out a shape that would draw nothing", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap(),
+        [],
+        [
+          makeShape({ id: "a", geometry: { kind: "polygon", points: [[25.28, 54.687]] } }),
+          makeShape({
+            id: "b",
+            geometry: { kind: "circle", lng: 25.28, lat: 54.687, radius: 0 },
+          }),
+        ],
+        GENERATED_AT,
+      );
+
+      expect(snapshot).not.toHaveProperty("shapes");
+    });
+
+    it("frames a map whose only content is a shape", () => {
+      // Without this the map has no bounds at all and opens on `center` at
+      // whatever zoom was saved — often nowhere near the thing it is about.
+      const { snapshot } = buildSnapshot(makeMap(), [], [makeShape()], GENERATED_AT);
+
+      expect(snapshot.bounds).not.toBeNull();
+      // The circle's diameter, not its centre: a 1.2km radius reaches about
+      // 0.0108° north and south.
+      expect(snapshot.bounds?.north).toBeGreaterThan(54.697);
+      expect(snapshot.bounds?.south).toBeLessThan(54.677);
+    });
+
+    it("extends the bounds over both places and shapes", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap(),
+        [makePlace({ lat: 54.9, lng: 25.28 })],
+        [makeShape()],
+        GENERATED_AT,
+      );
+
+      // The place is the northern extreme, the circle the southern one.
+      expect(snapshot.bounds?.north).toBe(54.9);
+      expect(snapshot.bounds?.south).toBeLessThan(54.68);
+    });
   });
 });

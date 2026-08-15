@@ -1,15 +1,17 @@
 "use client";
 
-import { Toast } from "@heroui/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { MotionConfig } from "motion/react";
 import { useEffect, useState } from "react";
 
 import { makeQueryClient } from "@/lib/query/client";
+import { ToastRegion } from "./toast-region";
 
 /**
  * HeroUI v3 needs no provider of its own — it is React Aria plus CSS variables.
  * Toast is the exception: it renders into a queue that has to be mounted once.
+ * `ToastRegion` is that mount, kept in its own file so the media query it watches
+ * cannot re-render everything under `{children}`.
  *
  * The query client is created in state, not as a module singleton, so an SSR
  * render never shares one user's cache with the next request's.
@@ -39,7 +41,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <MotionConfig reducedMotion="user">
         {children}
-        <Toast.Provider placement="bottom end" />
+        <ToastRegion />
       </MotionConfig>
     </QueryClientProvider>
   );

@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-/**
- * Categories are user data, so they are stored as plain hex — not as theme
- * variables. They travel into the published snapshot and get read by the embed
- * on someone else's site, where our CSS variables don't exist.
- */
+import { hexColorSchema } from "./common";
 
 /** Offered as swatches. Any valid hex is still accepted. */
 export const CATEGORY_COLORS = [
@@ -18,17 +14,30 @@ export const CATEGORY_COLORS = [
   "#495057",
 ] as const;
 
+/**
+ * A name per swatch.
+ *
+ * React Aria's ColorSwatchPicker derives one from the value itself, so the
+ * category picker needs nothing here. The pin studio renders its palette as
+ * plain buttons — the swatch there has to sit centred in a carousel slot, which
+ * that component's fixed-size items cannot do — and a control picked by eye
+ * still owes a screen reader something to say.
+ */
+export const CATEGORY_COLOR_NAMES: Record<(typeof CATEGORY_COLORS)[number], string> = {
+  "#e8590c": "Orange",
+  "#d6336c": "Pink",
+  "#7048e8": "Violet",
+  "#1c7ed6": "Blue",
+  "#0ca678": "Teal",
+  "#66a80f": "Lime",
+  "#f08c00": "Amber",
+  "#495057": "Slate",
+};
+
 export const DEFAULT_CATEGORY_COLOR = CATEGORY_COLORS[0];
 
 /** Enough for a legend a visitor can actually scan. */
 export const MAX_CATEGORIES = 24;
-
-const hexColor = z
-  .string()
-  .trim()
-  .regex(/^#[0-9a-fA-F]{6}$/, "Pick a colour, or enter a hex value like #e8590c.")
-  // Stored lowercase so two spellings of one colour compare equal.
-  .transform((value) => value.toLowerCase());
 
 export const categorySchema = z.object({
   /** Stable across renames — places reference this, not the label. */
@@ -38,7 +47,7 @@ export const categorySchema = z.object({
     .trim()
     .min(1, "Give the category a name.")
     .max(64, "Keep the name under 64 characters."),
-  color: hexColor,
+  color: hexColorSchema,
 });
 
 export const categoriesSchema = z

@@ -1,4 +1,4 @@
-import type { AppMap, Place } from "@/lib/repositories/types";
+import type { AppMap, Place, Shape } from "@/lib/repositories/types";
 
 /**
  * Has anything changed since the map was last published?
@@ -25,7 +25,11 @@ import type { AppMap, Place } from "@/lib/repositories/types";
  */
 const PUBLISH_WRITE_GRACE_MS = 60_000;
 
-export function hasUnpublishedChanges(map: AppMap, places: Place[]): boolean {
+export function hasUnpublishedChanges(
+  map: AppMap,
+  places: Place[],
+  shapes: Shape[],
+): boolean {
   if (!map.publishedAt) return false;
 
   const publishedAt = Date.parse(map.publishedAt);
@@ -33,8 +37,13 @@ export function hasUnpublishedChanges(map: AppMap, places: Place[]): boolean {
 
   if (isAfter(map.updatedAt, publishedAt + PUBLISH_WRITE_GRACE_MS)) return true;
 
-  // Place writes are unrelated to publishing, so they need no grace window.
-  return places.some((place) => isAfter(place.updatedAt, publishedAt));
+  // Place and shape writes are unrelated to publishing, so they need no grace
+  // window. Dragging a circle's radius handle is as much an unpublished change
+  // as renaming a location is.
+  return (
+    places.some((place) => isAfter(place.updatedAt, publishedAt)) ||
+    shapes.some((shape) => isAfter(shape.updatedAt, publishedAt))
+  );
 }
 
 function isAfter(timestamp: string, than: number): boolean {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { mountDragGhost, moveDragGhost } from "./drag-ghost";
 
 /**
@@ -26,6 +27,11 @@ const HANDLE_STYLE: React.CSSProperties = { touchAction: "none" };
  * live ghost we control, withholds coordinates until the drop in some browsers,
  * and does not work on touch at all. This is three listeners and a threshold.
  *
+ * One hook serves every source that can start a drag — the button and each tile
+ * in the icon menu — because the gesture is one at a time by definition. Which
+ * source it came from travels as the payload handed to `dragProps`, so the ghost
+ * knows what to draw and the drop knows what to create.
+ *
  * The press is caught in the **capture** phase, and that is not a detail. React
  * Aria's `usePress` — which every HeroUI Button runs on — ends its own
  * `onPointerDown` with `e.stopPropagation()`, and React dispatches synthetic
@@ -40,11 +46,29 @@ const HANDLE_STYLE: React.CSSProperties = { touchAction: "none" };
  */
 export function useDragToAdd({
   onDrop,
-  isDisabled,
+  onDragStart,
+  pinIcons,
 }: {
-  /** Viewport coordinates of the drop. Deciding what is there is the caller's. */
-  onDrop: (clientX: number, clientY: number) => void;
-  isDisabled?: boolean;
+  /**
+   * Viewport coordinates of the drop, and the icon that was dragged. Deciding
+   * what is under those coordinates is the caller's job.
+   */
+  onDrop: (clientX: number, clientY: number, icon: string) => void;
+  /**
+   * The moment the press crosses the threshold and becomes a drag.
+   *
+   * An event rather than something derived from `isDragging`, because what
+   * listens to it wants to act once, at the transition — closing the menu the
+   * pin was dragged out of, say. Watching the flag in an effect would be a
+   * setState cascading off a render, which is both slower and, as the React
+   * Compiler's lint rule points out, a misuse of effects.
+   */
+  onDragStart?: () => void;
+  /**
+   * The map's own pins, so the ghost can draw a custom one in its own colour.
+   * Held in a ref like the handlers are: it is read once, when a drag starts.
+   */
+  pinIcons?: CustomPinIcon[];
 }) {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -53,23 +77,54 @@ export function useDragToAdd({
   const latest = useRef({ x: 0, y: 0 });
   const started = useRef(false);
   const didDrag = useRef(false);
+  /** Which source the press came from. Read at drop, and by the ghost effect. */
+  const icon = useRef("");
 
-  // Latest handler without re-binding the window listeners mid-gesture.
+  // Latest handlers without re-binding the window listeners mid-gesture.
   const dropHandler = useRef(onDrop);
+  const startHandler = useRef(onDragStart);
+  const custom = useRef(pinIcons);
   useEffect(() => {
     dropHandler.current = onDrop;
+    startHandler.current = onDragStart;
+    custom.current = pinIcons;
   });
 
-  const onPointerDownCapture = useCallback(
-    (event: React.PointerEvent) => {
-      if (isDisabled || event.button !== 0) return;
+  /*
+   * There is no `isDisabled` here any more, and its absence is the point. The
+   * plan limit used to switch this off, so a customer at ten locations dragged a
+   * pin that never left the button and was told nothing. The gesture now always
+   * runs; the 403 it earns is what carries the explanation (see
+   * lib/query/plan-limit-toast.ts).
+   */
+  const onPointerDown = useCallback(
+    (event: React.PointerEvent, payload: string) => {
+      if (event.button !== 0) return;
 
       origin.current = { x: event.clientX, y: event.clientY };
       latest.current = { x: event.clientX, y: event.clientY };
       started.current = false;
       didDrag.current = false;
+      icon.current = payload;
     },
-    [isDisabled],
+    [],
+  );
+
+  /**
+   * Props for one drag source.
+   *
+   * A factory rather than a fixed object because there are now several sources
+   * and each carries a different icon. Memoised on the handler alone — the
+   * returned object is new per call, which is fine: it is spread onto a DOM
+   * element, not compared.
+   */
+  const dragProps = useCallback(
+    (payload: string) => ({
+      onPointerDownCapture: (event: React.PointerEvent) =>
+        onPointerDown(event, payload),
+      style: HANDLE_STYLE,
+    }),
+    [onPointerDown],
   );
 
   /*
@@ -89,6 +144,7 @@ export function useDragToAdd({
         started.current = true;
         didDrag.current = true;
         setIsDragging(true);
+        startHandler.current?.();
       }
 
       // Stops the gesture from also scrolling the page or selecting text.
@@ -105,7 +161,9 @@ export function useDragToAdd({
       started.current = false;
       setIsDragging(false);
 
-      if (wasDragging && drop) dropHandler.current(event.clientX, event.clientY);
+      if (wasDragging && drop) {
+        dropHandler.current(event.clientX, event.clientY, icon.current);
+      }
     };
 
     const onPointerUp = (event: PointerEvent) => finish(event, true);
@@ -145,7 +203,12 @@ export function useDragToAdd({
   useEffect(() => {
     if (!isDragging) return;
 
-    const element = mountDragGhost(latest.current.x, latest.current.y);
+    const element = mountDragGhost(
+      latest.current.x,
+      latest.current.y,
+      icon.current,
+      custom.current,
+    );
     ghost.current = element;
 
     const { body } = document;
@@ -173,8 +236,8 @@ export function useDragToAdd({
 
   return {
     isDragging,
-    /** Spread onto the element the pin is dragged out of. */
-    handleProps: { onPointerDownCapture, style: HANDLE_STYLE },
+    /** Spread onto an element a pin can be dragged out of, with its icon id. */
+    dragProps,
     consumeDidDrag,
   };
 }
