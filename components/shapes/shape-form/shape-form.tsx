@@ -75,7 +75,6 @@ export function ShapeForm({
         control={control}
         name="name"
         label="Name"
-        placeholder="Same-day delivery"
       />
 
       {/* What the map already knows, stated once so the form is about a shape you
@@ -86,7 +85,6 @@ export function ShapeForm({
         control={control}
         name="description"
         label="Description"
-        placeholder="Orders placed before 2pm arrive the same day inside this area."
       />
 
       <Controller

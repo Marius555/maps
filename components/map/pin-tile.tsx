@@ -2,14 +2,13 @@
 
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 
-import { PickedCheck, pickedTileClass } from "@/components/ui/picked-tile";
+import { pickedTileClass } from "@/components/ui/picked-tile";
 import {
   CUSTOM_PIN_PREFIX,
   PIN_ICONS,
-  pinSvg,
-  resolvePin,
   type CustomPinIcon,
 } from "@/packages/shared/pin-icons";
+import { PinPreview } from "./pin-preview";
 
 /**
  * One pin, as something you can press.
@@ -24,10 +23,9 @@ import {
  * those between the pointer and the gesture buys nothing. These need no press
  * behaviour beyond `onClick`.
  *
- * The preview is the same `pinSvg` the ghost and the markers draw, injected as
- * markup rather than rebuilt as JSX — including the custom pin's own colour,
- * which the tile sets as `--pin-color` exactly as a marker does. A second drawing
- * of the same pin is how the tile you pressed and the pin you got drift apart.
+ * The preview itself is `PinPreview`, which is the same `pinSvg` the ghost and
+ * the markers draw — including the custom pin's own colour. A second drawing of
+ * the same pin is how the tile you pressed and the pin you got drift apart.
  */
 
 export type DragProps = {
@@ -63,7 +61,6 @@ export function PinTile({
   dragProps?: DragProps;
   onPress: () => void;
 }) {
-  const pin = resolvePin(icon, pinIcons);
   const name = label ?? pinLabel(icon, pinIcons);
 
   return (
@@ -78,14 +75,7 @@ export function PinTile({
         dragProps ? "cursor-grab active:cursor-grabbing" : ""
       } ${size === "lg" ? "w-full" : ""}`}
     >
-      {isArmed ? <PickedCheck /> : null}
-
-      <span
-        aria-hidden="true"
-        className={`pin-preview ${size === "lg" ? "pin-preview--lg" : ""}`}
-        style={pin?.color ? ({ "--pin-color": pin.color } as CSSProperties) : undefined}
-        dangerouslySetInnerHTML={{ __html: pinSvg(pin) }}
-      />
+      <PinPreview icon={icon} pinIcons={pinIcons} size={size} />
       <span className="w-full truncate text-xs leading-tight text-muted">{name}</span>
     </button>
   );

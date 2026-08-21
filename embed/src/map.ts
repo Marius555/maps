@@ -564,6 +564,14 @@ function pinsOf(snapshot: MapSnapshot): CustomPinIcon[] {
     color: pin.color,
     glyph: pin.glyph ?? "",
     image: pin.image ?? "",
+    // Left undefined rather than defaulted here: the design fields are optional
+    // on `CustomPinIcon` too, and `resolvePin` is the one place that decides what
+    // absent means. Filling them in twice is how the two would disagree.
+    ring: pin.ring,
+    ringWidth: pin.ringWidth,
+    iconColor: pin.iconColor,
+    size: pin.size,
+    shape: pin.shape,
   }));
 }
 

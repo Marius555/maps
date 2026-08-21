@@ -23,6 +23,7 @@ import { recentPinIcons } from "@/lib/map/recent-pins";
 import { selectionBounds } from "@/lib/map/selection-bounds";
 import { nextPlaceDefaults } from "@/lib/places/next-place-defaults";
 import {
+  isOptimisticGroupId,
   useAssignToGroup,
   useCreateGroup,
   useGroups,
@@ -30,6 +31,7 @@ import {
   type GroupMembers,
 } from "@/lib/query/groups";
 import { useMap, useUpdateMap } from "@/lib/query/maps";
+import { readMapAppearance } from "@/lib/validation/map-appearance.schema";
 import { isPlanLimit, toastPlanLimit } from "@/lib/query/plan-limit-toast";
 import {
   useCreatePlace,
@@ -195,6 +197,21 @@ export function MapEditor({
   const recentIcons = useMemo(
     () => recentPinIcons(places, map.pinIcons),
     [places, map.pinIcons],
+  );
+
+  /*
+   * The stored blob, filled in. Read through the same helper the snapshot
+   * generator uses, so the switches in the appearance menu show what would
+   * actually be published rather than a second opinion — and memoised because
+   * the toolbar passes it straight into a control that saves on change.
+   *
+   * The canvas gets `map.appearance` raw instead: it normalises internally, and
+   * handing it the same object here would only add a second thing to keep in
+   * step.
+   */
+  const appearance = useMemo(
+    () => readMapAppearance(map.appearance),
+    [map.appearance],
   );
 
   /*
@@ -644,6 +661,54 @@ export function MapEditor({
     [assignMembers],
   );
 
+  /**
+   * One group dropped on another.
+   *
+   * A merge is not its own operation: it is every member of the source being
+   * assigned to the target, after which the source is a group with nothing in it
+   * and `usePruneEmptyGroups` deletes it. So there is no endpoint for this, no
+   * repository method, and nothing that could leave a half-merged pair behind —
+   * the failure mode of a partial write is some members moved and a group that
+   * still exists, which is a state the panel can already draw.
+   *
+   * The *target* survives, keeping its name and colour. That is what dropping
+   * onto something means everywhere else in this panel, and it is what the Merge
+   * button under a marquee does with the first group in sidebar order.
+   *
+   * Held busy for the length of the writes, like every other path that empties a
+   * group: the source reads as empty the instant its first member is optimistically
+   * PATCHed, and sweeping it then would strand the rest if the writes failed.
+   */
+  const mergeGroups = useCallback(
+    async (targetGroupId: string, sourceGroupId: string) => {
+      if (!targetGroupId || targetGroupId === sourceGroupId) return;
+
+      // Neither end can be a row that exists only in the cache: the server has
+      // never heard of a `temp-` id, and it is about to be replaced by a real one.
+      if (isOptimisticGroupId(targetGroupId) || isOptimisticGroupId(sourceGroupId)) {
+        return;
+      }
+
+      const members = membersOf({ id: sourceGroupId }, places, shapes);
+      if (members.places.length + members.shapes.length === 0) return;
+
+      setIsGrouping(true);
+
+      try {
+        await assignMembers(
+          {
+            placeIds: members.places.map((place) => place.id),
+            shapeIds: members.shapes.map((shape) => shape.id),
+          },
+          targetGroupId,
+        );
+      } finally {
+        setIsGrouping(false);
+      }
+    },
+    [assignMembers, places, shapes],
+  );
+
   // Escape leaves add mode — the toolbar toggle stays sticky so several pins can
   // be dropped in a row.
   useEffect(() => {
@@ -756,8 +821,30 @@ export function MapEditor({
      * `lg`, not `md`: with a 240px nav sidebar and a 320px locations panel, a
      * 768px viewport would leave the map about 200px wide. It stacks until there
      * is genuinely room for both.
+     *
+     * **`lg:h-[...]` is a definite height, and that is the whole point.** Every
+     * other step from `<body>` down to the locations list is `min-h-*` or
+     * `flex-1` — a floor or a ratio, never a ceiling — and a percentage
+     * flex-basis against an indefinite parent resolves to `content`. So the
+     * panel's `overflow-y: auto` sat on a box that always grew to fit, adding a
+     * location scrolled the *page*, and the map got taller with it. One real
+     * height here gives everything below something to divide up.
+     *
+     * **`lg:flex-none` is what makes that height apply at all**, and its absence
+     * fails silently. This row is a flex item of `Container`, which is a column,
+     * so its height *is* its main size — and `flex-1` sets `flex-basis: 0%`,
+     * which beats `height` on the main axis. With both, the height is simply
+     * ignored and everything above grows exactly as it did before. `flex-none`
+     * restores `flex-basis: auto`, and below `lg` the row goes back to `flex-1`
+     * because there it stacks and has nothing to fill.
+     *
+     * `100dvh - 3rem` is exact rather than approximate: 3rem is `Container`'s
+     * own `py-6` top and bottom, and at `lg` there is nothing else above this —
+     * `MobileHeader` is `md:hidden` and `PageTitle` is `sr-only`, which is
+     * absolutely positioned and contributes no height. dvh, not vh, so mobile
+     * browser chrome doesn't push the bottom of the panel out of reach.
      */
-    <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 lg:h-[calc(100dvh-3rem)] lg:flex-none lg:flex-row">
       {/*
        * A framed panel rather than a slab bled to the window edges. dvh, not vh:
        * mobile browser chrome would clip the canvas otherwise.
@@ -774,6 +861,8 @@ export function MapEditor({
           isSelecting={isSelecting}
           isSavingView={updateMap.isPending}
           hasSavedView={savedViewAt !== null}
+          style={map.style}
+          appearance={appearance}
           search={
             <MapSearch
               mapId={map.id}
@@ -798,6 +887,8 @@ export function MapEditor({
           onOpenStudio={() => setIsStudioOpen(true)}
           onSaveView={() => void saveCurrentView()}
           onPreview={() => setIsPreviewOpen(true)}
+          onChangeStyle={(style) => updateMap.mutate({ style })}
+          onChangeAppearance={(next) => updateMap.mutate({ appearance: next })}
         />
 
         {/* One bar, five instructions: a pin already in the air needs a different
@@ -841,6 +932,7 @@ export function MapEditor({
           center={{ lng: map.defaultLng, lat: map.defaultLat }}
           zoom={map.defaultZoom}
           style={map.style}
+          appearance={map.appearance}
           places={places}
           selectedPlaceId={selectedPlaceId}
           isAdding={isAdding}
@@ -881,6 +973,7 @@ export function MapEditor({
         shapes={shapes}
         groups={groups}
         categoriesById={categoriesById}
+        pinIcons={map.pinIcons}
         placeLimit={placeLimit}
         selectedPlaceId={selectedPlaceId}
         selectedShapeId={selectedShapeId}
@@ -896,6 +989,9 @@ export function MapEditor({
         onEditGroup={setEditingGroupId}
         onGroupObjects={groupObjects}
         onAddToGroup={addToGroup}
+        onMergeGroups={(targetGroupId, sourceGroupId) => {
+          void mergeGroups(targetGroupId, sourceGroupId);
+        }}
         onRemoveFromGroup={removeFromGroup}
         pendingAddressIds={pendingAddressIds}
         failedAddressIds={failedAddressIds}
@@ -934,8 +1030,9 @@ export function MapEditor({
         places={places}
         isOpen={isStudioOpen}
         onOpenChange={setIsStudioOpen}
-        // Picking a pin arms add mode with it, exactly as pressing a tile in the
-        // row does — so the sheet closes onto a map that is ready to be clicked.
+        // Finishing a pin in the studio arms add mode with it, exactly as
+        // pressing a tile in the row does — so the sheet closes onto a map that
+        // is ready to be clicked.
         onPick={startAdding}
       />
 
@@ -950,8 +1047,17 @@ export function MapEditor({
   );
 }
 
-/** One dragged object, as the pair of id lists every membership write takes. */
+/**
+ * One dragged object, as the pair of id lists every membership write takes.
+ *
+ * A group is not a member of anything, so it has none — and returning empty
+ * rather than throwing is deliberate: `assignMembers` already declines a write
+ * with nothing in it, and every caller that could hand this a group has resolved
+ * the drop to a merge long before reaching here.
+ */
 function asMembers(object: DraggedObject): GroupMembers {
+  if (object.type === "group") return { placeIds: [], shapeIds: [] };
+
   return object.type === "place"
     ? { placeIds: [object.id], shapeIds: [] }
     : { placeIds: [], shapeIds: [object.id] };

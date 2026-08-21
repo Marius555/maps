@@ -6,9 +6,12 @@ import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
 
 import { IconButton } from "@/components/ui/icon-button";
+import type { MapStyleKey } from "@/lib/map/style";
+import type { MapAppearanceSettings } from "@/lib/validation/map-appearance.schema";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import type { ShapeKind } from "@/packages/shared/shapes";
 import { AddLocationButton } from "./add-location/add-location-button";
+import { AppearanceButton } from "./appearance-button";
 import { SelectToolButton } from "./select-tool-button";
 import { ShapeToolsButton } from "./shapes/shape-tools-button";
 
@@ -47,6 +50,8 @@ export function MapToolbar({
   isSelecting,
   isSavingView,
   hasSavedView,
+  style,
+  appearance,
   search,
   onPickIcon,
   onStopAdding,
@@ -59,6 +64,8 @@ export function MapToolbar({
   onOpenStudio,
   onSaveView,
   onPreview,
+  onChangeStyle,
+  onChangeAppearance,
 }: {
   isAdding: boolean;
   /** The icon add mode is armed with — see AddLocationButton. */
@@ -77,6 +84,10 @@ export function MapToolbar({
   isSavingView: boolean;
   /** Shows confirmation after a save, so the button's effect is visible. */
   hasSavedView: boolean;
+  /** The chosen basemap or theme — see lib/map/style.ts. */
+  style: MapStyleKey;
+  /** Labels and layer toggles, normalised. */
+  appearance: MapAppearanceSettings;
   search?: ReactNode;
   onPickIcon: (icon: string) => void;
   onStopAdding: () => void;
@@ -91,6 +102,9 @@ export function MapToolbar({
   onOpenStudio: () => void;
   onSaveView: () => void;
   onPreview: () => void;
+  /** Both save immediately — see AppearanceButton. */
+  onChangeStyle: (style: MapStyleKey) => void;
+  onChangeAppearance: (appearance: MapAppearanceSettings) => void;
 }) {
   return (
     /*
@@ -143,6 +157,15 @@ export function MapToolbar({
         />
 
         <Separator orientation="vertical" className="h-6" />
+
+        {/* First on this side of the rule, because it is the one that changes
+            what the map *is* rather than where it is pointed or who is looking. */}
+        <AppearanceButton
+          style={style}
+          appearance={appearance}
+          onChangeStyle={onChangeStyle}
+          onChangeAppearance={onChangeAppearance}
+        />
 
         {/* The default view is where the map opens, for the owner and for every
             visitor of the embed. Setting it by panning beats typing coordinates. */}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AUTO_STYLE, CONCRETE_MAP_STYLES } from "@/lib/map/style";
+import { AUTO_STYLE, BASEMAP_SOURCES, CONCRETE_MAP_STYLES } from "@/lib/map/style";
 import type { AppMap, MapCategory, Place, Shape } from "@/lib/repositories/types";
 import { emptyHours } from "@/packages/shared/hours";
 import { buildSnapshot } from "./build";
@@ -20,6 +20,7 @@ function makeMap(overrides: Partial<AppMap> = {}): AppMap {
     categories: [],
     pinIcons: [],
     settings: {},
+    appearance: {},
     allowedDomains: [],
     publishedAt: null,
     snapshotUrl: null,
@@ -102,15 +103,80 @@ describe("buildSnapshot", () => {
   });
 
   it("resolves every pinned basemap to its own URL", () => {
-    for (const style of CONCRETE_MAP_STYLES) {
+    for (const style of BASEMAP_SOURCES) {
       const { snapshot } = buildSnapshot(makeMap({ style }), [], [], GENERATED_AT);
 
       expect(snapshot.styleUrl).toMatch(/^https:\/\//);
       expect(snapshot.styleUrl).toContain(style);
-      // A pinned basemap is the same for everyone, so there is nothing to decide
-      // at view time.
+    }
+  });
+
+  /**
+   * Sources and themes alike. A theme has no URL of its own — it is Liberty
+   * recoloured — so what has to hold for all sixteen is the weaker claim: a
+   * usable URL, and nothing left for the visitor to decide.
+   */
+  it("leaves nothing to decide at view time for any pinned style", () => {
+    for (const style of CONCRETE_MAP_STYLES) {
+      const { snapshot } = buildSnapshot(makeMap({ style }), [], [], GENERATED_AT);
+
+      expect(snapshot.styleUrl).toMatch(/^https:\/\//);
       expect(snapshot.autoDark).toBeUndefined();
     }
+  });
+
+  /**
+   * The numbers, not the name. A theme key is something we own and could rename;
+   * a snapshot is read forever by sites we do not control, so what travels is
+   * the resolved transform.
+   */
+  it("publishes a theme as its resolved tint, never as its key", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ style: "verdant" }),
+      [],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.appearance?.tint?.ground.hue).toBeTypeOf("number");
+    expect(JSON.stringify(snapshot)).not.toContain("verdant");
+  });
+
+  /**
+   * The rule every optional field here follows: a map whose owner never opened
+   * the appearance menu publishes the bytes it published before any of this
+   * existed. Live embeds read absent as "leave the basemap alone".
+   */
+  it("omits appearance entirely when it would change nothing", () => {
+    const { snapshot } = buildSnapshot(makeMap(), [], [], GENERATED_AT);
+
+    expect(snapshot.appearance).toBeUndefined();
+  });
+
+  it("carries a label level and layer toggles the owner actually changed", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ appearance: { labels: "some", layers: { poi: false } } }),
+      [],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.appearance?.labels).toBe("some");
+    expect(snapshot.appearance?.layers?.poi).toBe(false);
+    // Absent keys fall back to what the basemap ships, not to `undefined`.
+    expect(snapshot.appearance?.layers?.transit).toBe(true);
+  });
+
+  /** A hand-edited console row must not publish nonsense to live sites. */
+  it("ignores a stored appearance of the wrong shape", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ appearance: { labels: "everything", layers: "yes" } }),
+      [],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.appearance).toBeUndefined();
   });
 
   /**
@@ -262,6 +328,63 @@ describe("buildSnapshot", () => {
       expect(snapshot.pinIcons?.[0]).not.toHaveProperty("glyph");
       // The name is the owner's business. Nothing in the embed renders it.
       expect(snapshot.pinIcons?.[0]).not.toHaveProperty("label");
+    });
+
+    /*
+     * The design fields follow the same rule as the empty `glyph` above: a pin
+     * that took the default said nothing, so the snapshot says nothing and the
+     * embed's `resolvePin` defaults to the same value. Most pins are the default
+     * on most of these, and every dropped key is download a visitor doesn't pay
+     * for on a customer's site.
+     */
+    it("drops a design the pin left at its default", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap({
+          pinIcons: [
+            { ...glyphPin, ring: "", ringWidth: "regular", size: "md", shape: "circle" },
+          ],
+        }),
+        [makePlace({ icon: "custom:ab12cd34" })],
+        [],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.pinIcons).toEqual([
+        { id: "ab12cd34", color: "#1c7ed6", glyph: "store" },
+      ]);
+    });
+
+    it("publishes a design the pin actually chose", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap({
+          pinIcons: [
+            {
+              ...glyphPin,
+              ring: "#111827",
+              ringWidth: "thick",
+              iconColor: "#ffffff",
+              size: "lg",
+              shape: "diamond",
+            },
+          ],
+        }),
+        [makePlace({ icon: "custom:ab12cd34" })],
+        [],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.pinIcons).toEqual([
+        {
+          id: "ab12cd34",
+          color: "#1c7ed6",
+          glyph: "store",
+          ring: "#111827",
+          ringWidth: "thick",
+          iconColor: "#ffffff",
+          size: "lg",
+          shape: "diamond",
+        },
+      ]);
     });
 
     it("leaves out a pin no location wears", () => {

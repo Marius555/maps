@@ -30,14 +30,24 @@ import type { GeocodeStatus } from "@/lib/validation/place.schema";
  * Nothing renders when everything is settled — a flag on every row would be noise.
  * `variant="soft"` pairs the status colour with its own foreground, which is the
  * only legible way to use these tokens (see place-count-badge.tsx).
+ *
+ * The ring is a compromise the 320px sidebar forced and the Locations table does
+ * not have to make. In a column of its own there is room to say the word, and an
+ * unlabelled amber circle whose only explanation is a `title` reaches nobody on a
+ * keyboard or a phone. So `variant` picks between them: the sidebar and the map
+ * card keep the ring, the table gets the chip. One component either way, because
+ * two screens inventing their own amber is how they end up meaning two things.
  */
 export function PlaceStatusFlag({
   status,
   confidence,
+  variant = "ring",
 }: {
   status: GeocodeStatus;
   /** 0–1, or null when no geocoder ever spoke for this row. */
   confidence?: number | null;
+  /** How the approximate-address case is drawn. See above. */
+  variant?: "ring" | "chip";
 }) {
   if (status === "failed") {
     return (
@@ -62,6 +72,17 @@ export function PlaceStatusFlag({
   }
 
   if (isApproximate(status, confidence)) {
+    if (variant === "chip") {
+      return (
+        <StatusChip
+          color="warning"
+          title="Approximate — we matched this pin to the street, not to a building. Add the house number if you know it."
+        >
+          Approximate
+        </StatusChip>
+      );
+    }
+
     /*
      * A native `title` rather than a HeroUI Tooltip, and the same one the marker
      * carries. HeroUI's is React Aria, whose trigger has to be a focusable

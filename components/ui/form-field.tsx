@@ -27,6 +27,17 @@ type FieldProps<T extends FieldValues> = {
   control: Control<T>;
   name: FieldPath<T>;
   label: string;
+  /**
+   * A rule or an action — never an example value.
+   *
+   * Every field here already has a visible `<Label>`, so a placeholder adds no
+   * name; all it can add is the illusion of content. "Corner Shop" in an empty
+   * Name box, "52.5200" in an empty Latitude box, next to an error saying the row
+   * has no coordinates — the user reads those as saved and goes looking for a
+   * different bug. Empty is the honest rendering of empty. `"At least 8
+   * characters"` is the shape that survives: it states a constraint, and no
+   * password ever looked like it.
+   */
   placeholder?: string;
   autoComplete?: string;
   isDisabled?: boolean;

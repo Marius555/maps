@@ -4,7 +4,11 @@ import { Map as MapLibreMap, Marker } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 
 import type { Place } from "@/lib/repositories/types";
-import type { CustomPinIcon } from "@/packages/shared/pin-icons";
+import {
+  PIN_CSS_VARS,
+  pinCssVars,
+  type CustomPinIcon,
+} from "@/packages/shared/pin-icons";
 import { createPinElement, setPinIcon, setPinSelected } from "./pin-marker";
 
 /**
@@ -207,14 +211,23 @@ function paint(
   // "no opinion" here and must not read as a colour to rank.
   const pinColor = pin?.color ?? undefined;
 
-  setPinColor(element, colorFor?.(place, pinColor) ?? pinColor);
+  setPinVars(element, pinCssVars(pin, colorFor?.(place, pinColor)));
 }
 
-/** Pin colour as an inline custom property the pin CSS reads. */
-function setPinColor(element: HTMLElement, color: string | undefined): void {
-  if (color) {
-    element.style.setProperty("--pin-color", color);
-  } else {
-    element.style.removeProperty("--pin-color");
+/**
+ * The pin's design as inline custom properties the pin CSS reads.
+ *
+ * Cleared before it is written, and that is not tidiness. Markers are recycled by
+ * the diff pass above — the same element outlives a location being recategorised,
+ * regrouped, or given a different pin entirely — so a property the new pin does
+ * not set has to be *removed*, or the element keeps the old one. A pin taken from
+ * a thick ring to none would otherwise keep the thick ring forever.
+ */
+function setPinVars(element: HTMLElement, vars: Record<string, string>): void {
+  for (const name of PIN_CSS_VARS) {
+    const value = vars[name];
+
+    if (value) element.style.setProperty(name, value);
+    else element.style.removeProperty(name);
   }
 }

@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 
+import { ShapeIcon } from "@/components/shapes/shape-icon";
 import { shapeSummary } from "@/lib/map/shape-summary";
 import type { Shape } from "@/lib/repositories/types";
 
@@ -15,7 +16,9 @@ import type { Shape } from "@/lib/repositories/types";
  *
  * The swatch is not decoration. Every shape on a map is a translucent wash of
  * some colour, and matching the card to the area it describes is what says which
- * one you have open when three overlap.
+ * one you have open when three overlap. It draws the shape's *kind* as well as
+ * its colour — the same `ShapeIcon` the sidebar row uses, so the two cannot end
+ * up describing one shape differently.
  */
 export function ShapeCardHeader({
   shape,
@@ -26,10 +29,10 @@ export function ShapeCardHeader({
 }) {
   return (
     <div className="flex shrink-0 items-start gap-2 p-3 pb-0">
-      <span
-        aria-hidden="true"
-        className="mt-1 size-3 shrink-0 rounded-full border border-black/10"
-        style={{ backgroundColor: shape.color }}
+      <ShapeIcon
+        geometry={shape.geometry}
+        color={shape.color}
+        className="mt-0.5 size-4 shrink-0"
       />
 
       <div className="min-w-0 flex-1">

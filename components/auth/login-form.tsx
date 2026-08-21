@@ -48,7 +48,6 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
         name="email"
         label="Email"
         type="email"
-        placeholder="you@company.com"
         autoComplete="email"
       />
 
@@ -57,7 +56,6 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
         name="password"
         label="Password"
         type="password"
-        placeholder="••••••••"
         autoComplete="current-password"
       />
 

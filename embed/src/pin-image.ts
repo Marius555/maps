@@ -1,13 +1,13 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 
 import {
-  GLYPH_BOX,
   GLYPH_SOURCE_BOX,
   GLYPH_STROKE_WIDTH,
-  IMAGE_BOX,
-  IMAGE_CIRCLE,
-  PIN_BALL,
   PIN_BOX,
+  PIN_SHAPES,
+  glyphBoxFor,
+  imageBoxFor,
+  imageCircleFor,
   resolvePin,
   type CustomPinIcon,
   type ResolvedPin,
@@ -40,16 +40,22 @@ import {
  */
 
 /**
- * Rendered pin size in CSS pixels. Drawn at twice this and registered with
- * `pixelRatio: 2`, so it stays crisp on the retina screens most visitors have.
+ * Rendered pin size in CSS pixels, before the pin's own `scale`. Drawn at twice
+ * this and registered with `pixelRatio: 2`, so it stays crisp on the retina
+ * screens most visitors have.
  */
 const PIN_SIZE = 36;
 const PIXEL_RATIO = 2;
 
-/** The category colour is the fill; everything drawn over it is this. */
+/**
+ * What is drawn over the fill when the pin has no opinion.
+ *
+ * The editor's equivalent is `var(--accent-foreground)` in
+ * `.map-pin__shape .pin-svg__body` — white in the light theme, which is the one
+ * a snapshot's own `theme` field selects for. A pin that names its own ring or
+ * icon colour overrides this in both renderers.
+ */
 const PIN_STROKE = "#ffffff";
-/** Matches the editor's `.map-pin__shape .pin-svg__body` outline. */
-const BODY_STROKE_WIDTH = 1.5;
 
 /**
  * The image id for one pin. Shared by the registration pass and the feature
@@ -175,7 +181,10 @@ function drawPin(
   color: string,
   bitmap?: ImageBitmap,
 ): ImageData | null {
-  const scale = (PIN_SIZE / PIN_BOX) * PIXEL_RATIO;
+  // The pin's own size multiplies the raster rather than the geometry: one more
+  // pixel per unit, not a different pin. The symbol layer keeps `icon-size: 1`
+  // and the image is still the pin's own square, so nothing downstream changes.
+  const scale = (PIN_SIZE / PIN_BOX) * PIXEL_RATIO * pin.scale;
   const width = Math.ceil(PIN_BOX * scale);
   const height = width;
 
@@ -189,18 +198,26 @@ function drawPin(
   if (!context) return null;
 
   context.scale(scale, scale);
+  // The diamond's corners, matching `stroke-linejoin: round` in the editor's CSS.
+  // Mitred, a thick ring spikes well past the shape it is outlining.
   context.lineJoin = "round";
   context.lineCap = "round";
 
-  context.beginPath();
-  context.arc(PIN_BALL.cx, PIN_BALL.cy, PIN_BALL.r, 0, Math.PI * 2);
-  context.fillStyle = color;
-  context.fill();
-  context.strokeStyle = PIN_STROKE;
-  context.lineWidth = BODY_STROKE_WIDTH;
-  context.stroke();
+  // The same path string the editor drops into its markup — `Path2D` reads SVG
+  // path data, which is why the shape table can hold one description of a
+  // diamond instead of an arc here and a `d` there.
+  const body = new Path2D(PIN_SHAPES[pin.shape].path);
 
-  if (bitmap) drawImageHead(context, bitmap);
+  context.fillStyle = color;
+  context.fill(body);
+
+  if (pin.ringWidth > 0) {
+    context.strokeStyle = pin.ring ?? PIN_STROKE;
+    context.lineWidth = pin.ringWidth;
+    context.stroke(body);
+  }
+
+  if (bitmap) drawImageHead(context, bitmap, pin);
   else drawGlyphHead(context, pin);
 
   return context.getImageData(0, 0, width, height);
@@ -214,11 +231,16 @@ function drawPin(
  * begin with.
  */
 function drawGlyphHead(context: CanvasRenderingContext2D, pin: ResolvedPin): void {
-  const glyphScale = GLYPH_BOX.size / GLYPH_SOURCE_BOX;
+  const box = glyphBoxFor(pin.shape);
+  const glyphScale = box.size / GLYPH_SOURCE_BOX;
 
-  context.translate(GLYPH_BOX.x, GLYPH_BOX.y);
+  context.translate(box.x, box.y);
   context.scale(glyphScale, glyphScale);
   context.lineWidth = GLYPH_STROKE_WIDTH;
+  // Set outright rather than inherited from the body's stroke above. It used to
+  // be inherited, which was invisible while both were white and would have bled
+  // a custom ring colour into the glyph the moment they could differ.
+  context.strokeStyle = pin.iconColor ?? PIN_STROKE;
 
   for (const path of pin.paths) context.stroke(new Path2D(path));
 }
@@ -227,28 +249,30 @@ function drawGlyphHead(context: CanvasRenderingContext2D, pin: ResolvedPin): voi
  * The logo, clipped to the circle the editor's CSS clips it to.
  *
  * `arc` + `clip` here against `clip-path: circle(50%)` there — two mechanisms for
- * one shape, which is exactly why both read IMAGE_CIRCLE rather than each having
- * its own radius. The image arrives square and pre-fitted from
+ * one shape, which is exactly why both read `imageCircleFor` rather than each
+ * having its own radius. It takes the shape because a diamond holds a smaller
+ * circle than a ball does. The image arrives square and pre-fitted from
  * lib/map/normalise-pin-image.ts, so the contain-fit below is belt and braces
  * against a snapshot published by some other version.
  */
-function drawImageHead(context: CanvasRenderingContext2D, bitmap: ImageBitmap): void {
+function drawImageHead(
+  context: CanvasRenderingContext2D,
+  bitmap: ImageBitmap,
+  pin: ResolvedPin,
+): void {
+  const circle = imageCircleFor(pin.shape);
+  const box = imageBoxFor(pin.shape);
+
   context.save();
   context.beginPath();
-  context.arc(IMAGE_CIRCLE.cx, IMAGE_CIRCLE.cy, IMAGE_CIRCLE.r, 0, Math.PI * 2);
+  context.arc(circle.cx, circle.cy, circle.r, 0, Math.PI * 2);
   context.clip();
 
-  const fit = Math.min(IMAGE_BOX.size / bitmap.width, IMAGE_BOX.size / bitmap.height);
+  const fit = Math.min(box.size / bitmap.width, box.size / bitmap.height);
   const width = bitmap.width * fit;
   const height = bitmap.height * fit;
 
-  context.drawImage(
-    bitmap,
-    IMAGE_CIRCLE.cx - width / 2,
-    IMAGE_CIRCLE.cy - height / 2,
-    width,
-    height,
-  );
+  context.drawImage(bitmap, circle.cx - width / 2, circle.cy - height / 2, width, height);
   context.restore();
 }
 

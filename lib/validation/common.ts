@@ -18,6 +18,22 @@ export const zoomSchema = z
 export const idSchema = z.string().trim().min(1).max(36);
 
 /**
+ * Which pin something wears: "" for a plain one, a built-in id, or `custom:<id>`.
+ *
+ * Length-checked, not checked against the icon registry. An id we don't know
+ * draws a plain pin (packages/shared/pin-icons.ts), which is the right answer
+ * for a row written by a newer version of the app — and validating here would
+ * turn that into a 400 the user cannot act on. A form that rejected an id it did
+ * not recognise would likewise refuse to save a location whose only problem is a
+ * pin some other tab deleted a moment ago.
+ *
+ * Here rather than in place.schema.ts because group.schema.ts needs it too, and
+ * place.schema.ts already imports *from* group.schema.ts — the other direction
+ * would be a cycle between two modules that both build their schemas at load.
+ */
+export const pinIconRefSchema = z.string().trim().max(64);
+
+/**
  * Plain hex, shared by categories and custom pins.
  *
  * Both are user data that travels into the published snapshot and gets read by

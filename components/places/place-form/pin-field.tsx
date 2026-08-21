@@ -28,12 +28,19 @@ export function PinField({
   onChange: (icon: string) => void;
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       <span className="text-sm font-medium">Pin</span>
 
       {/* Scrolls rather than wraps: with eight custom pins on top of six built-in
-          ones, a wrapping grid would push the rest of the form off a phone. */}
-      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
+          ones, a wrapping grid would push the rest of the form off a phone.
+
+          `px-1` keeps a focused tile's ring off the scroller's own clip edge. It
+          used to be paired with `-mx-1` to pull the row back flush with the
+          fields above — which made this element 8px wider than its parent, and in
+          a two-column grid cell that bled out of the dialog as a horizontal
+          scrollbar. Four pixels of flushness is not worth a scrolling form
+          (CLAUDE.md §8). */}
+      <div className="flex gap-1 overflow-x-auto px-1 pb-1">
         <PinTile
           icon=""
           label="Plain"

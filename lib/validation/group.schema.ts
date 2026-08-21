@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { hexColorSchema } from "./common";
+import { hexColorSchema, pinIconRefSchema } from "./common";
 
 /**
  * What a group is allowed to be, on the way in.
@@ -48,6 +48,18 @@ export const updateGroupSchema = z
   .refine((value) => Object.keys(value).length > 0, "Nothing to save.");
 
 /**
+ * The pin every location in a group is about to be given.
+ *
+ * A write against the *members*, not against the group — a group holds a name, a
+ * colour and an order, and nothing about it reaches a published snapshot
+ * (lib/repositories/types.ts). A remembered `group.pinIcon` would have to break
+ * that, so the group is only ever the way the user names a set of locations, and
+ * what gets stored is each location's own `icon`. A location added afterwards
+ * therefore keeps its own pin, which is the trade this shape makes.
+ */
+export const setGroupPinSchema = z.object({ icon: pinIconRefSchema });
+
+/**
  * What the edit form holds — see shape.schema.ts for why this is not just
  * `updateGroupSchema`: `.partial()` would make every field possibly-undefined
  * and put a non-null assertion on every input.
@@ -60,3 +72,4 @@ export const groupFormSchema = z.object({
 export type GroupFormValues = z.infer<typeof groupFormSchema>;
 export type CreateGroupInput = z.output<typeof createGroupSchema>;
 export type UpdateGroupInput = z.output<typeof updateGroupSchema>;
+export type SetGroupPinInput = z.output<typeof setGroupPinSchema>;

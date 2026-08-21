@@ -1,17 +1,20 @@
 "use client";
 
 import { Button, Drawer, Modal } from "@heroui/react";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { ErrorMessage } from "@/components/ui/error-message";
+import { IconButton } from "@/components/ui/icon-button";
 import { useUpdateMap } from "@/lib/query/maps";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { SM_BREAKPOINT, useMediaQuery } from "@/lib/ui/use-media-query";
 import { CATEGORY_COLORS } from "@/lib/validation/category.schema";
 import { MAX_PIN_ICONS, pinIconsSchema } from "@/lib/validation/pin-icon.schema";
 import { CUSTOM_PIN_PREFIX, type CustomPinIcon } from "@/packages/shared/pin-icons";
-import { PinBuilder } from "./pin-builder";
+import { PinActions } from "./pin-actions";
+import { PinFields } from "./pin-fields";
+import { PinHero } from "./pin-hero";
 import { PinLibrary } from "./pin-library";
 
 /**
@@ -32,6 +35,19 @@ import { PinLibrary } from "./pin-library";
  * Two views, one sheet. The library is what opens; the builder replaces it and
  * hands back. A second dialog stacked on the first would be two backdrops and a
  * back button nobody expects on a phone.
+ *
+ * The builder is not one component but three, because the dialog has three slots
+ * and the pieces have to sit in different ones: PinHero in the header, PinFields
+ * in the body, PinActions in the footer. Only the middle one scrolls — see the
+ * note on `Modal.Container` below for why that arrangement is the point rather
+ * than an accident of composition.
+ *
+ * Every press in the library lands in the builder — see PinLibrary for why — so
+ * the builder is where a pin gets used as well as made. Saving arms add mode with
+ * it and closes, for both a new pin and an edited one. That is one action rather
+ * than two ("save", then find the thing you just saved and press it again), and
+ * it is why the primary button is "Use pin" in both cases: an action keeps its
+ * name through the whole flow (§8).
  *
  * Saving goes through the map's own PATCH, because a pin is map data exactly as a
  * category is — the image is already a small string by the time it gets here
@@ -101,22 +117,24 @@ export function PinStudio({
       return;
     }
 
-    // Straight to using the pin that was just made. Going back to a library to
+    // Straight to using the pin that was just saved. Going back to a library to
     // press the thing you were already looking at is a step for its own sake.
     if (picked) pick(picked);
     else setDraft(null);
   };
 
+  /** Editing one of the map's own pins, rather than making a new one. */
+  const isEditing = draft !== null && pinIcons.some((pin) => pin.id === draft.id);
+
   const save = () => {
     if (!draft) return;
 
-    const exists = pinIcons.some((pin) => pin.id === draft.id);
-    const next = exists
+    const next = isEditing
       ? pinIcons.map((pin) => (pin.id === draft.id ? draft : pin))
       : [...pinIcons, draft];
 
-    // An edit stays in the library; a new pin is what you came here to use.
-    void commit(next, exists ? undefined : `${CUSTOM_PIN_PREFIX}${draft.id}`);
+    // New or edited, the pin you just finished is the one you want to drop.
+    void commit(next, `${CUSTOM_PIN_PREFIX}${draft.id}`);
   };
 
   const remove = () => {
@@ -127,45 +145,84 @@ export function PinStudio({
     void commit(pinIcons.filter((pin) => pin.id !== draft.id));
   };
 
-  const body = (
-    <div className="flex flex-col gap-4">
-      {problem ? <ErrorMessage error={problem} /> : null}
-      {updateMap.error ? <ErrorMessage error={updateMap.error} /> : null}
+  /**
+   * The three slots the dialog is built from, filled once and handed to whichever
+   * of the two shells is on screen.
+   *
+   * Header and footer are siblings of the body inside a dialog that is a capped
+   * flex column, so whatever goes in them stays put while the body scrolls. That
+   * is the whole reason the builder is three components rather than one: the pin
+   * you are making has to be visible while you scroll the rows that change it,
+   * and so does the button that finishes.
+   */
+  const hero = draft ? <PinHero draft={draft} onChange={setDraft} /> : null;
 
-      {draft ? (
-        <PinBuilder
-          draft={draft}
-          usageCount={usageByPin.get(draft.id) ?? 0}
-          isSaving={updateMap.isPending}
-          isExisting={pinIcons.some((pin) => pin.id === draft.id)}
-          onChange={setDraft}
-          onSave={save}
-          onDelete={remove}
-          onCancel={() => setDraft(null)}
-        />
-      ) : (
-        <PinLibrary
-          pinIcons={pinIcons}
-          usageByPin={usageByPin}
-          onPick={pick}
-          onEdit={setDraft}
-        />
-      )}
-    </div>
+  const content = draft ? (
+    <PinFields draft={draft} onChange={setDraft} />
+  ) : (
+    <PinLibrary
+      pinIcons={pinIcons}
+      usageByPin={usageByPin}
+      onEdit={setDraft}
+      onFork={(glyph) => setDraft({ ...blankPin(pinIcons), glyph })}
+    />
   );
 
-  const heading = draft
-    ? pinIcons.some((pin) => pin.id === draft.id)
-      ? "Edit pin"
-      : "New pin"
-    : "Pins";
+  // Both failures reach the user from the footer, because both come from a
+  // control in it — or, for a refused delete, from a title bar that is pinned to
+  // the same frame. The library has no footer and cannot raise either: nothing in
+  // it writes.
+  const footer = draft ? (
+    <PinActions
+      draft={draft}
+      isSaving={updateMap.isPending}
+      problem={
+        <>
+          {problem ? <ErrorMessage error={problem} /> : null}
+          {updateMap.error ? <ErrorMessage error={updateMap.error} /> : null}
+        </>
+      }
+      onChange={setDraft}
+      onSave={save}
+      onCancel={() => setDraft(null)}
+    />
+  ) : null;
+
+  const heading = draft ? (isEditing ? "Edit pin" : "New pin") : "Pins";
 
   /**
-   * Making a pin is the reason to be here, so it sits in the title row rather
-   * than buried in a section header — and only in the library, where the builder
-   * it opens isn't already on screen saying "New pin" at the top.
+   * The title row's own control, which is a different one in each of the three
+   * states this sheet has.
+   *
+   * Making a pin is the reason to be in the library, so it sits in the title row
+   * rather than buried in a section header — and only there, since the builder it
+   * opens is already on screen saying "New pin" at the top.
+   *
+   * Deleting one is the same kind of thing: an action on what the sheet is
+   * showing, not a way to finish the form under it. It is up here and well away
+   * from Save, which it shared a row with before.
+   *
+   * Both sit directly *after* the heading rather than at the far end of the row.
+   * They are actions on the thing the heading names — "Pins, and here is how you
+   * make another" — and a control flung to the opposite edge reads as belonging
+   * to the dialog's chrome, next to the close button, rather than to its subject.
+   *
+   * Red on the glyph rather than a `danger` variant: that variant is a solid red
+   * fill, which is a lot of weight for a title bar, and HeroUI's variants set
+   * `--button-fg` from unlayered CSS that a Tailwind text colour on the button
+   * would lose to. On the icon it beats inheritance and needs no override.
    */
-  const action = draft ? null : (
+  const action = draft ? (
+    isEditing ? (
+      <IconButton
+        label={deleteLabel(usageByPin.get(draft.id) ?? 0)}
+        icon={Trash2}
+        variant="ghost"
+        iconClassName="size-4 text-danger"
+        onPress={remove}
+      />
+    ) : null
+  ) : (
     <Button
       size="sm"
       variant="secondary"
@@ -180,20 +237,39 @@ export function PinStudio({
   if (isWide) {
     return (
       <Modal.Backdrop isOpen={isOpen} onOpenChange={(open) => !open && close()}>
-        <Modal.Container>
+        {/* `scroll="inside"` caps the dialog at the viewport and scrolls the body
+            within it — seven rows of options are taller than a laptop screen.
+            HeroUI's own modifier rather than an `overflow-y-auto` utility, which
+            would lose to `.modal__body`'s unlayered `overflow: visible`.
+
+            It is also what pins the hero and the footer: header, body and footer
+            are siblings in a `flex-col` dialog held at `max-h-full`, so only the
+            body — the one with `flex-1` — takes the overflow. Putting all three
+            inside the body instead, which is where they used to be, is what made
+            the pin you are designing scroll off the top of the screen. */}
+        <Modal.Container scroll="inside">
           <Modal.Dialog className="sm:max-w-[520px]">
             <Modal.CloseTrigger />
-            {/* `pe-10` keeps the action clear of the close trigger, which is
-                positioned over this row rather than laid out in it. The row
-                itself is an inner div because `.modal__header` sets `flex-col`
-                as an unlayered rule, which a `flex-row` utility would lose to. */}
-            <Modal.Header className="pe-10">
-              <div className="flex items-center justify-between gap-2">
+            {/* `.modal__header` is an unlayered `flex-col`, which is exactly the
+                stack this wants — title row, then the pin under it — so the rows
+                are children of it rather than of a wrapper. The `pe-10` is on the
+                title row alone and not on the header: it keeps the action clear of
+                the close trigger, which is positioned over that row rather than
+                laid out in it, and on the header it would drag the centred hero
+                20px to the left. */}
+            <Modal.Header className={hero ? "border-b border-border pb-4" : undefined}>
+              <div className="flex items-center gap-2 pe-10">
                 <Modal.Heading>{heading}</Modal.Heading>
                 {action}
               </div>
+              {hero}
             </Modal.Header>
-            <Modal.Body>{body}</Modal.Body>
+
+            <Modal.Body>{content}</Modal.Body>
+
+            {footer ? (
+              <Modal.Footer className="border-t border-border pt-4">{footer}</Modal.Footer>
+            ) : null}
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
@@ -211,15 +287,20 @@ export function PinStudio({
               that start inside the body, so without this there is nothing on the
               sheet you can actually pull. */}
           <Drawer.Handle />
-          <Drawer.Header>
-            <div className="flex items-center justify-between gap-2">
-              <Drawer.Heading className="text-sm font-semibold">
-                {heading}
-              </Drawer.Heading>
+          <Drawer.Header className={hero ? "border-b border-border pb-4" : undefined}>
+            <div className="flex items-center gap-2">
+              <Drawer.Heading className="text-sm font-semibold">{heading}</Drawer.Heading>
               {action}
             </div>
+            {hero}
           </Drawer.Header>
-          <Drawer.Body className="min-h-0 flex-1 overflow-y-auto">{body}</Drawer.Body>
+
+          {/* `.drawer__body` already ships `min-h-0 flex-1` and the scrolling. */}
+          <Drawer.Body>{content}</Drawer.Body>
+
+          {footer ? (
+            <Drawer.Footer className="border-t border-border pt-4">{footer}</Drawer.Footer>
+          ) : null}
         </Drawer.Dialog>
       </Drawer.Content>
     </Drawer.Backdrop>
@@ -232,7 +313,27 @@ export function PinStudio({
  * An empty form asks the user to imagine the result; this one is a working pin
  * from the first frame, and every control changes something visible. The colour
  * steps through the palette so a second pin never arrives identical to the first.
+ *
+ * The design fields are left off rather than written out as their defaults. They
+ * are optional on the record for exactly this reason — absent *is* the default —
+ * and a pin that only says what the customer actually changed is a smaller row
+ * and a smaller snapshot.
  */
+/**
+ * The consequence of deleting, in the label.
+ *
+ * It rides in the accessible name and the tooltip rather than needing a line of
+ * its own, which is what lets an icon-only button in a title bar carry a warning
+ * at all. There is no confirmation step behind it: what it does is reversible in
+ * the sense that matters — the locations stay, they go back to plain pins.
+ */
+function deleteLabel(usageCount: number): string {
+  if (usageCount === 0) return "Delete pin";
+
+  const places = usageCount === 1 ? "1 location" : `${usageCount} locations`;
+  return `Delete pin — ${places} will go back to a plain pin`;
+}
+
 function blankPin(existing: CustomPinIcon[]): CustomPinIcon {
   return {
     id: crypto.randomUUID().slice(0, 8),

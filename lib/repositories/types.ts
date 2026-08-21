@@ -24,6 +24,7 @@ export type MapRow = Models.Row & {
   categories?: string | null;
   pinIcons?: string | null;
   settings?: string | null;
+  appearance?: string | null;
   allowedDomains?: string[] | null;
   publishedAt?: string | null;
   snapshotUrl?: string | null;
@@ -92,6 +93,7 @@ export type AppMap = {
    */
   pinIcons: CustomPinIcon[];
   settings: Record<string, unknown>;
+  appearance: Record<string, unknown>;
   allowedDomains: string[];
   publishedAt: string | null;
   snapshotUrl: string | null;

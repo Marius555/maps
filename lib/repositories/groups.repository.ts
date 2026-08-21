@@ -26,12 +26,13 @@ import type { Group, GroupRow, Page } from "./types";
  * **No plan check.** A group cannot outnumber the places and shapes inside it,
  * and those are limited already. §6's table has no row for groups.
  *
- * **`deleteGroup` leaves its members' `groupId` dangling.** Clearing them would
- * be one write per member inside a request that can half-fail, and there is no
- * bulk-update primitive here — `tablesDB.updateRows` is unused in this codebase;
- * only `createRows`, for the CSV import. So the client treats a `groupId` naming
- * a group that isn't in the list as ungrouped, which needs no cleanup at all and
- * cannot leave a location stranded inside a group that no longer exists.
+ * **`deleteGroup` leaves its members' `groupId` dangling.** Not for want of a
+ * bulk primitive — `setGroupPin` below writes every member in one request, and
+ * `clearFromPlaces` in maps.repository.ts has done the same for categories and
+ * pins for a while. It stays this way because it is the better answer: a client
+ * that treats a `groupId` naming a group not in the list as ungrouped needs no
+ * cleanup at all, and cannot leave a location stranded inside a group that no
+ * longer exists even if the write half-fails.
  */
 
 /** Appwrite's hard ceiling for a single page. */
@@ -175,6 +176,45 @@ export async function updateGroup(
     });
 
     return toGroup(row);
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+/**
+ * Gives every location in a group the same pin.
+ *
+ * One request whatever the group holds, rather than the one-PATCH-per-member
+ * shape `useAssignToGroup` uses for membership. That shape is right there: a
+ * marquee is bounded by what fits in a drag box. This is not — §6 allows 3,000
+ * locations on a map and every one of them can be in one group, and firing three
+ * thousand PATCHes from a browser to change a pin is not a thing to build.
+ *
+ * `getGroup` first, because that is the whole authorisation: it resolves the map
+ * through `getMap` and rejects a group id belonging to someone else's map. The
+ * `mapId` is repeated in the query anyway — a `groupId` is only ever scoped by
+ * the map it was found in, and a query on `groupId` alone would be one bug away
+ * from repainting another customer's pins.
+ *
+ * Shapes are untouched. A shape carries a colour and a geometry, not a pin.
+ */
+export async function setGroupPin(
+  ctx: RepoContext,
+  mapId: string,
+  groupId: string,
+  icon: string,
+): Promise<number> {
+  await getGroup(ctx, mapId, groupId);
+
+  try {
+    const result = await admin.tablesDB.updateRows({
+      databaseId: env.databaseId,
+      tableId: TABLES.places,
+      data: { icon },
+      queries: [Query.equal("mapId", mapId), Query.equal("groupId", groupId)],
+    });
+
+    return result.total;
   } catch (error) {
     throw toRepositoryError(error);
   }

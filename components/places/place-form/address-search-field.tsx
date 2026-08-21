@@ -14,17 +14,31 @@ import { useGeocodeSearch } from "@/lib/query/geocode";
  * One request per deliberate submit, and the results are a list the user picks
  * from — never applied automatically. Picking is what moves the pin, so a wrong
  * guess costs nothing (CLAUDE.md §7).
+ *
+ * Shared with the import review step, which is why the label and the hint are
+ * props. The behaviour is identical in both places and the copy is not: in the
+ * edit dialog the hint points at the map beside the field, while in a review row
+ * it points at the row's own actions. A second search field that agreed with
+ * this one on the day it was written is the drift worth avoiding.
  */
 export function AddressSearchField({
   mapId,
   value,
   error,
+  label = "Address",
+  hideLabel,
+  hint = "Or drag the pin on the map to place it exactly.",
   onChange,
   onPick,
 }: {
   mapId: string;
   value: string;
   error?: string;
+  label?: string;
+  /** Kept in the accessibility tree, out of the layout — for dense lists. */
+  hideLabel?: boolean;
+  /** `null` for no hint at all. */
+  hint?: string | null;
   onChange: (address: string) => void;
   onPick: (candidate: GeocodeCandidate) => void;
 }) {
@@ -55,27 +69,36 @@ export function AddressSearchField({
           void run();
         }}
       >
-        <Label>Address</Label>
-        <Input placeholder="Gedimino pr. 9, Vilnius" />
-        {/* Inside the field, not a paragraph beside it: this is what associates
-            the message with the input for a screen reader. */}
+        <Label className={hideLabel ? "sr-only" : undefined}>{label}</Label>
+
+        {/*
+         * The button sits on the input's own line, inside the field rather than
+         * under it. They are one control — type an address, look it up — and a
+         * full-width box with a small button orphaned on the next row spent a
+         * whole row of the dialog saying so.
+         *
+         * Nested rather than a sibling flex row so `FieldError` stays a child of
+         * `TextField`: that is what associates the message with the input for a
+         * screen reader, and it is also why the error goes *under* this line
+         * instead of inside it.
+         */}
+        <div className="flex items-center gap-2">
+          <Input className="min-w-0 flex-1" />
+          <Button
+            className="shrink-0"
+            variant="secondary"
+            isPending={search.isPending}
+            isDisabled={value.trim().length < 3}
+            onPress={run}
+          >
+            Find on map
+          </Button>
+        </div>
+
         {error ? <FieldError>{error}</FieldError> : null}
       </TextField>
 
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          isPending={search.isPending}
-          isDisabled={value.trim().length < 3}
-          onPress={run}
-        >
-          Find on map
-        </Button>
-        <span className="text-xs text-muted">
-          Or drag the pin on the map to place it exactly.
-        </span>
-      </div>
+      {hint ? <p className="text-xs text-muted">{hint}</p> : null}
 
       {search.error ? <ErrorMessage error={search.error} /> : null}
 

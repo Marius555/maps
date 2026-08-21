@@ -71,7 +71,6 @@ export function GroupForm({
         control={control}
         name="name"
         label="Name"
-        placeholder="North region"
       />
 
       <Controller

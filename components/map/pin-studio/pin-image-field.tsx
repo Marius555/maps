@@ -20,9 +20,17 @@ import {
  * URI), and a string can wait perfectly well, so nothing is written anywhere
  * until the pin is saved. Cancelling the builder leaves no trace.
  *
- * It sits in the builder's footer, beside Cancel and Save, because uploading a
- * logo is one of the two ways to finish this pin rather than a step on the way
- * through it — and it stretches, so the row has no dead gap in the middle.
+ * It sits in the footer, at the left end of the row that finishes the form. It
+ * spent a while in the hero on the argument that uploading a logo is the other
+ * answer to "what goes in this pin" rather than a way to finish — true, but it
+ * put the heaviest control in the form directly under the one thing in the
+ * dialog you are meant to be looking at. Down here it is a second way out of the
+ * form, beside the other two, and the hero is the pin and its name and nothing
+ * else.
+ *
+ * A fragment rather than a wrapper, and no `fullWidth`: this shares a row with
+ * Cancel and "Use pin" now, and a button told to fill its container would push
+ * both off the end of it.
  *
  * A button and nothing else. It used to carry a paragraph on accepted formats
  * and in-browser resizing, which is the file picker's job (`accept`) and our
@@ -70,7 +78,7 @@ export function PinImageField({
   };
 
   return (
-    <div className="flex w-full min-w-0 sm:w-auto sm:flex-1">
+    <>
       <input
         ref={input}
         type="file"
@@ -84,7 +92,6 @@ export function PinImageField({
       />
 
       <Button
-        fullWidth
         variant="secondary"
         isPending={isReading}
         onPress={() => input.current?.click()}
@@ -92,6 +99,6 @@ export function PinImageField({
         <ImageUp aria-hidden="true" className="size-4" />
         {hasImage ? "Replace image" : "Upload an image"}
       </Button>
-    </div>
+    </>
   );
 }

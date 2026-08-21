@@ -88,7 +88,6 @@ export function AllowedDomainsForm({ map }: { map: AppMap }) {
           control={control}
           name="domains"
           label="Domains"
-          placeholder={"example.com\nshop.example.com"}
         />
 
         <p className="text-xs text-muted">

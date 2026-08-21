@@ -1,17 +1,27 @@
 import { isValidLngLat, roundCoord } from "@/lib/map/geo";
 import {
   ATTRIBUTION_HTML,
-  AUTO_STYLE,
-  STYLE_URLS,
   isAutoMapStyle,
   isDarkMapStyle,
   resolveMapStyle,
+  resolveStyleUrl,
+  resolveTint,
   type MapStyleKey,
 } from "@/lib/map/style";
 import type { AppMap, Place, Shape } from "@/lib/repositories/types";
 import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
+import { readMapAppearance } from "@/lib/validation/map-appearance.schema";
+import {
+  isPlainAppearance,
+  type MapAppearance,
+} from "@/packages/shared/map-appearance";
 import { isEmptyHours } from "@/packages/shared/hours";
-import { CUSTOM_PIN_PREFIX } from "@/packages/shared/pin-icons";
+import {
+  CUSTOM_PIN_PREFIX,
+  DEFAULT_PIN_SHAPE,
+  DEFAULT_PIN_SIZE,
+  DEFAULT_RING_WIDTH,
+} from "@/packages/shared/pin-icons";
 import { MIN_POLYGON_POINTS, shapeBounds } from "@/packages/shared/shapes";
 import type {
   MapSnapshot,
@@ -106,6 +116,10 @@ export function buildSnapshot(
       // one has to be, because absent is also what every snapshot published
       // before shapes existed says.
       ...(drawable.length > 0 ? { shapes: drawable.map(toSnapshotShape) } : {}),
+      // Same rule again, and this one carries it furthest: a map whose owner
+      // never opened the appearance menu publishes the exact bytes it published
+      // before any of this existed.
+      ...appearanceField(map),
       settings: readEmbedSettings(map.settings),
       allowedDomains: map.allowedDomains,
     },
@@ -131,15 +145,35 @@ function basemapFields(
   style: MapStyleKey,
 ): Pick<MapSnapshot, "styleUrl" | "autoDark" | "theme"> {
   if (isAutoMapStyle(style)) {
-    return { styleUrl: STYLE_URLS[AUTO_STYLE], autoDark: true };
+    return { styleUrl: resolveStyleUrl(style), autoDark: true };
   }
 
-  const resolved = resolveMapStyle(style);
-
   return {
-    styleUrl: STYLE_URLS[resolved],
-    theme: isDarkMapStyle(resolved) ? "dark" : "light",
+    styleUrl: resolveStyleUrl(style),
+    theme: isDarkMapStyle(resolveMapStyle(style)) ? "dark" : "light",
   };
+}
+
+/**
+ * The appearance half: the theme's tint resolved to numbers, plus whatever the
+ * owner did to labels and layers.
+ *
+ * Resolved here rather than in the embed because a theme key is a name we own
+ * and could rename, while a published snapshot is read forever by sites we do
+ * not control (§7). Shipping the numbers means a renamed or retired theme leaves
+ * every live map exactly as it was.
+ */
+function appearanceField(map: AppMap): { appearance?: MapAppearance } {
+  const stored = readMapAppearance(map.appearance);
+  const tint = resolveTint(map.style);
+
+  const appearance: MapAppearance = {
+    ...(tint ? { tint } : {}),
+    labels: stored.labels,
+    layers: stored.layers,
+  };
+
+  return isPlainAppearance(appearance) ? {} : { appearance };
 }
 
 function toSnapshotCategory(category: SnapshotCategory): SnapshotCategory {
@@ -170,6 +204,16 @@ function usedPinIcons(map: AppMap, places: Place[]): SnapshotPinIcon[] {
       // serialised as "" — the embed reads absent and empty the same way.
       ...(icon.glyph ? { glyph: icon.glyph } : {}),
       ...(icon.image ? { image: icon.image } : {}),
+      // The design fields, on the same rule: a pin that took the default said
+      // nothing, so the snapshot says nothing either and the embed defaults to
+      // the same value. Most pins are the default on most of these.
+      ...(icon.ring ? { ring: icon.ring } : {}),
+      ...(icon.ringWidth && icon.ringWidth !== DEFAULT_RING_WIDTH
+        ? { ringWidth: icon.ringWidth }
+        : {}),
+      ...(icon.iconColor ? { iconColor: icon.iconColor } : {}),
+      ...(icon.size && icon.size !== DEFAULT_PIN_SIZE ? { size: icon.size } : {}),
+      ...(icon.shape && icon.shape !== DEFAULT_PIN_SHAPE ? { shape: icon.shape } : {}),
     }));
 }
 

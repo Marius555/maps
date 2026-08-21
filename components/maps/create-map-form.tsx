@@ -63,7 +63,6 @@ export function CreateMapForm({ onCreated }: { onCreated?: () => void }) {
         control={control}
         name="name"
         label="Map name"
-        placeholder="Stockists"
         autoFocus
       />
 

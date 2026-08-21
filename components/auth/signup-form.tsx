@@ -45,7 +45,6 @@ export function SignupForm() {
         control={control}
         name="name"
         label="Name"
-        placeholder="Jane Doe"
         autoComplete="name"
       />
 
@@ -54,7 +53,6 @@ export function SignupForm() {
         name="email"
         label="Email"
         type="email"
-        placeholder="you@company.com"
         autoComplete="email"
       />
 

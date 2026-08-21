@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
-import type { Group } from "@/lib/repositories/types";
+import type { Group, Place } from "@/lib/repositories/types";
 import {
   DEFAULT_GROUP_COLOR,
   type CreateGroupInput,
@@ -206,10 +206,10 @@ export type GroupMembers = {
  * Membership lives on the members, so this is one PATCH each rather than a
  * single write — which is fine at the sizes involved. A marquee selection is
  * bounded by what fits in a drag box, and drag-to-group moves exactly one
- * object. If bulk assignment ever needs hundreds at once, that is the moment to
- * add a batch endpoint, not before: there is no `tablesDB.updateRows` call
- * anywhere in this codebase yet, and speculatively building one would mean a new
- * repository primitive with no caller to shape it.
+ * object, so the batch endpoint this used to say it was waiting for would have
+ * had no caller. `useSetGroupPin` below is the case that finally needed one, and
+ * it is a different case: it writes *every* member of a group, which is up to
+ * 3,000 rows, and it goes through a single endpoint for exactly that reason.
  *
  * Each PATCH carries `groupId` alone, so `mergePlaceFields`/`mergeShapeFields`
  * let it commute with a rename or a drag landing at the same time.
@@ -234,6 +234,82 @@ export function useAssignToGroup(mapId: string) {
     },
     [updatePlaceAsync, updateShapeAsync],
   );
+}
+
+/**
+ * Gives every location in a group the same pin.
+ *
+ * One request rather than one per member — see `setGroupPin` in
+ * groups.repository.ts, and the note above about why membership is the other way
+ * round. Nothing is written to the group itself: a group has no pin, and what
+ * this changes is each of its locations' own `icon`.
+ *
+ * The optimistic write is what makes this feel like an edit rather than a form
+ * submission — forty markers on the canvas change on the press, not a second
+ * later. Only the affected rows are remembered for the rollback, not the whole
+ * list: a list-wide snapshot would undo every drag and rename that landed beside
+ * this while it was in flight. Same reasoning as `useUpdatePlace`.
+ */
+export function useSetGroupPin(mapId: string) {
+  const queryClient = useQueryClient();
+  const listKey = queryKeys.places.list(mapId);
+
+  return useMutation({
+    mutationFn: async ({ groupId, icon }: { groupId: string; icon: string }) =>
+      (
+        await apiFetch<{ count: number }>(
+          `/api/maps/${mapId}/groups/${groupId}/pin`,
+          { method: "PATCH", body: JSON.stringify({ icon }) },
+        )
+      ).count,
+
+    onMutate: async ({ groupId, icon }) => {
+      await queryClient.cancelQueries({ queryKey: listKey });
+
+      const previous = (queryClient.getQueryData<Place[]>(listKey) ?? [])
+        .filter((place) => place.groupId === groupId)
+        .map((place) => ({ id: place.id, icon: place.icon }));
+
+      queryClient.setQueryData<Place[]>(listKey, (places = []) =>
+        places.map((place) =>
+          place.groupId === groupId ? { ...place, icon } : place,
+        ),
+      );
+
+      return { previous };
+    },
+
+    // Only the `icon` of the rows this touched, so a rename or a drag that
+    // landed on one of them meanwhile survives the rollback.
+    onError: (_error, _variables, context) => {
+      if (!context?.previous) return;
+
+      const restore = new Map(
+        context.previous.map((row) => [row.id, row.icon] as const),
+      );
+
+      queryClient.setQueryData<Place[]>(listKey, (places = []) =>
+        places.map((place) =>
+          restore.has(place.id)
+            ? { ...place, icon: restore.get(place.id) as string }
+            : place,
+        ),
+      );
+    },
+
+    /*
+     * Marked stale, not refetched — the same reasoning as `useCreatePlace`.
+     * `places.all` prefix-matches the list key, so refetching here would re-page
+     * the whole map (up to 50 requests) to learn something the optimistic write
+     * already knows.
+     */
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.places.all(mapId),
+        refetchType: "none",
+      });
+    },
+  });
 }
 
 export function useDeleteGroup(mapId: string) {

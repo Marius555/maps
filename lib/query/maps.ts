@@ -45,8 +45,30 @@ export function useCreateMap() {
   });
 }
 
+/**
+ * Optimistic, and it has to be.
+ *
+ * This started as write-through-on-success, which is exactly right for a form
+ * with a Save button: nothing on screen claims to have changed until the server
+ * agrees. The appearance controls are the opposite shape — clicking a theme
+ * swatch is expected to repaint the canvas in that frame, and a round trip of
+ * latency there reads as a broken control rather than a slow one. The editor
+ * canvas draws straight from this cache, so patching it *is* the repaint.
+ *
+ * The patch is a shallow merge over the cached map, which is safe because
+ * `UpdateMapInput` is a partial of the same shape and every JSON field on it is
+ * replaced whole by the repository anyway.
+ */
 export function useUpdateMap(mapId: string) {
   const queryClient = useQueryClient();
+  const detailKey = queryKeys.maps.detail(mapId);
+
+  const write = (map: AppMap) => {
+    queryClient.setQueryData(detailKey, map);
+    queryClient.setQueryData<AppMap[]>(queryKeys.maps.list(), (maps = []) =>
+      maps.map((existing) => (existing.id === map.id ? map : existing)),
+    );
+  };
 
   return useMutation({
     mutationFn: async (input: UpdateMapInput) =>
@@ -56,11 +78,38 @@ export function useUpdateMap(mapId: string) {
           body: JSON.stringify(input),
         })
       ).map,
-    onSuccess: (map) => {
-      queryClient.setQueryData(queryKeys.maps.detail(map.id), map);
-      queryClient.setQueryData<AppMap[]>(queryKeys.maps.list(), (maps = []) =>
-        maps.map((existing) => (existing.id === map.id ? map : existing)),
+
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+
+      const previousDetail = queryClient.getQueryData<AppMap>(detailKey);
+      const previousList = queryClient.getQueryData<AppMap[]>(
+        queryKeys.maps.list(),
       );
+
+      if (previousDetail) write({ ...previousDetail, ...input } as AppMap);
+
+      return { previousDetail, previousList };
+    },
+
+    onError: (_error, _input, context) => {
+      // Both caches, because onMutate wrote both. Restoring only the detail
+      // would leave the maps list showing a change the server rejected.
+      if (context?.previousDetail) {
+        queryClient.setQueryData(detailKey, context.previousDetail);
+      }
+      if (context?.previousList) {
+        queryClient.setQueryData(queryKeys.maps.list(), context.previousList);
+      }
+    },
+
+    // The server's answer replaces the guess: it carries `updatedAt`, which the
+    // publish staleness badge reads and the optimistic patch cannot know.
+    onSuccess: write,
+
+    // Marked stale, not refetched — same reasoning as the group mutations.
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey, refetchType: "none" });
     },
   });
 }

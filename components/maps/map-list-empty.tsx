@@ -8,7 +8,7 @@ export function MapListEmpty() {
     <EmptyState
       icon={MapIcon}
       title="No maps yet"
-      description="Create a map, then drop your first location on it or import a CSV."
+      description="Create a map, then drop your first location on it or import a spreadsheet."
       action={<CreateMapDialog />}
     />
   );

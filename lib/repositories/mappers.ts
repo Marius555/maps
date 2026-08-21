@@ -63,6 +63,7 @@ export function toAppMap(row: MapRow): AppMap {
     categories: parseJson<MapCategory[]>(row.categories, []),
     pinIcons: parseJson<CustomPinIcon[]>(row.pinIcons, []),
     settings: parseJson<Record<string, unknown>>(row.settings, {}),
+    appearance: parseJson<Record<string, unknown>>(row.appearance, {}),
     allowedDomains: row.allowedDomains ?? [],
     publishedAt: row.publishedAt ?? null,
     snapshotUrl: row.snapshotUrl ?? null,

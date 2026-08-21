@@ -6,6 +6,7 @@ import { categoriesSchema } from "./category.schema";
 import { latSchema, lngSchema, zoomSchema } from "./common";
 import { allowedDomainsSchema } from "./domain.schema";
 import { embedSettingsSchema } from "./embed-settings.schema";
+import { mapAppearanceSchema } from "./map-appearance.schema";
 import { pinIconsSchema } from "./pin-icon.schema";
 
 export const createMapSchema = z.object({
@@ -34,6 +35,7 @@ export const updateMapSchema = z
     categories: categoriesSchema,
     pinIcons: pinIconsSchema,
     settings: embedSettingsSchema,
+    appearance: mapAppearanceSchema,
     allowedDomains: allowedDomainsSchema,
   })
   .partial()

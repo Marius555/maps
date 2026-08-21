@@ -57,6 +57,16 @@
       opens its card where you clicked; clicking a pin that sits inside a shape
       must still open the pin's card, not the shape's.
     </p>
+    <p class="note">
+      Appearance: the fixture sets <code>labels: "some"</code> and turns points
+      of interest off and cycle paths on, so the basemap should carry city and
+      district names but <em>no</em> street names, water names or shop markers,
+      and dedicated cycleways should be drawn as green ribbons under the labels.
+      All of it is applied to the style before the map is built — switch your OS
+      to dark and reload, and the same three should still hold on top of the
+      inverted basemap, because <code>autoDark</code> composes with them rather
+      than replacing them.
+    </p>
 
     <p class="note">Text below the script, to prove the map is inserted in place:</p>
 

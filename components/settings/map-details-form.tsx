@@ -2,23 +2,25 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@heroui/react";
-import { Controller, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { ErrorMessage } from "@/components/ui/error-message";
 import { FormTextField } from "@/components/ui/form-field";
 import { SectionPanel } from "@/components/ui/section-panel";
-import { MAP_STYLES } from "@/lib/map/style";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { useUpdateMap } from "@/lib/query/maps";
 import type { AppMap } from "@/lib/repositories/types";
 import { formatCoords } from "@/lib/map/geo";
-import { BasemapPicker } from "./basemap-picker";
 
 /**
- * Name and basemap. Both are the whole of "map details" — the default view is set
- * by panning the map and pressing Save this view, because nobody wants to type a
- * latitude.
+ * The name, and nothing else.
+ *
+ * The basemap used to be here too. It moved to its own panel when it grew into a
+ * gallery of sixteen with labels and layers under it — but the real reason is
+ * that it saves on click while this saves on submit, and one panel cannot
+ * honestly own both. The default view was never here: it is set by panning the
+ * map and pressing Save this view, because nobody wants to type a latitude.
  */
 const detailsSchema = z.object({
   name: z
@@ -26,7 +28,6 @@ const detailsSchema = z.object({
     .trim()
     .min(1, "Give the map a name.")
     .max(128, "Keep the name under 128 characters."),
-  style: z.enum(MAP_STYLES),
 });
 
 type DetailsValues = z.infer<typeof detailsSchema>;
@@ -41,7 +42,7 @@ export function MapDetailsForm({ map }: { map: AppMap }) {
     formState: { errors, isSubmitting, isDirty },
   } = useForm<DetailsValues>({
     resolver: zodResolver(detailsSchema),
-    defaultValues: { name: map.name, style: map.style },
+    defaultValues: { name: map.name },
   });
 
   const onSubmit = handleSubmit(async (values) => {
@@ -72,19 +73,6 @@ export function MapDetailsForm({ map }: { map: AppMap }) {
           control={control}
           name="name"
           label="Map name"
-          placeholder="Stockists"
-        />
-
-        <Controller
-          control={control}
-          name="style"
-          render={({ field }) => (
-            <BasemapPicker
-              value={field.value}
-              error={errors.style?.message}
-              onChange={field.onChange}
-            />
-          )}
         />
 
         <p className="text-xs text-muted">

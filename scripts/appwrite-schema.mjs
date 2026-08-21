@@ -14,7 +14,8 @@
  * - `email`/`url` are varchar, not Appwrite's native email/url column types.
  *   Those types reject the empty string, which would 400 every place saved
  *   without contact details. Zod validates the format instead.
- * - Long, never-queried values (`categories`, `pinIcons`, `settings`, `description`,
+ * - Long, never-queried values (`categories`, `pinIcons`, `settings`, `appearance`,
+ *   `description`,
  *   `hours`, `snapshotUrl`) are `text`: stored off-page, so they don't eat the 64KB
  *   row limit.
  */
@@ -69,6 +70,11 @@ export const TABLES = [
       // (lib/validation/pin-icon.schema.ts), so worst case is ~64KB of text.
       text("pinIcons"),
       text("settings"),
+      // What the owner did to the basemap beyond picking one: the label level
+      // and the layer toggles. Its own column rather than another key in
+      // `settings`, because `settings` belongs to the Publish tab and is written
+      // whole — two forms writing one blob is a lost update.
+      text("appearance"),
       // 253 is the maximum length of a DNS name.
       varchar("allowedDomains", 253, { array: true }),
       datetime("publishedAt"),

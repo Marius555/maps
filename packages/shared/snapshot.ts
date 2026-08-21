@@ -17,6 +17,8 @@
  */
 
 import type { OpeningHours } from "./hours";
+import type { MapAppearance } from "./map-appearance";
+import type { PinRingWidth, PinShape, PinSize } from "./pin-icons";
 
 export type SnapshotCategory = {
   id: string;
@@ -46,6 +48,22 @@ export type SnapshotPinIcon = {
   glyph?: string;
   /** A `data:image/…;base64,…` URI. Absent when this pin is a glyph. */
   image?: string;
+  /**
+   * The pin's design, and every one of these is absent when it is the default —
+   * the same rule the empty `glyph` and `image` follow. Across a map's pins the
+   * dropped keys are download the visitor does not pay for, and the embed reads
+   * absent and default identically (`pinsOf` in embed/src/map.ts).
+   *
+   * They are optional for a second reason too, and it is the harder one:
+   * snapshots are immutable and live customer sites keep reading the file they
+   * were published with (§7), so every snapshot written before these existed is
+   * still being parsed today and must keep parsing.
+   */
+  ring?: string;
+  ringWidth?: PinRingWidth;
+  iconColor?: string;
+  size?: PinSize;
+  shape?: PinShape;
 };
 
 export type SnapshotPlace = {
@@ -187,6 +205,24 @@ export type MapSnapshot = {
    * The version stays `1` — the embed's fetch rejects anything else outright.
    */
   shapes?: SnapshotShape[];
+  /**
+   * What the owner did to the basemap itself: the theme's recolouring, the label
+   * level, the layer toggles. Applied to `styleUrl`'s style document before the
+   * map is built (packages/shared/map-appearance.ts).
+   *
+   * The **resolved tint** travels here, not the theme's key. Snapshots are
+   * immutable and a key is a promise that the key will still exist and still
+   * mean the same thing years from now; fifteen numbers promise nothing and
+   * cannot be broken by renaming a theme. It also keeps the theme table out of
+   * the embed bundle — the embed needs the transform, never the catalogue.
+   *
+   * Optional, and omitted entirely when it would change nothing, for the same
+   * reason `pinIcons` and `shapes` are: every file published before this existed
+   * is still live on a customer's site and must keep rendering what it always
+   * rendered. Mutually exclusive with `autoDark` in practice — Auto has no theme
+   * to resolve, and its dark half is decided in the visitor's browser.
+   */
+  appearance?: MapAppearance;
   settings: SnapshotSettings;
   /**
    * Hostnames allowed to embed this map. Empty means "anywhere".

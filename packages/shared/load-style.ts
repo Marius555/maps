@@ -1,28 +1,38 @@
-import { darkenStyle } from "./darken-style";
+import { applyAppearance, isPlainAppearance, type MapAppearance } from "./map-appearance";
 
 /**
- * Fetches a style and, when asked, inverts it for dark mode.
+ * Fetches a style and, when asked, restyles it before the map is built.
  *
- * MapLibre accepts either a URL or a parsed style object, so the light path
- * hands back the URL untouched and costs nothing — MapLibre fetches it exactly
- * as it did before. Only the dark path pulls the JSON down itself, and even then
- * it is the same single request MapLibre would have made.
+ * MapLibre accepts either a URL or a parsed style object, so a map with nothing
+ * to change hands back the URL untouched and costs nothing — MapLibre fetches it
+ * exactly as it did before. Only a themed map pulls the JSON down itself, and
+ * even then it is the same single request MapLibre would have made.
  *
- * Results are cached per URL for the life of the page. The editor mounts a map
- * on several routes and the preview mounts another, and re-parsing a 100KB style
- * for each of them is work with no output.
+ * The cache holds the **raw** style, not the transformed one. It used to hold the
+ * result, which was correct while there was exactly one transform: dark or not.
+ * Now one URL feeds a dozen looks — Liberty is the source of every theme — so
+ * caching the output would serve the first map's theme to the second map. The
+ * transforms are pure and build copies, so re-running them over a shared raw
+ * object is safe, and it is the cheap half anyway: the fetch is what hurts.
  *
  * Shared by the dashboard and the embed, and dependency-free for that reason —
- * see ./darken-style.ts.
+ * see ./style-tint.ts.
  */
 
 export type LoadedStyle = string | Record<string, unknown>;
 
 const cache = new Map<string, Promise<Record<string, unknown>>>();
 
-export function loadMapStyle(url: string, darken: boolean): LoadedStyle | Promise<LoadedStyle> {
-  if (!darken) return url;
+export function loadMapStyle(
+  url: string,
+  appearance: MapAppearance | null,
+): LoadedStyle | Promise<LoadedStyle> {
+  if (isPlainAppearance(appearance)) return url;
 
+  return fetchStyle(url).then((style) => applyAppearance(style, appearance!));
+}
+
+function fetchStyle(url: string): Promise<Record<string, unknown>> {
   const cached = cache.get(url);
   if (cached) return cached;
 
@@ -34,7 +44,6 @@ export function loadMapStyle(url: string, darken: boolean): LoadedStyle | Promis
 
       return response.json() as Promise<Record<string, unknown>>;
     })
-    .then(darkenStyle)
     .catch((error: unknown) => {
       // A failed fetch must not poison the cache: the next map to mount should
       // get a fresh attempt rather than inheriting this one's rejection.

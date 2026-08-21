@@ -139,6 +139,12 @@ export function MapShapes({
     // No handles while a tool is armed: they sit exactly where the next click
     // would go, and grabbing one instead of drawing is not what anyone meant.
     shape: drawMode ? null : selectedShape,
+    // The colour the outline is actually painted, resolved the same way
+    // `useShapeLayers` resolves it — a grouped shape's midpoints have to sit on
+    // the line they belong to, not on the colour it stopped being.
+    color: selectedShape
+      ? (colorFor?.(selectedShape) ?? selectedShape.color)
+      : "",
     onPreview: preview,
     onCommit: onUpdateShape,
   });

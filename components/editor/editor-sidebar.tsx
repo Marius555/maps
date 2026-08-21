@@ -14,6 +14,7 @@ import type {
   Place,
   Shape,
 } from "@/lib/repositories/types";
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { LocationsList } from "./locations-panel/locations-list";
 import { UngroupDropZone } from "./locations-panel/ungroup-drop-zone";
 
@@ -51,6 +52,7 @@ export function EditorSidebar({
   shapes,
   groups,
   categoriesById,
+  pinIcons,
   placeLimit,
   selectedPlaceId,
   selectedShapeId,
@@ -70,12 +72,15 @@ export function EditorSidebar({
   onRemoveFromGroup,
   onGroupObjects,
   onAddToGroup,
+  onMergeGroups,
 }: {
   mapId: string;
   places: Place[];
   shapes: Shape[];
   groups: Group[];
   categoriesById: Map<string, MapCategory>;
+  /** The map's own pins, so a row can draw a `custom:<id>` one. */
+  pinIcons: CustomPinIcon[];
   placeLimit: number;
   selectedPlaceId: string | null;
   selectedShapeId: string | null;
@@ -102,6 +107,8 @@ export function EditorSidebar({
   onGroupObjects: (target: DraggedObject, dragged: DraggedObject) => void;
   /** A row was dropped on something already in a group: join that group. */
   onAddToGroup: (groupId: string, dragged: DraggedObject) => void;
+  /** A group was dropped on another: everything in the source moves to the target. */
+  onMergeGroups: (targetGroupId: string, sourceGroupId: string) => void;
 }) {
   const animateMoves =
     places.length + shapes.length + groups.length <= ANIMATE_MOVES_UP_TO;
@@ -118,6 +125,10 @@ export function EditorSidebar({
   );
 
   const isGrouped = (dragged: DraggedObject) => {
+    // A group is not in a group — they do not nest — so there is nothing for it
+    // to be removed from, and the strip stays hidden for the whole drag.
+    if (dragged.type === "group") return false;
+
     const object =
       dragged.type === "place"
         ? places.find((place) => place.id === dragged.id)
@@ -128,7 +139,11 @@ export function EditorSidebar({
 
   return (
     <RowDragProvider>
-      <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:w-80 lg:shrink-0">
+      {/* `max-h-[60dvh]` only below `lg`. There the row stacks — map above,
+          panel below — so there is no shared height to divide and the panel
+          would grow the page one location at a time. Above `lg` the row's own
+          height governs, and a cap here would fight it. */}
+      <aside className="flex max-h-[60dvh] min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:max-h-none lg:w-80 lg:shrink-0">
         <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
           <h2 className="text-sm font-semibold text-foreground">Locations</h2>
           {/* Counts every location on the map, grouped or not: this is the plan
@@ -158,6 +173,7 @@ export function EditorSidebar({
             places={places}
             shapes={shapes}
             categoriesById={categoriesById}
+            pinIcons={pinIcons}
             selectedPlaceId={selectedPlaceId}
             selectedShapeId={selectedShapeId}
             selectedPlaceIds={selectedPlaceIds}
@@ -176,6 +192,7 @@ export function EditorSidebar({
             onRemoveFromGroup={onRemoveFromGroup}
             onGroupObjects={onGroupObjects}
             onAddToGroup={onAddToGroup}
+            onMergeGroups={onMergeGroups}
           />
         </ScrollShadow>
 

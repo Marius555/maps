@@ -2,12 +2,9 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@heroui/react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
-import { SelectControl } from "@/components/ui/select-control";
 import { ErrorMessage } from "@/components/ui/error-message";
-import { FormTextArea, FormTextField } from "@/components/ui/form-field";
-import { formatCoords, roundCoord } from "@/lib/map/geo";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { useUpdatePlace } from "@/lib/query/places";
 import type { AppMap, Place } from "@/lib/repositories/types";
@@ -16,17 +13,26 @@ import {
   type PlaceFormValues,
 } from "@/lib/validation/place.schema";
 import { emptyHours } from "@/packages/shared/hours";
-import { AddressSearchField } from "./address-search-field";
-import { HoursField } from "./hours-field/hours-field";
-import { PhotoField } from "./photo-field";
-import { PinField } from "./pin-field";
+import { ContactSection } from "./sections/contact-section";
+import { EssentialsSection } from "./sections/essentials-section";
+import { HoursSection } from "./sections/hours-section";
+import { MediaSection } from "./sections/media-section";
 
 /**
  * Edits one location.
  *
- * Coordinates are shown but not typed: nobody edits a latitude by hand. They are
- * changed by dragging the pin or by picking an address match, both of which write
- * through this form's state so a save carries them.
+ * Composition and submit; every field lives in a section beside it. What used to
+ * be here was one flat stack of eleven controls in a 520px dialog, which is the
+ * form the user could not make sense of — nothing separated the four fields that
+ * decide whether this is a working pin from the seven that decorate it.
+ *
+ * **Coordinates are typed now, and that is a deliberate reversal.** This file
+ * used to say "Coordinates are shown but not typed: nobody edits a latitude by
+ * hand", and mostly nobody does — but the exception is the case that matters,
+ * which is a pin the geocoder put in the wrong country. Then the coordinates are
+ * the only way in, and the advice this form gave instead ("drag the pin on the
+ * map") pointed at a map that did not exist in the dialog. There is one now, and
+ * the boxes underneath it, and either can move the pin.
  */
 export function PlaceForm({
   map,
@@ -70,22 +76,15 @@ export function PlaceForm({
   const lat = useWatch({ control, name: "lat" });
   const lng = useWatch({ control, name: "lng" });
 
-  const categoryOptions = [
-    { id: "", label: "No category" },
-    ...map.categories.map((category) => ({
-      id: category.id,
-      label: category.label,
-    })),
-  ];
-
   const onSubmit = handleSubmit(async (values) => {
     try {
       await updatePlace.mutateAsync({
         placeId: place.id,
         input: {
           ...values,
-          // Coordinates set here were placed deliberately, by drag or by picking
-          // a match, so a later geocode pass must not overwrite them.
+          // Coordinates set here were placed deliberately — by drag, by typing,
+          // or by picking a match — so a later geocode pass must not overwrite
+          // them.
           geocodeStatus:
             values.lat === place.lat && values.lng === place.lng
               ? place.geocodeStatus
@@ -103,96 +102,31 @@ export function PlaceForm({
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
       {updatePlace.error ? <ErrorMessage error={updatePlace.error} /> : null}
 
-      <FormTextField
+      <EssentialsSection
+        map={map}
+        place={place}
         control={control}
-        name="name"
-        label="Name"
-        placeholder="Corner Shop"
+        errors={errors}
+        setValue={setValue}
+        lat={lat}
+        lng={lng}
       />
 
-      <Controller
-        control={control}
-        name="address"
-        render={({ field }) => (
-          <AddressSearchField
-            mapId={map.id}
-            value={field.value}
-            error={errors.address?.message}
-            onChange={field.onChange}
-            onPick={(candidate) => {
-              // The matched label replaces what was typed, so the stored address
-              // is the one the coordinates actually belong to.
-              if (candidate.label) field.onChange(candidate.label);
-              setValue("lat", roundCoord(candidate.lat), { shouldDirty: true });
-              setValue("lng", roundCoord(candidate.lng), { shouldDirty: true });
-            }}
-          />
-        )}
-      />
-
-      <p className="text-xs tabular-nums text-muted">
-        Pin at {formatCoords(lat, lng)}
-      </p>
-
-      <Controller
-        control={control}
-        name="category"
-        render={({ field }) => (
-          <SelectControl
-            label="Category"
-            options={categoryOptions}
-            value={field.value}
-            error={errors.category?.message}
-            onChange={field.onChange}
-          />
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="icon"
-        render={({ field }) => (
-          <PinField
-            value={field.value}
-            pinIcons={map.pinIcons}
-            onChange={field.onChange}
-          />
-        )}
-      />
-
-      <PhotoField mapId={map.id} place={place} />
-
-      <FormTextArea
-        control={control}
-        name="description"
-        label="Description"
-        placeholder="Anything a visitor should know."
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormTextField control={control} name="phone" label="Phone" type="tel" />
-        <FormTextField control={control} name="email" label="Email" type="email" />
+      {/* Collapsed by default, and forced open by an error in them — a message
+          nobody can see is the same as no message. */}
+      <div className="space-y-2">
+        <ContactSection
+          control={control}
+          hasError={Boolean(errors.phone || errors.email || errors.url)}
+        />
+        <HoursSection control={control} hasError={Boolean(errors.hours)} />
+        <MediaSection
+          map={map}
+          place={place}
+          control={control}
+          hasError={Boolean(errors.description)}
+        />
       </div>
-
-      <FormTextField
-        control={control}
-        name="url"
-        label="Website"
-        type="url"
-        placeholder="https://example.com"
-      />
-
-      <Controller
-        control={control}
-        name="hours"
-        render={({ field }) => (
-          <HoursField
-            value={field.value}
-            error={errors.hours?.message}
-            onChange={field.onChange}
-          />
-        )}
-      />
 
       <div className="flex justify-end gap-2">
         {onCancel ? (

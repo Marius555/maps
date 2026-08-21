@@ -2,14 +2,9 @@
 
 import { Ungroup } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useState, type DragEvent } from "react";
 
 import { useRowDragState } from "@/components/groups/row-drag-context";
-import {
-  DRAG_MIME,
-  readDraggedObject,
-  type DraggedObject,
-} from "@/components/groups/use-row-drag";
+import { useDropTarget, type DraggedObject } from "@/components/groups/use-row-drag";
 
 /**
  * Somewhere to drop a row that is leaving its group.
@@ -28,6 +23,13 @@ import {
  * "remove from group" target would be a control that does nothing almost all of
  * the time, and offering it during a drag that could not use it would be worse
  * than not offering it at all.
+ *
+ * It used to say all of that in a dashed grey outline and muted text, which is
+ * the vocabulary of a hint — and people missed it, because a hint is exactly what
+ * it looked like while they were busy aiming at something else. It is a control,
+ * and it now reads as one from the moment it arrives: tinted, ringed in the
+ * accent, in full-strength text. The escalation on hover is what it always had;
+ * what it was missing was a resting state loud enough to be noticed at all.
  */
 export function UngroupDropZone({
   /** Answers "is this one in a group?" — the panel knows, this does not. */
@@ -38,47 +40,40 @@ export function UngroupDropZone({
   onUngroup: (dragged: DraggedObject) => void;
 }) {
   const { dragged } = useRowDragState();
-  const [isTarget, setIsTarget] = useState(false);
+
+  const { targetProps } = useDropTarget({
+    id: "ungroup",
+    accepts: isGrouped,
+    onDrop: onUngroup,
+  });
 
   const isOffered = dragged !== null && isGrouped(dragged);
-
-  const onDragOver = (event: DragEvent) => {
-    if (!event.dataTransfer.types.includes(DRAG_MIME)) return;
-
-    // Without this the browser refuses the drop, and `onDrop` never fires.
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    setIsTarget(true);
-  };
-
-  const onDrop = (event: DragEvent) => {
-    setIsTarget(false);
-
-    const object = readDraggedObject(event.dataTransfer);
-    if (!object) return;
-
-    event.preventDefault();
-    onUngroup(object);
-  };
 
   return (
     <AnimatePresence>
       {isOffered ? (
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
+          /*
+           * Overshoots a little on the way in. Half of what makes a target easy
+           * to miss is that it appears the way a static thing would — this
+           * arrives, and movement is the one signal that reaches someone whose
+           * attention is on the row under their pointer.
+           *
+           * Motion respects `prefers-reduced-motion` for transforms through its
+           * own reduced-motion handling, and the strip is legible without the
+           * movement because the resting state carries the emphasis.
+           */
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 8 }}
-          transition={{ duration: 0.15, ease: [0, 0, 0.2, 1] }}
+          exit={{ opacity: 0, y: 12 }}
+          transition={{ type: "spring", stiffness: 520, damping: 30, mass: 0.6 }}
           className="border-t border-border p-2"
         >
           <div
-            data-drop-target={isTarget || undefined}
-            onDragOver={onDragOver}
-            onDragLeave={() => setIsTarget(false)}
-            onDrop={onDrop}
-            className="flex h-12 items-center justify-center gap-2 rounded-xl border border-dashed border-border text-xs text-muted transition-colors data-drop-target:border-solid data-drop-target:border-accent data-drop-target:bg-accent-soft data-drop-target:text-foreground"
+            {...targetProps}
+            className="flex h-14 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-accent/55 bg-accent-soft/50 text-sm font-medium text-foreground transition-colors data-drop-target:border-solid data-drop-target:border-accent data-drop-target:bg-accent-soft"
           >
-            <Ungroup aria-hidden="true" className="size-4" />
+            <Ungroup aria-hidden="true" className="size-5 text-accent" />
             {/* The name the row menu uses for the same outcome (§8). */}
             Remove from group
           </div>

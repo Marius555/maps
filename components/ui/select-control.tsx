@@ -1,11 +1,22 @@
 "use client";
 
 import { FieldError, Label, ListBox, Select } from "@heroui/react";
+import type { ReactNode } from "react";
 
 export type SelectOption = {
   id: string;
   label: string;
   description?: string;
+  /**
+   * Heading for the run of options this one belongs to.
+   *
+   * Contiguous options sharing a section are grouped under it. Only
+   * `InlineSelect` draws these — a labelled form select over a flat list of
+   * choices has nothing to group, and this control ignores both this and `icon`.
+   */
+  section?: string;
+  /** Leading mark, e.g. how well the option fits. */
+  icon?: ReactNode;
 };
 
 /**
@@ -43,7 +54,9 @@ export function SelectControl({
     >
       <Label>{label}</Label>
       <Select.Trigger>
-        <Select.Value />
+        {/* min-w-0 on the value, so a long option truncates rather than pushing
+            the indicator out of the trigger. */}
+        <Select.Value className="min-w-0 overflow-hidden" />
         <Select.Indicator />
       </Select.Trigger>
       {error ? <FieldError>{error}</FieldError> : null}
@@ -56,7 +69,18 @@ export function SelectControl({
               id={option.id}
               textValue={option.label}
             >
-              {option.label}
+              {/* The description sits under the label rather than beside it, so
+                  a long one truncates instead of pushing the indicator off the
+                  row. `min-w-0` is what lets the truncation actually happen
+                  inside a flex parent. */}
+              <span className="flex w-full min-w-0 flex-col overflow-hidden">
+                <span className="truncate">{option.label}</span>
+                {option.description ? (
+                  <span className="truncate text-xs text-muted">
+                    {option.description}
+                  </span>
+                ) : null}
+              </span>
               <ListBox.ItemIndicator />
             </ListBox.Item>
           ))}

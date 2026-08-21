@@ -47,6 +47,12 @@ export type SidebarRow =
       /** Set only inside a group: what its pin is actually painted on the map. */
       groupColor?: string;
       indent: boolean;
+      /**
+       * The last row of its group, so the tree draws an elbow rather than a tee
+       * and the rail stops here — see components/ui/tree-branch.tsx. False for
+       * every loose row, which has no rail at all.
+       */
+      isLastInGroup: boolean;
       startsLooseSection: boolean;
     }
   | {
@@ -56,6 +62,7 @@ export type SidebarRow =
       groupId: string;
       groupColor?: string;
       indent: boolean;
+      isLastInGroup: boolean;
       startsLooseSection: boolean;
     };
 
@@ -123,7 +130,15 @@ export function sidebarRows({
 
     if (!isOpen) continue;
 
-    for (const place of groupPlaces) {
+    /*
+     * The members are one run, locations then shapes, and only its final row
+     * closes the tree. Computed from the two lengths rather than from each loop's
+     * index, because a group whose shapes are all that is left of it has its last
+     * *place* somewhere in the middle of nothing.
+     */
+    const lastPlace = groupShapes.length === 0 ? groupPlaces.length - 1 : -1;
+
+    groupPlaces.forEach((place, index) => {
       rows.push({
         kind: "place",
         key: `place:${place.id}`,
@@ -131,11 +146,12 @@ export function sidebarRows({
         groupId: group.id,
         groupColor: group.color,
         indent: true,
+        isLastInGroup: index === lastPlace,
         startsLooseSection: false,
       });
-    }
+    });
 
-    for (const shape of groupShapes) {
+    groupShapes.forEach((shape, index) => {
       rows.push({
         kind: "shape",
         key: `shape:${shape.id}`,
@@ -143,9 +159,10 @@ export function sidebarRows({
         groupId: group.id,
         groupColor: group.color,
         indent: true,
+        isLastInGroup: index === groupShapes.length - 1,
         startsLooseSection: false,
       });
-    }
+    });
   }
 
   /*
@@ -171,6 +188,7 @@ export function sidebarRows({
       // names it, and everything here reads that as no group at all.
       groupId: "",
       indent: false,
+      isLastInGroup: false,
       startsLooseSection: isFirstLoose,
     });
     isFirstLoose = false;
@@ -183,6 +201,7 @@ export function sidebarRows({
       shape,
       groupId: "",
       indent: false,
+      isLastInGroup: false,
       startsLooseSection: isFirstLoose,
     });
     isFirstLoose = false;

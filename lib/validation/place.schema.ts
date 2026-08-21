@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { DAYS_IN_WEEK } from "@/packages/shared/hours";
-import { latSchema, lngSchema } from "./common";
+import { latSchema, lngSchema, pinIconRefSchema } from "./common";
 import { groupIdSchema } from "./group.schema";
 
 export const GEOCODE_STATUSES = ["ok", "low", "failed", "manual"] as const;
@@ -96,13 +96,7 @@ export const createPlaceSchema = z.object({
   // coordinates and nothing else.
   address: z.string().trim().max(512).default(""),
   category: z.string().trim().max(64).default(""),
-  /*
-   * Length-checked, not checked against the icon registry. An id we don't know
-   * draws a plain pin (packages/shared/pin-icons.ts), which is the right answer
-   * for a row written by a newer version of the app — and validating here would
-   * turn that into a 400 the user cannot act on.
-   */
-  icon: z.string().trim().max(64).default(""),
+  icon: pinIconRefSchema.default(""),
   description: z.string().max(5000).optional(),
   phone: z.string().trim().max(32).optional(),
   email: optionalEmail.optional(),
@@ -126,7 +120,7 @@ export const updatePlaceSchema = z
     lng: lngSchema,
     address: z.string().trim().max(512),
     category: z.string().trim().max(64),
-    icon: z.string().trim().max(64),
+    icon: pinIconRefSchema,
     description: z.string().max(5000),
     phone: z.string().trim().max(32),
     email: optionalEmail,
@@ -156,10 +150,7 @@ export const placeFormSchema = z.object({
     .max(255, "Keep the name under 255 characters."),
   address: z.string().trim().max(512),
   category: z.string().trim().max(64),
-  // Same length-only rule as on the way in, and for the same reason: a form that
-  // rejected an id it did not recognise would refuse to save a location whose
-  // only problem is a pin some other tab deleted a moment ago.
-  icon: z.string().trim().max(64),
+  icon: pinIconRefSchema,
   description: z.string().max(5000),
   phone: z.string().trim().max(32),
   email: optionalEmail,

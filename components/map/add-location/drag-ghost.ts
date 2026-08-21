@@ -21,7 +21,12 @@
  * quietly stop matching.
  */
 
-import { pinSvg, resolvePin, type CustomPinIcon } from "@/packages/shared/pin-icons";
+import {
+  pinCssVars,
+  pinSvg,
+  resolvePin,
+  type CustomPinIcon,
+} from "@/packages/shared/pin-icons";
 
 /**
  * Build the pin, put it under the pointer, and start it growing.
@@ -44,10 +49,13 @@ export function mountDragGhost(
 
   element.className = "map-pin-ghost";
   element.setAttribute("aria-hidden", "true");
-  // A custom pin carries its own colour, so the thing in the hand is the thing
-  // that lands. Without this the ghost would be accent-coloured all the way down
-  // and change colour the instant it became a marker.
-  if (pin?.color) element.style.setProperty("--pin-color", pin.color);
+  // A custom pin carries its own colour, ring and size, so the thing in the hand
+  // is the thing that lands. Without this the ghost would be an accent-coloured
+  // ball all the way down and change design the instant it became a marker. The
+  // element is new on every drag, so unlike the markers there is nothing to clear.
+  for (const [name, value] of Object.entries(pinCssVars(pin))) {
+    element.style.setProperty(name, value);
+  }
   element.innerHTML = `<span class="map-pin-ghost__pin">${pinSvg(pin)}</span>`;
 
   moveDragGhost(element, x, y);

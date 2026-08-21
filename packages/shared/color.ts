@@ -110,6 +110,34 @@ export function withLightness(
   });
 }
 
+/**
+ * Rebuilds a colour at a new perceptual lightness *and* a new hue, discarding
+ * whatever hue it had. `chroma` is absolute here, not a scale — there is no
+ * original chroma left to scale once the hue has been replaced. Alpha survives.
+ *
+ * This is what makes a coral road coral. `withLightness` deliberately preserves
+ * hue and so can only ever produce a darker or lighter version of the basemap's
+ * own palette; a theme that recolours the map needs the opposite.
+ *
+ * Typical chroma: 0.02–0.05 reads as a tint, 0.10–0.20 as a colour. Beyond ~0.25
+ * OKLab starts asking for sRGB values that do not exist and the result clips.
+ */
+export function withHue(
+  color: Rgba,
+  lightness: number,
+  hueDegrees: number,
+  chroma: number,
+): Rgba {
+  const radians = (hueDegrees * Math.PI) / 180;
+
+  return oklabToRgb({
+    l: clamp01(lightness),
+    a: Math.cos(radians) * chroma,
+    b: Math.sin(radians) * chroma,
+    alpha: color.a,
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 
 type Oklab = { l: number; a: number; b: number };

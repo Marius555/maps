@@ -5,7 +5,8 @@ import { useEffect, useRef } from "react";
 
 import { ErrorMessage } from "@/components/ui/error-message";
 import { SectionPanel } from "@/components/ui/section-panel";
-import { draftsNeedingGeocode } from "@/lib/csv/draft-places";
+import { formatCount } from "@/lib/format/number";
+import { draftsNeedingGeocode } from "@/lib/import/draft-places";
 import { useGeocodeBatch } from "@/lib/query/import";
 import {
   draftFromGeocodeResult,
@@ -125,7 +126,7 @@ export function GeocodeStep({
         value={percentage}
       >
         <Label>
-          {geocodedCount.toLocaleString()} of {geocodeTotal.toLocaleString()}{" "}
+          {formatCount(geocodedCount)} of {formatCount(geocodeTotal)}{" "}
           addresses
         </Label>
         <ProgressBar.Output />

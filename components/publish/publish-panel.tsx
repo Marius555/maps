@@ -1,7 +1,7 @@
 "use client";
 
 import { PreviewPanel } from "@/components/preview/preview-panel";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageTitle } from "@/components/ui/page-title";
 import { SectionPanel } from "@/components/ui/section-panel";
 import { useMap } from "@/lib/query/maps";
 import { usePlaces } from "@/lib/query/places";
@@ -35,10 +35,7 @@ export function PublishPanel({
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Publish"
-        description="Put this map live, then paste one line into your site."
-      />
+      <PageTitle>Publish</PageTitle>
 
       <SectionPanel
         title="Publish this map"

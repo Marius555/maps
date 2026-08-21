@@ -119,6 +119,7 @@ export async function createMap(
           categories: "[]",
           pinIcons: "[]",
           settings: "{}",
+          appearance: "{}",
           allowedDomains: [],
         },
         permissions: ownerPermissions(ctx.userId),
@@ -141,13 +142,14 @@ export async function updateMap(
 ): Promise<AppMap> {
   const before = await getMap(ctx, mapId);
 
-  // `categories`, `pinIcons` and `settings` are JSON text columns, so they have
-  // to be serialised. Everything else maps straight onto its column.
-  const { categories, pinIcons, settings, ...rest } = input;
+  // `categories`, `pinIcons`, `settings` and `appearance` are JSON text columns,
+  // so they have to be serialised. Everything else maps straight onto its column.
+  const { categories, pinIcons, settings, appearance, ...rest } = input;
   const data: Record<string, unknown> = { ...rest };
   if (categories) data.categories = JSON.stringify(categories);
   if (pinIcons) data.pinIcons = JSON.stringify(pinIcons);
   if (settings) data.settings = JSON.stringify(settings);
+  if (appearance) data.appearance = JSON.stringify(appearance);
 
   try {
     const row = await admin.tablesDB.updateRow<MapRow>({

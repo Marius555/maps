@@ -94,6 +94,8 @@ export type MapCanvasProps = {
   center: { lng: number; lat: number };
   zoom: number;
   style: MapStyleKey;
+  /** The map's stored `appearance` blob — labels and layer toggles. */
+  appearance?: Record<string, unknown>;
   places: Place[];
   selectedPlaceId: string | null;
   isAdding: boolean;
@@ -167,6 +169,7 @@ export default function MapCanvasImpl({
   center,
   zoom,
   style,
+  appearance,
   places,
   selectedPlaceId,
   isAdding,
@@ -185,7 +188,12 @@ export default function MapCanvasImpl({
 }: MapCanvasProps) {
   const frame = useRef<HTMLDivElement>(null);
   const container = useRef<HTMLDivElement>(null);
-  const { map, isReady } = useMaplibre(frame, container, { center, zoom, style });
+  const { map, isReady } = useMaplibre(frame, container, {
+    center,
+    zoom,
+    style,
+    appearance,
+  });
 
   /*
    * Looked up here rather than passed in, so the card follows a place edited

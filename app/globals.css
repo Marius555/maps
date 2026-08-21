@@ -11,6 +11,9 @@
  */
 @theme inline {
   --font-sans: var(--font-instrument-sans);
+  /* Ours, not HeroUI's — see `--warning-ink` below. Without this line the
+     variable exists but `text-warning-ink` is not a utility. */
+  --color-warning-ink: var(--warning-ink);
 }
 
 
@@ -88,6 +91,17 @@
    */
   --warning: oklch(80% 0.155 85);
   --warning-foreground: oklch(24% 0.04 85);
+  /*
+   * The amber you can draw a *mark* in, as opposed to fill a chip with.
+   *
+   * `--warning` is a fill token: it is paired with `--warning-foreground` and is
+   * meant to have dark text on top of it. Used directly as an icon or text
+   * colour it lands near 2:1 on a light surface, which is why the confidence
+   * badge used to be a chip. An icon-only mark has no chip to sit in, so it
+   * needs an amber that carries its own contrast — this is ~3.5:1 against
+   * `--surface-secondary`, clearing the 3:1 floor for non-text content.
+   */
+  --warning-ink: oklch(54% 0.13 85);
   --danger: oklch(65.32% 0.2378 359.62);
   --danger-foreground: oklch(99.11% 0 0);
 
@@ -152,6 +166,8 @@
   --success-foreground: oklch(21.03% 0.0059 124.69);
   --warning: oklch(82% 0.145 85);
   --warning-foreground: oklch(24% 0.04 85);
+  /* Same amber, already legible on a dark surface. */
+  --warning-ink: oklch(80% 0.14 85);
   --danger: oklch(64% 0.21 359.62);
   --danger-foreground: oklch(99.11% 0 0);
 }
@@ -334,6 +350,53 @@
 }
 
 /*
+ * The tree rail in the Locations panel — see components/ui/tree-branch.tsx.
+ *
+ * Plain CSS rather than Tailwind utilities because the whole thing is two
+ * pseudo-elements, and a rail whose length depends on whether the row is the last
+ * of its group is a rule, not a class list.
+ *
+ * The colour is a tint of `--tree-color`, which the element sets inline from the
+ * group's own colour. `--border` is the fallback, and it is what a rail with no
+ * group colour would want anyway.
+ */
+.tree-branch {
+  --tree-line: color-mix(in oklch, var(--tree-color, var(--border)) 40%, transparent);
+
+  position: relative;
+}
+
+/* The rail. Full height, so consecutive rows join into one line. */
+.tree-branch::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--tree-line);
+}
+
+/* The last member closes the group: the rail stops at the elbow rather than
+   running on into the row below, which belongs to something else. */
+.tree-branch[data-last]::before {
+  bottom: 50%;
+}
+
+/* The elbow, from the rail out to the row's content. */
+.tree-branch::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  right: 0;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--tree-line);
+}
+
+/*
  * Shape handles — the grab points on a selected circle or polygon.
  *
  * Plain CSS for the same reason the pins are: these are DOM elements handed to
@@ -378,6 +441,35 @@
 /* East–west, because that is the only direction this handle travels in. */
 .shape-handle--radius {
   cursor: ew-resize;
+}
+
+/*
+ * The point that is not a point yet — drag one and the edge gains a corner.
+ *
+ * The one handle that does *not* follow the white-with-a-dark-ring rule above,
+ * and for the opposite reason: a corner handle has to be findable against the
+ * fill, while this has to read as part of the outline it sits on. So it takes the
+ * shape's own colour (`--shape-handle-color`, written per marker in
+ * use-shape-handles.ts) with a ring of the page behind it — `--surface`, which is
+ * white in light and near-black in dark, and animates across a theme change with
+ * everything else.
+ *
+ * Smaller and dimmer than a real corner, because that is the difference it is
+ * reporting: these are suggestions, and the corners are decisions. Full strength
+ * on hover, when it is about to become one.
+ */
+.shape-handle--midpoint {
+  --shape-handle-size: 0.625rem;
+
+  background: var(--shape-handle-color, var(--accent));
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.3);
+  opacity: 0.65;
+}
+
+.shape-handle--midpoint:hover,
+.shape-handle--midpoint:focus-visible {
+  opacity: 1;
 }
 
 .shape-handle:hover {
@@ -474,22 +566,48 @@
   filter: drop-shadow(0 2px 3px oklch(0% 0 0 / 0.4));
 }
 
-.map-pin__shape svg {
+/*
+ * `--pin-scale` is a transform on the *inner* svg rather than a width on the
+ * span, so a large pin never pushes the layout around: the marker keeps its
+ * 2.75rem hit area whatever size the customer chose, and this composes with the
+ * hover and drag transforms on the span above rather than fighting them.
+ *
+ * `> .pin-svg` and never a bare `svg`, here and in the two rules like it below.
+ * A pin with a glyph in it contains a *second*, nested `<svg>` — see `headOf` in
+ * packages/shared/pin-icons.ts, which positions the glyph by `x`/`y` attributes
+ * inside the body. A descendant selector reaches that one too, and then both
+ * halves of this rule are wrong on it: `width: 100%` overrides the glyph's own
+ * 10-unit box, and a transform on a nested `<svg>` composes *before* its `x`/`y`
+ * viewport translation, so scaling multiplies the offset instead of leaving it
+ * alone. That is a glyph drawn at scale squared and dragged off centre — up-left
+ * at `sm`, down-right at `lg`, and correct at `md` only because `pinCssVars`
+ * omits the property entirely at the default.
+ */
+.map-pin__shape > .pin-svg {
   display: block;
   width: 100%;
   height: 100%;
+  transform: scale(var(--pin-scale, 1));
 }
 
 /* Filled rather than lucide's stroked outline: a line drawing disappears over a
-   busy basemap, and this has to be legible over every tile it crosses. */
+   busy basemap, and this has to be legible over every tile it crosses.
+
+   The custom properties are the pin's own design where it has one, and every
+   fallback is what a built-in pin has always looked like — so a pin that says
+   nothing is drawn exactly as it was before it could say anything. An unset ring
+   also stays theme-aware, which a stored hex cannot be. */
 .map-pin__shape .pin-svg__body {
   fill: var(--pin-color, var(--accent));
-  stroke: var(--accent-foreground);
-  stroke-width: 1.5;
+  stroke: var(--pin-ring, var(--accent-foreground));
+  stroke-width: var(--pin-ring-width, 1.5);
+  /* The diamond's corners. Mitred, they spike well past the shape at a thick
+     ring; the embed's canvas sets the same join for the same reason. */
+  stroke-linejoin: round;
 }
 
 .map-pin__shape .pin-svg__glyph {
-  stroke: var(--accent-foreground);
+  stroke: var(--pin-icon-color, var(--accent-foreground));
 }
 
 .map-pin:hover .map-pin__shape,
@@ -589,22 +707,120 @@
   opacity: 1;
 }
 
-.map-pin-ghost__pin svg {
+.map-pin-ghost__pin > .pin-svg {
   display: block;
   width: 100%;
   height: 100%;
+  /* Scaled inside the lift animation on the span above, not instead of it — the
+     ghost still grows from the toolbar icon's size, and a large pin is a large
+     pin at both ends of that. */
+  transform: scale(var(--pin-scale, 1));
 }
 
 /* Filled rather than lucide's stroked outline: a line drawing disappears over a
-   busy basemap, and this has to be legible over every tile it crosses. */
+   busy basemap, and this has to be legible over every tile it crosses. The
+   custom properties carry the pin's own design; see `.map-pin__shape` above. */
 .map-pin-ghost__pin .pin-svg__body {
   fill: var(--pin-color, var(--accent));
-  stroke: var(--accent-foreground);
-  stroke-width: 1.5;
+  stroke: var(--pin-ring, var(--accent-foreground));
+  stroke-width: var(--pin-ring-width, 1.5);
+  stroke-linejoin: round;
 }
 
 .map-pin-ghost__pin .pin-svg__glyph {
-  stroke: var(--accent-foreground);
+  stroke: var(--pin-icon-color, var(--accent-foreground));
+}
+
+/*
+ * A row that has been picked up — see components/groups/row-drag-ghost.ts.
+ *
+ * This carried a small chip with the row's name in it, and that was the wrong
+ * object: a name in a box is a *reference* to the thing being dragged, not the
+ * thing. What travels now is a copy of the row itself, cloned from the DOM, so
+ * the pin, the address, the second line and the group's colour all come along
+ * without this stylesheet knowing anything about them.
+ *
+ * The colours the clone *cannot* bring are here, and there are exactly two. A row
+ * has no background of its own — at rest it is transparent and sits on the
+ * panel's surface, with `bg-default` and `bg-accent-soft` only arriving on hover
+ * and selection. Lift one onto `<body>` and it is see-through. So this element
+ * supplies the ground the row was standing on, and the border that says it is off
+ * the page now.
+ *
+ * Slightly under full opacity on purpose. A full-size row under the pointer
+ * covers the row it is being aimed at, and the drop target's accent ring has to
+ * read through it. Making the copy smaller would fix the occlusion by turning it
+ * back into a reference.
+ *
+ * The transition lives here rather than in JS, which is what puts it under the
+ * blanket `prefers-reduced-motion` rule instead of needing its own opt-out.
+ */
+.row-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  border-radius: 0.75rem;
+  background: var(--surface);
+  /* Neutral, not accent. Accent is the drop target's ring, and a copy wearing the
+     same colour reads as the place it is about to land rather than as the thing
+     in your hand — with the two overlapping, they were indistinguishable. The
+     shadow is what says this one is off the page. */
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 24px oklch(0% 0 0 / 0.28);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out-fluid);
+  /* A copy of the row under the pointer must not be what the drop lands on — the
+     hit test in use-row-drag.ts reads `elementFromPoint`, and this would win
+     every sample. */
+  pointer-events: none;
+}
+
+/* Added one reflow after the copy is in the document, so the browser has an
+   initial state to animate away from. */
+.row-ghost--lifted {
+  opacity: 0.9;
+}
+
+/*
+ * The row left behind, for the length of the gesture.
+ *
+ * It stays in the list rather than collapsing out of it, so nothing shifts under
+ * the pointer while the user is aiming at a row two places down. Dim enough to
+ * read as "this one is in your hand", solid enough to still say where it came
+ * from.
+ */
+.row-lifted {
+  opacity: 0.35;
+}
+
+/*
+ * The drag cursors — the browser's own hands, deliberately.
+ *
+ * These were briefly drawn as SVG, to fix a real problem: the hand Windows draws
+ * is white, and this panel is white, so the resting cursor is easy to lose.
+ * Drawn hands solved that and looked worse than the problem — a cursor is a piece
+ * of the operating system's furniture, and one that does not match the other
+ * twenty on screen reads as broken rather than as designed. Reverted.
+ *
+ * The resting hand, on a row that can be picked up.
+ */
+.is-draggable {
+  cursor: grab;
+}
+
+/*
+ * And the closed hand, for the length of a drag.
+ *
+ * On `<body>` because the pointer spends the gesture nowhere near the row it
+ * started on. The descendant selector and `!important` are both load-bearing: the
+ * pointer crosses other rows, their buttons and the map, each setting a cursor of
+ * its own, and without this the hand flickers to a pointer every time it passes
+ * over one. Specificity alone cannot beat an inline cursor on the map canvas.
+ */
+body.is-row-dragging,
+body.is-row-dragging * {
+  cursor: grabbing !important;
 }
 
 /*
@@ -620,6 +836,19 @@
      1.5rem this started at, the head is under 6px and every icon looked alike. */
   width: 2.25rem;
   height: 2.25rem;
+}
+
+/*
+ * Row scale, for the Locations list.
+ *
+ * The pin is the row's identity, so it has to survive being shrunk: 20px keeps
+ * the ball wider than the 14px text beside it without pushing a 48px row around,
+ * and the glyph inside it still reads as a shop or a bed at a glance. Smaller and
+ * every icon looks alike again — the failure the 36px tile size exists to avoid.
+ */
+.pin-preview--sm {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 /*
@@ -641,33 +870,66 @@
   aspect-ratio: 1;
 }
 
+/*
+ * The studio's option tiles.
+ *
+ * A fixed size where `--lg` is a proportional one, which is the whole reason it
+ * exists rather than reusing that: a design row's tile stretches to share the
+ * dialog's width but keeps a fixed height, and `width: 100%` with `aspect-ratio:
+ * 1` inside a stretched tile resolves to something taller than the tile.
+ *
+ * 2.75rem is what a size step or a ring thickness needs to be a visible
+ * difference rather than a guess, and it still leaves the 6px of padding a
+ * `lg` pin needs to scale inside its own tile.
+ */
+.pin-preview--tile {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
 .pin-preview--xl {
   width: 4.5rem;
   height: 4.5rem;
 }
 
-.pin-preview svg {
+.pin-preview > .pin-svg {
   display: block;
   width: 100%;
   height: 100%;
+  /* The pin's own size, so a large pin reads large in a tile and in a list row —
+     as a transform, so it does not resize the 48px row it sits in. Direct child,
+     for the reason spelled out at `.map-pin__shape > .pin-svg` above. */
+  transform: scale(var(--pin-scale, 1));
 }
 
 /*
- * Fill only — no ring, no shadow.
+ * The same ring and shadow the map draws.
  *
- * The map versions of this pin wear a white outline because they have to survive
- * whatever tile is beneath them. Here the ground is a white dialog, so the ring
- * separates the pin from nothing and reads as a badge drawn around it.
+ * This was fill only, on the argument that a white outline over a white dialog
+ * separates the pin from nothing. True of the outline alone, and beside the
+ * point: this is a *preview*, and a preview that quietly drops part of the
+ * drawing is previewing a pin that does not exist. The tile you press and the
+ * marker you get were visibly different objects.
  *
- * `--pin-color` rather than a flat accent: a custom pin brings its own colour,
- * and a tile that previewed it in the wrong one would be lying about what lands.
+ * The shadow is what makes it work rather than decoration (§8). A white ring on
+ * a white surface really is invisible on its own — the shadow is the only thing
+ * giving it an edge to be seen against, so the two ship together or neither
+ * does. Lighter than the map's: here it has to suggest an edge, not survive a
+ * satellite tile.
  */
+.pin-preview {
+  filter: drop-shadow(0 1px 2px oklch(0% 0 0 / 0.25));
+}
+
 .pin-preview .pin-svg__body {
   fill: var(--pin-color, var(--accent));
+  stroke: var(--pin-ring, var(--accent-foreground));
+  stroke-width: var(--pin-ring-width, 1.5);
+  stroke-linejoin: round;
 }
 
 .pin-preview .pin-svg__glyph {
-  stroke: var(--accent-foreground);
+  stroke: var(--pin-icon-color, var(--accent-foreground));
 }
 
 /*
@@ -726,6 +988,39 @@
 /* Four visible, so three gaps to subtract. */
 .carousel-track > * {
   flex: 0 0 calc((100% - 1.5rem) / 4);
+  scroll-snap-align: start;
+}
+
+/*
+ * The other kind of track: three visible, and scroll to the rest.
+ *
+ * Same shape as the four-up rule, one column wider. It exists because the pin
+ * studio stacks seven of these down one dialog, and they are read against each
+ * other as much as across: a tile whose width comes from how many options its
+ * row happens to have is not a column. Three shapes used to stretch to a third
+ * of the dialog each while eleven trim colours huddled at 36px, and nothing on
+ * screen said the two rows were the same kind of control.
+ *
+ * A fixed basis rather than the `1 0 auto` this started as. Growing into the
+ * slack is what made the width depend on the count; pinning it to a third makes
+ * every row identical and hands the overflow to the track, which already knows
+ * how to scroll and when to show its arrows.
+ *
+ * Doubled class rather than a bare modifier: it has to outrank the four-up rule
+ * above, which is the same specificity, and source order is too easy to lose in
+ * a later edit.
+ *
+ * The tighter gap is inherited from when this row held eleven swatches, and is
+ * kept because three tiles across a 400px track want less air between them than
+ * four across a full-width one, not more.
+ */
+.carousel-track--three {
+  gap: 0.375rem;
+}
+
+/* Three visible, so two gaps to subtract. */
+.carousel-track.carousel-track--three > * {
+  flex: 0 0 calc((100% - 0.75rem) / 3);
   scroll-snap-align: start;
 }
 

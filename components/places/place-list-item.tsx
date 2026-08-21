@@ -3,10 +3,18 @@
 import { Pencil, RotateCw, Trash2, Ungroup } from "lucide-react";
 import { motion } from "motion/react";
 
-import { useRowDrag, type DraggedObject } from "@/components/groups/use-row-drag";
+import {
+  NO_DRAG_PROPS,
+  useDropTarget,
+  useRowDragSource,
+  type DraggedObject,
+} from "@/components/groups/use-row-drag";
+import { PinPreview } from "@/components/map/pin-preview";
 import { LIST_ROW_CLASS, listRowMotion } from "@/components/ui/list-row-motion";
 import { RowMenu, type RowMenuItem } from "@/components/ui/row-menu";
+import { TreeBranch } from "@/components/ui/tree-branch";
 import type { MapCategory, Place } from "@/lib/repositories/types";
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { PlaceRowLabel } from "./place-row-label";
 
 /**
@@ -14,17 +22,25 @@ import { PlaceRowLabel } from "./place-row-label";
  *
  * The actions were two full-width text buttons, then three icon buttons revealed
  * on hover, and are now one menu — see `RowMenu` for why. What is left beside the
- * name is what says *which* location this is: its category dot and its status
- * flag.
+ * name is what says *which* location this is: its pin and its status flag.
+ *
+ * The pin is the pin. It was a plain coloured dot, which meant a location with
+ * no category and no group drew *nothing at all* — the commonest row on a new
+ * map identified itself with an empty space — and a location whose owner had
+ * gone and picked a coffee cup for it showed no sign of that anywhere but the
+ * canvas. `PinPreview` draws the same `pinSvg` the marker does, and `pinSvg`
+ * with no icon is still a ball, so every row has something true to show.
  */
 export function PlaceListItem({
   place,
   category,
+  pinIcons,
   groupColor,
   isSelected,
   isAddressPending,
   hasAddressFailed,
   indent,
+  isLastInGroup = false,
   startsLooseSection,
   animateMoves = false,
   canDrag = false,
@@ -34,9 +50,12 @@ export function PlaceListItem({
   onRetryAddress,
   onRemoveFromGroup,
   onDropObject,
+  acceptsDrop,
 }: {
   place: Place;
   category: MapCategory | undefined;
+  /** The map's own pins, so `custom:<id>` on a place resolves to a drawing. */
+  pinIcons: CustomPinIcon[];
   /** Set for a row in a group: the group's colour, which its pin now wears. */
   groupColor?: string;
   isSelected: boolean;
@@ -44,8 +63,13 @@ export function PlaceListItem({
   isAddressPending?: boolean;
   /** The lookup answered with nothing, so the row offers another go. */
   hasAddressFailed?: boolean;
-  /** Inside a group. The step in from the left is what says so. */
+  /**
+   * Inside a group. The step in from the left says so, and the rail beside it
+   * says *which* group — see `TreeBranch`.
+   */
   indent?: boolean;
+  /** The last member of its group: the rail ends here rather than running on. */
+  isLastInGroup?: boolean;
   /**
    * The first row below the groups. It carries the rule between the two, which
    * used to be a border on a `<section>` wrapper — see lib/map/sidebar-rows.ts.
@@ -63,6 +87,13 @@ export function PlaceListItem({
   onRemoveFromGroup?: () => void;
   /** Another row was dropped on this one. Omit and the row is not a drop target. */
   onDropObject?: (dragged: DraggedObject) => void;
+  /**
+   * Whether this row would do anything with what is currently in the air.
+   *
+   * A row that cannot use a drop stays dark as the pointer crosses it, rather
+   * than lighting up and then declining on release — see lib/map/drop-action.ts.
+   */
+  acceptsDrop?: (dragged: DraggedObject) => boolean;
 }) {
   // Only worth offering while there is still nothing to show. A location whose
   // address the customer has since typed has no failure left to retry.
@@ -70,10 +101,18 @@ export function PlaceListItem({
     hasAddressFailed && onRetryAddress && !isAddressPending && !place.address,
   );
 
-  const { isTarget, isDraggable, rowProps, noDragProps } = useRowDrag({
+  const { isDraggable, rowProps } = useRowDragSource({
     self: { type: "place", id: place.id },
     canDrag,
-    onDropObject,
+  });
+
+  // `targetProps` carries the id the hit test looks for *and* the
+  // `data-drop-target` flag the highlight keys off, so nothing else is needed
+  // here — the two cannot drift into a row that lights up and does nothing.
+  const { targetProps } = useDropTarget({
+    id: `place:${place.id}`,
+    accepts: acceptsDrop ?? ALWAYS,
+    onDrop: onDropObject,
   });
 
   const items: RowMenuItem[] = [
@@ -128,50 +167,69 @@ export function PlaceListItem({
      */
     <motion.li
       {...listRowMotion(animateMoves)}
-      // `ms-4` rather than padding, so the step in from the left is a change of
-      // *position* and `layout` animates it along with everything else.
-      className={`${LIST_ROW_CLASS}${indent ? " ms-4" : ""}${
+      // `flex` so the tree rail can sit *beside* the row rather than inside it —
+      // see TreeBranch. `ms-4` rather than padding, so the step in from the left
+      // is a change of *position* and `layout` animates it along with everything
+      // else.
+      className={`${LIST_ROW_CLASS} flex${indent ? " ms-4" : ""}${
         startsLooseSection ? " mt-2 border-t border-border pt-2" : ""
       }`}
     >
+      {indent ? <TreeBranch color={groupColor} isLast={isLastInGroup} /> : null}
+
       {/*
-       * The row proper is this div, not the `li`. Motion claims `onDragStart`
-       * and `onDragEnd` for its own pan gesture and does not forward them to the
-       * DOM, so native drag-and-drop handlers on a `motion.li` are swallowed
-       * without an error. A plain element inside it gets them intact.
+       * The row proper is this div, not the `li`. Motion owns the `li`'s pointer
+       * handlers for its own gestures, and the drop target has to be an element
+       * with a stable box the hit test can find — a `motion.li` mid-layout
+       * animation is neither.
        */}
       <div
         data-selected={isSelected || undefined}
-        data-drop-target={isTarget || undefined}
+        {...targetProps}
         {...rowProps}
-        className={`group flex h-12 items-center gap-1 rounded-xl px-2 transition-colors hover:bg-default data-drop-target:inset-ring-2 data-drop-target:inset-ring-accent data-selected:bg-accent-soft${
-          isDraggable ? " cursor-grab active:cursor-grabbing" : ""
+        className={`group flex h-12 min-w-0 flex-1 items-center gap-1 rounded-xl px-2 transition-colors hover:bg-default data-drop-target:inset-ring-2 data-drop-target:inset-ring-accent data-selected:bg-accent-soft${
+          isDraggable ? " is-draggable" : ""
         }`}
       >
+        {/* Pin outside the text block, not on its first line. Beside both lines
+            it reads as the row's subject rather than as punctuation in front of
+            the address, and it leaves the left edge free for the group rail. */}
         <button
           type="button"
-          className="flex h-full min-w-0 flex-1 flex-col justify-center rounded-lg text-left outline-none focus-visible:inset-ring-2 focus-visible:inset-ring-focus"
+          className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none focus-visible:inset-ring-2 focus-visible:inset-ring-focus"
           aria-current={isSelected ? "true" : undefined}
           // The skeleton is decorative, so the row would otherwise be a button
           // with no name at all for the second the lookup takes.
           aria-label={isAddressPending ? "Finding this address" : undefined}
           onClick={onSelect}
         >
-          <PlaceRowLabel
-            place={place}
-            category={category}
-            dotColor={groupColor}
-            isPending={Boolean(isAddressPending)}
-            hasFailed={Boolean(hasAddressFailed)}
+          <PinPreview
+            icon={place.icon}
+            pinIcons={pinIcons}
+            color={groupColor}
+            fallbackColor={category?.color}
+            size="sm"
+            className="shrink-0"
           />
+
+          <span className="flex min-w-0 flex-1 flex-col justify-center">
+            <PlaceRowLabel
+              place={place}
+              isPending={Boolean(isAddressPending)}
+              hasFailed={Boolean(hasAddressFailed)}
+            />
+          </span>
         </button>
 
-        {/* `noDragProps` stops the row being dragged out from under the menu —
-            see useRowDrag. */}
-        <div className="shrink-0" {...noDragProps}>
+        {/* `NO_DRAG_PROPS` stops a press on the menu from also picking the row
+            up — see useRowDragSource. */}
+        <div className="shrink-0" {...NO_DRAG_PROPS}>
           <RowMenu label={`Actions for ${place.name}`} items={items} />
         </div>
       </div>
     </motion.li>
   );
 }
+
+/** A row with no rule of its own takes anything. Hoisted so it is one identity. */
+const ALWAYS = () => true;

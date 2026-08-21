@@ -65,6 +65,21 @@ export const pinIconSchema = z
     color: hexColorSchema,
     /** A packages/shared/pin-icons.ts id, or "". */
     glyph: z.string().trim().max(64).default(""),
+    /**
+     * The design fields, all defaulted to what a pin looked like before they
+     * existed — a row saved without them parses to today's pin, which is what
+     * lets this ship without a migration or a republish.
+     *
+     * Named steps rather than numbers for the ring and the size, matching
+     * `PIN_RING_WIDTHS` and `PIN_SIZES` in packages/shared/pin-icons.ts. A number
+     * here would be a number the renderers have to defend against; an enum is a
+     * value they can only fail to recognise, and they already default on that.
+     */
+    ring: z.union([hexColorSchema, z.literal("")]).default(""),
+    ringWidth: z.enum(["none", "thin", "regular", "thick"]).default("regular"),
+    iconColor: z.union([hexColorSchema, z.literal("")]).default(""),
+    size: z.enum(["sm", "md", "lg"]).default("md"),
+    shape: z.enum(["circle", "square", "diamond"]).default("circle"),
     image: z
       .string()
       .trim()

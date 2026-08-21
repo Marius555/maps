@@ -1,7 +1,7 @@
 import type { ImportStep } from "@/lib/stores/import-store";
 
 const STEPS: { id: ImportStep; label: string }[] = [
-  { id: "file", label: "File" },
+  { id: "source", label: "Source" },
   { id: "mapping", label: "Columns" },
   { id: "geocoding", label: "Addresses" },
   { id: "review", label: "Review" },
@@ -15,10 +15,7 @@ const STEPS: { id: ImportStep; label: string }[] = [
  * on top.
  */
 export function ImportSteps({ current }: { current: ImportStep }) {
-  const currentIndex =
-    current === "done"
-      ? STEPS.length
-      : STEPS.findIndex((step) => step.id === current);
+  const currentIndex = STEPS.findIndex((step) => step.id === current);
 
   return (
     <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">

@@ -4,11 +4,12 @@ import { useRouter } from "next/navigation";
 
 import { CategoryEditor } from "@/components/categories/category-editor";
 import { DeleteMapButton } from "@/components/maps/delete-map-button";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageTitle } from "@/components/ui/page-title";
 import { SectionPanel } from "@/components/ui/section-panel";
 import { useMap } from "@/lib/query/maps";
 import { usePlaces } from "@/lib/query/places";
 import type { AppMap, Place } from "@/lib/repositories/types";
+import { MapAppearanceSection } from "./map-appearance-section";
 import { MapDetailsForm } from "./map-details-form";
 
 /**
@@ -33,12 +34,11 @@ export function MapSettings({
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Settings"
-        description="Name, basemap and the categories visitors filter by."
-      />
+      <PageTitle>Settings</PageTitle>
 
       <MapDetailsForm key={map.id} map={map} />
+
+      <MapAppearanceSection map={map} />
 
       <CategoryEditor map={map} places={places} />
 

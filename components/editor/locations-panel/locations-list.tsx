@@ -1,21 +1,30 @@
 "use client";
 
+import { toast } from "@heroui/react";
 import { AnimatePresence } from "motion/react";
 import { useState } from "react";
 
 import { GroupListItem } from "@/components/groups/group-list-item";
+import { GroupPinDialog } from "@/components/groups/group-pin-dialog";
 import { UngroupDialog } from "@/components/groups/ungroup-dialog";
 import type { DraggedObject } from "@/components/groups/use-row-drag";
 import { DeletePlaceDialog } from "@/components/places/delete-place-dialog";
 import { PlaceListItem } from "@/components/places/place-list-item";
 import { DeleteShapeDialog } from "@/components/shapes/delete-shape-dialog";
 import { ShapeListItem } from "@/components/shapes/shape-list-item";
+import { dropAction, type DropTargetRow } from "@/lib/map/drop-action";
 import { sidebarRows } from "@/lib/map/sidebar-rows";
-import { isOptimisticGroupId, useDeleteGroup } from "@/lib/query/groups";
+import {
+  isOptimisticGroupId,
+  useDeleteGroup,
+  useSetGroupPin,
+} from "@/lib/query/groups";
 import { isOptimisticPlaceId, useDeletePlace } from "@/lib/query/places";
 import { isOptimisticShapeId, useDeleteShape } from "@/lib/query/shapes";
 import { toastError } from "@/lib/query/toast-error";
+import { formatCount } from "@/lib/format/number";
 import type { Group, MapCategory, Place, Shape } from "@/lib/repositories/types";
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 
 /**
  * Everything in the Locations panel, as one list.
@@ -43,6 +52,7 @@ export function LocationsList({
   places,
   shapes,
   categoriesById,
+  pinIcons,
   selectedPlaceId,
   selectedShapeId,
   selectedPlaceIds,
@@ -61,12 +71,15 @@ export function LocationsList({
   onRemoveFromGroup,
   onGroupObjects,
   onAddToGroup,
+  onMergeGroups,
 }: {
   mapId: string;
   groups: Group[];
   places: Place[];
   shapes: Shape[];
   categoriesById: Map<string, MapCategory>;
+  /** The map's own pins, so a row can draw a `custom:<id>` one. */
+  pinIcons: CustomPinIcon[];
   selectedPlaceId: string | null;
   selectedShapeId: string | null;
   /** Locations picked by the marquee or a group — lit like a selected row. */
@@ -94,6 +107,8 @@ export function LocationsList({
   onGroupObjects: (target: DraggedObject, dragged: DraggedObject) => void;
   /** A row was dropped on something already in a group: join that group. */
   onAddToGroup: (groupId: string, dragged: DraggedObject) => void;
+  /** A group was dropped on another: everything in the source moves to the target. */
+  onMergeGroups: (targetGroupId: string, sourceGroupId: string) => void;
 }) {
   /*
    * Open by default, and remembered per group only while the editor is on
@@ -103,10 +118,12 @@ export function LocationsList({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
   const ungroup = useDeleteGroup(mapId);
+  const setGroupPin = useSetGroupPin(mapId);
   const deletePlace = useDeletePlace(mapId);
   const deleteShape = useDeleteShape(mapId);
 
   const [pendingUngroupId, setPendingUngroupId] = useState<string | null>(null);
+  const [pinGroupId, setPinGroupId] = useState<string | null>(null);
   const [pendingDeletePlaceId, setPendingDeletePlaceId] = useState<string | null>(
     null,
   );
@@ -125,6 +142,12 @@ export function LocationsList({
   // Looked up rather than stored, so a dialog can't hold a stale copy of a row
   // that has since been renamed elsewhere.
   const pendingUngroup = groups.find((g) => g.id === pendingUngroupId) ?? null;
+  const pinGroup = groups.find((g) => g.id === pinGroupId) ?? null;
+  // Counted from the live array rather than carried in state, so a location
+  // dragged into the group while the dialog is open is included in what it says.
+  const pinGroupPlaces = places.filter(
+    (place) => place.groupId === pinGroupId,
+  ).length;
   const pendingDeletePlace =
     places.find((place) => place.id === pendingDeletePlaceId) ?? null;
   const pendingDeleteShape =
@@ -138,25 +161,54 @@ export function LocationsList({
     });
 
   /**
-   * What a drop on a row means, decided by whether that row is in a group.
+   * The group a dragged object is currently in, or "".
    *
-   * On a member: join the group it is in. On a loose row: make a new group
-   * holding the two of them. One rule in one place, where it used to be split
-   * between a group's own lists and the loose ones purely because they happened
-   * to be different components.
+   * The decision needs it and the payload does not carry it — a `DraggedObject`
+   * is a kind and an id, because anything more would be a copy of a row that can
+   * be renamed or regrouped while the pointer is still down. Same
+   * missing-group-reads-as-ungrouped rule the rest of the panel follows.
    */
-  const drop = (
-    target: DraggedObject,
-    groupId: string,
-    dragged: DraggedObject,
-  ) => {
-    if (groupId) {
-      onAddToGroup(groupId, dragged);
+  const groupOf = (dragged: DraggedObject): string => {
+    if (dragged.type === "group") return "";
+
+    const object =
+      dragged.type === "place"
+        ? places.find((place) => place.id === dragged.id)
+        : shapes.find((shape) => shape.id === dragged.id);
+
+    const groupId = object?.groupId ?? "";
+
+    return groups.some((group) => group.id === groupId) ? groupId : "";
+  };
+
+  /**
+   * What a drop on a row means — see lib/map/drop-action.ts for the table.
+   *
+   * This component asks the question and performs the answer; it does not decide
+   * it. Seven cases with two kinds of thing in the hand is not something to read
+   * inside a `map` callback, and none of it needs a map or a query cache to be
+   * tested.
+   */
+  const drop = (target: DropTargetRow, dragged: DraggedObject) => {
+    const action = dropAction(dragged, target, groupOf(dragged));
+    if (!action) return;
+
+    if (action.kind === "join") {
+      onAddToGroup(action.groupId, action.object);
       return;
     }
 
-    onGroupObjects(target, dragged);
+    if (action.kind === "merge") {
+      onMergeGroups(action.targetGroupId, action.sourceGroupId);
+      return;
+    }
+
+    onGroupObjects(action.objects[0], action.objects[1]);
   };
+
+  /** Whether a row would do anything at all with what is in the air. */
+  const accepts = (target: DropTargetRow) => (dragged: DraggedObject) =>
+    dropAction(dragged, target, groupOf(dragged)) !== null;
 
   return (
     <>
@@ -193,6 +245,8 @@ export function LocationsList({
                 row.places.every((place) => selectedPlaceIds.has(place.id)) &&
                 row.shapes.every((shape) => selectedShapeIds.has(shape.id));
 
+              const target: DropTargetRow = { kind: "group", groupId: group.id };
+
               return (
                 <GroupListItem
                   key={row.key}
@@ -201,33 +255,50 @@ export function LocationsList({
                   isOpen={row.isOpen}
                   isSelected={isSelected}
                   animateMoves={animateMoves}
+                  /* A group that exists only in the cache has no id the server
+                     would recognise, so it cannot be merged into anything yet.
+                     It is real a moment later. */
+                  canDrag={!isOptimisticGroupId(group.id)}
                   onToggle={() => toggle(group.id)}
                   onFocus={() => onFocusGroup(group.id)}
                   onEdit={() => onEditGroup(group.id)}
+                  hasPlaces={row.places.length > 0}
+                  onChangePins={() => {
+                    // Same guard as Ungroup: a group still in flight has no id
+                    // the server would recognise.
+                    if (isOptimisticGroupId(group.id)) return;
+                    setPinGroupId(group.id);
+                  }}
                   onUngroup={() => {
-                    // A row that exists only in the cache has no id the server
-                    // would recognise.
                     if (isOptimisticGroupId(group.id)) return;
                     setPendingUngroupId(group.id);
                   }}
-                  onDropObject={(dragged) => onAddToGroup(group.id, dragged)}
+                  onDropObject={(dragged) => drop(target, dragged)}
+                  acceptsDrop={accepts(target)}
                 />
               );
             }
 
             if (row.kind === "place") {
               const { place } = row;
+              const target: DropTargetRow = {
+                kind: "object",
+                object: { type: "place", id: place.id },
+                groupId: row.groupId,
+              };
 
               return (
                 <PlaceListItem
                   key={row.key}
                   place={place}
                   category={categoriesById.get(place.category)}
+                  pinIcons={pinIcons}
                   groupColor={row.groupColor}
                   isSelected={
                     place.id === selectedPlaceId || selectedPlaceIds.has(place.id)
                   }
                   indent={row.indent}
+                  isLastInGroup={row.isLastInGroup}
                   startsLooseSection={row.startsLooseSection}
                   animateMoves={animateMoves}
                   canDrag
@@ -253,14 +324,18 @@ export function LocationsList({
                       ? () => onRemoveFromGroup({ type: "place", id: place.id })
                       : undefined
                   }
-                  onDropObject={(dragged) =>
-                    drop({ type: "place", id: place.id }, row.groupId, dragged)
-                  }
+                  onDropObject={(dragged) => drop(target, dragged)}
+                  acceptsDrop={accepts(target)}
                 />
               );
             }
 
             const { shape } = row;
+            const target: DropTargetRow = {
+              kind: "object",
+              object: { type: "shape", id: shape.id },
+              groupId: row.groupId,
+            };
 
             return (
               <ShapeListItem
@@ -271,6 +346,7 @@ export function LocationsList({
                   shape.id === selectedShapeId || selectedShapeIds.has(shape.id)
                 }
                 indent={row.indent}
+                isLastInGroup={row.isLastInGroup}
                 startsLooseSection={row.startsLooseSection}
                 animateMoves={animateMoves}
                 canDrag
@@ -287,9 +363,8 @@ export function LocationsList({
                     ? () => onRemoveFromGroup({ type: "shape", id: shape.id })
                     : undefined
                 }
-                onDropObject={(dragged) =>
-                  drop({ type: "shape", id: shape.id }, row.groupId, dragged)
-                }
+                onDropObject={(dragged) => drop(target, dragged)}
+                acceptsDrop={accepts(target)}
               />
             );
           })}
@@ -316,6 +391,40 @@ export function LocationsList({
           ungroup.mutate(pendingUngroupId, {
             onError: (error) => toastError(error, "Couldn't ungroup"),
           });
+        }}
+      />
+
+      <GroupPinDialog
+        group={pinGroup}
+        places={pinGroupPlaces}
+        pinIcons={pinIcons}
+        onClose={() => setPinGroupId(null)}
+        onConfirm={(icon) => {
+          if (!pinGroupId) return;
+
+          /*
+           * Closed first and fired rather than awaited, for the same reason as
+           * Ungroup above: the mutation repaints every marker in `onMutate`, so
+           * holding the dialog open over a canvas that has finished changing
+           * would hide the one thing the user pressed the button to see.
+           */
+          setPinGroupId(null);
+
+          setGroupPin.mutate(
+            { groupId: pinGroupId, icon },
+            {
+              // The action keeps its name from the menu item through to here,
+              // and the count is the server's rather than the one this page had
+              // cached — the endpoint answers with the rows it actually wrote.
+              onSuccess: (changed) =>
+                toast.success("Pins changed", {
+                  description: `${formatCount(changed)} ${
+                    changed === 1 ? "location" : "locations"
+                  } updated.`,
+                }),
+              onError: (error) => toastError(error, "Couldn't change the pins"),
+            },
+          );
         }}
       />
 

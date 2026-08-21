@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AUTO_STYLE,
+  BASEMAP_SOURCES,
   CONCRETE_MAP_STYLES,
   DEFAULT_MAP_STYLE,
   isAutoMapStyle,
@@ -10,9 +11,11 @@ import {
   MAP_STYLES,
   resolveMapStyle,
   resolveStyleUrl,
+  resolveTint,
   shouldDarkenStyle,
   STYLE_LABELS,
   STYLE_URLS,
+  THEME_KEYS,
 } from "./style";
 
 describe("resolveMapStyle", () => {
@@ -72,8 +75,36 @@ describe("style tables", () => {
     }
   });
 
-  it("gives every concrete style a URL and no more", () => {
-    expect(Object.keys(STYLE_URLS).sort()).toEqual([...CONCRETE_MAP_STYLES].sort());
+  /**
+   * Only the *sources* have URLs. A theme is one of those documents recoloured
+   * in the browser, which is what lets there be sixteen looks without a second
+   * tile provider — so a URL per selectable style is exactly what must not be
+   * true here.
+   */
+  it("gives every basemap source a URL and no more", () => {
+    expect(Object.keys(STYLE_URLS).sort()).toEqual([...BASEMAP_SOURCES].sort());
+  });
+
+  it("resolves every theme to a source URL and a tint", () => {
+    for (const style of THEME_KEYS) {
+      expect(resolveStyleUrl(style)).toMatch(/^https:\/\//);
+      expect(resolveTint(style)).not.toBeNull();
+    }
+  });
+
+  /**
+   * Auto has no tint of its own: whether it is darkened depends on who is
+   * looking, and that is `shouldDarkenStyle`'s question. A tint here would mean
+   * two answers to it.
+   */
+  it("gives Auto and the plain basemaps no tint", () => {
+    expect(resolveTint("auto")).toBeNull();
+    for (const style of BASEMAP_SOURCES) expect(resolveTint(style)).toBeNull();
+  });
+
+  /** Every key is stored in a varchar(32) — see scripts/appwrite-schema.mjs. */
+  it("keeps every style key short enough for its column", () => {
+    for (const style of MAP_STYLES) expect(style.length).toBeLessThanOrEqual(32);
   });
 
   it("defaults to Auto, so a new map follows whoever is looking", () => {

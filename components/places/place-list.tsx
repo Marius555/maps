@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import type { MapCategory, Place } from "@/lib/repositories/types";
 import { useDeletePlace } from "@/lib/query/places";
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { DeletePlaceDialog } from "./delete-place-dialog";
 import { PlaceListEmpty } from "./place-list-empty";
 import { PlaceListItem } from "./place-list-item";
@@ -27,16 +28,34 @@ export function PlaceList({
   mapId,
   places,
   categoriesById,
+  pinIcons,
   selectedPlaceId,
+  pendingAddressIds,
+  failedAddressIds,
   onSelect,
   onEdit,
+  onRetryAddress,
 }: {
   mapId: string;
   places: Place[];
   categoriesById: Map<string, MapCategory>;
+  /** The map's own pins, so a row can draw a `custom:<id>` one. */
+  pinIcons: CustomPinIcon[];
   selectedPlaceId: string | null;
+  /**
+   * Address lookups in flight, and ones that came back empty.
+   *
+   * These were never passed here, which made three things `PlaceListItem`
+   * already implements dead on this route: the pending skeleton, the "Couldn't
+   * find an address" line, and the "Find address again" action — the last of
+   * which is unreachable without `hasAddressFailed`. The editor sidebar has
+   * always passed them (locations-list.tsx); this list simply never caught up.
+   */
+  pendingAddressIds?: ReadonlySet<string>;
+  failedAddressIds?: ReadonlySet<string>;
   onSelect: (placeId: string) => void;
   onEdit: (placeId: string) => void;
+  onRetryAddress?: (placeId: string) => void;
 }) {
   const deletePlace = useDeletePlace(mapId);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -62,9 +81,15 @@ export function PlaceList({
               key={place.id}
               place={place}
               category={categoriesById.get(place.category)}
+              pinIcons={pinIcons}
               isSelected={place.id === selectedPlaceId}
+              isAddressPending={pendingAddressIds?.has(place.id) ?? false}
+              hasAddressFailed={failedAddressIds?.has(place.id) ?? false}
               onSelect={() => onSelect(place.id)}
               onEdit={() => onEdit(place.id)}
+              onRetryAddress={
+                onRetryAddress ? () => onRetryAddress(place.id) : undefined
+              }
               onDelete={() => setPendingDeleteId(place.id)}
             />
           ))}

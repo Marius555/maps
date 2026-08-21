@@ -6,21 +6,26 @@ import {
   NavigationControl,
   type StyleSpecification,
 } from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  resolveStyleUrl,
-  shouldDarkenStyle,
-  type MapStyleKey,
-} from "@/lib/map/style";
+import { effectiveAppearance } from "@/lib/map/appearance";
+import { resolveStyleUrl, type MapStyleKey } from "@/lib/map/style";
 import { collapseAttribution } from "@/packages/shared/attribution";
 import { loadMapStyle } from "@/packages/shared/load-style";
+import type { MapAppearance } from "@/packages/shared/map-appearance";
 import { usePrefersDark } from "@/lib/theme/use-prefers-dark";
 
 type Options = {
   center: { lng: number; lat: number };
   zoom: number;
   style: MapStyleKey;
+  /**
+   * The map's stored `appearance` blob, straight off the row. Normalised here
+   * rather than by each caller so a map with nothing stored, a map created
+   * before the column existed and a map whose JSON was hand-edited all mean the
+   * same thing.
+   */
+  appearance?: Record<string, unknown>;
 };
 
 /**
@@ -51,21 +56,36 @@ export function useMaplibre(
    */
   const prefersDark = usePrefersDark();
   const styleUrl = resolveStyleUrl(options.style);
-  const darken = shouldDarkenStyle(options.style, prefersDark);
+
+  /*
+   * Memoised because it is what the restyle effect below depends on, and an
+   * object rebuilt on every render would restyle the canvas on every render. The
+   * inputs are all stable: `options.appearance` comes off the query cache and
+   * only changes identity when the stored blob does.
+   */
+  const mapStyle = options.style;
+  const stored = options.appearance;
+  const appearance = useMemo(
+    () => effectiveAppearance(mapStyle, stored, prefersDark),
+    [mapStyle, stored, prefersDark],
+  );
 
   // Read once at creation. Changing the initial view later would yank the map
   // out from under someone mid-pan.
-  const initial = useRef({ ...options, styleUrl, darken });
+  const initial = useRef({ ...options, styleUrl, appearance });
 
   /*
    * What the canvas is currently showing, so the restyle effect below can tell a
-   * real basemap change from a re-render.
+   * real change from a re-render.
    *
-   * Seeded from the same values as `initial` rather than read off it — a ref's
-   * `.current` must not be touched during render, and on the first render these
-   * are the same two values anyway.
+   * A string rather than the object: the object is rebuilt whenever any of its
+   * inputs change, and comparing by identity would restyle on a change that
+   * produced the same map. Seeded from the same values as `initial` rather than
+   * read off it — a ref's `.current` must not be touched during render, and on
+   * the first render these are the same values anyway.
    */
-  const applied = useRef({ styleUrl, darken });
+  const look = lookKey(styleUrl, appearance);
+  const applied = useRef(look);
 
   useEffect(() => {
     const element = container.current;
@@ -78,30 +98,31 @@ export function useMaplibre(
 
     void (async () => {
       /*
-       * A URL in light mode, so MapLibre fetches it itself exactly as before;
-       * the inverted style object in dark. Only the second case is a promise,
-       * and awaiting a plain string costs one microtask.
+       * A URL when there is nothing to change, so MapLibre fetches it itself
+       * exactly as before; the transformed style object otherwise. Only the
+       * second case is a promise, and awaiting a plain string costs one
+       * microtask.
        */
       let style: string | StyleSpecification;
 
       try {
         style = (await loadMapStyle(
           initial.current.styleUrl,
-          initial.current.darken,
+          initial.current.appearance,
         )) as string | StyleSpecification;
       } catch (error) {
         /*
-         * A working light map beats no map: the inversion is a nicety, the
-         * basemap is not.
+         * A working plain map beats no map: the theme is a nicety, the basemap
+         * is not.
          *
-         * Recording it as "not darkened" leaves the restyle effect below with a
-         * mismatch it will act on once the map is ready, so a transient network
-         * blip heals itself. It cannot loop — that effect writes `applied`
-         * before its own await, so a second failure is the last.
+         * Recording it as "nothing applied" leaves the restyle effect below with
+         * a mismatch it will act on once the map is ready, so a transient
+         * network blip heals itself. It cannot loop — that effect writes
+         * `applied` before its own await, so a second failure is the last.
          */
         console.error("[maplibre]", error);
         style = initial.current.styleUrl;
-        applied.current = { ...applied.current, darken: false };
+        applied.current = lookKey(initial.current.styleUrl, null);
       }
 
       if (cancelled) return;
@@ -311,10 +332,10 @@ export function useMaplibre(
    * the map — but nothing guarantees that, and it broke the moment the two ever
    * shared a screen.
    *
-   * The guard compares URL *and* darkness, which is what makes Auto work in both
-   * directions: toggling the theme on an Auto map re-inverts the same Liberty
-   * style, and toggling the theme on a map pinned to a fixed basemap correctly
-   * does nothing.
+   * The guard compares the URL *and* everything applied on top of it, which is
+   * what makes Auto work in both directions: toggling the dashboard theme on an
+   * Auto map re-inverts the same Liberty style, and toggling it on a map pinned
+   * to a basemap or a theme correctly does nothing.
    *
    * Safe here specifically because editor pins are DOM `Marker` elements
    * (components/map/pin-marker.ts), which are not part of the style and survive
@@ -323,19 +344,19 @@ export function useMaplibre(
    */
   useEffect(() => {
     if (!isReady) return;
-    if (applied.current.styleUrl === styleUrl && applied.current.darken === darken) {
-      return;
-    }
+    if (applied.current === look) return;
 
-    applied.current = { styleUrl, darken };
+    applied.current = look;
 
     let cancelled = false;
 
     void (async () => {
-      let style: string | StyleSpecification;
+      let next: string | StyleSpecification;
 
       try {
-        style = (await loadMapStyle(styleUrl, darken)) as string | StyleSpecification;
+        next = (await loadMapStyle(styleUrl, appearance)) as
+          | string
+          | StyleSpecification;
       } catch (error) {
         console.error("[maplibre]", error);
         return;
@@ -345,13 +366,18 @@ export function useMaplibre(
       // in flight. Either way this result is stale.
       if (cancelled) return;
 
-      mapRef.current?.setStyle(style);
+      mapRef.current?.setStyle(next);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [isReady, styleUrl, darken]);
+  }, [isReady, styleUrl, appearance, look]);
 
   return { map: mapRef, isReady };
+}
+
+/** One comparable string for "what the canvas is showing". */
+function lookKey(styleUrl: string, appearance: MapAppearance | null): string {
+  return `${styleUrl}\n${JSON.stringify(appearance)}`;
 }

@@ -222,6 +222,62 @@ describe("sidebarRows", () => {
     expect(starts.map((row) => row.key)).toEqual(["place:p2"]);
   });
 
+  it("closes the tree on the last member of a group, shapes included", () => {
+    // The rail runs to the bottom of every member but the last, where it stops
+    // at the elbow. The members are one run — places then shapes — so a group
+    // holding both closes on its last *shape*, not on its last place.
+    const rows = sidebarRows({
+      groups: [group("g1")],
+      places: [place("p1", "g1"), place("p2", "g1")],
+      shapes: [shape("s1", "g1"), shape("s2", "g1")],
+      collapsed: NO_COLLAPSE,
+      hideEmptyGroups: false,
+    });
+
+    const last = rows.filter(
+      (row) => row.kind !== "heading" && row.kind !== "group" && row.isLastInGroup,
+    );
+
+    expect(last.map((row) => row.key)).toEqual(["shape:s2"]);
+  });
+
+  it("closes on the last place when a group holds no shapes", () => {
+    const rows = sidebarRows({
+      groups: [group("g1")],
+      places: [place("p1", "g1"), place("p2", "g1")],
+      shapes: [],
+      collapsed: NO_COLLAPSE,
+      hideEmptyGroups: false,
+    });
+
+    const last = rows.filter(
+      (row) => row.kind !== "heading" && row.kind !== "group" && row.isLastInGroup,
+    );
+
+    expect(last.map((row) => row.key)).toEqual(["place:p2"]);
+  });
+
+  it("never marks a loose row as closing a group", () => {
+    // A loose row has no rail to close. It is the last row in the panel, which
+    // is a different thing entirely.
+    const rows = sidebarRows({
+      groups: [group("g1")],
+      places: [place("p1", "g1"), place("p2")],
+      shapes: [shape("s1")],
+      collapsed: NO_COLLAPSE,
+      hideEmptyGroups: false,
+    });
+
+    const loose = rows.filter(
+      (row) => row.kind !== "heading" && row.kind !== "group" && !row.indent,
+    );
+
+    expect(loose.map((row) => row.key)).toEqual(["place:p2", "shape:s1"]);
+    expect(
+      loose.every((row) => row.kind !== "heading" && row.kind !== "group" && !row.isLastInGroup),
+    ).toBe(true);
+  });
+
   it("does not draw a separator when nothing precedes the loose rows", () => {
     // No groups means no Groups section, so there is no boundary to mark.
     const rows = sidebarRows({

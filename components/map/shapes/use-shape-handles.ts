@@ -3,14 +3,32 @@
 import { Marker, type Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 
+import {
+  edgeMidpointAt,
+  edgeMidpoints,
+  insertPointAt,
+  translatePoints,
+} from "@/lib/map/polygon-edit";
 import type { Shape } from "@/lib/repositories/types";
+import { MAX_POLYGON_POINTS } from "@/lib/validation/shape.schema";
 import {
   MIN_CIRCLE_RADIUS_M,
   radiusFrom,
   radiusHandle,
+  shapeCentre,
   type LngLatTuple,
   type ShapeGeometry,
 } from "@/packages/shared/shapes";
+
+/**
+ * Past this many corners the midpoints stop being drawn.
+ *
+ * They double the marker count, and the gesture they exist for — "this boundary
+ * is not detailed enough here" — is not one anybody has on a shape already traced
+ * with a hundred points. Below the cap they are the difference between a polygon
+ * you can refine and one you have to redraw.
+ */
+const MIDPOINT_LIMIT = 100;
 
 /**
  * The grab points on the selected shape.
@@ -25,7 +43,26 @@ import {
  * it. Two handles rather than four because a circle has one dimension — four
  * would be three redundant controls and a lot more to keep in step.
  *
- * A polygon gets one per vertex.
+ * A polygon gets three kinds:
+ *
+ * - **One per corner**, which moves that corner.
+ * - **One in the middle**, which moves the whole thing. A polygon could only ever
+ *   be reshaped, never *relocated* — the customer who traced a district and then
+ *   found it forty metres east had to drag every corner in turn, or delete it and
+ *   start again. It is the same `--centre` handle a circle has, because it does
+ *   the same job and there is no reason for the two to look different.
+ * - **One halfway along every edge**, which is not a corner yet. Drag it and the
+ *   edge gains one, at the point you dragged it to. This is the only way to add a
+ *   corner after the shape is saved; before it, a boundary that came out too
+ *   coarse had to be drawn again from nothing.
+ *
+ * Every handle stays on screen for every gesture. That sounds like the default
+ * and was not: the midpoints used to hide themselves for the length of any drag,
+ * on the theory that a suggestion sitting off a moving edge reads as the shape
+ * coming apart. It reads far worse. Dragging a corner blanked half the controls,
+ * releasing it snapped them back from wherever they had been, and dragging a
+ * midpoint hid the very handle the pointer was holding. They ride their edges
+ * instead — `positionIn` is what makes that a two-line answer.
  *
  * In every case the drag paints through `onPreview` and saves once, on release.
  * A PATCH per pointer sample would be a request every few milliseconds for a
@@ -35,6 +72,7 @@ export function useShapeHandles({
   map,
   isReady,
   shape,
+  color,
   onPreview,
   onCommit,
 }: {
@@ -42,6 +80,12 @@ export function useShapeHandles({
   isReady: boolean;
   /** The selected shape, or null when nothing is selected. */
   shape: Shape | null;
+  /**
+   * What the shape is actually painted on the map — a group's colour, or its
+   * own. Only the midpoints read it: they are dots *on the outline*, so they have
+   * to wear the outline's colour, and a grouped shape's outline is not its own.
+   */
+  color: string;
   onPreview: (shapeId: string, geometry: ShapeGeometry | null) => void;
   onCommit: (shapeId: string, geometry: ShapeGeometry) => void;
 }) {
@@ -109,6 +153,18 @@ export function useShapeHandles({
     }[] = [];
 
     /**
+     * True from the moment a midpoint drag inserts its corner.
+     *
+     * Every `positionIn` below indexes into the ring by position, and an insert
+     * shifts each corner after it by one — so from that instant the other handles'
+     * closures are describing the wrong entries. Nothing needs them to be right:
+     * splitting one edge in two moves no corner and changes no *other* edge, so
+     * every handle but the dragged one is already where it belongs. Suspending the
+     * sync is what keeps them there until the commit rebuilds the set.
+     */
+    let hasGrown = false;
+
+    /**
      * Move every handle except the one under the pointer.
      *
      * The dragged marker is skipped deliberately: MapLibre rewrites that
@@ -116,6 +172,8 @@ export function useShapeHandles({
      * would be overwritten anyway — and on a clamped drag it fights the gesture.
      */
     const sync = (next: ShapeGeometry, dragged: Marker) => {
+      if (hasGrown) return;
+
       for (const entry of handles) {
         if (entry.marker === dragged) continue;
 
@@ -124,10 +182,15 @@ export function useShapeHandles({
       }
     };
 
-    /** One draggable handle, wired to report where it ended up. */
+    /**
+     * One draggable handle, wired to report where it ended up.
+     *
+     * Returns its element, which one caller needs: a midpoint stops being a
+     * midpoint half-way through its own drag.
+     */
     const handle = (
       position: { lng: number; lat: number },
-      variant: "centre" | "radius" | "vertex",
+      variant: "centre" | "radius" | "vertex" | "midpoint",
       label: string,
       onDrag: (to: { lng: number; lat: number }) => ShapeGeometry,
       positionIn: (geometry: ShapeGeometry) => { lng: number; lat: number } | null,
@@ -137,6 +200,10 @@ export function useShapeHandles({
       element.setAttribute("role", "button");
       element.setAttribute("aria-label", label);
       element.tabIndex = 0;
+
+      // Only the midpoints read it — see the `color` prop — but setting it on
+      // every handle keeps one rule about where the value lives.
+      element.style.setProperty("--shape-handle-color", color);
 
       const marker = new Marker({ element, draggable: true })
         .setLngLat([position.lng, position.lat])
@@ -176,6 +243,8 @@ export function useShapeHandles({
       element.addEventListener("click", (event) => event.stopPropagation());
 
       handles.push({ marker, positionIn });
+
+      return element;
     };
 
     if (geometry.kind === "circle") {
@@ -216,22 +285,55 @@ export function useShapeHandles({
         (next) => (next.kind === "circle" ? radiusHandle(next) : null),
       );
     } else {
-      geometry.points.forEach((point, index) => {
+      const saved = geometry;
+
+      /** The ring as it stands right now, part-way through a drag included. */
+      const livePoints = (): readonly LngLatTuple[] => {
+        const current = live.current;
+        return current?.kind === "polygon" ? current.points : saved.points;
+      };
+
+      /** One corner moved, the rest left where they are. */
+      const moveVertex = (index: number, to: { lng: number; lat: number }) => {
+        const points: LngLatTuple[] = livePoints().map((existing, at) =>
+          at === index ? [to.lng, to.lat] : existing,
+        );
+
+        return { kind: "polygon" as const, points };
+      };
+
+      /*
+       * The whole shape, by its middle.
+       *
+       * The step is measured from where the *centre* currently is rather than
+       * from where the drag started, and that is what makes it need no
+       * drag-start capture: `live.current` is rewritten on every pointer sample,
+       * so each sample contributes only its own increment. `dragend` runs this
+       * once more with an unmoved pointer, which is a zero step — idempotent, as
+       * it has to be.
+       */
+      handle(
+        shapeCentre(saved),
+        "centre",
+        "Move this shape",
+        (to) => {
+          const points = livePoints();
+          const from = shapeCentre({ kind: "polygon", points: [...points] });
+
+          return {
+            kind: "polygon",
+            points: translatePoints(points, to.lng - from.lng, to.lat - from.lat),
+          };
+        },
+        (next) => (next.kind === "polygon" ? shapeCentre(next) : null),
+      );
+
+      saved.points.forEach((point, index) => {
         handle(
           { lng: point[0], lat: point[1] },
           "vertex",
           `Move point ${index + 1}`,
-          (to) => {
-            const current = live.current;
-            const points =
-              current?.kind === "polygon" ? current.points : geometry.points;
-
-            const moved: LngLatTuple[] = points.map((existing, at) =>
-              at === index ? [to.lng, to.lat] : existing,
-            );
-
-            return { kind: "polygon", points: moved };
-          },
+          (to) => moveVertex(index, to),
           (next) => {
             if (next.kind !== "polygon") return null;
 
@@ -240,12 +342,78 @@ export function useShapeHandles({
           },
         );
       });
+
+      /*
+       * A point that is not a point yet, halfway along each edge.
+       *
+       * Nothing happens until it is dragged, and the corner is inserted on the
+       * first sample of that drag rather than on `dragstart` — so a click on one
+       * leaves the shape exactly as it was. From the insert onwards the handle is
+       * an ordinary vertex handle for the corner it just made, which is why the
+       * ring only ever gains one point per gesture however far it travels.
+       *
+       * It also *looks* like one from that moment, because it is one: the class is
+       * swapped on insert rather than waiting for the rebuild. Without it the
+       * thing under the pointer went on drawing itself as a suggestion for the
+       * length of the drag that had already accepted it.
+       */
+      const canGrow = saved.points.length < Math.min(MAX_POLYGON_POINTS, MIDPOINT_LIMIT);
+
+      if (canGrow) {
+        edgeMidpoints(saved.points).forEach((midpoint, index) => {
+          // The new corner lands *after* the edge's first corner.
+          const at = index + 1;
+          let hasInserted = false;
+
+          /*
+           * Assigned from the call the closure below is an argument to, which is
+           * why it is read through a variable rather than passed in: the element
+           * does not exist until `handle` has been given the handler that wants
+           * it. By the time anything drags, it does.
+           */
+          const element: HTMLElement = handle(
+            midpoint,
+            "midpoint",
+            `Add a point between ${index + 1} and ${((index + 1) % saved.points.length) + 1}`,
+            (to) => {
+              if (hasInserted) return moveVertex(at, to);
+
+              hasInserted = true;
+              hasGrown = true;
+              element.classList.replace(
+                "shape-handle--midpoint",
+                "shape-handle--vertex",
+              );
+
+              return {
+                kind: "polygon",
+                points: insertPointAt(livePoints(), at, [to.lng, to.lat]),
+              };
+            },
+            /*
+             * It rides its edge while a *neighbouring* corner is dragged, which is
+             * the whole reason midpoints are no longer hidden for the length of a
+             * drag. They were, and it made the two commonest gestures wrong:
+             * dragging a corner blanked every suggestion on the shape, and
+             * releasing it teleported them from where they had been to where they
+             * now belonged.
+             *
+             * Only ever asked while some *other* handle is being dragged — `sync`
+             * skips the one under the pointer, and suspends entirely once this
+             * handle has inserted (see `hasGrown`) — so reading the edge at this
+             * index is always reading the edge this handle still sits on.
+             */
+            (next) =>
+              next.kind === "polygon" ? edgeMidpointAt(next.points, index) : null,
+          );
+        });
+      }
     }
 
     return () => {
       for (const entry of handles) entry.marker.remove();
     };
-  }, [map, isReady, shapeId, geometry]);
+  }, [map, isReady, shapeId, geometry, color]);
 
   /*
    * The saved geometry has changed, so the preview held over from the last drag

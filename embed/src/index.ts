@@ -1,7 +1,9 @@
 import type { StyleSpecification } from "maplibre-gl";
 import maplibreCss from "maplibre-gl/dist/maplibre-gl.css?inline";
 
+import { MIDNIGHT_TINT } from "@/packages/shared/darken-style";
 import { loadMapStyle } from "@/packages/shared/load-style";
+import type { MapAppearance } from "@/packages/shared/map-appearance";
 import type { MapSnapshot, SnapshotPlace } from "@/packages/shared/snapshot";
 
 import { isDomainAllowed } from "./allowlist";
@@ -132,26 +134,33 @@ async function render(
   const isDark = resolveTheme(snapshot);
 
   /*
-   * Auto's dark basemap is its light one recoloured here in the browser, not a
-   * second style on the server — see lib/map/darken-style.ts for why (the stock
-   * dark style carries no POI layers at all and its labels sit under the AA
-   * contrast floor).
+   * Everything the owner did to the basemap is applied here, in the browser, to
+   * the style document MapLibre would have fetched anyway — a recolour, a label
+   * level, a set of layer toggles (packages/shared/map-appearance.ts). Before
+   * `createMap`, and only ever before it: this map draws its places as a GeoJSON
+   * source with cluster layers, and `setStyle` drops them.
    *
-   * `snapshot.autoDark` is what gates it, not `isDark` alone: a map pinned to
-   * `dark` or `fiord` is already dark and must not be inverted a second time.
+   * Auto is the one case the snapshot cannot answer on its own. It publishes no
+   * tint, because whether to darken depends on who is looking; `autoDark` gates
+   * that, not `isDark` alone, since a map pinned to `dark`, `fiord` or a dark
+   * theme is already dark and must not be inverted a second time.
    *
    * Still no metered call in the visitor's path (CLAUDE.md §2) — this is the
    * same static style file MapLibre would have fetched itself, read by us first.
    */
+  const appearance: MapAppearance | null =
+    isDark && snapshot.autoDark === true
+      ? { ...snapshot.appearance, tint: MIDNIGHT_TINT }
+      : (snapshot.appearance ?? null);
+
   let style: string | StyleSpecification;
 
   try {
-    style = (await loadMapStyle(
-      snapshot.styleUrl,
-      isDark && snapshot.autoDark === true,
-    )) as string | StyleSpecification;
+    style = (await loadMapStyle(snapshot.styleUrl, appearance)) as
+      | string
+      | StyleSpecification;
   } catch {
-    // A working light map beats no map, and a stranger's site must never sprout
+    // A working plain map beats no map, and a stranger's site must never sprout
     // our diagnostics.
     style = snapshot.styleUrl;
   }

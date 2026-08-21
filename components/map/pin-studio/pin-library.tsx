@@ -1,7 +1,5 @@
 "use client";
 
-import { Pencil } from "lucide-react";
-
 import { PinTile } from "@/components/map/pin-tile";
 import { Carousel } from "@/components/ui/carousel";
 import { MAX_PIN_ICONS } from "@/lib/validation/pin-icon.schema";
@@ -23,26 +21,34 @@ import {
  * the screen. Rotating to the rest costs a press; failing to tell two pins apart
  * costs a location dropped as the wrong shape.
  *
- * Pressing a pin arms add mode with it and closes the sheet. It does *not* drag:
- * there is a backdrop between here and the map, so a drag out of here could never
- * end in a marker. The add menu's grid is the drag surface, and picking here is
- * what floats a pin to the front of it — which is the loop, not a limitation.
+ * **Pressing a pin opens the editor.** This is where pins are made and changed;
+ * the grid hanging off the add control is where they are dropped, and it is the
+ * better surface for it anyway — it drags, and there is a backdrop between here
+ * and the map so a drag out of this could never end in a marker. Editing used to
+ * hang off a pencil badge in the corner of each tile, which put the whole reason
+ * to open this dialog behind a target a third the size of the thing it edited.
+ * Using a pin is still one press from here: the editor saves and arms in one
+ * action.
  *
- * Editing hangs off the tile rather than replacing its press, because the common
- * action by far is "use this one" and burying that behind a mode would be
- * backwards.
+ * Pressing a built-in makes a *new* pin wearing that glyph rather than editing it
+ * in place. Built-ins live in code and are shared by every map on the platform,
+ * so there is nothing here to edit — but "this one, in my colours" is the most
+ * common thing anyone wants from them, and forking is how you get it. At the cap
+ * they stop being a way in and say so, because a press that opens a form you
+ * cannot save is worse than a button that is plainly unavailable.
  */
 export function PinLibrary({
   pinIcons,
   usageByPin,
-  onPick,
   onEdit,
+  onFork,
 }: {
   pinIcons: CustomPinIcon[];
   /** Locations per custom pin id, shown so a crowded library can be pruned. */
   usageByPin: Map<string, number>;
-  onPick: (icon: string) => void;
   onEdit: (pin: CustomPinIcon) => void;
+  /** A built-in glyph id → a new pin already wearing it. */
+  onFork: (glyph: string) => void;
 }) {
   const isFull = pinIcons.length >= MAX_PIN_ICONS;
 
@@ -60,22 +66,13 @@ export function PinLibrary({
         ) : (
           <Carousel title="Your pins" count={pinIcons.length}>
             {pinIcons.map((pin) => (
-              <li key={pin.id} className="relative">
+              <li key={pin.id}>
                 <PinTile
                   icon={`${CUSTOM_PIN_PREFIX}${pin.id}`}
                   pinIcons={pinIcons}
                   size="lg"
-                  onPress={() => onPick(`${CUSTOM_PIN_PREFIX}${pin.id}`)}
+                  onPress={() => onEdit(pin)}
                 />
-
-                <button
-                  type="button"
-                  aria-label={`Edit ${pin.label}`}
-                  onClick={() => onEdit(pin)}
-                  className="absolute end-0 top-0 cursor-pointer rounded-full border border-border bg-surface p-1 text-muted shadow-sm transition-colors duration-[var(--duration-fast)] hover:text-foreground"
-                >
-                  <Pencil aria-hidden="true" className="size-3" />
-                </button>
 
                 {(usageByPin.get(pin.id) ?? 0) > 0 ? (
                   <span className="sr-only">
@@ -86,27 +83,33 @@ export function PinLibrary({
             ))}
           </Carousel>
         )}
+      </section>
 
+      <section className="flex flex-col gap-2">
+        <Carousel title="Built in" count={PIN_ICONS.length}>
+          {PIN_ICONS.map((icon) => (
+            <li key={icon.id}>
+              <PinTile
+                icon={icon.id}
+                pinIcons={pinIcons}
+                size="lg"
+                isDisabled={isFull}
+                onPress={() => onFork(icon.id)}
+              />
+            </li>
+          ))}
+        </Carousel>
+
+        {/* Under the built-ins rather than under your own, which is where it was:
+            the cap is the reason *these* are unpressable, and an explanation two
+            sections above the thing it explains is one nobody reads. */}
         {isFull ? (
           <p className="text-xs text-muted">
-            You&rsquo;ve reached the maximum of {MAX_PIN_ICONS} custom pins. Delete
-            one to make another.
+            You&rsquo;ve reached the maximum of {MAX_PIN_ICONS} custom pins. Delete one
+            to make another.
           </p>
         ) : null}
       </section>
-
-      <Carousel title="Built in" count={PIN_ICONS.length}>
-        {PIN_ICONS.map((icon) => (
-          <li key={icon.id}>
-            <PinTile
-              icon={icon.id}
-              pinIcons={pinIcons}
-              size="lg"
-              onPress={() => onPick(icon.id)}
-            />
-          </li>
-        ))}
-      </Carousel>
     </div>
   );
 }

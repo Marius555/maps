@@ -18,6 +18,7 @@ function makeMap(overrides: Partial<AppMap> = {}): AppMap {
     categories: [],
     pinIcons: [],
     settings: {},
+    appearance: {},
     allowedDomains: [],
     publishedAt: null,
     snapshotUrl: null,
