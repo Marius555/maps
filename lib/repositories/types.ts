@@ -5,6 +5,8 @@ import type { OpeningHours } from "@/packages/shared/hours";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import type { ShapeGeometry } from "@/packages/shared/shapes";
 import type { AddressParts, GeocodeStatus } from "@/lib/validation/place.schema";
+import type { CustomFieldInput } from "@/lib/validation/field.schema";
+import type { TagGroupInput } from "@/lib/validation/tag.schema";
 
 /**
  * Raw Appwrite row shapes. These stay inside /lib/repositories.
@@ -22,6 +24,8 @@ export type MapRow = Models.Row & {
   defaultLng: number;
   defaultZoom: number;
   categories?: string | null;
+  tagGroups?: string | null;
+  fields?: string | null;
   pinIcons?: string | null;
   settings?: string | null;
   appearance?: string | null;
@@ -37,6 +41,9 @@ export type PlaceRow = Models.Row & {
   lng: number;
   address?: string | null;
   category?: string | null;
+  /** A real Appwrite array column, so it arrives as an array, not as JSON. */
+  tags?: string[] | null;
+  fields?: string | null;
   icon?: string | null;
   description?: string | null;
   phone?: string | null;
@@ -77,6 +84,16 @@ export type MapCategory = {
   color: string;
 };
 
+/**
+ * The map's filter vocabulary and its extra fields.
+ *
+ * Aliased from the zod schemas rather than redeclared: these travel from a form
+ * straight into a JSON column, so a second hand-written definition here would be
+ * one more place for the two to drift apart. `MapCategory` predates that habit.
+ */
+export type MapTagGroup = TagGroupInput;
+export type MapField = CustomFieldInput;
+
 export type AppMap = {
   id: string;
   userId: string;
@@ -87,6 +104,10 @@ export type AppMap = {
   defaultLng: number;
   defaultZoom: number;
   categories: MapCategory[];
+  /** Groups of tags a location can wear — see lib/validation/tag.schema.ts. */
+  tagGroups: MapTagGroup[];
+  /** Extra fields these locations carry — see lib/validation/field.schema.ts. */
+  fields: MapField[];
   /**
    * The pins the customer built — see packages/shared/pin-icons.ts. Shared with
    * the embed, so the type lives there rather than here.
@@ -109,6 +130,14 @@ export type Place = {
   lng: number;
   address: string;
   category: string;
+  /**
+   * Tag ids from the map's own groups. May name a tag the map no longer defines
+   * — deleting a tag does not sweep it off the places wearing it, and the
+   * snapshot narrows to defined tags at publish time.
+   */
+  tags: string[];
+  /** Answers to the map's extra fields, keyed by field id. Same dangling rule. */
+  fields: Record<string, string>;
   /**
    * Which icon the pin wears, or "" for a plain one. A built-in id from
    * packages/shared/pin-icons.ts, or `custom:<id>` naming one of the map's own

@@ -62,6 +62,7 @@ export default async function MapEditorPage(props: PageProps<"/maps/[id]">) {
         initialShapes={data.shapes}
         initialGroups={data.groups}
         placeLimit={data.placeLimit}
+        shapeLimit={data.shapeLimit}
       />
     </Container>
   );
@@ -86,12 +87,19 @@ async function loadEditor(
     shapes,
     groups,
     placeLimit: PLAN_LIMITS[plan].places,
-    // No shape limit either, and for a different reason than groups: the sidebar
-    // stopped showing a shapes badge when shapes moved inline with the
-    // locations, so nothing reads it. The server still enforces it on create and
-    // `toastPlanLimit` still says so — `PLAN_LIMITS[plan].shapes` is one line
-    // away if a badge ever wants it back.
-    //
+    /*
+     * The shape limit is back, and the importer is what wanted it.
+     *
+     * It went away when shapes moved inline with the locations and the sidebar
+     * dropped its shapes badge, because nothing read it. Drawing a shape never
+     * needed it either: you draw one at a time, and the server refusing the
+     * eleventh is a toast at exactly the right moment.
+     *
+     * An import is the case that breaks. Thirteen provinces against a limit of
+     * three has to be said *before* the button, with the number in it, and the
+     * dialog cannot work that out from a rejection it has not made yet.
+     */
+    shapeLimit: PLAN_LIMITS[plan].shapes,
     // No group limit: a group cannot outnumber the places and shapes in it, and
     // those are limited already. See §6's table, which has no row for groups.
   };

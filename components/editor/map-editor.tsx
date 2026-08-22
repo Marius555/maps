@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useMapExport } from "@/components/export/use-map-export";
 import { GroupEditDialog } from "@/components/groups/group-form/group-edit-dialog";
 import { usePruneEmptyGroups } from "@/components/groups/use-prune-empty-groups";
 import type { DraggedObject } from "@/components/groups/use-row-drag";
@@ -12,8 +13,10 @@ import { MapSearch } from "@/components/map/map-search/map-search";
 import { MapToolbar } from "@/components/map/map-toolbar";
 import { PinStudio } from "@/components/map/pin-studio/pin-studio";
 import { SelectionBar } from "@/components/map/selection-bar";
+import { BulkTagMenu } from "@/components/tags/bulk-tag-menu";
 import { PlaceEditDialog } from "@/components/places/place-form/place-edit-dialog";
 import { PreviewDialog } from "@/components/preview/preview-dialog";
+import { ImportShapesDialog } from "@/components/shapes/import/import-shapes-dialog";
 import type { GeocodeCandidate } from "@/lib/geocoding/types";
 import { roundCoord } from "@/lib/map/geo";
 import { groupAction, groupActionLabel } from "@/lib/map/group-action";
@@ -34,6 +37,7 @@ import { useMap, useUpdateMap } from "@/lib/query/maps";
 import { readMapAppearance } from "@/lib/validation/map-appearance.schema";
 import { isPlanLimit, toastPlanLimit } from "@/lib/query/plan-limit-toast";
 import {
+  useAddTagToPlaces,
   useCreatePlace,
   usePlaces,
   usePlacesSnapshot,
@@ -52,7 +56,12 @@ import {
   selectionSize,
   useEditorStore,
 } from "@/lib/stores/editor-store";
-import { shapeBounds, type ShapeGeometry } from "@/packages/shared/shapes";
+import { placeIndex, resolveGeometry } from "@/lib/map/line-endpoints";
+import {
+  shapeBounds,
+  type ShapeGeometry,
+  type ShapeKind,
+} from "@/packages/shared/shapes";
 import { DEFAULT_SHAPE_OPACITY } from "@/lib/validation/shape.schema";
 import { ShapeEditDialog } from "@/components/shapes/shape-form/shape-edit-dialog";
 import { EditorSidebar } from "./editor-sidebar";
@@ -71,12 +80,15 @@ export function MapEditor({
   initialShapes,
   initialGroups,
   placeLimit,
+  shapeLimit,
 }: {
   map: AppMap;
   initialPlaces: Place[];
   initialShapes: Shape[];
   initialGroups: Group[];
   placeLimit: number;
+  /** Read by the GeoJSON importer, which has to state it before its button. */
+  shapeLimit: number;
 }) {
   /*
    * Read through the cache rather than straight off the prop, the same way the
@@ -87,14 +99,40 @@ export function MapEditor({
    */
   const { data: map = initialMap } = useMap(initialMap.id, initialMap);
   const { data: places = [] } = usePlaces(map.id, initialPlaces);
-  const { data: shapes = [] } = useShapes(map.id, initialShapes);
+  const { data: storedShapes = [] } = useShapes(map.id, initialShapes);
   const { data: groups = [] } = useGroups(map.id, initialGroups);
+
+  /*
+   * Bonded lines resolved once, here, and everything downstream reads the
+   * result.
+   *
+   * A line that connects two locations stores their ids and treats its own
+   * coordinates as a fallback (packages/shared/shapes.ts). Resolving at the one
+   * place both the canvas and the sidebar draw from is what keeps them agreeing:
+   * doing it only in the renderer drew the line correctly against a moved pin
+   * while the row underneath went on reporting the length it used to be. The
+   * publish step does the same thing on the server for the same reason.
+   *
+   * It also reaches the preview dialog, which renders the real embed bundle —
+   * and the embed cannot resolve a bond, because it has no locations to look an
+   * id up in.
+   */
+  const shapes = useMemo(() => {
+    const located = placeIndex(places);
+
+    return storedShapes.map((shape) => {
+      const geometry = resolveGeometry(shape.geometry, located);
+      return geometry === shape.geometry ? shape : { ...shape, geometry };
+    });
+  }, [storedShapes, places]);
   const createPlace = useCreatePlace(map.id);
   const updatePlace = useUpdatePlace(map.id);
   const createShape = useCreateShape(map.id);
   const updateShape = useUpdateShape(map.id);
   const createGroup = useCreateGroup(map.id);
   const assignToGroup = useAssignToGroup(map.id);
+  const addTagToPlaces = useAddTagToPlaces(map.id);
+  const [isTagging, setIsTagging] = useState(false);
   const updateMap = useUpdateMap(map.id);
   const readPlaces = usePlacesSnapshot(map.id);
   const readShapes = useShapesSnapshot(map.id);
@@ -127,6 +165,7 @@ export function MapEditor({
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [isImportingShapes, setIsImportingShapes] = useState(false);
 
   const isAdding = mode === "add";
   const drawMode = drawKindOf(mode);
@@ -241,6 +280,22 @@ export function MapEditor({
     mapHandle.current = handle;
   }, []);
 
+  /*
+   * The export renders a second map off screen, so it needs the same data the
+   * canvas has — and the same two colour resolvers, so an exported map and the
+   * map it is a picture of agree about what colour a grouped location is. See
+   * components/export/use-map-export.ts.
+   */
+  const mapExport = useMapExport({
+    mapHandle,
+    name: map.name,
+    places,
+    shapes,
+    pinIcons: map.pinIcons,
+    colorFor,
+    shapeColorFor,
+  });
+
   /**
    * The street under a coordinate, measured against the tiles already on screen.
    *
@@ -285,6 +340,8 @@ export function MapEditor({
           lng,
           address: known?.title ?? "",
           category: "",
+          tags: [],
+          fields: {},
           icon,
           sortOrder,
           geocodeStatus: "manual",
@@ -584,6 +641,30 @@ export function MapEditor({
     [selection, groups, places, shapes],
   );
 
+  /**
+   * The Tag button under a marquee.
+   *
+   * Only locations: a shape wears a colour and a geometry, and tags are a filter
+   * over the pins. A mixed selection tags the locations in it and leaves the
+   * shapes alone rather than refusing — the user asked for something reasonable,
+   * and the shapes were never candidates.
+   */
+  const tagSelection = useCallback(
+    async (tagId: string) => {
+      const selected = places.filter((place) => selectedPlaceIds.has(place.id));
+      if (selected.length === 0) return;
+
+      setIsTagging(true);
+
+      try {
+        await addTagToPlaces(selected, tagId);
+      } finally {
+        setIsTagging(false);
+      }
+    },
+    [addTagToPlaces, places, selectedPlaceIds],
+  );
+
   /** The Group/Merge button under a marquee. */
   const groupSelection = useCallback(async () => {
     if (!action.kind) return;
@@ -880,6 +961,7 @@ export function MapEditor({
           onStopAdding={() => setMode("browse")}
           onPickTool={startDrawing}
           onStopDrawing={() => setMode("browse")}
+          onImportShapes={() => setIsImportingShapes(true)}
           onStartSelecting={startSelecting}
           onStopSelecting={() => setMode("browse")}
           onDropPin={dropPin}
@@ -889,6 +971,15 @@ export function MapEditor({
           onPreview={() => setIsPreviewOpen(true)}
           onChangeStyle={(style) => updateMap.mutate({ style })}
           onChangeAppearance={(next) => updateMap.mutate({ appearance: next })}
+          exportControl={{
+            options: mapExport.options,
+            view: mapExport.view,
+            isBusy: mapExport.isBusy,
+            error: mapExport.error,
+            onChange: mapExport.setOptions,
+            onExport: mapExport.exportMap,
+            onOpen: mapExport.refresh,
+          }}
         />
 
         {/* One bar, five instructions: a pin already in the air needs a different
@@ -904,17 +995,7 @@ export function MapEditor({
             (isAdding || isDraggingPin || drawMode !== null || isSelecting) &&
             selectionSize(selection) === 0
           }
-          message={
-            isDraggingPin
-              ? "Drop the pin where the location is."
-              : drawMode === "circle"
-                ? "Drag out from the centre to draw a circle. Press Esc to stop."
-                : drawMode === "polygon"
-                  ? "Click each corner. Click the first point or press Enter to finish, Esc to stop."
-                  : isSelecting
-                    ? "Drag a box around the locations and shapes you want. Press Esc to stop."
-                    : undefined
-          }
+          message={hintFor({ isDraggingPin, drawMode, isSelecting })}
         />
 
         <SelectionBar
@@ -924,6 +1005,17 @@ export function MapEditor({
           // assigned after that returns, and the button should stay busy until
           // there is a full group to show for it.
           isBusy={isGrouping}
+          extraActions={
+            // Renders nothing when the map defines no tags, or when the marquee
+            // caught only shapes — there is nothing to put a tag on.
+            selectedPlaceIds.size > 0 ? (
+              <BulkTagMenu
+                groups={map.tagGroups}
+                isBusy={isTagging}
+                onPick={(tagId) => void tagSelection(tagId)}
+              />
+            ) : null
+          }
           onGroup={() => void groupSelection()}
           onClear={clearSelection}
         />
@@ -1036,6 +1128,16 @@ export function MapEditor({
         onPick={startAdding}
       />
 
+      <ImportShapesDialog
+        mapId={map.id}
+        isOpen={isImportingShapes}
+        // The live array, not the server render: importing twice in a row has to
+        // count the first import's shapes against the limit and number past them.
+        shapes={shapes}
+        limit={shapeLimit}
+        onClose={() => setIsImportingShapes(false)}
+      />
+
       <PreviewDialog
         map={map}
         places={places}
@@ -1061,4 +1163,45 @@ function asMembers(object: DraggedObject): GroupMembers {
   return object.type === "place"
     ? { placeIds: [object.id], shapeIds: [] }
     : { placeIds: [], shapeIds: [object.id] };
+}
+
+/**
+ * The sentence under the toolbar, for whatever gesture is armed.
+ *
+ * Lifted out of the JSX when the line tool would have made it a sixth branch. As
+ * a chain of nested ternaries this had already stopped being readable at the
+ * fourth, and the ordering matters: dragging beats every armed mode, because it
+ * is the thing happening right now rather than the thing that could happen next.
+ *
+ * A tool with no sentence here is a tool people press once and never again.
+ * There is no other moment to explain the gesture — the hint bar only appears
+ * once the tool is armed, which is after the menu that might have said it.
+ */
+function hintFor({
+  isDraggingPin,
+  drawMode,
+  isSelecting,
+}: {
+  isDraggingPin: boolean;
+  drawMode: ShapeKind | null;
+  isSelecting: boolean;
+}): string | undefined {
+  if (isDraggingPin) return "Drop the pin where the location is.";
+
+  switch (drawMode) {
+    case "circle":
+      return "Drag out from the centre to draw a circle. Press Esc to stop.";
+    case "polygon":
+      return "Click each corner. Click the first point or press Enter to finish, Esc to stop.";
+    case "line":
+      // Says the magnet out loud. Snapping is invisible until it happens, and a
+      // feature nobody knows is there is a feature nobody uses.
+      return "Click each point — near a location it snaps onto it. Enter to finish, Esc to stop.";
+  }
+
+  if (isSelecting) {
+    return "Drag a box around the locations and shapes you want. Press Esc to stop.";
+  }
+
+  return undefined;
 }

@@ -2,7 +2,9 @@ import { z } from "zod";
 
 import { DAYS_IN_WEEK } from "@/packages/shared/hours";
 import { latSchema, lngSchema, pinIconRefSchema } from "./common";
+import { placeFieldsSchema } from "./field.schema";
 import { groupIdSchema } from "./group.schema";
+import { placeTagsSchema } from "./tag.schema";
 
 export const GEOCODE_STATUSES = ["ok", "low", "failed", "manual"] as const;
 export const geocodeStatusSchema = z.enum(GEOCODE_STATUSES);
@@ -96,6 +98,11 @@ export const createPlaceSchema = z.object({
   // coordinates and nothing else.
   address: z.string().trim().max(512).default(""),
   category: z.string().trim().max(64).default(""),
+  // Tag ids from the map's own groups, and this place's answers to its extra
+  // fields. Both default to empty the way `category` defaults to "": most
+  // creates — a dropped pin, a bare CSV row — have nothing to say about either.
+  tags: placeTagsSchema.default([]),
+  fields: placeFieldsSchema.default({}),
   icon: pinIconRefSchema.default(""),
   description: z.string().max(5000).optional(),
   phone: z.string().trim().max(32).optional(),
@@ -120,6 +127,8 @@ export const updatePlaceSchema = z
     lng: lngSchema,
     address: z.string().trim().max(512),
     category: z.string().trim().max(64),
+    tags: placeTagsSchema,
+    fields: placeFieldsSchema,
     icon: pinIconRefSchema,
     description: z.string().max(5000),
     phone: z.string().trim().max(32),
@@ -150,6 +159,8 @@ export const placeFormSchema = z.object({
     .max(255, "Keep the name under 255 characters."),
   address: z.string().trim().max(512),
   category: z.string().trim().max(64),
+  tags: placeTagsSchema,
+  fields: placeFieldsSchema,
   icon: pinIconRefSchema,
   description: z.string().max(5000),
   phone: z.string().trim().max(32),

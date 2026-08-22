@@ -1,4 +1,4 @@
-import { Circle, Pentagon } from "lucide-react";
+import { Circle, Pentagon, Slash } from "lucide-react";
 
 import type { ShapeGeometry } from "@/packages/shared/shapes";
 
@@ -12,11 +12,15 @@ import type { ShapeGeometry } from "@/packages/shared/shapes";
  * the way the thing on the map looks: an area is an outline around nothing, not a
  * solid lozenge.
  *
- * The same `Circle` and `Pentagon` the drawing tools use
+ * The same `Circle`, `Pentagon` and `Slash` the drawing tools use
  * (components/map/shapes/shape-tools-button.tsx), so the row and the tool that
  * made it are drawn from one vocabulary. lucide strokes with `currentColor`, and
  * `stroke-dasharray` on the `<svg>` is inherited by the paths inside it, so both
  * ride in as ordinary props.
+ *
+ * The line is the one glyph drawn solid. Dashes say "an outline around nothing",
+ * which is exactly right for an area and exactly wrong here — a dashed line reads
+ * as a dashed line, a property of the thing rather than a way of drawing it.
  */
 export function ShapeIcon({
   geometry,
@@ -28,7 +32,8 @@ export function ShapeIcon({
   color: string;
   className?: string;
 }) {
-  const Glyph = geometry.kind === "circle" ? Circle : Pentagon;
+  const isLine = geometry.kind === "line";
+  const Glyph = isLine ? Slash : geometry.kind === "circle" ? Circle : Pentagon;
 
   return (
     <Glyph
@@ -37,7 +42,7 @@ export function ShapeIcon({
       style={{ color }}
       /* Short dashes: at 16px a longer pattern puts two gaps on a circle and
          reads as a broken ring rather than a dashed one. */
-      strokeDasharray="3 2.5"
+      strokeDasharray={isLine ? undefined : "3 2.5"}
     />
   );
 }

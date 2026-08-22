@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, Popover } from "@heroui/react";
-import { Circle, Pentagon, Shapes } from "lucide-react";
+import { Button, Popover, Separator } from "@heroui/react";
+import { Circle, Pentagon, Shapes, Slash, Upload } from "lucide-react";
 import { useState } from "react";
 
 import type { ShapeKind } from "@/packages/shared/shapes";
@@ -9,11 +9,11 @@ import type { ShapeKind } from "@/packages/shared/shapes";
 /**
  * The drawing tools, in one control beside Add location.
  *
- * A menu rather than two buttons on the toolbar. The panel is deliberately not
+ * A menu rather than a button each on the toolbar. The panel is deliberately not
  * wrapping (see map-toolbar.tsx) and the search already competes for its width —
- * two more permanent buttons would push a phone's toolbar past the point where
- * the address field is usable. A menu also matches how the tools behave: you pick
- * one, and it stays picked until you are done drawing with it.
+ * three more permanent buttons would push a phone's toolbar well past the point
+ * where the address field is usable. A menu also matches how the tools behave:
+ * you pick one, and it stays picked until you are done drawing with it.
  *
  * While a tool is armed the control is a stop button, not a menu. That is
  * `AddLocationButton`'s idiom, arbitrated in the same place and for the same
@@ -29,12 +29,15 @@ export function ShapeToolsButton({
   isBusy,
   onPickTool,
   onStopDrawing,
+  onImport,
 }: {
   /** The armed tool, or null in browse mode. */
   drawMode: ShapeKind | null;
   isBusy: boolean;
   onPickTool: (kind: ShapeKind) => void;
   onStopDrawing: () => void;
+  /** Opens the GeoJSON import dialog. Omitted where there is nowhere to put it. */
+  onImport?: () => void;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isDrawing = drawMode !== null;
@@ -97,6 +100,35 @@ export function ShapeToolsButton({
                 onPickTool("polygon");
               }}
             />
+            <ToolItem
+              icon={Slash}
+              label="Line"
+              hint="Click each point, Enter to finish"
+              isArmed={drawMode === "line"}
+              onPress={() => {
+                setIsMenuOpen(false);
+                onPickTool("line");
+              }}
+            />
+
+            {/* Below a rule, because it is the odd one out: the three above arm
+                a gesture and this one opens a dialog. Still in this menu rather
+                than on the toolbar — it makes shapes, and that is what this
+                control is for. */}
+            {onImport ? (
+              <>
+                <Separator className="my-1" />
+                <ToolItem
+                  icon={Upload}
+                  label="Import shapes"
+                  hint="GeoJSON, TopoJSON or ArcGIS JSON"
+                  onPress={() => {
+                    setIsMenuOpen(false);
+                    onImport();
+                  }}
+                />
+              </>
+            ) : null}
           </div>
         </Popover.Dialog>
       </Popover.Content>
@@ -114,6 +146,10 @@ export function ShapeToolsButton({
  * The hint is the whole gesture in five words. A drawing tool that does not say
  * how it is used is a tool people press once and abandon, and there is no other
  * moment to say it — the hint bar only appears after the tool is armed.
+ *
+ * `isArmed` is optional because not every row is a toggle. Import opens a dialog
+ * and is never "on", and `aria-pressed="false"` on it would tell a screen reader
+ * it is a switch that happens to be off.
  */
 function ToolItem({
   icon: Icon,
@@ -125,7 +161,7 @@ function ToolItem({
   icon: typeof Circle;
   label: string;
   hint: string;
-  isArmed: boolean;
+  isArmed?: boolean;
   onPress: () => void;
 }) {
   return (

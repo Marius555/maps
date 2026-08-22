@@ -11,6 +11,8 @@ type Params = { id: string };
  * fetch, so it takes no body: what gets published is always the map's current
  * saved state, never a payload the client composed.
  */
-export const POST = withAuth<Params>(async ({ params, ctx }) =>
-  ok(await publishMap(ctx, params.id)),
+export const POST = withAuth<Params>(async ({ request, params, ctx }) =>
+  // The origin is read from the request rather than configured, so a self-hosted
+  // or preview deployment publishes URLs that point at itself.
+  ok(await publishMap(ctx, params.id, new URL(request.url).origin)),
 );

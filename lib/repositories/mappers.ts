@@ -22,6 +22,8 @@ import type {
   Group,
   GroupRow,
   MapCategory,
+  MapField,
+  MapTagGroup,
   MapRow,
   Place,
   PlaceRow,
@@ -61,6 +63,8 @@ export function toAppMap(row: MapRow): AppMap {
     defaultLng: row.defaultLng,
     defaultZoom: row.defaultZoom,
     categories: parseJson<MapCategory[]>(row.categories, []),
+    tagGroups: parseJson<MapTagGroup[]>(row.tagGroups, []),
+    fields: parseJson<MapField[]>(row.fields, []),
     pinIcons: parseJson<CustomPinIcon[]>(row.pinIcons, []),
     settings: parseJson<Record<string, unknown>>(row.settings, {}),
     appearance: parseJson<Record<string, unknown>>(row.appearance, {}),
@@ -85,6 +89,29 @@ function toShapeGeometry(row: ShapeRow): ShapeGeometry {
   if (row.kind === "polygon") {
     const parsed = parseJson<{ points?: LngLatTuple[] }>(row.geometry, {});
     return { kind: "polygon", points: parsed.points ?? [] };
+  }
+
+  /*
+   * Explicit, because the fall-through below is to a circle. A line decoded by
+   * that path becomes a circle of radius zero — it vanishes from the map, and
+   * nothing anywhere reports an error.
+   *
+   * Empty bonds are dropped rather than kept as "": absent is what "not bonded"
+   * means everywhere else in the geometry, and one spelling is enough.
+   */
+  if (row.kind === "line") {
+    const parsed = parseJson<{
+      points?: LngLatTuple[];
+      from?: string;
+      to?: string;
+    }>(row.geometry, {});
+
+    return {
+      kind: "line",
+      points: parsed.points ?? [],
+      ...(parsed.from ? { from: parsed.from } : {}),
+      ...(parsed.to ? { to: parsed.to } : {}),
+    };
   }
 
   const parsed = parseJson<Partial<CircleGeometry>>(row.geometry, {});
@@ -134,6 +161,10 @@ export function toPlace(row: PlaceRow): Place {
     lng: row.lng,
     address: row.address ?? "",
     category: row.category ?? "",
+    // An array column, so no parsing — but still `?? []`, because a row written
+    // before the column existed comes back with it absent rather than empty.
+    tags: row.tags ?? [],
+    fields: parseJson<Record<string, string>>(row.fields, {}),
     icon: row.icon ?? "",
     description: row.description ?? null,
     phone: row.phone ?? null,

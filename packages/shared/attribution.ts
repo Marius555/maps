@@ -1,4 +1,18 @@
 /**
+ * Credit for the place data behind the search box.
+ *
+ * GeoNames is CC BY 4.0: we may use it freely and must say we did. It is *not*
+ * in the tile source's own TileJSON — that credits OpenStreetMap, OpenMapTiles
+ * and the tile host — so unlike those three it has no other route onto the page
+ * and has to be passed to MapLibre as `customAttribution`.
+ *
+ * Added only by maps that actually ship a gazetteer. CC BY asks for credit for
+ * data we used, and a map with no place search used none.
+ */
+export const GEONAMES_ATTRIBUTION =
+  '<a href="https://www.geonames.org/" target="_blank" rel="noreferrer">GeoNames</a>';
+
+/**
  * Start MapLibre's compact attribution collapsed.
  *
  * `attributionControl: { compact: true }` does not mean "start as a ⓘ" — it means

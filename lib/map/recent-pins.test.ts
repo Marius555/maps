@@ -18,6 +18,8 @@ function place(icon: string, updatedAt: string): Place {
     lng: 25.28,
     address: "",
     category: "",
+    tags: [],
+    fields: {},
     icon,
     description: null,
     phone: null,

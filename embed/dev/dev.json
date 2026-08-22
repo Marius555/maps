@@ -18,11 +18,28 @@
     }
   },
   "attribution": "© <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noreferrer\">OpenStreetMap</a> contributors · tiles by <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noreferrer\">OpenFreeMap</a>",
-  "center": { "lat": 54.687, "lng": 25.28, "zoom": 11 },
-  "bounds": { "west": 25.24, "south": 54.66, "east": 25.32, "north": 54.71 },
+  "center": {
+    "lat": 54.687,
+    "lng": 25.28,
+    "zoom": 11
+  },
+  "bounds": {
+    "west": 25.24,
+    "south": 54.66,
+    "east": 25.32,
+    "north": 54.71
+  },
   "categories": [
-    { "id": "shops", "label": "Shops", "color": "#e8590c" },
-    { "id": "depots", "label": "Depots", "color": "#1c7ed6" }
+    {
+      "id": "shops",
+      "label": "Shops",
+      "color": "#e8590c"
+    },
+    {
+      "id": "depots",
+      "label": "Depots",
+      "color": "#1c7ed6"
+    }
   ],
   "pinIcons": [
     {
@@ -30,7 +47,11 @@
       "color": "#7048e8",
       "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAB1UlEQVR42u2dWY7FMAgEc/9Le47wpJGhF1ckfwe6sgKG75zzsXQLEQAAABYAfq7/HgBYFjwOSLvg9kBeFd4GxOvCy0EgvBgEwotBILwYBOKLISC+GALCi0EgvhgC4oshIL4YQpr46XZdBZD0srO19cWQcQWAhkCYhQ8OhreFxEcBtGaoZH6pDG1PhY4AaBdf4ue2Ye1VGGMAXhJ/1ectY1ILpywAvCr+iv8AMAfwuvjjOkyeuK2Qdh0AV/+CHolXv/O5qwEk2iABEPctrtyr4H71O8afrtrhDKAxvTkO4JUdMtUAEhL9owAOAPYeQ24AIoqpXAF8DwH4GgFsHwAAAAAAAAAAAAAAAAAAAPgRiwdAKKIAAME4wtHkA0jIFKT+XO0iKZ8CgLIUcVkKhVlUxlGaeIwhPFGcS3m6uDydu8BggwYQhv0HQAAAtqkO+s1G7ZCN2rQqGPKVZh1BzTpoVzPgHw2bwho20bLssj807RP7QNtKsd00bg0GQOviCxcKzbvFdynt68WPSAY4iN9PjDARf6kxxEf8icwYK/H/CYPcxD+HjDIUh0cY5imOSzHOVhyZZaCzOCTemhCJSQi1pwbtU6HtVQr2vrUV0MYtRAAAAFjC9QfgCbP/Ds0RnQAAAABJRU5ErkJggg=="
     },
-    { "id": "trade", "color": "#0ca678", "glyph": "landmark" }
+    {
+      "id": "trade",
+      "color": "#0ca678",
+      "glyph": "landmark"
+    }
   ],
   "places": [
     {
@@ -43,7 +64,16 @@
       "icon": "store",
       "description": "Open late on Thursdays.",
       "phone": "+370 600 00001",
-      "url": "https://example.com/gedimino"
+      "url": "https://example.com/gedimino",
+      "tags": [
+        "bikes",
+        "sundays"
+      ],
+      "fields": {
+        "booking": "https://example.com/book",
+        "code": "GB-14",
+        "workshop": "+370 600 00002"
+      }
     },
     {
       "id": "p2",
@@ -53,7 +83,13 @@
       "address": "Pilies g. 22, Vilnius",
       "category": "shops",
       "icon": "coffee",
-      "email": "oldtown@example.com"
+      "email": "oldtown@example.com",
+      "tags": [
+        "skis"
+      ],
+      "fields": {
+        "code": "GB-22"
+      }
     },
     {
       "id": "p3",
@@ -63,7 +99,10 @@
       "address": "Užupio g. 3, Vilnius",
       "category": "shops",
       "icon": "custom:logo",
-      "description": "Custom image pin — decoded from the snapshot, no request of its own."
+      "description": "Custom image pin — decoded from the snapshot, no request of its own.",
+      "tags": [
+        "bikes"
+      ]
     },
     {
       "id": "p9",
@@ -82,7 +121,11 @@
       "address": "Savanorių pr. 1, Vilnius",
       "category": "depots",
       "icon": "custom:trade",
-      "description": "Trade counter only. Custom glyph pin — keeps its own green, not the depots blue."
+      "description": "Trade counter only. Custom glyph pin — keeps its own green, not the depots blue.",
+      "tags": [
+        "skis",
+        "sundays"
+      ]
     },
     {
       "id": "p5",
@@ -130,6 +173,28 @@
       "radius": 2400
     },
     {
+      "id": "s3",
+      "kind": "line",
+      "name": "Courier route",
+      "color": "#0ca678",
+      "opacity": 0.2,
+      "description": "The morning run between the flagship and the kiosk.",
+      "points": [
+        [
+          25.2797,
+          54.6872
+        ],
+        [
+          25.2891,
+          54.6795
+        ],
+        [
+          25.2963,
+          54.6809
+        ]
+      ]
+    },
+    {
       "id": "s2",
       "kind": "polygon",
       "name": "Old town zone",
@@ -137,14 +202,87 @@
       "opacity": 0.22,
       "description": "Pedestrian only. Deliveries by handcart.",
       "points": [
-        [25.2842, 54.6754],
-        [25.2951, 54.6773],
-        [25.2978, 54.6836],
-        [25.2889, 54.6862],
-        [25.2807, 54.6812]
+        [
+          25.2842,
+          54.6754
+        ],
+        [
+          25.2951,
+          54.6773
+        ],
+        [
+          25.2978,
+          54.6836
+        ],
+        [
+          25.2889,
+          54.6862
+        ],
+        [
+          25.2807,
+          54.6812
+        ]
       ]
     }
   ],
-  "settings": { "clustering": true, "search": true, "filters": true, "nearest": true },
-  "allowedDomains": []
+  "settings": {
+    "clustering": true,
+    "search": true,
+    "filters": true,
+    "nearest": true,
+    "list": true
+  },
+  "allowedDomains": [],
+  "tagGroups": [
+    {
+      "id": "sells",
+      "label": "Sells",
+      "tags": [
+        {
+          "id": "bikes",
+          "label": "Bikes"
+        },
+        {
+          "id": "skis",
+          "label": "Skis"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "label": "Open",
+      "tags": [
+        {
+          "id": "sundays",
+          "label": "Sundays"
+        }
+      ]
+    }
+  ],
+  "fields": [
+    {
+      "id": "booking",
+      "label": "Book a fitting",
+      "type": "url",
+      "showAs": "button"
+    },
+    {
+      "id": "code",
+      "label": "Dealer code",
+      "type": "text",
+      "showAs": "row"
+    },
+    {
+      "id": "workshop",
+      "label": "Workshop",
+      "type": "tel",
+      "showAs": "row"
+    }
+  ],
+  "gazetteer": {
+    "base": "http://localhost:3000/gazetteer",
+    "countries": [
+      "LT"
+    ]
+  }
 }

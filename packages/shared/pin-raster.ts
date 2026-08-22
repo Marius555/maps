@@ -11,14 +11,21 @@ import {
   resolvePin,
   type CustomPinIcon,
   type ResolvedPin,
-} from "@/packages/shared/pin-icons";
+} from "./pin-icons";
 
 /**
  * Pins with icons, drawn into map images.
  *
- * The embed renders places as a GeoJSON source, so a shaped pin has to be a
- * symbol layer, and a symbol layer needs a registered image. Three ways to get
- * one, and only the third survives contact with a stranger's website:
+ * A place drawn from a GeoJSON source has to be a symbol layer, and a symbol
+ * layer needs a registered image. Two renderers need that now — the published
+ * embed, and the editor's image export, which builds a second map off screen and
+ * therefore has no DOM markers to photograph. So this sits in the one directory
+ * both build targets read (CLAUDE.md §4): it is vanilla TS over `Path2D` and
+ * Canvas2D with no dependency of its own, and a second copy in /lib would be a
+ * copy that slowly stopped matching the pins it is a picture of.
+ *
+ * Three ways to get the image, and only the third survives contact with a
+ * stranger's website:
  *
  * - An external sprite is a second request in the visitor's path (§2), and one
  *   more thing to keep in sync with the CDN.

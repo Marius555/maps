@@ -66,6 +66,45 @@ export type SnapshotPinIcon = {
   shape?: PinShape;
 };
 
+/**
+ * One answer in the map's filter vocabulary, and the question it answers.
+ *
+ * Groups are the point. The embed reads them as **AND across groups, OR within
+ * one** — "sells bikes OR sells skis, AND opens on Sundays" — which one flat
+ * list of chips cannot express. A place stores bare tag ids and never says which
+ * group they came from, which is why tag ids are unique across the whole map.
+ */
+export type SnapshotTag = {
+  id: string;
+  label: string;
+};
+
+export type SnapshotTagGroup = {
+  id: string;
+  label: string;
+  tags: SnapshotTag[];
+};
+
+/** How a custom field's value is rendered, and what it links to. */
+export type SnapshotFieldType = "text" | "url" | "tel" | "email";
+/** `row` is a labelled line among the details; `button` is the call to action. */
+export type SnapshotFieldDisplay = "row" | "button";
+
+/**
+ * One extra field these locations carry, defined once for the whole map.
+ *
+ * The definition travels separately from the values for the reason it is stored
+ * that way: a label is a promise about the whole set, and per-place labels would
+ * let two locations spell one field differently with no way to tell which was
+ * meant. The order here is the order the popup renders.
+ */
+export type SnapshotField = {
+  id: string;
+  label: string;
+  type: SnapshotFieldType;
+  showAs: SnapshotFieldDisplay;
+};
+
 export type SnapshotPlace = {
   id: string;
   name: string;
@@ -98,6 +137,21 @@ export type SnapshotPlace = {
   hours?: OpeningHours;
   /** Public storage URL, composed on the server so no bucket id ships. */
   photoUrl?: string;
+  /**
+   * Tag ids, already narrowed to ones the map still defines — a place may be
+   * storing ids for tags that were deleted, and those are dropped here rather
+   * than shipped for the embed to fail to match.
+   *
+   * Optional, and it has to stay that way for the same reason `hours` does:
+   * snapshots are immutable, so every file published before this field existed
+   * is still live on a customer's site and must keep parsing.
+   */
+  tags?: string[];
+  /**
+   * Answers to the map's extra fields, keyed by field id and narrowed the same
+   * way. Same optionality, same reason.
+   */
+  fields?: Record<string, string>;
 };
 
 /**
@@ -124,6 +178,15 @@ export type SnapshotShape = {
 } & (
   | { kind: "circle"; lat: number; lng: number; radius: number }
   | { kind: "polygon"; points: [number, number][] }
+  /**
+   * An open path. Drawn as a LineString, never filled.
+   *
+   * Its points are already resolved: an endpoint bonded to a location in the
+   * editor is written here as the coordinates that location was at when the map
+   * was published. The bond itself never ships — the embed would have to look an
+   * id up to use it, and it has nothing to look it up in.
+   */
+  | { kind: "line"; points: [number, number][] }
 );
 
 /** Which of the embed's optional controls are switched on. */
@@ -132,6 +195,43 @@ export type SnapshotSettings = {
   search: boolean;
   filters: boolean;
   nearest: boolean;
+  /**
+   * The results panel beside the map.
+   *
+   * Optional, and it has to stay that way for the same reason `hours`, `theme`,
+   * `pinIcons` and `shapes` are: snapshots are immutable, so every file
+   * published before this field existed is still live on a customer's site and
+   * must keep parsing. Absent means **off** here rather than "the default",
+   * which is the one place this rule bites: the default for a new map is on, but
+   * a map published a year ago must keep rendering what its owner last saw, and
+   * growing a panel on someone's website without them republishing is not that.
+   */
+  list?: boolean;
+};
+
+/**
+ * Where to look up a place name or postcode the visitor types.
+ *
+ * The embed's search filters the snapshot's own locations by text; that finds a
+ * shop *called* Manchester and nothing else. Real proximity search needs a table
+ * of place names to coordinates, and geocoding one at view time is a metered
+ * call in the visitor's path, which CLAUDE.md §2 rules out.
+ *
+ * So the table ships as static files, fetched lazily and cached by the browser —
+ * the same thing this snapshot already is. `countries` is only the ones this
+ * map's own locations sit in, so a UK map never fetches a byte of anything else,
+ * and it is derived for free from `addressParts` at publish time.
+ *
+ * `base` is absolute: the embed runs on a customer's page, where a relative URL
+ * would resolve against their domain. Baking it in means moving the files later
+ * is a republish rather than a redeploy of every customer's embed — the same
+ * trade `styleUrl` makes.
+ */
+export type SnapshotGazetteer = {
+  /** Absolute, no trailing slash. Shards live at `{base}/{cc}/cities.json`. */
+  base: string;
+  /** ISO-2, uppercase, sorted. Empty means the block is omitted entirely. */
+  countries: string[];
 };
 
 export type SnapshotBounds = {
@@ -195,6 +295,23 @@ export type MapSnapshot = {
    * existed is still live on a customer's site and must keep parsing.
    */
   pinIcons?: SnapshotPinIcon[];
+  /**
+   * The filter vocabulary, narrowed to tags a published place actually wears —
+   * the same filter `categories` gets, and for the same reason: a chip that
+   * matches nothing is a dead control on someone else’s website. Groups left
+   * empty by that narrowing are dropped whole.
+   *
+   * Optional, on the immutability rule above.
+   */
+  tagGroups?: SnapshotTagGroup[];
+  /**
+   * The extra-field definitions, narrowed to ones at least one published place
+   * fills in. Same rule: an empty field label on a card is a promise the map
+   * does not keep.
+   *
+   * Optional, on the immutability rule above.
+   */
+  fields?: SnapshotField[];
   places: SnapshotPlace[];
   /**
    * Areas drawn on the map, under the pins.
@@ -223,6 +340,16 @@ export type MapSnapshot = {
    * to resolve, and its dark half is decided in the visitor's browser.
    */
   appearance?: MapAppearance;
+  /**
+   * Static place-name lookup for the search box — see SnapshotGazetteer.
+   *
+   * Optional, and omitted when the map has no locations we know the country of,
+   * for the same reason `pinIcons`, `shapes` and `appearance` are: every file
+   * published before this existed is still live on a customer's site and must
+   * keep rendering what it always rendered. Absent means the search behaves
+   * exactly as it did before this shipped.
+   */
+  gazetteer?: SnapshotGazetteer;
   settings: SnapshotSettings;
   /**
    * Hostnames allowed to embed this map. Empty means "anywhere".

@@ -11,13 +11,15 @@
     "copy:maplibre-worker": "node scripts/copy-maplibre-worker.mjs",
     "build:embed": "vite build --config embed/vite.config.mts && node scripts/copy-maplibre-worker.mjs && node scripts/check-embed-size.mjs",
     "check:embed-size": "node scripts/check-embed-size.mjs",
+    "build:gazetteer": "node scripts/build-gazetteer.mjs",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run test",
     "setup:appwrite": "node --env-file=.env scripts/setup-appwrite.mjs",
-    "migrate:auto-style": "node --env-file=.env scripts/migrate-auto-style.mjs"
+    "migrate:auto-style": "node --env-file=.env scripts/migrate-auto-style.mjs",
+    "migrate:shape-kinds": "node --env-file=.env scripts/migrate-shape-kinds.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.4",

@@ -22,6 +22,11 @@ export const DEFAULT_EMBED_SETTINGS: SnapshotSettings = {
   search: true,
   filters: true,
   nearest: true,
+  // On by default: a store locator without a results list is the thing the list
+  // was added to fix, and a new map should be one out of the box. This changes
+  // nothing for a map already published — its live snapshot keeps the shape it
+  // was written with, and only a republish opts it in.
+  list: true,
 };
 
 export const embedSettingsSchema = z.object({
@@ -29,6 +34,7 @@ export const embedSettingsSchema = z.object({
   search: z.boolean(),
   filters: z.boolean(),
   nearest: z.boolean(),
+  list: z.boolean(),
 });
 
 export type EmbedSettings = z.output<typeof embedSettingsSchema>;
@@ -46,6 +52,7 @@ export function readEmbedSettings(
     search: readFlag(settings.search, DEFAULT_EMBED_SETTINGS.search),
     filters: readFlag(settings.filters, DEFAULT_EMBED_SETTINGS.filters),
     nearest: readFlag(settings.nearest, DEFAULT_EMBED_SETTINGS.nearest),
+    list: readFlag(settings.list, DEFAULT_EMBED_SETTINGS.list ?? true),
   };
 }
 

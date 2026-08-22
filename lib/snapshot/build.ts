@@ -1,4 +1,6 @@
+import { gazetteerCountries } from "@/lib/gazetteer/config";
 import { isValidLngLat, roundCoord } from "@/lib/map/geo";
+import { placeIndex, resolveGeometry } from "@/lib/map/line-endpoints";
 import {
   ATTRIBUTION_HTML,
   isAutoMapStyle,
@@ -8,7 +10,13 @@ import {
   resolveTint,
   type MapStyleKey,
 } from "@/lib/map/style";
-import type { AppMap, Place, Shape } from "@/lib/repositories/types";
+import type {
+  AppMap,
+  MapField,
+  MapTagGroup,
+  Place,
+  Shape,
+} from "@/lib/repositories/types";
 import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { readMapAppearance } from "@/lib/validation/map-appearance.schema";
 import {
@@ -22,14 +30,20 @@ import {
   DEFAULT_PIN_SIZE,
   DEFAULT_RING_WIDTH,
 } from "@/packages/shared/pin-icons";
-import { MIN_POLYGON_POINTS, shapeBounds } from "@/packages/shared/shapes";
+import {
+  MIN_LINE_POINTS,
+  MIN_POLYGON_POINTS,
+  shapeBounds,
+} from "@/packages/shared/shapes";
 import type {
   MapSnapshot,
   SnapshotBounds,
   SnapshotCategory,
+  SnapshotField,
   SnapshotPinIcon,
   SnapshotPlace,
   SnapshotShape,
+  SnapshotTagGroup,
 } from "@/packages/shared/snapshot";
 
 /**
@@ -61,6 +75,16 @@ export function buildSnapshot(
   places: Place[],
   shapes: Shape[],
   generatedAt: string,
+  /**
+   * Absolute base URL for the search gazetteer, or omitted for none.
+   *
+   * Injected rather than read from the environment here, for the same reason
+   * `generatedAt` is injected rather than read off the clock: this function has
+   * to stay pure and testable without provisioning anything (§9). The caller
+   * resolves it — `lib/gazetteer/config.ts` — because only the caller knows the
+   * origin, and on the server that comes off the request.
+   */
+  gazetteerBase?: string,
 ): BuildSnapshotResult {
   const usable: Place[] = [];
   const skipped: Place[] = [];
@@ -79,12 +103,44 @@ export function buildSnapshot(
   const pinIcons = usedPinIcons(map, usable);
 
   /*
+   * The filter vocabulary and the extra fields, narrowed to what the published
+   * places actually use — the same filter categories get above, for the same
+   * reason. Both also decide what a *place* may carry: a location can be storing
+   * a tag id or a field value the map no longer defines (nothing sweeps those up
+   * on delete, see maps.repository.ts), and those must not reach a visitor who
+   * has nothing to resolve them against.
+   */
+  const tagGroups = usedTagGroups(map.tagGroups, usable);
+  const definedTags = new Set(
+    tagGroups.flatMap((group) => group.tags.map((tag) => tag.id)),
+  );
+
+  const fields = usedFields(map.fields, usable);
+  const definedFields = new Set(fields.map((field) => field.id));
+
+  /*
+   * Bonded lines are pinned down before anything measures or publishes them.
+   *
+   * A line that connects two locations stores their ids and treats its own
+   * coordinates as a fallback, so publishing it as stored would ship whatever it
+   * was drawn against rather than where those locations ended up. Resolved
+   * against `usable`, not `places`: an endpoint bonded to a location that never
+   * got coordinates has nothing to resolve to, and falling back to the stored
+   * point is the right answer there.
+   */
+  const located = placeIndex(usable);
+  const resolved = shapes.map((shape) => ({
+    ...shape,
+    geometry: resolveGeometry(shape.geometry, located),
+  }));
+
+  /*
    * A shape with no size is not publishable. A circle can be stored at radius
    * zero only if something has gone wrong upstream — the drawing tool floors it
    * — and a polygon under three points encloses nothing. Neither would draw, and
    * both would still cost bytes on every visitor's download.
    */
-  const drawable = shapes.filter(isDrawableShape);
+  const drawable = resolved.filter(isDrawableShape);
 
   return {
     snapshot: {
@@ -111,7 +167,11 @@ export function buildSnapshot(
       // with no custom pins this would be a bare `[]` on every visitor's
       // download, and an unused logo is measured in kilobytes, not bytes.
       ...(pinIcons.length > 0 ? { pinIcons } : {}),
-      places: usable.map(toSnapshotPlace),
+      ...(tagGroups.length > 0 ? { tagGroups } : {}),
+      ...(fields.length > 0 ? { fields } : {}),
+      places: usable.map((place) =>
+        toSnapshotPlace(place, definedTags, definedFields),
+      ),
       // Dropped entirely when empty, like every other optional field — and this
       // one has to be, because absent is also what every snapshot published
       // before shapes existed says.
@@ -120,6 +180,7 @@ export function buildSnapshot(
       // never opened the appearance menu publishes the exact bytes it published
       // before any of this existed.
       ...appearanceField(map),
+      ...gazetteerField(gazetteerBase, usable),
       settings: readEmbedSettings(map.settings),
       allowedDomains: map.allowedDomains,
     },
@@ -176,6 +237,32 @@ function appearanceField(map: AppMap): { appearance?: MapAppearance } {
   return isPlainAppearance(appearance) ? {} : { appearance };
 }
 
+/**
+ * The search gazetteer, or nothing at all.
+ *
+ * Omitted in two cases, and both matter. Without a base there is nowhere to
+ * fetch from, so publishing one would be a URL the embed 404s on every
+ * keystroke. Without countries there is nothing to fetch — a map whose pins were
+ * all dropped by hand has no `addressParts` and we genuinely do not know where
+ * they are — and an empty list would have the embed asking for shards it can
+ * never name.
+ *
+ * Only `usable` places count. A row we could not place is not on the published
+ * map, and its country is not one a visitor can search into.
+ */
+function gazetteerField(
+  base: string | undefined,
+  places: Place[],
+): { gazetteer?: MapSnapshot["gazetteer"] } {
+  if (!base) return {};
+
+  const countries = gazetteerCountries(places);
+  if (countries.length === 0) return {};
+
+  // Trailing slash stripped here rather than at every join site in the embed.
+  return { gazetteer: { base: base.replace(/\/+$/, ""), countries } };
+}
+
 function toSnapshotCategory(category: SnapshotCategory): SnapshotCategory {
   return { id: category.id, label: category.label, color: category.color };
 }
@@ -222,7 +309,66 @@ function usedPinIcons(map: AppMap, places: Place[]): SnapshotPinIcon[] {
  * places the absent keys are a meaningful slice of the download, and the embed
  * reads absent and empty identically.
  */
-function toSnapshotPlace(place: Place): SnapshotPlace {
+/**
+ * The map's tag groups, narrowed to tags a published place actually wears.
+ *
+ * The same filter categories get, and it does two jobs at once. It drops chips
+ * that would match nothing — a dead control on someone else's website — and it
+ * is also what defines "a real tag" for the places below: an id that survives
+ * this is one the map still lists *and* someone still uses.
+ *
+ * A group left with no tags is dropped whole. A heading over an empty row is
+ * worse than no heading.
+ */
+function usedTagGroups(
+  groups: MapTagGroup[],
+  places: Place[],
+): SnapshotTagGroup[] {
+  const worn = new Set(places.flatMap((place) => place.tags));
+
+  return groups
+    .map((group) => ({
+      id: group.id,
+      label: group.label,
+      tags: group.tags
+        .filter((tag) => worn.has(tag.id))
+        .map((tag) => ({ id: tag.id, label: tag.label })),
+    }))
+    .filter((group) => group.tags.length > 0);
+}
+
+/**
+ * The map's extra fields, narrowed to ones at least one published place fills in.
+ *
+ * An empty value is not a filled-in one: `placeFieldsSchema` already strips
+ * those on the way in, but a row written before that existed — or by an older
+ * build — can still hold `""`, and a field label with nothing under it on every
+ * card is a promise the map does not keep.
+ */
+function usedFields(fields: MapField[], places: Place[]): SnapshotField[] {
+  const answered = new Set(
+    places.flatMap((place) =>
+      Object.entries(place.fields)
+        .filter(([, value]) => value !== "")
+        .map(([id]) => id),
+    ),
+  );
+
+  return fields
+    .filter((field) => answered.has(field.id))
+    .map((field) => ({
+      id: field.id,
+      label: field.label,
+      type: field.type,
+      showAs: field.showAs,
+    }));
+}
+
+function toSnapshotPlace(
+  place: Place,
+  definedTags: ReadonlySet<string>,
+  definedFields: ReadonlySet<string>,
+): SnapshotPlace {
   const snapshot: SnapshotPlace = {
     id: place.id,
     name: place.name,
@@ -243,6 +389,19 @@ function toSnapshotPlace(place: Place): SnapshotPlace {
   if (!isEmptyHours(place.hours)) snapshot.hours = place.hours ?? undefined;
   if (place.photoUrl) snapshot.photoUrl = place.photoUrl;
 
+  // Narrowed, not copied: a place can be wearing a tag the map deleted, and the
+  // embed has nothing to resolve that id against. Omitted entirely when nothing
+  // survives, like every other optional field here.
+  const tags = place.tags.filter((id) => definedTags.has(id));
+  if (tags.length > 0) snapshot.tags = tags;
+
+  const fields = Object.fromEntries(
+    Object.entries(place.fields).filter(
+      ([id, value]) => definedFields.has(id) && value !== "",
+    ),
+  );
+  if (Object.keys(fields).length > 0) snapshot.fields = fields;
+
   return snapshot;
 }
 
@@ -254,9 +413,14 @@ function toSnapshotPlace(place: Place): SnapshotPlace {
  * are rows that would be downloaded by every visitor to render nothing.
  */
 function isDrawableShape(shape: Shape): boolean {
-  return shape.geometry.kind === "circle"
-    ? shape.geometry.radius > 0
-    : shape.geometry.points.length >= MIN_POLYGON_POINTS;
+  if (shape.geometry.kind === "circle") return shape.geometry.radius > 0;
+
+  // Two points for a line, three for an area. A line of two is a real line; a
+  // polygon of two is a line pretending to be one.
+  const floor =
+    shape.geometry.kind === "line" ? MIN_LINE_POINTS : MIN_POLYGON_POINTS;
+
+  return shape.geometry.points.length >= floor;
 }
 
 /**
@@ -284,14 +448,20 @@ function toSnapshotShape(shape: Shape): SnapshotShape {
     };
   }
 
-  return {
-    ...common,
-    kind: "polygon",
-    points: shape.geometry.points.map(([lng, lat]) => [
-      roundCoord(lng),
-      roundCoord(lat),
-    ]),
-  };
+  const points: [number, number][] = shape.geometry.points.map(([lng, lat]) => [
+    roundCoord(lng),
+    roundCoord(lat),
+  ]);
+
+  /*
+   * `from` and `to` are deliberately not carried across. They name rows in a
+   * database the embed has no access to and no reason to want one — the points
+   * above are already resolved, so the bond has nothing left to contribute
+   * except bytes on every visitor's download.
+   */
+  return shape.geometry.kind === "line"
+    ? { ...common, kind: "line", points }
+    : { ...common, kind: "polygon", points };
 }
 
 /**

@@ -58,6 +58,41 @@
       must still open the pin's card, not the shape's.
     </p>
     <p class="note">
+      Results list: a panel of locations beside the map, with search and the
+      filters docked at the top of it. Clicking a row opens that location's card
+      and marks the row; clicking a pin scrolls its row into view and marks it.
+      Narrow the browser <em>window</em> and nothing should change — the
+      breakpoints are container queries, so squeeze the map's own box instead and
+      it should stack with the map on top. &ldquo;Nearest to me&rdquo; re-sorts
+      the whole list by distance rather than jumping to one pin.
+    </p>
+    <p class="note">
+      Tags: two filter groups, &ldquo;Sells&rdquo; and &ldquo;Open&rdquo;, each
+      under its own heading with no colour dot. Within a group the chips widen
+      the results &mdash; ticking Bikes and Skis shows more shops than Bikes
+      alone &mdash; and across groups they narrow: Bikes plus Sundays leaves only
+      the flagship. That asymmetry is the whole rule; if ticking a second chip in
+      one group ever <em>removes</em> a location, the matching is wrong.
+    </p>
+    <p class="note">
+      Custom fields: the flagship's card carries a &ldquo;Book a fitting&rdquo;
+      button beside Directions, plus &ldquo;Dealer code&rdquo; and
+      &ldquo;Workshop&rdquo; as labelled rows &mdash; in the order the fixture
+      defines them, not the order the values sit in. The button shows the
+      owner's label, never the URL. Old town corner has only a dealer code, and
+      the two locations with no values must show no field rows at all.
+    </p>
+    <p class="note">
+      Search: typing filters the locations immediately, and after a beat offers
+      Lithuanian places and postcodes underneath &mdash; run
+      <code>npm run build:gazetteer -- LT</code> first, or the list stays empty
+      and the console says why. Pick &ldquo;Kaunas&rdquo;, which has no location
+      in it, and the map should fly there while the list re-sorts by distance
+      from Kaunas rather than emptying. A chip under the controls says where the
+      distances are measured from, and clears it. The whole control works from
+      the keyboard: type, arrow down, Enter, Escape.
+    </p>
+    <p class="note">
       Appearance: the fixture sets <code>labels: "some"</code> and turns points
       of interest off and cycle paths on, so the basemap should carry city and
       district names but <em>no</em> street names, water names or shop markers,

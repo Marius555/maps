@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
-import type { Group, Place } from "@/lib/repositories/types";
+import type { Group, Place, Shape } from "@/lib/repositories/types";
 import {
   DEFAULT_GROUP_COLOR,
   type CreateGroupInput,
@@ -346,6 +346,87 @@ export function useDeleteGroup(mapId: string) {
         queryKey: queryKeys.groups.all(mapId),
         refetchType: "none",
       });
+    },
+  });
+}
+
+/**
+ * Deletes a group and everything in it, in one request.
+ *
+ * One endpoint rather than a PATCH per member, for the reason `useSetGroupPin`
+ * gives: this touches *every* member of a group, which §6 allows to be 3,000
+ * rows, and firing three thousand DELETEs from a browser is not a thing to
+ * build. `useAssignToGroup` stays one-request-each because a marquee is bounded
+ * by a drag box; this is not bounded by anything.
+ *
+ * Three caches move at once and all three are rolled back together, because the
+ * user pressed one button: a half-restored map after a failed delete would be
+ * worse than the delete not happening. The whole arrays are kept rather than the
+ * removed ids — unlike `useSetGroupPin`, which keeps one field per row — because
+ * there is no field to merge back. A row is either there or it is not.
+ */
+export function useDeleteGroupContents(mapId: string) {
+  const queryClient = useQueryClient();
+
+  const groupsKey = queryKeys.groups.list(mapId);
+  const placesKey = queryKeys.places.list(mapId);
+  const shapesKey = queryKeys.shapes.list(mapId);
+
+  return useMutation({
+    mutationFn: (groupId: string) =>
+      apiFetch<{ places: number; shapes: number }>(
+        `/api/maps/${mapId}/groups/${groupId}/contents`,
+        { method: "DELETE" },
+      ),
+
+    onMutate: async (groupId) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: groupsKey }),
+        queryClient.cancelQueries({ queryKey: placesKey }),
+        queryClient.cancelQueries({ queryKey: shapesKey }),
+      ]);
+
+      const previous = {
+        groups: queryClient.getQueryData<Group[]>(groupsKey),
+        places: queryClient.getQueryData<Place[]>(placesKey),
+        shapes: queryClient.getQueryData<Shape[]>(shapesKey),
+      };
+
+      queryClient.setQueryData<Group[]>(groupsKey, (groups = []) =>
+        groups.filter((group) => group.id !== groupId),
+      );
+      queryClient.setQueryData<Place[]>(placesKey, (places = []) =>
+        places.filter((place) => place.groupId !== groupId),
+      );
+      queryClient.setQueryData<Shape[]>(shapesKey, (shapes = []) =>
+        shapes.filter((shape) => shape.groupId !== groupId),
+      );
+
+      return { previous };
+    },
+
+    onError: (_error, _groupId, context) => {
+      if (!context?.previous) return;
+
+      const { groups, places, shapes } = context.previous;
+      if (groups) queryClient.setQueryData(groupsKey, groups);
+      if (places) queryClient.setQueryData(placesKey, places);
+      if (shapes) queryClient.setQueryData(shapesKey, shapes);
+    },
+
+    /*
+     * Marked stale without a refetch, like every other mutation here: the
+     * optimistic filter is already the right answer, and re-paging a 3,000-row
+     * map is up to 50 requests to confirm it.
+     */
+    onSettled: () => {
+      for (const key of [
+        queryKeys.groups.all(mapId),
+        queryKeys.places.all(mapId),
+        queryKeys.shapes.all(mapId),
+      ]) {
+        queryClient.invalidateQueries({ queryKey: key, refetchType: "none" });
+      }
     },
   });
 }

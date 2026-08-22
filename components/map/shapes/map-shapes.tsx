@@ -3,10 +3,11 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useCallback, useEffect, useRef } from "react";
 
-import type { Shape } from "@/lib/repositories/types";
+import type { Place, Shape } from "@/lib/repositories/types";
 import type { ShapeGeometry, ShapeKind } from "@/packages/shared/shapes";
 import { ShapeCard } from "./shape-card/shape-card";
 import { useDrawCircle } from "./use-draw-circle";
+import { useDrawLine } from "./use-draw-line";
 import { useDrawPolygon } from "./use-draw-polygon";
 import { useShapeHandles } from "./use-shape-handles";
 import { useShapeLayers } from "./use-shape-layers";
@@ -19,7 +20,7 @@ import { useShapeLayers } from "./use-shape-layers";
  * the folder, and the import review and preview screens reuse its props without
  * wanting any of this.
  *
- * The four hooks share exactly one thing: the preview channel. Drawing paints
+ * The drawing hooks share exactly one thing: the preview channel. Drawing paints
  * through `draw`, dragging a handle paints through `preview`, and both write
  * straight to the GeoJSON source without a React render. See use-shape-layers.ts.
  */
@@ -49,6 +50,7 @@ export function MapShapes({
   map,
   isReady,
   shapes,
+  places,
   selectedShapeId,
   selectedShapeIds,
   drawMode,
@@ -61,6 +63,15 @@ export function MapShapes({
 }: MapShapesProps & {
   map: React.RefObject<MapLibreMap | null>;
   isReady: boolean;
+  /**
+   * The map's locations, for lines to bond to and be drawn from.
+   *
+   * Supplied by the canvas, which already has them, rather than by the caller's
+   * prop group — so map-editor.tsx never learns that shapes grew an opinion
+   * about pins, and the import review and preview screens that reuse these props
+   * are unaffected.
+   */
+  places: Place[];
   /**
    * Shapes picked out by the marquee or a group, which light up the same way a
    * clicked one does. Empty when the canvas has no selection feature at all.
@@ -133,9 +144,20 @@ export function MapShapes({
     onCancel: onStopDrawing,
   });
 
+  useDrawLine({
+    map,
+    isReady,
+    isActive: drawMode === "line",
+    places,
+    onPreview: draw,
+    onDraw: createShape,
+    onCancel: onStopDrawing,
+  });
+
   useShapeHandles({
     map,
     isReady,
+    places,
     // No handles while a tool is armed: they sit exactly where the next click
     // would go, and grabbing one instead of drawing is not what anyone meant.
     shape: drawMode ? null : selectedShape,

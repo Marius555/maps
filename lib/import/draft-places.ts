@@ -6,6 +6,7 @@ import { normalizeEmail, normalizeUrl } from "./contact";
 import { parseCoordinate, parseLatLngPair } from "./coordinates";
 import { ADDRESS_PARTS } from "./fields";
 import { hasBlockingIssue, hasErrorOn, quoteValue, type RowIssue } from "./issues";
+import { splitTagCell } from "./resolve-tags";
 import type { SourceRow } from "./table";
 
 /** A parsed row, keyed by header. */
@@ -33,6 +34,12 @@ export type DraftPlace = {
   address: string;
   /** The raw category text from the file. Resolved to a category id on save. */
   categoryLabel: string;
+  /**
+   * The raw tag text from the file, already split on , ; and |. Resolved to tag
+   * ids on save, the same way `categoryLabel` is — a file has labels and a place
+   * stores ids.
+   */
+  tagLabels: string[];
   description: string;
   phone: string;
   email: string;
@@ -140,6 +147,7 @@ export function buildDraftPlaces(
       name,
       address,
       categoryLabel: cell(row, mapping.category),
+      tagLabels: splitTagCell(cell(row, mapping.tags)),
       description: cell(row, mapping.description),
       phone: cell(row, mapping.phone),
       email,

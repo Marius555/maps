@@ -12,7 +12,7 @@
  * have to: the editor renders SVG and colours it with CSS custom properties, the
  * embed rasterises to a canvas and has no CSS to read. So `pinSvg` emits markup
  * with class hooks and no colours in it, and the embed paints the same paths
- * itself (embed/src/pin-image.ts).
+ * itself (./pin-raster.ts).
  *
  * Icon ids are stored as plain strings, and nothing here throws on one it doesn't
  * know. That is what lets a pin the customer built store `custom:<pinIconId>` in
@@ -52,6 +52,16 @@ export const GLYPH_SOURCE_BOX = 24;
 
 /** Prefixes an id that names one of the map's own pins rather than a built-in. */
 export const CUSTOM_PIN_PREFIX = "custom:";
+
+/**
+ * What a place with no category and no pin colour of its own is drawn in.
+ *
+ * A fixed grey rather than the dashboard's `--accent`, because the two renderers
+ * that need it have no theme to read: a published snapshot is looked at by
+ * strangers, and an exported image is a file that outlives the tab. Both need a
+ * colour that is decided once and written down.
+ */
+export const UNCATEGORISED_PIN_COLOR = "#7a828f";
 
 /** The body outline a pin is drawn as. */
 export type PinShape = "circle" | "square" | "diamond";

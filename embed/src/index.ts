@@ -14,9 +14,17 @@ import {
   whenVisible,
   type EmbedConfig,
 } from "./config";
-import { el } from "./dom";
-import { createFilters, matchesCategories } from "./filters";
-import { nearestPlace, formatDistance, distanceKm } from "./geo";
+import { button, el } from "./dom";
+import {
+  createFilters,
+  createTagFilters,
+  matchesCategories,
+  matchesTags,
+  tagGroupIndex,
+} from "./filters";
+import { createGazetteer } from "./gazetteer";
+import { nearestPlace, formatDistance, distanceKm, type Located } from "./geo";
+import { createList, type ListHandle } from "./list";
 import { createMap, type MapHandle } from "./map";
 import { fetchSnapshot } from "./snapshot";
 import {
@@ -168,6 +176,7 @@ async function render(
   const root = el("div", isDark ? "lm-root lm-root--dark" : "lm-root");
   root.style.height = "100%";
 
+  const layout = el("div", "lm-layout");
   const canvas = el("div", "lm-canvas");
   const toolbar = el("div", "lm-toolbar");
   const status = el("div", "lm-status");
@@ -176,14 +185,50 @@ async function render(
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
 
-  root.append(canvas, toolbar, status);
+  /*
+   * The two halves refer to each other, so one of them has to be built before
+   * the other exists: the list opens a place on the map, and the map marks the
+   * list's row when a pin is clicked. Declared here and assigned below, because
+   * both references are read inside callbacks that cannot run until after
+   * `createMap` has returned.
+   *
+   * Absent `list` means the owner switched the panel off — and it also means an
+   * older snapshot, published before the setting existed, which must keep
+   * rendering the bare map it has always rendered on their site.
+   */
+  let map: MapHandle | null = null;
+
+  const list = snapshot.settings.list
+    ? createList(snapshot, (place) => map?.focusPlace(place))
+    : null;
+
+  if (list) {
+    // Search and filters belong to the results panel once there is one; over
+    // the map they would cover the list rather than the thing they filter.
+    toolbar.classList.add("lm-toolbar--docked");
+
+    const panel = el("div", "lm-panel");
+    panel.append(toolbar, list.element);
+    layout.append(panel, canvas);
+  } else {
+    layout.append(canvas);
+  }
+
+  root.append(layout);
+  // Floating controls hang off the root rather than the layout: they are
+  // positioned against the whole box, and the layout is the flex row.
+  if (!list) root.append(toolbar);
+  root.append(status);
+
   container.replaceChildren(root);
 
-  const map = createMap(canvas, snapshot, {
+  map = createMap(canvas, snapshot, {
     style,
     focusPlaceId: readFocusPlaceId(),
+    onSelect: (placeId) => list?.select(placeId),
   });
-  wireControls({ map, snapshot, toolbar, status });
+
+  wireControls({ map, snapshot, toolbar, status, list });
 }
 
 /**
@@ -216,24 +261,81 @@ function wireControls({
   snapshot,
   toolbar,
   status,
+  list,
 }: {
   map: MapHandle;
   snapshot: MapSnapshot;
   toolbar: HTMLElement;
   status: HTMLElement;
+  list: ListHandle | null;
 }): void {
   let query = "";
   let selected = new Set<string>();
+  let tags = new Set<string>();
+  /*
+   * Which group each tag belongs to, built once. `matchesTags` needs it on every
+   * place on every keystroke, and walking the group list each time would be
+   * three thousand places times sixty tags of work per character typed.
+   */
+  const groupOf = tagGroupIndex(snapshot.tagGroups ?? []);
+  /**
+   * Where the visitor is measuring from, once anything has said. Null until
+   * then, and the list keeps the owner's own order while it is.
+   *
+   * Two things set it — "Nearest to me" and a place picked out of the search —
+   * and both go through `setOrigin`, so the chip that says where the distances
+   * are measured from can never disagree with the distances themselves.
+   */
+  let origin: Located | null = null;
+
+  const nearby = el("div", "lm-origin");
+  nearby.hidden = true;
+
+  /**
+   * Measure from here, and say so.
+   *
+   * The chip is not decoration. Without it the list is silently ordered by a
+   * point the visitor can no longer see, and the only way back to the map's own
+   * order is to reload the page — which reads as the widget having got stuck.
+   */
+  const setOrigin = (next: Located | null, label?: string) => {
+    origin = next;
+
+    if (!next) {
+      nearby.hidden = true;
+      nearby.replaceChildren();
+      apply();
+      return;
+    }
+
+    const clear = button("lm-origin__clear", "Clear");
+    clear.setAttribute("aria-label", "Stop measuring from here");
+    clear.addEventListener("click", () => setOrigin(null));
+
+    nearby.replaceChildren(
+      el("span", "lm-origin__label", `Near ${label ?? "you"}`),
+      clear,
+    );
+    nearby.hidden = false;
+
+    apply();
+  };
 
   const visible = (): SnapshotPlace[] =>
     snapshot.places.filter(
       (place) =>
-        matchesQuery(place, query) && matchesCategories(place.category, selected),
+        matchesQuery(place, query) &&
+        matchesCategories(place.category, selected) &&
+        matchesTags(place.tags, tags, groupOf),
     );
 
   const apply = () => {
     const places = visible();
     map.setPlaces(places);
+    // Before the empty check, not after: an empty result is exactly when the
+    // list has something to say, and returning early would leave the last set
+    // of rows sitting under a search that matches none of them.
+    list?.setPlaces(places, origin);
 
     if (places.length === 0) {
       status.textContent = "No locations match.";
@@ -248,9 +350,13 @@ function wireControls({
 
   if (snapshot.settings.search) {
     toolbar.append(
-      createSearchField((value) => {
-        query = value;
-        apply();
+      createSearchField({
+        onQuery: (value) => {
+          query = value;
+          apply();
+        },
+        onPlace: (place) => setOrigin({ lat: place.lat, lng: place.lng }, place.label),
+        gazetteer: createGazetteer(snapshot.gazetteer),
       }),
     );
   }
@@ -266,6 +372,15 @@ function wireControls({
     });
 
     if (filters) toolbar.append(filters);
+
+    // The same switch governs both: they are one control to a visitor, and a map
+    // whose owner turned filtering off should not sprout half of it back.
+    const tagFilters = createTagFilters(snapshot.tagGroups ?? [], (next) => {
+      tags = next;
+      apply();
+    });
+
+    if (tagFilters) toolbar.append(tagFilters);
   }
 
   async function goToNearest(): Promise<void> {
@@ -273,8 +388,19 @@ function wireControls({
 
     try {
       const position = await currentPosition();
-      const candidates = visible();
-      const nearest = nearestPlace(position, candidates);
+
+      /*
+       * The answer is the whole list re-ordered, not one pin.
+       *
+       * Flying to the single nearest place was all a map could say. With a list
+       * beside it, "nearest to me" means the visitor now has somewhere to
+       * measure from — so every row shows its distance and the order becomes the
+       * order they care about. The closest one is still opened, because that is
+       * the question they asked.
+       */
+      setOrigin(position, "you");
+
+      const nearest = nearestPlace(position, visible());
 
       if (!nearest) {
         status.textContent = "No locations match.";
@@ -291,6 +417,14 @@ function wireControls({
       status.textContent = "Couldn't get your location.";
     }
   }
+
+  // Under the controls rather than beside them: it is the *result* of using one,
+  // and it appears and disappears, which inside a wrapping flex row would shuffle
+  // the chips every time the visitor pressed it.
+  toolbar.append(nearby);
+
+  // The map builds itself from the snapshot; the list has to be told once.
+  list?.setPlaces(snapshot.places, origin);
 }
 
 // Module scripts are deferred, so the DOM is normally parsed by now. The guard

@@ -5,6 +5,7 @@ import { AnimatePresence } from "motion/react";
 import { useState } from "react";
 
 import { GroupListItem } from "@/components/groups/group-list-item";
+import { DeleteGroupDialog } from "@/components/groups/delete-group-dialog";
 import { GroupPinDialog } from "@/components/groups/group-pin-dialog";
 import { UngroupDialog } from "@/components/groups/ungroup-dialog";
 import type { DraggedObject } from "@/components/groups/use-row-drag";
@@ -17,6 +18,7 @@ import { sidebarRows } from "@/lib/map/sidebar-rows";
 import {
   isOptimisticGroupId,
   useDeleteGroup,
+  useDeleteGroupContents,
   useSetGroupPin,
 } from "@/lib/query/groups";
 import { isOptimisticPlaceId, useDeletePlace } from "@/lib/query/places";
@@ -118,12 +120,16 @@ export function LocationsList({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
   const ungroup = useDeleteGroup(mapId);
+  const deleteGroupContents = useDeleteGroupContents(mapId);
   const setGroupPin = useSetGroupPin(mapId);
   const deletePlace = useDeletePlace(mapId);
   const deleteShape = useDeleteShape(mapId);
 
   const [pendingUngroupId, setPendingUngroupId] = useState<string | null>(null);
   const [pinGroupId, setPinGroupId] = useState<string | null>(null);
+  const [pendingDeleteGroupId, setPendingDeleteGroupId] = useState<string | null>(
+    null,
+  );
   const [pendingDeletePlaceId, setPendingDeletePlaceId] = useState<string | null>(
     null,
   );
@@ -147,6 +153,17 @@ export function LocationsList({
   // dragged into the group while the dialog is open is included in what it says.
   const pinGroupPlaces = places.filter(
     (place) => place.groupId === pinGroupId,
+  ).length;
+  const pendingDeleteGroup =
+    groups.find((g) => g.id === pendingDeleteGroupId) ?? null;
+  // Counted live for the same reason the pin dialog's count is: what the
+  // sentence promises and what the request deletes have to be the same set, even
+  // if something is dragged in while the dialog is open.
+  const pendingDeleteGroupPlaces = places.filter(
+    (place) => place.groupId === pendingDeleteGroupId,
+  ).length;
+  const pendingDeleteGroupShapes = shapes.filter(
+    (shape) => shape.groupId === pendingDeleteGroupId,
   ).length;
   const pendingDeletePlace =
     places.find((place) => place.id === pendingDeletePlaceId) ?? null;
@@ -273,6 +290,10 @@ export function LocationsList({
                     if (isOptimisticGroupId(group.id)) return;
                     setPendingUngroupId(group.id);
                   }}
+                  onDelete={() => {
+                    if (isOptimisticGroupId(group.id)) return;
+                    setPendingDeleteGroupId(group.id);
+                  }}
                   onDropObject={(dragged) => drop(target, dragged)}
                   acceptsDrop={accepts(target)}
                 />
@@ -390,6 +411,33 @@ export function LocationsList({
           setPendingUngroupId(null);
           ungroup.mutate(pendingUngroupId, {
             onError: (error) => toastError(error, "Couldn't ungroup"),
+          });
+        }}
+      />
+
+      <DeleteGroupDialog
+        group={pendingDeleteGroup}
+        places={pendingDeleteGroupPlaces}
+        shapes={pendingDeleteGroupShapes}
+        isDeleting={deleteGroupContents.isPending}
+        error={deleteGroupContents.error}
+        onClose={() => setPendingDeleteGroupId(null)}
+        onConfirm={() => {
+          if (!pendingDeleteGroupId) return;
+
+          /*
+           * Awaited, unlike Ungroup beside it — the asymmetry is deliberate.
+           *
+           * Ungroup closes first because its whole story is the rows travelling
+           * back out into the loose run, and a spinner would cover the only
+           * thing worth watching. This destroys them. If the request fails the
+           * user has to be told *here*, over the button they pressed, rather
+           * than by a toast arriving after a dialog has already closed on what
+           * looked like a successful delete — which is why this one has an
+           * inline error and a pending state at all.
+           */
+          deleteGroupContents.mutate(pendingDeleteGroupId, {
+            onSuccess: () => setPendingDeleteGroupId(null),
           });
         }}
       />

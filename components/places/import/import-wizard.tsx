@@ -14,6 +14,7 @@ import {
   normalizeLabel,
   resolveCategories,
 } from "@/lib/import/resolve-categories";
+import { resolveTags } from "@/lib/import/resolve-tags";
 import { useBulkCreatePlaces } from "@/lib/query/import";
 import { useUpdateMap } from "@/lib/query/maps";
 import type { AppMap } from "@/lib/repositories/types";
@@ -95,6 +96,17 @@ export function ImportWizard({
       map.categories,
     );
 
+    /*
+     * The same reconciliation for tags, and it has to happen before the first
+     * chunk for the same reason: a place stores ids, and the ids only exist once
+     * the labels in the file have been matched to the map's vocabulary or added
+     * to it. `flatMap` because a row carries several.
+     */
+    const tags = resolveTags(
+      drafts.flatMap((draft) => draft.tagLabels),
+      map.tagGroups,
+    );
+
     // Built up front so every row can be checked before the first request goes
     // out. A failure on chunk two would otherwise leave 200 locations saved and
     // a message that names neither the row nor the reason.
@@ -103,6 +115,12 @@ export function ImportWizard({
       input: draftToCreateInput(
         draft,
         resolved.idByLabel.get(normalizeLabel(draft.categoryLabel)) ?? "",
+        // A label the resolver dropped — because the map is at its ceiling —
+        // resolves to nothing and is simply left off the row, which is what the
+        // dropped list is reported for.
+        draft.tagLabels
+          .map((label) => tags.idByLabel.get(normalizeLabel(label)))
+          .filter((id): id is string => Boolean(id)),
       ),
     }));
 
@@ -132,8 +150,14 @@ export function ImportWizard({
         // Writing them up front — as this used to — left a map full of new
         // categories and no locations whenever the plan limit rejected the very
         // first chunk, and the user had to delete them by hand.
-        if (start === 0 && resolved.added.length > 0) {
-          await updateMap.mutateAsync({ categories: resolved.categories });
+        if (start === 0 && (resolved.added.length > 0 || tags.addedCount > 0)) {
+          // One PATCH for both. `updateMap` writes each JSON column it is given
+          // and leaves the rest alone, but two calls would be two round trips
+          // and two chances to half-apply the vocabulary this import needs.
+          await updateMap.mutateAsync({
+            ...(resolved.added.length > 0 ? { categories: resolved.categories } : {}),
+            ...(tags.addedCount > 0 ? { tagGroups: tags.tagGroups } : {}),
+          });
           addedCategories = resolved.added.length;
         }
       }

@@ -48,6 +48,11 @@ export function useShapeLayers({
 }: {
   map: React.RefObject<MapLibreMap | null>;
   isReady: boolean;
+  /**
+   * Already resolved: a bonded line arrives here with its ends at the locations
+   * it is tied to. map-editor.tsx does that once for the canvas and the sidebar
+   * together — see the memo there for why it cannot be done per renderer.
+   */
   shapes: Shape[];
   selectedShapeId: string | null;
   /** Shapes picked by the marquee or a group. They light up the same way. */
@@ -133,6 +138,10 @@ export function useShapeLayers({
    * because joining or leaving a group repaints shapes whose own rows have not
    * changed at all: without it the source would keep the old colours until
    * something else happened to redraw it.
+   *
+   * A bonded line is covered by the same dependency without naming it: moving a
+   * pin rebuilds the resolved array upstream, so `shapes` is a new value here
+   * and the line redraws at its end's new position.
    */
   useEffect(() => {
     shapesRef.current = shapes;

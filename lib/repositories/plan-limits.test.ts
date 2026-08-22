@@ -102,6 +102,8 @@ const placeInput = (name: string) => ({
   lng: 25.28,
   address: "",
   category: "",
+  tags: [],
+  fields: {},
   icon: "",
   sortOrder: 0,
   geocodeStatus: "manual" as const,
@@ -277,5 +279,111 @@ describe("createShape", () => {
     const { createShape } = await shapes();
 
     await expect(createShape(ctx, MAP_ID, shapeInput("Zone"))).resolves.toBeTruthy();
+  });
+});
+
+/**
+ * The importer's paywall.
+ *
+ * The case `createShape` cannot cover: a GeoJSON file arrives as one batch, and
+ * checking the limit per row would let a thirteen-province import stop at the
+ * third with three provinces already saved and no way to tell the user which.
+ * The batch is refused whole or written whole.
+ */
+describe("createShapes", () => {
+  const shapeInput = (name: string) => ({
+    name,
+    geometry: {
+      kind: "polygon" as const,
+      points: [
+        [25.27, 54.68],
+        [25.29, 54.68],
+        [25.28, 54.7],
+      ] as [number, number][],
+    },
+    color: "#1c7ed6",
+    opacity: 0.2,
+    sortOrder: 0,
+    groupId: "",
+  });
+
+  const batch = (count: number) =>
+    Array.from({ length: count }, (_, index) => shapeInput(`Region ${index}`));
+
+  async function shapes() {
+    return import("./shapes.repository");
+  }
+
+  it("writes a batch that fits", async () => {
+    existingShapeCount = 0;
+    const { createShapes } = await shapes();
+
+    const created = await createShapes(ctx, MAP_ID, batch(PLAN_LIMITS.free.shapes));
+
+    expect(created).toHaveLength(PLAN_LIMITS.free.shapes);
+    expect(createRows).toHaveBeenCalledOnce();
+  });
+
+  it("refuses a batch that would overflow, and writes nothing", async () => {
+    existingShapeCount = 0;
+    const { createShapes } = await shapes();
+
+    await expect(
+      createShapes(ctx, MAP_ID, batch(PLAN_LIMITS.free.shapes + 1)),
+    ).rejects.toMatchObject({ code: "plan_limit_reached", status: 403 });
+
+    // The half that matters. A partial import is worse than a refused one,
+    // because the user cannot tell what landed.
+    expect(createRows).not.toHaveBeenCalled();
+  });
+
+  it("counts what the map already holds", async () => {
+    existingShapeCount = PLAN_LIMITS.free.shapes - 1;
+    const { createShapes } = await shapes();
+
+    // One fits, two do not — the limit is on the total, not on the batch.
+    await expect(createShapes(ctx, MAP_ID, batch(1))).resolves.toHaveLength(1);
+    await expect(createShapes(ctx, MAP_ID, batch(2))).rejects.toMatchObject({
+      code: "plan_limit_reached",
+    });
+  });
+
+  it("uses the paid limit for an active paid subscription", async () => {
+    subscriptionRows = [{ plan: "starter", status: "active" }];
+    existingShapeCount = 0;
+    const { createShapes } = await shapes();
+
+    await expect(
+      createShapes(ctx, MAP_ID, batch(PLAN_LIMITS.free.shapes + 5)),
+    ).resolves.toBeTruthy();
+  });
+
+  it("writes nothing for an empty batch", async () => {
+    const { createShapes } = await shapes();
+
+    await expect(createShapes(ctx, MAP_ID, [])).resolves.toEqual([]);
+    expect(createRows).not.toHaveBeenCalled();
+  });
+
+  it("numbers sortOrder on from what the map already has", async () => {
+    existingShapeCount = 2;
+    subscriptionRows = [{ plan: "starter", status: "active" }];
+    const { createShapes } = await shapes();
+
+    await createShapes(ctx, MAP_ID, batch(3));
+
+    const { rows } = createRows.mock.calls[0][0];
+    expect(rows.map((row: { sortOrder: number }) => row.sortOrder)).toEqual([2, 3, 4]);
+  });
+
+  it("splits the kind out of the geometry, as createShape does", async () => {
+    subscriptionRows = [{ plan: "starter", status: "active" }];
+    const { createShapes } = await shapes();
+
+    await createShapes(ctx, MAP_ID, batch(1));
+
+    const { rows } = createRows.mock.calls[0][0];
+    expect(rows[0].kind).toBe("polygon");
+    expect(JSON.parse(rows[0].geometry)).not.toHaveProperty("kind");
   });
 });

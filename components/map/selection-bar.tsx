@@ -2,6 +2,7 @@
 
 import { Button } from "@heroui/react";
 import { AnimatePresence, motion } from "motion/react";
+import type { ReactNode } from "react";
 
 /**
  * What to do with the things the marquee just caught.
@@ -21,6 +22,7 @@ export function SelectionBar({
   count,
   actionLabel,
   isBusy,
+  extraActions,
   onGroup,
   onClear,
 }: {
@@ -36,6 +38,16 @@ export function SelectionBar({
    */
   actionLabel: "Group" | "Merge" | null;
   isBusy: boolean;
+  /**
+   * Anything else this selection can be turned into, rendered between the
+   * grouping action and Clear.
+   *
+   * A slot rather than another pair of props, because the bar's job is to say
+   * how many things are selected and give them somewhere to go — it should not
+   * have to know what a tag is. Today this is the bulk tag menu; whatever comes
+   * next lands here without reopening this file.
+   */
+  extraActions?: ReactNode;
   onGroup: () => void;
   onClear: () => void;
 }) {
@@ -68,6 +80,8 @@ export function SelectionBar({
                 {actionLabel}
               </Button>
             ) : null}
+
+            {extraActions}
 
             <Button size="sm" variant="tertiary" onPress={onClear}>
               Clear

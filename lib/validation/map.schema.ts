@@ -3,6 +3,8 @@ import { z } from "zod";
 import { DEFAULT_CENTER } from "@/lib/config";
 import { DEFAULT_MAP_STYLE, MAP_STYLES } from "@/lib/map/style";
 import { categoriesSchema } from "./category.schema";
+import { customFieldsSchema } from "./field.schema";
+import { tagGroupsSchema } from "./tag.schema";
 import { latSchema, lngSchema, zoomSchema } from "./common";
 import { allowedDomainsSchema } from "./domain.schema";
 import { embedSettingsSchema } from "./embed-settings.schema";
@@ -33,6 +35,11 @@ export const updateMapSchema = z
     defaultLng: lngSchema,
     defaultZoom: zoomSchema,
     categories: categoriesSchema,
+    // The map's second filter axis, and the extra fields its locations carry.
+    // Both are the map's vocabulary rather than any one place's — see their
+    // schemas for why the definitions live here and only the answers live there.
+    tagGroups: tagGroupsSchema,
+    fields: customFieldsSchema,
     pinIcons: pinIconsSchema,
     settings: embedSettingsSchema,
     appearance: mapAppearanceSchema,

@@ -18,6 +18,8 @@ function makeMap(overrides: Partial<AppMap> = {}): AppMap {
     defaultLng: 25.28,
     defaultZoom: 11,
     categories: [],
+    tagGroups: [],
+    fields: [],
     pinIcons: [],
     settings: {},
     appearance: {},
@@ -39,6 +41,8 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     lng: 25.28,
     address: "Gedimino pr. 1, Vilnius",
     category: "",
+    tags: [],
+    fields: {},
     icon: "",
     description: null,
     phone: null,
@@ -221,6 +225,7 @@ describe("buildSnapshot", () => {
       search: true,
       filters: true,
       nearest: true,
+      list: true,
     });
   });
 
@@ -579,6 +584,7 @@ describe("buildSnapshot", () => {
       search: true,
       filters: true,
       nearest: true,
+      list: true,
     });
   });
 
@@ -709,6 +715,113 @@ describe("buildSnapshot", () => {
       expect(shape.points).toHaveLength(3);
     });
 
+    /**
+     * A line publishes its ends resolved and its bonds stripped.
+     *
+     * The bond names a database row the embed has no access to, so shipping it
+     * would be bytes on every visitor's download describing a relationship
+     * nothing on that page could act on. And resolving has to happen *here*:
+     * publishing the stored coordinates would ship wherever the line was drawn
+     * rather than where its locations ended up.
+     */
+    describe("lines", () => {
+      const line = (overrides: Partial<Shape> = {}) =>
+        makeShape({
+          id: "line-1",
+          name: "Supply route",
+          geometry: {
+            kind: "line",
+            points: [
+              [0, 0],
+              [25.3, 54.7],
+            ],
+            from: "place-1",
+          },
+          ...overrides,
+        });
+
+      it("publishes a line as a line", () => {
+        const { snapshot } = buildSnapshot(
+          makeMap(),
+          [makePlace()],
+          [line()],
+          GENERATED_AT,
+        );
+
+        expect(snapshot.shapes?.[0].kind).toBe("line");
+      });
+
+      it("resolves a bonded end to its location", () => {
+        const { snapshot } = buildSnapshot(
+          makeMap(),
+          [makePlace({ id: "place-1", lng: 25.28, lat: 54.687 })],
+          [line()],
+          GENERATED_AT,
+        );
+
+        const shape = snapshot.shapes?.[0];
+        if (shape?.kind !== "line") throw new Error("expected a line");
+
+        expect(shape.points[0]).toEqual([25.28, 54.687]);
+      });
+
+      it("never ships the bond itself", () => {
+        const { snapshot } = buildSnapshot(
+          makeMap(),
+          [makePlace()],
+          [line()],
+          GENERATED_AT,
+        );
+
+        expect(snapshot.shapes?.[0]).not.toHaveProperty("from");
+        expect(snapshot.shapes?.[0]).not.toHaveProperty("to");
+      });
+
+      it("keeps the stored point when the bonded location is gone", () => {
+        const { snapshot } = buildSnapshot(
+          makeMap(),
+          [],
+          [line({ geometry: { kind: "line", points: [[10, 20], [25.3, 54.7]], from: "deleted" } })],
+          GENERATED_AT,
+        );
+
+        const shape = snapshot.shapes?.[0];
+        if (shape?.kind !== "line") throw new Error("expected a line");
+
+        expect(shape.points[0]).toEqual([10, 20]);
+      });
+
+      it("publishes a two-point line, which an area could not be", () => {
+        const { snapshot } = buildSnapshot(makeMap(), [], [line()], GENERATED_AT);
+
+        expect(snapshot.shapes).toHaveLength(1);
+      });
+
+      it("leaves out a line with only one point", () => {
+        const { snapshot } = buildSnapshot(
+          makeMap(),
+          [],
+          [line({ geometry: { kind: "line", points: [[25.28, 54.687]] } })],
+          GENERATED_AT,
+        );
+
+        expect(snapshot).not.toHaveProperty("shapes");
+      });
+
+      it("frames the map around a line's resolved extent", () => {
+        const { snapshot } = buildSnapshot(
+          makeMap(),
+          [makePlace({ id: "place-1", lng: 25.0, lat: 54.0 })],
+          [line()],
+          GENERATED_AT,
+        );
+
+        // The bond moved the western end, so the bounds must follow it rather
+        // than the coordinates stored on the row.
+        expect(snapshot.bounds?.west).toBe(25.0);
+      });
+    });
+
     it("leaves out a shape that would draw nothing", () => {
       const { snapshot } = buildSnapshot(
         makeMap(),
@@ -750,5 +863,191 @@ describe("buildSnapshot", () => {
       expect(snapshot.bounds?.north).toBe(54.9);
       expect(snapshot.bounds?.south).toBeLessThan(54.68);
     });
+  });
+});
+
+describe("buildSnapshot tags and custom fields", () => {
+  const groups = [
+    {
+      id: "sells",
+      label: "Sells",
+      tags: [
+        { id: "bikes", label: "Bikes" },
+        { id: "skis", label: "Skis" },
+      ],
+    },
+    { id: "open", label: "Open", tags: [{ id: "sundays", label: "Sundays" }] },
+  ];
+
+  const fields = [
+    { id: "booking", label: "Book", type: "url" as const, showAs: "button" as const },
+    { id: "code", label: "Dealer code", type: "text" as const, showAs: "row" as const },
+  ];
+
+  it("omits both entirely when the map defines neither", () => {
+    // The bytes every visitor downloads. Absent is also what every snapshot
+    // published before these existed says, so absent has to keep meaning "none".
+    const { snapshot } = buildSnapshot(makeMap(), [makePlace()], [], GENERATED_AT);
+
+    expect(snapshot.tagGroups).toBeUndefined();
+    expect(snapshot.fields).toBeUndefined();
+    expect(snapshot.places[0].tags).toBeUndefined();
+    expect(snapshot.places[0].fields).toBeUndefined();
+  });
+
+  it("ships only the tags a published place actually wears", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ tagGroups: groups }),
+      [makePlace({ tags: ["bikes"] })],
+      [],
+      GENERATED_AT,
+    );
+
+    // "Skis" is defined but unworn, so its chip would match nothing; "Open" is
+    // left empty by that narrowing and goes whole.
+    expect(snapshot.tagGroups).toEqual([
+      { id: "sells", label: "Sells", tags: [{ id: "bikes", label: "Bikes" }] },
+    ]);
+  });
+
+  it("drops a tag id the map no longer defines", () => {
+    // Deleting a tag does not sweep it off the places wearing it, so this is the
+    // normal state of a map whose owner has changed their mind once.
+    const { snapshot } = buildSnapshot(
+      makeMap({ tagGroups: groups }),
+      [makePlace({ tags: ["bikes", "deleted"] })],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.places[0].tags).toEqual(["bikes"]);
+  });
+
+  it("omits a place's tags when none of them survive", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ tagGroups: groups }),
+      [makePlace({ tags: ["deleted"] })],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.tagGroups).toBeUndefined();
+    expect(snapshot.places[0].tags).toBeUndefined();
+  });
+
+  it("counts tags worn by skipped places as unworn", () => {
+    // An unplaceable row is not published, so a chip that only it wears would be
+    // a dead control on the customer's site.
+    const { snapshot } = buildSnapshot(
+      makeMap({ tagGroups: groups }),
+      [makePlace({ tags: ["bikes"] }), makePlace({ id: "p2", lat: 999, tags: ["skis"] })],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.tagGroups?.[0].tags).toEqual([{ id: "bikes", label: "Bikes" }]);
+  });
+
+  it("ships only the custom fields somebody filled in", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ fields }),
+      [makePlace({ fields: { booking: "https://example.com/book" } })],
+      [],
+      GENERATED_AT,
+    );
+
+    // A label with nothing under it on every card is a promise the map doesn't keep.
+    expect(snapshot.fields).toEqual([fields[0]]);
+    expect(snapshot.places[0].fields).toEqual({ booking: "https://example.com/book" });
+  });
+
+  it("treats an empty value as unanswered", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ fields }),
+      [makePlace({ fields: { booking: "" } })],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.fields).toBeUndefined();
+    expect(snapshot.places[0].fields).toBeUndefined();
+  });
+
+  it("drops a value keyed by a field the map no longer defines", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ fields: [fields[1]] }),
+      [makePlace({ fields: { booking: "https://example.com/book", code: "GB-14" } })],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.places[0].fields).toEqual({ code: "GB-14" });
+  });
+});
+
+describe("buildSnapshot gazetteer", () => {
+  const inGb = (id: string) =>
+    makePlace({ id, addressParts: { countryCode: "GB" } });
+
+  it("is omitted when no base is given", () => {
+    // Every existing caller passes four arguments, and a snapshot with a
+    // `gazetteer` block pointing nowhere is a URL the embed 404s on per
+    // keystroke.
+    const { snapshot } = buildSnapshot(makeMap(), [inGb("p1")], [], GENERATED_AT);
+
+    expect(snapshot.gazetteer).toBeUndefined();
+  });
+
+  it("names only the countries the published locations are in", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [inGb("p1"), makePlace({ id: "p2", addressParts: { countryCode: "DE" } })],
+      [],
+      GENERATED_AT,
+      "https://cdn.example.com/gazetteer",
+    );
+
+    expect(snapshot.gazetteer).toEqual({
+      base: "https://cdn.example.com/gazetteer",
+      countries: ["DE", "GB"],
+    });
+  });
+
+  it("ignores the countries of locations that were not published", () => {
+    // An unplaceable row is not on the map, so its country is not one a visitor
+    // can search into.
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [inGb("p1"), makePlace({ id: "p2", lat: 999, addressParts: { countryCode: "DE" } })],
+      [],
+      GENERATED_AT,
+      "https://cdn.example.com/gazetteer",
+    );
+
+    expect(snapshot.gazetteer?.countries).toEqual(["GB"]);
+  });
+
+  it("is omitted for a map whose pins were all dropped by hand", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [makePlace()],
+      [],
+      GENERATED_AT,
+      "https://cdn.example.com/gazetteer",
+    );
+
+    expect(snapshot.gazetteer).toBeUndefined();
+  });
+
+  it("strips a trailing slash so the embed can join paths naively", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [inGb("p1")],
+      [],
+      GENERATED_AT,
+      "https://cdn.example.com/gazetteer/",
+    );
+
+    expect(snapshot.gazetteer?.base).toBe("https://cdn.example.com/gazetteer");
   });
 });

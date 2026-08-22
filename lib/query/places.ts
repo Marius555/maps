@@ -116,6 +116,8 @@ export function useCreatePlace(mapId: string) {
         lng: input.lng,
         address: input.address ?? "",
         category: input.category ?? "",
+        tags: input.tags ?? [],
+        fields: input.fields ?? {},
         icon: input.icon ?? "",
         description: input.description ?? null,
         phone: input.phone ?? null,
@@ -278,4 +280,42 @@ export function useDeletePlace(mapId: string) {
       });
     },
   });
+}
+
+/**
+ * Adds one tag to every selected location.
+ *
+ * One PATCH each, for the same reason `useAssignToGroup` is one PATCH each: a
+ * marquee selection is bounded by what fits in a drag box. `useSetGroupPin` is
+ * the case that needed a batch endpoint instead, and it is a different case —
+ * it writes *every* member of a group, which §6 allows 3,000 of.
+ *
+ * The PATCH carries the whole `tags` array because that is the column's shape;
+ * Appwrite has no "append to array". Each one is built from the place's own
+ * current tags, so two of these landing at once cannot lose each other's work
+ * unless they hit the same location — and a location is only in one selection.
+ *
+ * Places already wearing the tag are skipped rather than rewritten: a no-op
+ * PATCH still bumps `updatedAt`, and that is what the publish tab reads to
+ * decide whether the map has unpublished changes.
+ */
+export function useAddTagToPlaces(mapId: string) {
+  const updatePlace = useUpdatePlace(mapId);
+  const updatePlaceAsync = updatePlace.mutateAsync;
+
+  return useCallback(
+    async (places: Place[], tagId: string) => {
+      const pending = places.filter((place) => !place.tags.includes(tagId));
+
+      await Promise.all(
+        pending.map((place) =>
+          updatePlaceAsync({
+            placeId: place.id,
+            input: { tags: [...place.tags, tagId] },
+          }),
+        ),
+      );
+    },
+    [updatePlaceAsync],
+  );
 }

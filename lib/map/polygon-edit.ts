@@ -1,7 +1,7 @@
 import type { LngLatTuple } from "@/packages/shared/shapes";
 
 /**
- * Reshaping a polygon after it has been drawn.
+ * Reshaping a polygon or a line after it has been drawn.
  *
  * `/lib` rather than `/packages/shared`, deliberately: a polygon is only ever
  * edited in the dashboard, and the embed would inherit anything put next to
@@ -30,13 +30,23 @@ import type { LngLatTuple } from "@/packages/shared/shapes";
  *
  * Empty for anything that has no edges — a ring of one point has nowhere to put
  * a midpoint, and a ring of none has nothing at all.
+ *
+ * `isClosed` is what separates a ring from a path. A line has no edge back to its
+ * start, so it has one fewer midpoint than it has points — offering one there
+ * would be offering to bend a segment that is not drawn.
  */
 export function edgeMidpoints(
   points: readonly LngLatTuple[],
+  isClosed = true,
 ): { lng: number; lat: number }[] {
   if (points.length < 2) return [];
 
-  return points.map((_, index) => edgeMidpointAt(points, index)!);
+  const edges = isClosed ? points.length : points.length - 1;
+
+  return Array.from(
+    { length: edges },
+    (_, index) => edgeMidpointAt(points, index, isClosed)!,
+  );
 }
 
 /**
@@ -53,11 +63,13 @@ export function edgeMidpoints(
 export function edgeMidpointAt(
   points: readonly LngLatTuple[],
   index: number,
+  isClosed = true,
 ): { lng: number; lat: number } | null {
   if (points.length < 2) return null;
 
   const from = points[index];
-  const to = points[(index + 1) % points.length];
+  // An open path stops at its last point rather than wrapping to its first.
+  const to = isClosed ? points[(index + 1) % points.length] : points[index + 1];
   if (!from || !to) return null;
 
   return { lng: (from[0] + to[0]) / 2, lat: (from[1] + to[1]) / 2 };

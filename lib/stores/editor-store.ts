@@ -12,21 +12,19 @@ import type { ShapeKind } from "@/packages/shared/shapes";
 /**
  * What the next click on the map means.
  *
- * "add" drops a pin. The two draw modes hand every click to a shape tool
- * instead — see components/map/shapes. They are separate values rather than one
- * "draw" plus a kind, because a mode is a thing you can be *in* and the two
- * tools read clicks completely differently: one is a drag, one is a sequence.
+ * "add" drops a pin. The draw modes hand every click to a shape tool instead —
+ * see components/map/shapes. They are separate values rather than one "draw"
+ * plus a kind, because a mode is a thing you can be *in* and the tools read
+ * clicks completely differently: the circle is a drag, the other two are
+ * sequences. Written as a template over `ShapeKind` so a new tool is a new kind
+ * and nothing else — the old spelled-out union quietly accepted a third tool
+ * with no mode to put it in.
  *
  * "select" hands the drag to the marquee instead — see
  * components/map/select-box. It is a mode for the same reason the others are:
  * while it is on, a drag stops panning the map.
  */
-export type EditorMode =
-  | "browse"
-  | "add"
-  | "draw-circle"
-  | "draw-polygon"
-  | "select";
+export type EditorMode = "browse" | "add" | `draw-${ShapeKind}` | "select";
 
 export type Viewport = {
   lng: number;
@@ -108,8 +106,23 @@ export const useEditorStore = create<EditorState>()((set) => ({
 
   setMode: (mode) => set({ mode }),
   startAdding: (addIcon) => set({ mode: "add", addIcon }),
+  /*
+   * Arming a tool drops whatever was selected.
+   *
+   * A selection is what puts a card on the map, and a card is 256px of the map
+   * a drawing gesture cannot reach — see the note on `place` in
+   * map-canvas-impl.tsx. The canvas hides the card while a tool is armed, but
+   * clearing the id is what stops the sidebar row staying lit for something the
+   * user has stopped looking at, and what makes the card's return after the
+   * gesture a decision rather than a leftover.
+   */
   startDrawing: (kind) =>
-    set({ mode: kind === "circle" ? "draw-circle" : "draw-polygon" }),
+    set({
+      mode: `draw-${kind}`,
+      selectedPlaceId: null,
+      selectedShapeId: null,
+      selection: EMPTY_SELECTION,
+    }),
   startSelecting: () => set({ mode: "select" }),
 
   /*
@@ -172,5 +185,6 @@ export const useSelectedPlaceId = () =>
 export function drawKindOf(mode: EditorMode): ShapeKind | null {
   if (mode === "draw-circle") return "circle";
   if (mode === "draw-polygon") return "polygon";
+  if (mode === "draw-line") return "line";
   return null;
 }

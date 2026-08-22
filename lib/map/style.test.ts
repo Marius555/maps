@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ATTRIBUTION_HTML,
+  ATTRIBUTION_TEXT,
   AUTO_STYLE,
   BASEMAP_SOURCES,
   CONCRETE_MAP_STYLES,
@@ -118,5 +120,19 @@ describe("style tables", () => {
     // What a hand-edited console row or an older build could leave behind.
     expect(isMapStyleKey("satellite")).toBe(false);
     expect(isMapStyleKey(undefined)).toBe(false);
+  });
+
+  /*
+   * Attribution is non-negotiable on every rendered map (§12), and it is now
+   * written twice: once as markup for the controls, once as plain text for the
+   * image exporter, which paints onto a canvas and has no DOM to put a control
+   * in. Two constants can drift; this is what stops them.
+   */
+  it("says the same thing in markup and in plain text", () => {
+    const stripped = ATTRIBUTION_HTML.replace(/<[^>]+>/g, "");
+
+    expect(stripped).toBe(ATTRIBUTION_TEXT);
+    expect(ATTRIBUTION_TEXT).toContain("OpenStreetMap");
+    expect(ATTRIBUTION_TEXT).toContain("OpenFreeMap");
   });
 });

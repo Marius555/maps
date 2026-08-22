@@ -9,7 +9,8 @@ import {
   insertPointAt,
   translatePoints,
 } from "@/lib/map/polygon-edit";
-import type { Shape } from "@/lib/repositories/types";
+import { snapToPlace } from "@/lib/map/snap-to-place";
+import type { Place, Shape } from "@/lib/repositories/types";
 import { MAX_POLYGON_POINTS } from "@/lib/validation/shape.schema";
 import {
   MIN_CIRCLE_RADIUS_M,
@@ -72,12 +73,15 @@ export function useShapeHandles({
   map,
   isReady,
   shape,
+  places,
   color,
   onPreview,
   onCommit,
 }: {
   map: React.RefObject<MapLibreMap | null>;
   isReady: boolean;
+  /** Candidates a line's endpoint can bond to as it is dropped. */
+  places: Place[];
   /** The selected shape, or null when nothing is selected. */
   shape: Shape | null;
   /**
@@ -90,9 +94,16 @@ export function useShapeHandles({
   onCommit: (shapeId: string, geometry: ShapeGeometry) => void;
 }) {
   const handlers = useRef({ onPreview, onCommit });
+  /*
+   * Read at drop time, never at mount time. The handles are rebuilt only when the
+   * shape or its colour changes, so capturing `places` in that effect would bond
+   * against whatever was on the map when the shape was selected.
+   */
+  const livePlaces = useRef(places);
 
   useEffect(() => {
     handlers.current = { onPreview, onCommit };
+    livePlaces.current = places;
   });
 
   /**
@@ -286,12 +297,33 @@ export function useShapeHandles({
       );
     } else {
       const saved = geometry;
+      /*
+       * Polygon or line — the handles are identical and the geometry they write
+       * is not. Carried in a variable rather than hardcoded because this branch
+       * used to be the polygon branch by assumption: a line fell into it and
+       * every drag wrote `kind: "polygon"`, quietly turning a route into an area
+       * on its first edit.
+       */
+      const kind = saved.kind;
+      const isClosed = kind === "polygon";
 
       /** The ring as it stands right now, part-way through a drag included. */
       const livePoints = (): readonly LngLatTuple[] => {
         const current = live.current;
-        return current?.kind === "polygon" ? current.points : saved.points;
+        return current && current.kind === kind ? current.points : saved.points;
       };
+
+      /**
+       * Rebuild the geometry, carrying a line's bonds across.
+       *
+       * The bonds have to survive every reshape: they live on the geometry, so a
+       * spread that forgot them would silently unbond a line the moment anyone
+       * nudged a middle corner.
+       */
+      const rebuild = (points: LngLatTuple[]): ShapeGeometry =>
+        kind === "line"
+          ? { ...(live.current?.kind === "line" ? live.current : saved), points }
+          : { kind: "polygon", points };
 
       /** One corner moved, the rest left where they are. */
       const moveVertex = (index: number, to: { lng: number; lat: number }) => {
@@ -299,7 +331,7 @@ export function useShapeHandles({
           at === index ? [to.lng, to.lat] : existing,
         );
 
-        return { kind: "polygon" as const, points };
+        return rebuild(points);
       };
 
       /*
@@ -320,22 +352,65 @@ export function useShapeHandles({
           const points = livePoints();
           const from = shapeCentre({ kind: "polygon", points: [...points] });
 
-          return {
-            kind: "polygon",
-            points: translatePoints(points, to.lng - from.lng, to.lat - from.lat),
-          };
+          return rebuild(
+            translatePoints(points, to.lng - from.lng, to.lat - from.lat),
+          );
         },
-        (next) => (next.kind === "polygon" ? shapeCentre(next) : null),
+        (next) => (next.kind === kind ? shapeCentre(next) : null),
       );
 
+      /**
+       * Which end of a line this corner is, or null for a middle point.
+       *
+       * Only the ends bond. A middle point that passes near a pin is a bend in
+       * the route, not a stop on it — bonding it would drag the whole line about
+       * whenever that location moved.
+       */
+      const endOf = (index: number): "from" | "to" | null => {
+        if (kind !== "line") return null;
+        if (index === 0) return "from";
+        if (index === saved.points.length - 1) return "to";
+        return null;
+      };
+
       saved.points.forEach((point, index) => {
+        const end = endOf(index);
+
         handle(
           { lng: point[0], lat: point[1] },
           "vertex",
           `Move point ${index + 1}`,
-          (to) => moveVertex(index, to),
+          (to) => {
+            if (!end) return moveVertex(index, to);
+
+            /*
+             * An endpoint decides its bond on every sample, not just on release.
+             * Dropped near a location it attaches; dragged away it lets go — and
+             * because the preview redraws from the resolved geometry, both are
+             * visible while the pointer is still down rather than announced by a
+             * jump afterwards.
+             */
+            const snap = snapToPlace(livePlaces.current, instance.project(to), (place) =>
+              instance.project([place.lng, place.lat]),
+            );
+
+            const moved = moveVertex(
+              index,
+              snap ? { lng: snap.point[0], lat: snap.point[1] } : to,
+            );
+            if (moved.kind !== "line") return moved;
+
+            const next = { ...moved };
+            if (snap?.placeId) {
+              next[end] = snap.placeId;
+            } else {
+              delete next[end];
+            }
+
+            return next;
+          },
           (next) => {
-            if (next.kind !== "polygon") return null;
+            if (next.kind !== kind) return null;
 
             const at = next.points[index];
             return at ? { lng: at[0], lat: at[1] } : null;
@@ -360,7 +435,7 @@ export function useShapeHandles({
       const canGrow = saved.points.length < Math.min(MAX_POLYGON_POINTS, MIDPOINT_LIMIT);
 
       if (canGrow) {
-        edgeMidpoints(saved.points).forEach((midpoint, index) => {
+        edgeMidpoints(saved.points, isClosed).forEach((midpoint, index) => {
           // The new corner lands *after* the edge's first corner.
           const at = index + 1;
           let hasInserted = false;
@@ -374,7 +449,7 @@ export function useShapeHandles({
           const element: HTMLElement = handle(
             midpoint,
             "midpoint",
-            `Add a point between ${index + 1} and ${((index + 1) % saved.points.length) + 1}`,
+            `Add a point between ${index + 1} and ${isClosed ? ((index + 1) % saved.points.length) + 1 : index + 2}`,
             (to) => {
               if (hasInserted) return moveVertex(at, to);
 
@@ -385,10 +460,7 @@ export function useShapeHandles({
                 "shape-handle--vertex",
               );
 
-              return {
-                kind: "polygon",
-                points: insertPointAt(livePoints(), at, [to.lng, to.lat]),
-              };
+              return rebuild(insertPointAt(livePoints(), at, [to.lng, to.lat]));
             },
             /*
              * It rides its edge while a *neighbouring* corner is dragged, which is
@@ -404,7 +476,9 @@ export function useShapeHandles({
              * index is always reading the edge this handle still sits on.
              */
             (next) =>
-              next.kind === "polygon" ? edgeMidpointAt(next.points, index) : null,
+              next.kind === kind
+                ? edgeMidpointAt(next.points, index, isClosed)
+                : null,
           );
         });
       }

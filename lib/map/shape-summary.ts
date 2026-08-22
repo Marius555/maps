@@ -1,14 +1,25 @@
+import { formatDistanceM, pathLengthM } from "@/packages/shared/geo";
 import type { ShapeGeometry } from "@/packages/shared/shapes";
 
 /**
- * What a shape is, in a phrase: "Circle · 2.4 km radius", "Polygon · 8 points".
+ * What a shape is, in a phrase: "Circle · 2.4 km radius", "Polygon · 8 points",
+ * "Line · 463 km".
  *
  * The card and the sidebar row both print it, from here, so the two cannot end up
  * describing the same shape differently.
+ *
+ * A line is measured rather than counted, and that is the one asymmetry worth
+ * defending. How many corners a boundary has is a fact about how it was drawn; how
+ * long a line is is the thing it was drawn to say. "Line · 4 points" would answer
+ * a question nobody asked.
  */
 export function shapeSummary(geometry: ShapeGeometry): string {
   if (geometry.kind === "circle") {
     return `Circle · ${formatRadius(geometry.radius)} radius`;
+  }
+
+  if (geometry.kind === "line") {
+    return `Line · ${formatDistanceM(pathLengthM(geometry.points))}`;
   }
 
   const count = geometry.points.length;

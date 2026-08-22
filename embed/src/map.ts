@@ -10,9 +10,16 @@ import {
   type StyleSpecification,
 } from "maplibre-gl";
 
-import { collapseAttribution } from "@/packages/shared/attribution";
-import { resolvePin, type CustomPinIcon } from "@/packages/shared/pin-icons";
-import { shapePolygon, type ShapeGeometry } from "@/packages/shared/shapes";
+import {
+  collapseAttribution,
+  GEONAMES_ATTRIBUTION,
+} from "@/packages/shared/attribution";
+import {
+  resolvePin,
+  UNCATEGORISED_PIN_COLOR,
+  type CustomPinIcon,
+} from "@/packages/shared/pin-icons";
+import { shapePolygon, type AreaGeometry } from "@/packages/shared/shapes";
 import type {
   MapSnapshot,
   SnapshotPlace,
@@ -24,7 +31,7 @@ import {
   pinImageId,
   registerPinImageBitmaps,
   registerPinImages,
-} from "./pin-image";
+} from "@/packages/shared/pin-raster";
 
 /**
  * The map itself: source, layers, clustering and popups.
@@ -38,7 +45,7 @@ import {
  * cluster bubbles carried on counting them.
  *
  * Places are drawn by one of two layers, never both: a circle for a location
- * with no icon, a symbol for one with an icon (see ./pin-image.ts). One source
+ * with no icon, a symbol for one with an icon (see @/packages/shared/pin-raster.ts). One source
  * feeds both, so clustering still counts every place regardless of shape.
  */
 
@@ -57,13 +64,19 @@ const CLUSTER_MAX_ZOOM = 14;
 const CLUSTER_RADIUS = 50;
 const FIT_PADDING = 48;
 const FOCUS_ZOOM = 15;
+/**
+ * Where to sit when the visitor names a town rather than a shop. Lower than
+ * FOCUS_ZOOM because a postcode or a city is an area, and arriving at street
+ * level would hide the very locations the search was meant to surface.
+ */
+const AREA_ZOOM = 11;
 
 /**
  * Pins with no category. Deliberately a neutral grey rather than the palette's
  * first colour — reusing that made an uncategorised place indistinguishable
  * from the first category, and the legend then explained a pin it didn't cover.
  */
-const UNCATEGORISED_COLOR = "#7a828f";
+
 
 /**
  * Popup offsets, in pixels above the point.
@@ -79,6 +92,15 @@ const PIN_POPUP_OFFSET = 24;
 export type MapHandle = {
   setPlaces: (places: SnapshotPlace[]) => void;
   focusPlace: (place: SnapshotPlace) => void;
+  /**
+   * Fly to a bare coordinate — somewhere the visitor named in search, which is
+   * not one of the map's own locations and so has no place to focus.
+   *
+   * The map goes *there* rather than fitting the results around it, because
+   * "near Manchester" is a question about Manchester; framing the three nearest
+   * shops instead would answer a question nobody asked and lose the town.
+   */
+  focusPoint: (lat: number, lng: number) => void;
   fitTo: (places: SnapshotPlace[]) => void;
   destroy: () => void;
 };
@@ -95,12 +117,22 @@ export type CreateMapOptions = {
    * page. Unknown ids are ignored, which is what lets several maps share a page.
    */
   focusPlaceId?: string | null;
+  /**
+   * Which place the open card belongs to, or null when nothing is open.
+   *
+   * The results list follows the map through this: clicking a pin marks and
+   * scrolls to its row. The other direction needs nothing new — the list calls
+   * `focusPlace`, which opens the popup, which reports back through here, so
+   * both routes converge on one notification rather than two paths to keep in
+   * step.
+   */
+  onSelect?: (placeId: string | null) => void;
 };
 
 export function createMap(
   container: HTMLElement,
   snapshot: MapSnapshot,
-  { style, focusPlaceId = null }: CreateMapOptions,
+  { style, focusPlaceId = null, onSelect }: CreateMapOptions,
 ): MapHandle {
   const map = new MapLibreMap({
     container,
@@ -114,13 +146,23 @@ export function createMap(
      * dark basemap. Expanding it is one click, which is the affordance OSM's
      * attribution guidance expects for constrained space.
      *
-     * No `customAttribution`: the tile source's own TileJSON already credits
-     * OpenFreeMap, OpenMapTiles and OpenStreetMap. Passing `snapshot.attribution`
-     * as well printed all three a second time, joined by a pipe — that was the
-     * doubled line. `snapshot.attribution` stays in the contract because
-     * snapshots are immutable, it is just no longer the thing that renders it.
+     * `snapshot.attribution` is deliberately *not* passed: the tile source's own
+     * TileJSON already credits OpenFreeMap, OpenMapTiles and OpenStreetMap, and
+     * passing it as well printed all three a second time, joined by a pipe —
+     * that was the doubled line. It stays in the contract because snapshots are
+     * immutable, it is just no longer the thing that renders it.
+     *
+     * GeoNames is the exception, and precisely because it is *not* in the
+     * TileJSON: it is the place data behind the search box, it is CC BY, and
+     * this is its only route onto the page. Only for maps that ship a gazetteer
+     * — credit is owed for data used, and a map with no place search used none.
      */
-    attributionControl: { compact: true },
+    attributionControl: {
+      compact: true,
+      ...(snapshot.gazetteer
+        ? { customAttribution: GEONAMES_ATTRIBUTION }
+        : {}),
+    },
   });
 
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
@@ -172,9 +214,22 @@ export function createMap(
    */
   let pinImages = new Set<string>();
 
-  popup.on("close", () => {
-    openPlaceId = null;
-  });
+  /**
+   * The one place `openPlaceId` is written.
+   *
+   * Every route into and out of a popup has to tell the list, and there are four
+   * of them — a pin click, a list click, a shape click, and a filter closing a
+   * card whose place has gone. Assigning the field directly at each is how one
+   * of them ends up not notifying, so nothing else assigns it.
+   */
+  const setOpen = (id: string | null) => {
+    if (openPlaceId === id) return;
+
+    openPlaceId = id;
+    onSelect?.(id);
+  };
+
+  popup.on("close", () => setOpen(null));
 
   map.on("load", () => {
     const pairs = pinPairs(snapshot);
@@ -256,7 +311,7 @@ export function createMap(
    * is no longer what is open.
    */
   const showShapePopup = (shape: SnapshotShape, at: LngLatLike) => {
-    openPlaceId = null;
+    setOpen(null);
     popup
       // No pin to clear, so the card sits on the point that was clicked.
       .setOffset(0)
@@ -266,7 +321,7 @@ export function createMap(
   };
 
   const showPopup = (place: SnapshotPlace) => {
-    openPlaceId = place.id;
+    setOpen(place.id);
     // Set per place, not at construction: one Popup instance serves both pin
     // shapes, and the card has to clear whichever one it is opening over.
     popup
@@ -274,7 +329,13 @@ export function createMap(
         pinIdFor(place, colors, pinImages) ? PIN_POPUP_OFFSET : DOT_POPUP_OFFSET,
       )
       .setLngLat([place.lng, place.lat])
-      .setDOMContent(buildPopup(place, categories.get(place.category ?? "")))
+      .setDOMContent(
+        buildPopup(
+          place,
+          categories.get(place.category ?? ""),
+          snapshot.fields ?? [],
+        ),
+      )
       .addTo(map);
   };
 
@@ -300,9 +361,11 @@ export function createMap(
       // A popup left open over a pin that has just been filtered away is a card
       // floating on empty map, with a Directions link to somewhere no longer
       // shown.
+      // `remove` fires the popup's own close event, which is what clears
+      // `openPlaceId` and tells the list. Clearing it here as well would be a
+      // second writer for the one thing `setOpen` exists to keep single.
       if (openPlaceId && !next.some((place) => place.id === openPlaceId)) {
         popup.remove();
-        openPlaceId = null;
       }
     },
 
@@ -313,6 +376,12 @@ export function createMap(
       });
 
       showPopup(place);
+    },
+
+    focusPoint: (lat, lng) => {
+      // No popup: there is nothing here to open a card about. The list beside
+      // the map is what answers, re-sorted by distance from this point.
+      map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), AREA_ZOOM) });
     },
 
     fitTo: (subset) => {
@@ -389,7 +458,7 @@ function addLayers(map: MapLibreMap, snapshot: MapSnapshot): void {
     filter: ["all", ["!", ["has", "point_count"]], ["has", "pin"]],
     layout: {
       // A ball marks its position with its middle, and the image is the pin's own
-      // square (./pin-image.ts) — so centring it needs no offset to keep in sync.
+      // square (@/packages/shared/pin-raster.ts) — so centring it needs no offset to keep in sync.
       "icon-image": ["get", "pin"],
       "icon-anchor": "center",
       /*
@@ -427,11 +496,16 @@ function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
       type: "FeatureCollection",
       features: shapes.map((shape) => ({
         type: "Feature",
-        geometry: { type: "Polygon", coordinates: shapePolygon(toGeometry(shape)) },
+        geometry: shapeOutline(shape),
         // Flat scalars only — MapLibre serialises features to its worker, and a
         // nested object does not survive the trip. Same reason a whole place is
         // stringified into one property below.
-        properties: { id: shape.id, color: shape.color, opacity: shape.opacity },
+        properties: {
+          id: shape.id,
+          color: shape.color,
+          opacity: shape.opacity,
+          isLine: shape.kind === "line",
+        },
       })),
     },
   });
@@ -440,6 +514,13 @@ function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
     id: SHAPE_FILL_LAYER,
     type: "fill",
     source: SHAPE_SOURCE_ID,
+    /*
+     * Areas only. A `fill` layer does not ignore a LineString — MapLibre
+     * tessellates whatever points the source gives it, so without this a
+     * three-point route publishes as a filled triangle with the route drawn
+     * along two of its sides.
+     */
+    filter: ["==", ["geometry-type"], "Polygon"],
     paint: {
       "fill-color": ["get", "color"],
       "fill-opacity": ["get", "opacity"],
@@ -456,13 +537,31 @@ function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
       // Solid whatever the fill is set to: a shape at 5% fill still has to be
       // findable, and its edge is what makes it so.
       "line-opacity": 1,
-      "line-width": 2,
+      // A line is the whole object rather than an area's edge, so it is drawn
+      // heavier — and with no fill behind it, a hairline is also a thing a
+      // visitor cannot reliably tap.
+      "line-width": ["case", ["get", "isLine"], 4, 2],
     },
   });
 }
 
+/**
+ * How a shape is drawn: a closed ring for an area, an open path for a line.
+ *
+ * A line is a LineString because `shapePolygon` closes whatever it is handed, and
+ * a closed route is a triangle. What keeps it unfilled is the fill layer's own
+ * geometry-type filter — a fill layer will happily tessellate a LineString.
+ */
+function shapeOutline(shape: SnapshotShape): GeoJSON.Geometry {
+  if (shape.kind === "line") {
+    return { type: "LineString", coordinates: shape.points };
+  }
+
+  return { type: "Polygon", coordinates: shapePolygon(toGeometry(shape)) };
+}
+
 /** The snapshot's flat shape back into the union both renderers draw from. */
-function toGeometry(shape: SnapshotShape): ShapeGeometry {
+function toGeometry(shape: Exclude<SnapshotShape, { kind: "line" }>): AreaGeometry {
   return shape.kind === "circle"
     ? { kind: "circle", lng: shape.lng, lat: shape.lat, radius: shape.radius }
     : { kind: "polygon", points: shape.points };
@@ -592,7 +691,7 @@ function colorOf(
   return (
     resolvePin(place.icon, pins)?.color ??
     colors.get(place.category ?? "") ??
-    UNCATEGORISED_COLOR
+    UNCATEGORISED_PIN_COLOR
   );
 }
 

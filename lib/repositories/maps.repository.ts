@@ -142,11 +142,15 @@ export async function updateMap(
 ): Promise<AppMap> {
   const before = await getMap(ctx, mapId);
 
-  // `categories`, `pinIcons`, `settings` and `appearance` are JSON text columns,
-  // so they have to be serialised. Everything else maps straight onto its column.
-  const { categories, pinIcons, settings, appearance, ...rest } = input;
+  // `categories`, `tagGroups`, `fields`, `pinIcons`, `settings` and `appearance`
+  // are JSON text columns, so they have to be serialised. Everything else maps
+  // straight onto its column.
+  const { categories, tagGroups, fields, pinIcons, settings, appearance, ...rest } =
+    input;
   const data: Record<string, unknown> = { ...rest };
   if (categories) data.categories = JSON.stringify(categories);
+  if (tagGroups) data.tagGroups = JSON.stringify(tagGroups);
+  if (fields) data.fields = JSON.stringify(fields);
   if (pinIcons) data.pinIcons = JSON.stringify(pinIcons);
   if (settings) data.settings = JSON.stringify(settings);
   if (appearance) data.appearance = JSON.stringify(appearance);
@@ -187,6 +191,22 @@ export async function updateMap(
 
       await clearFromPlaces(mapId, "icon", removed);
     }
+
+    /*
+     * Tags and custom fields get no such sweep, deliberately.
+     *
+     * `clearFromPlaces` sets a scalar column to "" where it equals a value, and
+     * neither of these is scalar: `tags` is an array column Appwrite cannot
+     * remove a single element from, and `fields` is a JSON object. Clearing
+     * either means reading every place that references the deleted id and
+     * rewriting it — a read plus N updates on a map §6 allows 3,000 locations in.
+     *
+     * It also buys nothing a visitor can see: `buildSnapshot` narrows both to
+     * what the map still defines, so a dangling id is already invisible off the
+     * dashboard. This is the same call `groupId` already makes. What makes it
+     * safe is that tag and field ids are minted fresh and never reused, so a
+     * deleted id cannot come back attached to a new tag (lib/validation/tag.schema.ts).
+     */
 
     return toAppMap(row);
   } catch (error) {

@@ -15,6 +15,7 @@ import {
   isPointInBox,
   type SelectBox as Box,
 } from "@/lib/map/marquee";
+import type { ExportView } from "@/lib/export/render-map";
 import { nearestRoad } from "@/lib/map/nearest-road";
 import type { NearestRoad } from "@/lib/map/nearest-road";
 import { registerPmtilesProtocol } from "@/lib/map/pmtiles";
@@ -88,6 +89,22 @@ export type MapHandle = {
    * falls back to the geocoder alone, which is where we were before.
    */
   streetAt: (lng: number, lat: number) => NearestRoad | null;
+  /**
+   * Everything needed to draw this map again somewhere else: the resolved style,
+   * and where the camera is standing in it.
+   *
+   * The image export renders a *second* map off screen, at a page size and a
+   * resolution the window cannot provide, and this is what it copies from. Still
+   * only the camera and the style, which is the same side of the line the rest of
+   * this handle sits on — locations and shapes belong to the editor, which has
+   * them already, and handing them out through here would turn a remote control
+   * for the viewpoint into an accessor for the whole canvas.
+   *
+   * The style is taken live rather than rebuilt from the map's stored theme, so a
+   * tint, a label level and a layer toggle all come through with nothing to keep
+   * in step. Null before the map exists.
+   */
+  getExportView: () => ExportView | null;
 };
 
 export type MapCanvasProps = {
@@ -216,6 +233,56 @@ export default function MapCanvasImpl({
     () => new Set(selection?.selected.shapeIds ?? []),
     [selection?.selected.shapeIds],
   );
+
+  /*
+   * The two mode classes MapLibre's own container wears, derived once so the
+   * effect below and nothing else decides when they are on.
+   */
+  const isCrosshair =
+    isAdding || Boolean(shapes?.drawMode) || Boolean(selection?.isSelecting);
+  const isDrawing = Boolean(shapes?.drawMode);
+
+  /*
+   * Written with `classList`, never with React's `className`.
+   *
+   * MapLibre's constructor adds `maplibregl-map` to this same element, and that
+   * class carries `position: relative` and `overflow: hidden`. React owns an
+   * attribute it renders: had `className` held these two, every toggle of a mode
+   * would rewrite the whole attribute and take MapLibre's class with it. Benign
+   * only for as long as the frame outside happens to be `relative` too.
+   *
+   * So the element is rendered with a static class list and never touched by
+   * React again, and the modes are added beside MapLibre's rather than over it.
+   *
+   * `maplibregl-crosshair`, not Tailwind's `cursor-crosshair`. The cursor the
+   * pointer actually reads is the one on
+   * `.maplibregl-canvas-container.maplibregl-interactive` — a *child* of this
+   * element — and maplibre-gl.css sets it to `grab` at (0,2,0), against a utility
+   * class's (0,1,0). A cursor class here is dead over the canvas, which is why
+   * arming a tool still showed a hand. MapLibre ships this class for exactly this
+   * case: its selectors reach the child and the `:active` state, so it beats both
+   * `grab` and `grabbing`. Ours would have to win on source order against a
+   * stylesheet injected at runtime by this module's own dynamic chunk, which is
+   * not a fight worth picking twice.
+   *
+   * `drawing-shapes` is separate, and only the shape tools set it. A location's
+   * marker is a DOM element over the canvas, roughly 26px across — wider than the
+   * 12px the line tool snaps from. So every click inside the magnet's reach landed
+   * on the marker, opened that location's card, and never reached the map at all:
+   * the hint bar promised a snap the UI made unreachable. The class turns markers
+   * inert for the length of a drawing gesture (app/globals.css).
+   *
+   * Not extended to add mode. Dropping a pin on top of an existing one is a thing
+   * people do by accident far more often than on purpose, and its card opening is
+   * the feedback that says so.
+   */
+  useEffect(() => {
+    const element = container.current;
+    if (!element) return;
+
+    element.classList.toggle("maplibregl-crosshair", isCrosshair);
+    element.classList.toggle("drawing-shapes", isDrawing);
+  }, [isCrosshair, isDrawing]);
 
   usePlaceMarkers({
     map,
@@ -426,6 +493,28 @@ export default function MapCanvasImpl({
         }
       },
 
+      getExportView: () => {
+        const instance = map.current;
+        const box = container.current?.getBoundingClientRect();
+        if (!instance || !box) return null;
+
+        const centre = instance.getCenter();
+
+        return {
+          // MapLibre's own resolved style: sources with their URLs filled in and
+          // layers with the theme's tint already applied.
+          style: instance.getStyle(),
+          center: { lng: centre.lng, lat: centre.lat },
+          zoom: instance.getZoom(),
+          bearing: instance.getBearing(),
+          pitch: instance.getPitch(),
+          // CSS pixels, which is what MapLibre measures its zoom against — the
+          // export scales its own zoom from the ratio between the two.
+          width: box.width,
+          height: box.height,
+        };
+      },
+
       fitBounds: (bounds) => {
         const instance = map.current;
         if (!instance) return;
@@ -507,24 +596,10 @@ export default function MapCanvasImpl({
          * why this is the form that survives.
          */
         /*
-         * `maplibregl-crosshair`, not Tailwind's `cursor-crosshair`.
-         *
-         * The cursor the pointer actually reads is the one on
-         * `.maplibregl-canvas-container.maplibregl-interactive`, a *child* of
-         * this element, and maplibre-gl.css sets it to `grab` — (0,2,0) against
-         * a utility class's (0,1,0). So a cursor class here is dead over the
-         * canvas, which is why arming a tool still showed a hand. MapLibre ships
-         * this class for exactly this case: its own selectors reach the child
-         * and the `:active` state, so it beats both `grab` and `grabbing`.
-         *
-         * Third time this file has lost to maplibre-gl.css on specificity — see
-         * the `h-full` note below for the second.
+         * Static, and it has to stay static — the mode classes are added by the
+         * `classList` effect above, which explains why.
          */
-        className={`h-full w-full ${
-          isAdding || shapes?.drawMode || selection?.isSelecting
-            ? "maplibregl-crosshair"
-            : ""
-        }`}
+        className="h-full w-full"
       />
 
       {selection ? <SelectBox ref={selectBox} /> : null}
@@ -535,6 +610,9 @@ export default function MapCanvasImpl({
         <MapShapes
           map={map}
           isReady={isReady}
+          // The canvas already has these; shapes need them because a line bonded
+          // to a location is drawn from wherever that location is now.
+          places={places}
           selectedShapeIds={selectedShapeIds}
           {...shapes}
         />
@@ -544,9 +622,26 @@ export default function MapCanvasImpl({
         <PlaceCard
           map={map}
           isReady={isReady}
-          // Hidden while adding: the point of add mode is dropping several pins
-          // in a row, and a card opening over the map after each one is in the way.
-          place={isAdding ? null : selectedPlace}
+          /*
+           * Hidden while adding: the point of add mode is dropping several pins
+           * in a row, and a card opening over the map after each one is in the
+           * way.
+           *
+           * Hidden while drawing for a harder reason. The card is 256px of
+           * `pointer-events-auto` parked 22px from its pin, and MapLibre fires
+           * neither `click` nor `mousemove` under it — so a line drawn towards a
+           * selected location stopped dead at the edge of its own card, with the
+           * rubber band frozen and the endpoint unplaceable. Making markers inert
+           * (the `drawing-shapes` class) never reached this: the card is a React
+           * sibling of the map container, not a marker inside it. MapShapes has
+           * always applied the same rule to its own card — see map-shapes.tsx.
+           *
+           * It also settles an Escape that meant two things at once: the card
+           * closed on it and the line tool cancelled on it, both from window
+           * listeners, so one press did both. Unmounted, the card has no listener
+           * to fire.
+           */
+          place={isAdding || shapes?.drawMode ? null : selectedPlace}
           category={selectedPlace ? categoryFor?.(selectedPlace) : undefined}
           onClose={() => onSelectPlace(null)}
           onEdit={onEditPlace}

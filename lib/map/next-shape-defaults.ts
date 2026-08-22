@@ -3,7 +3,7 @@ import { CATEGORY_COLORS } from "@/lib/validation/category.schema";
 import type { ShapeKind } from "@/packages/shared/shapes";
 
 /** Matches the placeholder names this module hands out, and only those. */
-const PLACEHOLDER_NAME = /^(Circle|Area) (\d+)$/;
+const PLACEHOLDER_NAME = /^(Circle|Area|Line) (\d+)$/;
 
 export type ShapeDefaults = {
   name: string;
@@ -25,12 +25,21 @@ export type ShapeDefaults = {
  * "Area" rather than "Polygon" for the polygon case. The tool is called Polygon
  * because that names the gesture — click the corners — but the thing on the map
  * is an area, and that is what it should be called once it exists.
+ *
+ * "Line" is both, so it stays as it is: the gesture and the object have the same
+ * name, and inventing a second word for one of them would only be a word to learn.
  */
+const NOUNS: Record<ShapeKind, string> = {
+  circle: "Circle",
+  polygon: "Area",
+  line: "Line",
+};
+
 export function nextShapeDefaults(
   shapes: readonly Pick<Shape, "name" | "sortOrder">[],
   kind: ShapeKind,
 ): ShapeDefaults {
-  const noun = kind === "circle" ? "Circle" : "Area";
+  const noun = NOUNS[kind];
 
   let highestNumber = 0;
   let highestSortOrder = -1;

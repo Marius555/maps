@@ -1,3 +1,4 @@
+import { gazetteerBase } from "@/lib/gazetteer/config";
 import type { AppMap, Place, Shape } from "@/lib/repositories/types";
 import type { MapSnapshot } from "@/packages/shared/snapshot";
 import { buildSnapshot } from "./build";
@@ -17,6 +18,11 @@ import { buildSnapshot } from "./build";
  * Left in, a customer who had locked their map to their own domain would find
  * the preview refusing to render on the very page offering it.
  *
+ * The gazetteer base comes from the browser's own origin, so the preview's
+ * search reads the same shards the published map will. `globalThis` rather than
+ * `window` because this file is imported by tests running under node, where the
+ * base then comes out empty and the block is simply omitted.
+ *
  * `generatedAt` comes from the map rather than the clock. Nothing renders it, and
  * a fresh timestamp on every call would make two otherwise identical previews
  * compare unequal — which is what the caller uses to decide whether to rebuild
@@ -27,7 +33,14 @@ export function buildPreviewSnapshot(
   places: Place[],
   shapes: Shape[],
 ): MapSnapshot {
-  const { snapshot } = buildSnapshot(map, places, shapes, map.updatedAt);
+  const origin = globalThis.location?.origin ?? "";
+  const { snapshot } = buildSnapshot(
+    map,
+    places,
+    shapes,
+    map.updatedAt,
+    origin ? gazetteerBase(origin) : undefined,
+  );
 
   return { ...snapshot, allowedDomains: [] };
 }

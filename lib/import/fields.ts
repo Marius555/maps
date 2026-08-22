@@ -17,6 +17,7 @@ export const IMPORT_FIELDS = [
   "state",
   "country",
   "category",
+  "tags",
   "description",
   "phone",
   "email",
@@ -65,6 +66,7 @@ export const FIELD_LABELS: Record<ImportField, string> = {
   state: "State or region",
   country: "Country",
   category: "Category",
+  tags: "Tags",
   description: "Description",
   phone: "Phone",
   email: "Email",
@@ -78,6 +80,7 @@ export const FIELD_LABELS: Record<ImportField, string> = {
 export const FIELD_HINTS: Partial<Record<ImportField, string>> = {
   latlng: 'One column holding both, like "52.5200, 13.4050" or a map link.',
   category: "Used to colour and filter the pins.",
+  tags: "Extra filters. One column, several tags per row, separated by , ; or |.",
   lat: "Between -90 and 90.",
   lng: "Between -180 and 180.",
 };

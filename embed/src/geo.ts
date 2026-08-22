@@ -1,29 +1,17 @@
 import type { SnapshotPlace } from "@/packages/shared/snapshot";
 
-/** Mean Earth radius, kilometres. */
-const EARTH_RADIUS_KM = 6371;
-
-export type Located = { lat: number; lng: number };
+import { distanceKm, type Located } from "@/packages/shared/geo";
 
 /**
- * Great-circle distance in kilometres.
+ * "Find nearest", against the snapshot the visitor already has.
  *
- * Runs entirely in the visitor's browser against the snapshot they already
- * downloaded, which is what makes "find nearest" free (CLAUDE.md §2). Sorting a
- * few thousand places this way is microseconds.
+ * The maths itself moved to packages/shared/geo.ts when lines arrived: the editor
+ * has to measure a line the same way this does, and §4 keeps /lib closed to this
+ * directory but not /packages/shared. Re-exported here so the rest of the embed
+ * keeps importing distance from one place.
  */
-export function distanceKm(from: Located, to: Located): number {
-  const dLat = toRadians(to.lat - from.lat);
-  const dLng = toRadians(to.lng - from.lng);
-  const lat1 = toRadians(from.lat);
-  const lat2 = toRadians(to.lat);
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a));
-}
+export { distanceKm, formatDistance, pathLengthM } from "@/packages/shared/geo";
+export type { Located } from "@/packages/shared/geo";
 
 export function nearestPlace(
   from: Located,
@@ -41,16 +29,4 @@ export function nearestPlace(
   }
 
   return best;
-}
-
-/** Rounded the way a person would say it, not to three decimal places. */
-export function formatDistance(km: number): string {
-  if (km < 1) return `${Math.round(km * 1000)} m`;
-  if (km < 10) return `${km.toFixed(1)} km`;
-
-  return `${Math.round(km)} km`;
-}
-
-function toRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
 }

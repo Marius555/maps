@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   MIN_CIRCLE_RADIUS_M,
+  MIN_LINE_POINTS,
   MIN_POLYGON_POINTS,
 } from "@/packages/shared/shapes";
 import { hexColorSchema, latSchema, lngSchema } from "./common";
@@ -14,7 +15,7 @@ import { groupIdSchema } from "./group.schema";
  * client never validates alone.
  */
 
-export const SHAPE_KINDS = ["circle", "polygon"] as const;
+export const SHAPE_KINDS = ["circle", "polygon", "line"] as const;
 
 export const DEFAULT_SHAPE_COLOR = "#1c7ed6";
 export const DEFAULT_SHAPE_OPACITY = 0.2;
@@ -61,9 +62,38 @@ const polygonGeometrySchema = z.object({
     ),
 });
 
+/**
+ * A bonded endpoint's location id, or absent.
+ *
+ * Shaped like `groupIdSchema` and for the same reason: it is a reference the
+ * client may hand back untouched, and a reference to something deleted is read as
+ * "not bonded" rather than repaired. Never trusted as coordinates — the renderer
+ * resolves it against the live location or falls back to the stored point.
+ */
+const bondSchema = z
+  .string()
+  .max(36, "That is not a location id.")
+  .regex(/^[a-zA-Z0-9_-]*$/, "That is not a location id.");
+
+const lineGeometrySchema = z.object({
+  kind: z.literal("line"),
+  points: z
+    .array(pointSchema)
+    .min(MIN_LINE_POINTS, "A line needs at least two points.")
+    // Shares the polygon's cap, and for the identical reason: every point is
+    // roughly 24 bytes on every visitor's download.
+    .max(
+      MAX_POLYGON_POINTS,
+      `A line can have up to ${MAX_POLYGON_POINTS} points. Draw it with fewer.`,
+    ),
+  from: bondSchema.optional(),
+  to: bondSchema.optional(),
+});
+
 export const shapeGeometrySchema = z.discriminatedUnion("kind", [
   circleGeometrySchema,
   polygonGeometrySchema,
+  lineGeometrySchema,
 ]);
 
 const nameSchema = z
@@ -117,6 +147,24 @@ export const shapeFormSchema = z.object({
   opacity: opacitySchema,
 });
 
+/**
+ * Import confirm payload, mirroring `bulkCreatePlacesSchema`.
+ *
+ * Capped lower than places because a shape is far heavier: 200 boundaries at 500
+ * points each is a payload measured in megabytes, where 200 locations is a few
+ * dozen kilobytes. Fifty keeps a chunk comfortably inside any body-size limit,
+ * and the plan limit is still checked against the map's real total on every one.
+ */
+export const MAX_BULK_SHAPES = 50;
+
+export const bulkCreateShapesSchema = z.object({
+  shapes: z
+    .array(createShapeSchema)
+    .min(1, "Nothing to import.")
+    .max(MAX_BULK_SHAPES, `Send at most ${MAX_BULK_SHAPES} shapes at a time.`),
+});
+
 export type ShapeFormValues = z.infer<typeof shapeFormSchema>;
 export type CreateShapeInput = z.output<typeof createShapeSchema>;
 export type UpdateShapeInput = z.output<typeof updateShapeSchema>;
+export type BulkCreateShapesInput = z.output<typeof bulkCreateShapesSchema>;

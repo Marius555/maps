@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 
 import { CategoryEditor } from "@/components/categories/category-editor";
+import { CustomFieldEditor } from "@/components/fields/custom-field-editor";
 import { DeleteMapButton } from "@/components/maps/delete-map-button";
+import { TagGroupEditor } from "@/components/tags/tag-group-editor";
 import { PageTitle } from "@/components/ui/page-title";
 import { SectionPanel } from "@/components/ui/section-panel";
 import { useMap } from "@/lib/query/maps";
@@ -41,6 +43,12 @@ export function MapSettings({
       <MapAppearanceSection map={map} />
 
       <CategoryEditor map={map} places={places} />
+
+      {/* Under categories, in the order an owner builds a map: what a pin *is*,
+          then how a visitor narrows the set, then what each card carries. */}
+      <TagGroupEditor map={map} places={places} />
+
+      <CustomFieldEditor map={map} places={places} />
 
       <SectionPanel
         title="Delete map"

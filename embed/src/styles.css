@@ -25,6 +25,16 @@
   box-sizing: border-box;
   width: 100%;
   overflow: hidden;
+  /*
+   * Breakpoints below are asked of *this box*, not the viewport.
+   *
+   * A media query is the wrong instrument here and always was: this stylesheet
+   * runs inside a div on someone else's page, and a 360px-wide sidebar map on a
+   * 1440px monitor is a phone-shaped layout that no `max-width: 480px` will ever
+   * fire for. `@container` asks the only question that has a correct answer.
+   */
+  container-type: inline-size;
+  container-name: lm;
   border: 1px solid var(--lm-border);
   border-radius: var(--lm-radius);
   background: var(--lm-surface);
@@ -114,9 +124,28 @@
   color: var(--lm-muted);
 }
 
-.lm-canvas {
+/*
+ * The map and the results panel side by side, filling the height the customer
+ * gave us.
+ *
+ * Absolute rather than a plain block so the height is the container's, not the
+ * content's: a list of forty locations must scroll inside its own box, never
+ * stretch the embed down someone's page.
+ */
+.lm-layout {
   position: absolute;
   inset: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.lm-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  /* Without these a wide row of results or a long address sets the flex basis
+     and squeezes the map to nothing. */
+  min-width: 0;
+  min-height: 0;
 }
 
 /* Controls float over the map so the map keeps the full height it was given. */
@@ -285,6 +314,18 @@
   color: var(--lm-muted);
 }
 
+/* A line's length.
+
+   Tabular figures so it does not jitter between "9.4 km" and "12 km" as a
+   visitor clicks along a set of routes, and a shade darker than the description:
+   on a line this is the fact, not the footnote. */
+.lm-popup__distance {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lm-foreground);
+}
+
 /* Opening hours.
 
    A <details>, so the seven rows cost nothing until asked for. The summary
@@ -362,8 +403,225 @@
   text-decoration: underline;
 }
 
-/* On a phone the toolbar would cover the map, so it spans the top instead. */
-@media (max-width: 480px) {
+
+@media (prefers-reduced-motion: reduce) {
+  .lm-root * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Results panel ---------------------------------------------------------- */
+
+/*
+ * Search and filters move *into* the panel when there is one.
+ *
+ * Floating them over the map is right for a bare map and wrong the moment a
+ * results list exists: controls anchored to the root would sit on top of the
+ * list rather than over the map, and a search box that belongs to a list reads
+ * as belonging to it. `.lm-toolbar` keeps its floating rules for maps with the
+ * list switched off; this modifier undoes them.
+ */
+.lm-panel {
+  display: flex;
+  flex: 0 0 320px;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--lm-border);
+  background: var(--lm-surface);
+}
+
+/* Every control can be switched off independently of the list, and a docked
+   toolbar with nothing in it is a padded, bordered strip above the results
+   explaining nothing. */
+.lm-toolbar:empty {
+  display: none;
+}
+
+.lm-toolbar--docked {
+  position: static;
+  max-width: none;
+  padding: 10px;
+  border-bottom: 1px solid var(--lm-border);
+}
+
+/* Docked, the controls sit on the panel rather than over a map, so the shadow
+   that lifted them off the basemap is just noise. */
+.lm-toolbar--docked .lm-search__input,
+.lm-toolbar--docked .lm-button,
+.lm-toolbar--docked .lm-chip {
+  box-shadow: none;
+}
+
+.lm-toolbar--docked .lm-search__input {
+  width: 100%;
+}
+
+.lm-toolbar--docked .lm-chip--on {
+  box-shadow: inset 0 0 0 1px var(--lm-category-color, var(--lm-foreground));
+}
+
+.lm-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  /* iOS gives a nested scroller momentum only when it is told to. Without this
+     a flick inside the list scrolls the customer's page instead. */
+  -webkit-overflow-scrolling: touch;
+}
+
+.lm-list__items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lm-list__item {
+  border-bottom: 1px solid var(--lm-border);
+}
+
+.lm-list__item--on {
+  background: color-mix(in oklab, var(--lm-focus) 10%, transparent);
+}
+
+.lm-list__row {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lm-list__row:hover {
+  background: color-mix(in oklab, var(--lm-foreground) 4%, transparent);
+}
+
+.lm-list__head {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lm-list__name {
+  font-weight: 600;
+}
+
+/* Never wraps, never shrinks: it is the column a visitor scans down, and a
+   distance that reflows under a long name stops being a column. */
+.lm-list__distance {
+  flex: none;
+  color: var(--lm-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lm-list__category {
+  color: var(--lm-muted);
+  font-size: 12px;
+}
+
+.lm-list__category::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--lm-category-color, var(--lm-muted));
+  vertical-align: -1px;
+}
+
+.lm-list__address {
+  color: var(--lm-muted);
+  font-size: 13px;
+}
+
+.lm-list__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 12px 10px;
+}
+
+.lm-list__link {
+  font-size: 13px;
+  color: #1c7ed6;
+  text-decoration: none;
+}
+
+.lm-list__link:hover {
+  text-decoration: underline;
+}
+
+.lm-root--dark .lm-list__link,
+.lm-root--dark .lm-popup__link {
+  color: var(--lm-focus);
+}
+
+.lm-list__empty,
+.lm-list__footer {
+  margin: 0;
+  padding: 14px 12px;
+  color: var(--lm-muted);
+  font-size: 13px;
+}
+
+.lm-list__footer:empty {
+  display: none;
+}
+
+/* Narrow ----------------------------------------------------------------- */
+
+/*
+ * Under ~640px of *our own* width the two columns become two rows.
+ *
+ * The map keeps a fixed slice rather than flexing: a results list is content and
+ * would otherwise take the whole box on a map with forty locations, leaving the
+ * thing the widget is for as a sliver at the top.
+ */
+@container lm (max-width: 640px) {
+  .lm-layout {
+    flex-direction: column;
+  }
+
+  .lm-panel {
+    flex: 1 1 auto;
+    border-right: 0;
+    border-top: 1px solid var(--lm-border);
+  }
+
+  .lm-canvas {
+    flex: 0 0 55%;
+    /*
+     * The map goes first when the columns become rows.
+     *
+     * Source order puts the panel first because that is the reading order the
+     * layout wants at full width — search, then results, then the map they are
+     * plotted on — and it is the order a screen reader should keep either way.
+     * Stacked, though, a panel on top is a box of text where a visitor expects
+     * the map, with the map pushed under the fold on the exact screen that has
+     * the least of it. `order` moves the painted box and leaves the DOM alone,
+     * which is the one case it is the right tool rather than a shortcut.
+     */
+    order: -1;
+  }
+}
+
+/* With no panel to dock into, the floating toolbar spans the top instead of
+   covering the map's left half. */
+@container lm (max-width: 480px) {
   .lm-toolbar {
     right: 10px;
   }
@@ -373,9 +631,164 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .lm-root * {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
+/* Tag filters ------------------------------------------------------------ */
+
+/*
+ * A group is one question, so it gets a heading and its own row of chips. The
+ * embed reads groups as AND and the chips inside one as OR, and a visitor who
+ * cannot see that boundary reads a filter that narrows as a filter that broke.
+ */
+.lm-filter-groups {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lm-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lm-filter-group__label {
+  margin: 0;
+  color: var(--lm-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* A tag has no colour, and borrowing the category chip's dot would invent a
+   legend that means nothing. */
+.lm-chip--plain::before {
+  display: none;
+}
+
+/* Custom fields ---------------------------------------------------------- */
+
+.lm-popup__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.lm-popup__field {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.lm-popup__field-label {
+  flex: none;
+  color: var(--lm-muted);
+}
+
+.lm-popup__field-value {
+  text-align: right;
+  /* A booking URL has no spaces to break at, and one would otherwise push the
+     card past its 280px and out over the map. */
+  overflow-wrap: anywhere;
+}
+
+/* The owner's own call to action — the reason custom fields exist — so it reads
+   as a button rather than as one more link in the row. */
+.lm-popup__link--cta {
+  padding: 4px 10px;
+  border: 1px solid currentcolor;
+  border-radius: 8px;
+}
+
+.lm-popup__link--cta:hover {
+  text-decoration: none;
+  background: color-mix(in oklab, currentcolor 12%, transparent);
+}
+
+/* Search results ---------------------------------------------------------- */
+
+/*
+ * The listbox is positioned against the field, so the field is the containing
+ * block. Everything else in the toolbar is a flex child of a wrapping row, and
+ * without this the dropdown would hang off whichever ancestor happened to be
+ * positioned — which inside the docked panel is somewhere else entirely.
+ */
+.lm-search {
+  position: relative;
+}
+
+.lm-search__list {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  max-height: 240px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--lm-border);
+  border-radius: 8px;
+  background: var(--lm-surface);
+  box-shadow: var(--lm-shadow);
+}
+
+.lm-search__option {
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  /* A long "SW1A — Westminster, City of" must not widen the panel. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * One rule for both the pointer and the keyboard. The active row is tracked by
+ * `aria-activedescendant` rather than focus — focus stays in the input, which is
+ * what lets the visitor keep typing — so there is no `:focus` to style and the
+ * hover state has to be the same thing arrow keys produce, or the two would look
+ * like different controls.
+ */
+.lm-search__option:hover,
+.lm-search__option--on {
+  background: color-mix(in oklab, var(--lm-foreground) 8%, transparent);
+}
+
+/* Where we are measuring from ---------------------------------------------- */
+
+/*
+ * Full width, so it sits on its own line under the controls rather than joining
+ * the wrap. It appears and disappears, and inside the chip row that would
+ * reshuffle every filter every time the visitor pressed it.
+ */
+.lm-origin {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.lm-origin[hidden] {
+  display: none;
+}
+
+.lm-origin__label {
+  overflow: hidden;
+  color: var(--lm-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lm-origin__clear {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
 }

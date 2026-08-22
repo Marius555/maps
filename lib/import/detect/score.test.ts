@@ -311,3 +311,43 @@ describe("detectColumns — byHeader", () => {
     expect(detectColumns(headers, rows).byHeader.Notes).toBeUndefined();
   });
 });
+
+describe("detectColumns — tags", () => {
+  it("sends a tags column to tags, not to category", () => {
+    // "tag" used to be a category synonym, and with a real tags field it would
+    // have made this column land on whichever scored higher by luck.
+    const { headers, rows } = table({
+      Name: ["Berlin Mitte", "Hamburg Hafen", "Köln Süd"],
+      Category: ["Store", "Store", "Depot"],
+      Tags: ["bikes, skis", "bikes", "repairs|hire"],
+    });
+
+    const detection = detectColumns(headers, rows);
+
+    expect(detection.mapping.tags).toBe("Tags");
+    expect(detection.mapping.category).toBe("Category");
+  });
+
+  it("takes the singular spelling too", () => {
+    const { headers, rows } = table({
+      Name: ["Berlin Mitte", "Hamburg Hafen"],
+      Tag: ["bikes", "skis"],
+    });
+
+    expect(detectColumns(headers, rows).mapping.tags).toBe("Tag");
+  });
+
+  it("will not guess tags from values alone", () => {
+    /*
+     * `tags` is not SELF_EVIDENT, deliberately: a repeating column of short text
+     * is exactly what a category, a sales region or an internal status looks
+     * like. Left unmapped, the mapping step asks — which is the honest answer.
+     */
+    const { headers, rows } = table({
+      Name: ["Berlin Mitte", "Hamburg Hafen", "Köln Süd"],
+      Column2: ["bikes, skis", "bikes", "repairs|hire"],
+    });
+
+    expect(detectColumns(headers, rows).mapping.tags).toBeUndefined();
+  });
+});

@@ -29,6 +29,9 @@ const MAX_PAGE_SIZE = 100;
 /** Belt and braces on listAllShapes: far past any plan's limit. */
 const MAX_PAGES = 20;
 
+/** Rows per bulk insert. The same figure createPlaces settled on. */
+const BULK_CHUNK_SIZE = 50;
+
 type ListOptions = {
   cursor?: string | null;
   limit?: number;
@@ -48,6 +51,21 @@ function toColumns(geometry: ShapeGeometry): { kind: string; geometry: string } 
   if (geometry.kind === "circle") {
     const { lng, lat, radius } = geometry;
     return { kind: "circle", geometry: JSON.stringify({ lng, lat, radius }) };
+  }
+
+  // The bonds ride along with the points because they are part of what the line
+  // *is*: without them a bonded end is a stale coordinate that stops following
+  // its pin the moment the page reloads.
+  if (geometry.kind === "line") {
+    const { points, from, to } = geometry;
+    return {
+      kind: "line",
+      geometry: JSON.stringify({
+        points,
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
+      }),
+    };
   }
 
   return {
@@ -193,6 +211,73 @@ export async function createShape(
     });
 
     return toShape(row);
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+/**
+ * Many shapes at once — what importing a GeoJSON file confirms into.
+ *
+ * The plan check runs **once**, against the whole batch, which is the entire
+ * reason this exists beside `createShape`. Looping that function would re-count
+ * the table per row and then let a thirteen-province import stop at the third
+ * with three provinces already saved and no way to tell which. Refusing the batch
+ * whole tells the user something they can act on (§8), and leaves the map as it
+ * was.
+ *
+ * `sortOrder` continues from the map's existing count, so imported shapes land
+ * after what is already there in the order the file listed them.
+ */
+export async function createShapes(
+  ctx: RepoContext,
+  mapId: string,
+  inputs: CreateShapeInput[],
+): Promise<Shape[]> {
+  await getMap(ctx, mapId);
+  if (inputs.length === 0) return [];
+
+  const plan = await getUserPlan(ctx.userId);
+  const limit = PLAN_LIMITS[plan].shapes;
+  const existing = await countShapes(ctx, mapId);
+
+  if (existing + inputs.length > limit) {
+    throw new PlanLimitError("shapes", limit, plan);
+  }
+
+  const permissions = ownerPermissions(ctx.userId);
+  const created: Shape[] = [];
+
+  try {
+    // Chunked for the reason createPlaces is: one enormous createRows is a
+    // single point of failure, and a partial import that reports how far it got
+    // beats an opaque timeout.
+    for (let start = 0; start < inputs.length; start += BULK_CHUNK_SIZE) {
+      const chunk = inputs.slice(start, start + BULK_CHUNK_SIZE);
+
+      const result = await admin.tablesDB.createRows<ShapeRow>({
+        databaseId: env.databaseId,
+        tableId: TABLES.shapes,
+        rows: chunk.map((input, offset) => ({
+          // Bulk create takes per-row $id and $permissions inline; without them
+          // the rows would land with no owner.
+          $id: ID.unique(),
+          $permissions: permissions,
+          mapId,
+          name: input.name,
+          description: input.description ?? null,
+          color: input.color,
+          opacity: input.opacity,
+          sortOrder: existing + start + offset,
+          groupId: input.groupId ?? "",
+          ...toColumns(input.geometry),
+        })),
+      });
+
+      created.push(...result.rows.map(toShape));
+    }
+
+    return created;
   } catch (error) {
     throw toRepositoryError(error);
   }

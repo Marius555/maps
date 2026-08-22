@@ -144,7 +144,6 @@ export const FIELD_SYNONYMS: Record<ImportField, readonly string[]> = {
     "kind",
     "group",
     "segment",
-    "tag",
     "classification",
     // de / fr / es / it / nl / pl
     "kategorie",
@@ -155,6 +154,35 @@ export const FIELD_SYNONYMS: Record<ImportField, readonly string[]> = {
     "tipo",
     "kategoria",
     "rodzaj",
+  ],
+  /*
+   * Deliberately narrow. `tags` is not SELF_EVIDENT in ./score.ts — a
+   * comma-separated column of short text is equally an address, a list of
+   * opening days, or a sales region — so the header is the only signal that can
+   * assign it, and a loose synonym here would quietly steal a column the
+   * mapping step should have asked about.
+   */
+  tags: [
+    "tags",
+    "tag",
+    "labels",
+    "keywords",
+    "attributes",
+    "features",
+    "services",
+    "amenities",
+    // de / fr / es / it / nl / pl
+    "schlagworte",
+    "stichworte",
+    "merkmale",
+    "etiquettes",
+    "mots-cles",
+    "etiquetas",
+    "caracteristicas",
+    "etichette",
+    "kenmerken",
+    "tagi",
+    "cechy",
   ],
   description: [
     "description",

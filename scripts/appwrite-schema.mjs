@@ -42,7 +42,7 @@ const enumeration = (key, elements, opts = {}) => ({
 });
 
 export const GEOCODE_STATUSES = ["ok", "low", "failed", "manual"];
-export const SHAPE_KINDS = ["circle", "polygon"];
+export const SHAPE_KINDS = ["circle", "polygon", "line"];
 export const PLANS = ["free", "starter", "pro"];
 export const SUBSCRIPTION_STATUSES = [
   "active",
@@ -75,6 +75,27 @@ export const TABLES = [
       // `settings`, because `settings` belongs to the Publish tab and is written
       // whole — two forms writing one blob is a lost update.
       text("appearance"),
+      /*
+       * The map's own filter vocabulary: groups of tags a location can wear.
+       * `[{ id, label, tags: [{ id, label }] }]`.
+       *
+       * A second axis beside `categories`, not a replacement for it. A category
+       * is what colours a pin, so a place has exactly one; a tag says something
+       * else about it — what it stocks, what it offers — and a place has as many
+       * as apply. Merging them would mean a stockist that sells three product
+       * lines needed three pins in three colours at one address.
+       */
+      text("tagGroups"),
+      /*
+       * Extra fields this map's locations carry, defined once here and filled in
+       * per place: `[{ id, label, type, showAs }]`. The values live on the place.
+       *
+       * The definitions are the map's because they are a promise about the whole
+       * set — an import maps a column to one of these, and a popup renders them
+       * in this order. Storing a label per place instead would let two rows
+       * spell the same field differently and there would be no way to tell.
+       */
+      text("fields"),
       // 253 is the maximum length of a DNS name.
       varchar("allowedDomains", 253, { array: true }),
       datetime("publishedAt"),
@@ -95,6 +116,20 @@ export const TABLES = [
       float("lng", { required: true, min: -180, max: 180 }),
       varchar("address", 512, { xdefault: "" }),
       varchar("category", 64, { xdefault: "" }),
+      /*
+       * Tag ids from the map's own `tagGroups`. A real array column rather than
+       * JSON, because unlike `hours` this is the one new value worth being able
+       * to query on later — "every stockist carrying product X" is a question
+       * somebody will eventually ask of the dashboard.
+       *
+       * An id no longer defined on the map reads as absent: the snapshot narrows
+       * to defined tags, and nothing clears these on delete (there is no
+       * array-remove in Appwrite, and rewriting 3,000 rows to tidy up ids no
+       * visitor can see is not a trade worth making). Same call the codebase
+       * already makes for `groupId`. It only holds because tag ids are minted
+       * fresh and never reused — see lib/validation/tag.schema.ts.
+       */
+      varchar("tags", 64, { array: true }),
       // Which icon the pin wears: a built-in id, or `custom:<pinIconId>` naming
       // one of the map's own pins. A plain string, not an enum, so an unknown id
       // degrades to a plain pin instead of failing a write — which is what a
@@ -112,6 +147,11 @@ export const TABLES = [
       // The geocoder's answer in parts — postcode, city, country, OSM ids. JSON
       // for the same reason `hours` is: it is read whole and never queried on.
       text("addressParts"),
+      // This place's answers to the map's own extra fields: `{ [fieldId]: value }`.
+      // JSON on the same argument as `hours` and `addressParts` — read whole,
+      // rendered whole, never queried on. The labels and order live on the map,
+      // so two rows cannot spell one field differently.
+      text("fields"),
       // Which group this location belongs to, or "" for none — the same way
       // `category` and `icon` already spell "nothing chosen".
       varchar("groupId", 36, { xdefault: "" }),

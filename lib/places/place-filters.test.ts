@@ -18,6 +18,8 @@ function place(overrides: Partial<Place> = {}): Place {
     lng: 25.28,
     address: "Gedimino pr. 9, Vilnius",
     category: "cat-1",
+    tags: [],
+    fields: {},
     icon: "",
     description: "A shop on a corner.",
     phone: "+370 5 123 4567",

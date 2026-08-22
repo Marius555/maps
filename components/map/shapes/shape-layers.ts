@@ -7,7 +7,12 @@ import {
   DEFAULT_SHAPE_COLOR,
   DEFAULT_SHAPE_OPACITY,
 } from "@/lib/validation/shape.schema";
-import { shapePolygon, type ShapeGeometry } from "@/packages/shared/shapes";
+import {
+  MIN_POLYGON_POINTS,
+  shapePoints,
+  shapePolygon,
+  type ShapeGeometry,
+} from "@/packages/shared/shapes";
 
 /**
  * Shapes as MapLibre style layers.
@@ -44,6 +49,12 @@ type ShapeProperties = {
   opacity: number;
   /** MapLibre expressions read booleans fine; it is the nesting it can't take. */
   selected: boolean;
+  /**
+   * Drives line width. An area's outline is a 2px edge around a fill that is
+   * doing most of the talking; a line has no fill, so the same 2px reads as a
+   * hairline rather than the object itself.
+   */
+  isLine: boolean;
 };
 
 export type ShapeFeatures = GeoJSON.FeatureCollection<
@@ -67,15 +78,23 @@ export function shapeFeature(
   /** Overrides the shape's own colour. A group's, when it is in one. */
   color?: string,
 ): GeoJSON.Feature<GeoJSON.Geometry, ShapeProperties> {
+  const isLine = geometry.kind === "line";
+
   return {
     type: "Feature",
     id: shape.id,
-    geometry: { type: "Polygon", coordinates: shapePolygon(geometry) },
+    // A LineString, not a one-ring Polygon: `shapePolygon` closes what it is
+    // given, and a closed route is a triangle. What keeps a line unfilled is the
+    // fill layer's own geometry-type filter — see addShapeLayers.
+    geometry: isLine
+      ? { type: "LineString", coordinates: shapePoints(geometry) }
+      : { type: "Polygon", coordinates: shapePolygon(geometry) },
     properties: {
       id: shape.id,
       color: color ?? shape.color,
       opacity: shape.opacity,
       selected: isSelected,
+      isLine,
     },
   };
 }
@@ -96,6 +115,7 @@ export function draftFeatures(
     color: DEFAULT_SHAPE_COLOR,
     opacity: DEFAULT_SHAPE_OPACITY,
     selected: true,
+    isLine: geometry.kind === "line",
   };
 
   if (geometry.kind === "circle") {
@@ -111,18 +131,26 @@ export function draftFeatures(
   const points = geometry.points;
   if (points.length === 0) return [];
 
-  const outline: GeoJSON.Feature<GeoJSON.Geometry, ShapeProperties> =
-    points.length >= 3
-      ? {
-          type: "Feature",
-          geometry: { type: "Polygon", coordinates: shapePolygon(geometry) },
-          properties,
-        }
-      : {
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: points },
-          properties,
-        };
+  /*
+   * A line stays a line at every length — it never crosses over into being an
+   * area the way a polygon-in-progress does at its third point. So the branch
+   * below is about the polygon alone, and asking `geometry.kind` here rather
+   * than only counting points is what keeps a three-point line from being
+   * previewed as a filled triangle.
+   */
+  const isArea = geometry.kind === "polygon" && points.length >= MIN_POLYGON_POINTS;
+
+  const outline: GeoJSON.Feature<GeoJSON.Geometry, ShapeProperties> = isArea
+    ? {
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: shapePolygon(geometry) },
+        properties,
+      }
+    : {
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: points },
+        properties,
+      };
 
   return [
     outline,
@@ -159,6 +187,20 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
         id: SHAPE_FILL_LAYER,
         type: "fill",
         source: SHAPE_SOURCE,
+        /*
+         * Areas only — and this is not belt and braces.
+         *
+         * A `fill` layer does **not** ignore a LineString. MapLibre hands its
+         * fill bucket whatever geometry the source has and tessellates the
+         * points as a ring, so an unfiltered fill layer paints a line's own
+         * points as a solid polygon: a three-point route renders as a filled
+         * triangle with the route drawn along two of its sides.
+         *
+         * Matched on geometry type rather than on the `isLine` property,
+         * because it is the geometry that decides whether a fill is meaningful.
+         * The vertex layer below filters the same way for the same reason.
+         */
+        filter: ["==", ["geometry-type"], "Polygon"],
         paint: {
           // Per feature, so recolouring one shape is a data update rather than a
           // rebuilt match expression.
@@ -182,7 +224,15 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
           // The outline is solid whatever the fill is set to. A shape at 5% fill
           // still has to be findable, and its edge is what makes it so.
           "line-opacity": 1,
-          "line-width": ["case", ["get", "selected"], 3, 2],
+          // A line is the whole object, so it is drawn heavier than an area's
+          // edge — and it has no fill to widen its hit target, so a hairline
+          // would also be a thing you cannot reliably click.
+          "line-width": [
+            "case",
+            ["get", "isLine"],
+            ["case", ["get", "selected"], 6, 4],
+            ["case", ["get", "selected"], 3, 2],
+          ],
         },
       },
       beforeId,

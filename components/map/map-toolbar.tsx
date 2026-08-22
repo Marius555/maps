@@ -6,12 +6,14 @@ import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
 
 import { IconButton } from "@/components/ui/icon-button";
+import type { ExportOptions } from "@/lib/export/export-map";
 import type { MapStyleKey } from "@/lib/map/style";
 import type { MapAppearanceSettings } from "@/lib/validation/map-appearance.schema";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import type { ShapeKind } from "@/packages/shared/shapes";
 import { AddLocationButton } from "./add-location/add-location-button";
 import { AppearanceButton } from "./appearance-button";
+import { ExportButton } from "./export-button";
 import { SelectToolButton } from "./select-tool-button";
 import { ShapeToolsButton } from "./shapes/shape-tools-button";
 
@@ -57,6 +59,7 @@ export function MapToolbar({
   onStopAdding,
   onPickTool,
   onStopDrawing,
+  onImportShapes,
   onStartSelecting,
   onStopSelecting,
   onDropPin,
@@ -66,6 +69,7 @@ export function MapToolbar({
   onPreview,
   onChangeStyle,
   onChangeAppearance,
+  exportControl,
 }: {
   isAdding: boolean;
   /** The icon add mode is armed with — see AddLocationButton. */
@@ -93,6 +97,8 @@ export function MapToolbar({
   onStopAdding: () => void;
   onPickTool: (kind: ShapeKind) => void;
   onStopDrawing: () => void;
+  /** Opens the GeoJSON importer, from inside the Draw menu. */
+  onImportShapes?: () => void;
   onStartSelecting: () => void;
   onStopSelecting: () => void;
   /** A pin dragged out of the add control and dropped, in viewport coordinates. */
@@ -105,6 +111,23 @@ export function MapToolbar({
   /** Both save immediately — see AppearanceButton. */
   onChangeStyle: (style: MapStyleKey) => void;
   onChangeAppearance: (appearance: MapAppearanceSettings) => void;
+  /**
+   * Everything the export popover needs, handed over whole.
+   *
+   * Passed as one object rather than as six props for the same reason `search`
+   * is a slot: rendering an image is a job with its own pending state, its own
+   * failure and its own remembered choices, and this file stays a toolbar. Absent
+   * on a canvas that has no map to photograph.
+   */
+  exportControl?: {
+    options: ExportOptions;
+    view: { width: number; height: number };
+    isBusy: boolean;
+    error: string | null;
+    onChange: (options: ExportOptions) => void;
+    onExport: () => void;
+    onOpen: () => void;
+  };
 }) {
   return (
     /*
@@ -144,6 +167,7 @@ export function MapToolbar({
           isBusy={isDrawingBusy}
           onPickTool={onPickTool}
           onStopDrawing={onStopDrawing}
+          onImport={onImportShapes}
         />
 
         {/* Third of the three tools that change what a gesture on the map means,
@@ -185,6 +209,10 @@ export function MapToolbar({
           placement="bottom"
           onPress={onPreview}
         />
+
+        {/* After Preview, and last of the three: both of those show you the map,
+            and this is the one that takes it away with you. */}
+        {exportControl ? <ExportButton {...exportControl} /> : null}
 
         {/* Last, so opening the search grows the panel into empty map rather than
             shoving the other controls sideways. The rule goes on a phone, where

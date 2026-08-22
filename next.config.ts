@@ -26,6 +26,9 @@ const nextConfig: NextConfig = {
     return [
       { source: "/embed/:path*", headers: embedCorsHeaders },
       { source: "/maplibre/:path*", headers: embedCorsHeaders },
+      // The gazetteer the embed's search fetches, on the same argument: static
+      // public files, read by pages on domains that are not ours.
+      { source: "/gazetteer/:path*", headers: embedCorsHeaders },
     ];
   },
 };

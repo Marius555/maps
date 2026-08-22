@@ -71,21 +71,13 @@ export function ShapeForm({
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
       {updateShape.error ? <ErrorMessage error={updateShape.error} /> : null}
 
-      <FormTextField
-        control={control}
-        name="name"
-        label="Name"
-      />
+      <FormTextField control={control} name="name" label="Name" />
 
       {/* What the map already knows, stated once so the form is about a shape you
           can identify rather than about an anonymous set of fields. */}
       <p className="text-xs text-muted">{shapeSummary(shape.geometry)}</p>
 
-      <FormTextArea
-        control={control}
-        name="description"
-        label="Description"
-      />
+      <FormTextArea control={control} name="description" label="Description" />
 
       <Controller
         control={control}
@@ -102,32 +94,38 @@ export function ShapeForm({
         )}
       />
 
-      <Controller
-        control={control}
-        name="opacity"
-        render={({ field }) => (
-          <Slider.Root
-            // Percentages, because nobody thinks in 0.2. The stored value stays
-            // 0–1, which is what the fill layer and the snapshot want.
-            minValue={0}
-            maxValue={100}
-            step={5}
-            value={Math.round(field.value * 100)}
-            onChange={(value) =>
-              field.onChange((Array.isArray(value) ? value[0] : value) / 100)
-            }
-          >
-            <div className="flex items-center justify-between">
-              <Label>Fill</Label>
-              <Slider.Output className="text-xs tabular-nums text-muted" />
-            </div>
-            <Slider.Track>
-              <Slider.Fill />
-              <Slider.Thumb />
-            </Slider.Track>
-          </Slider.Root>
-        )}
-      />
+      {/* A line has no fill to set, and its stroke is drawn solid on purpose —
+          a shape at 5% still has to be findable, and its outline is what makes
+          it so. Left out rather than disabled: a greyed slider invites you to
+          work out why, and the answer is that the control does not apply. */}
+      {shape.geometry.kind === "line" ? null : (
+        <Controller
+          control={control}
+          name="opacity"
+          render={({ field }) => (
+            <Slider.Root
+              // Percentages, because nobody thinks in 0.2. The stored value stays
+              // 0–1, which is what the fill layer and the snapshot want.
+              minValue={0}
+              maxValue={100}
+              step={5}
+              value={Math.round(field.value * 100)}
+              onChange={(value) =>
+                field.onChange((Array.isArray(value) ? value[0] : value) / 100)
+              }
+            >
+              <div className="flex items-center justify-between">
+                <Label>Fill</Label>
+                <Slider.Output className="text-xs tabular-nums text-muted" />
+              </div>
+              <Slider.Track>
+                <Slider.Fill />
+                <Slider.Thumb />
+              </Slider.Track>
+            </Slider.Root>
+          )}
+        />
+      )}
 
       <div className="flex justify-end gap-2">
         {onCancel ? (

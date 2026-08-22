@@ -3,12 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   CIRCLE_SEGMENTS,
   circleRing,
+  isAreaGeometry,
+  isAreaKind,
   radiusFrom,
   radiusHandle,
   shapeBounds,
   shapeCentre,
+  shapePoints,
   shapeRing,
   type CircleGeometry,
+  type LineGeometry,
   type PolygonGeometry,
 } from "./shapes";
 
@@ -142,5 +146,89 @@ describe("radiusHandle", () => {
 
     const resized = { ...shape, radius: radiusFrom(shape, dragged) };
     expect(radiusHandle(resized).lng).toBeCloseTo(dragged.lng, 9);
+  });
+});
+
+/**
+ * A line is the one geometry that must come back *open*.
+ *
+ * `shapeRing` closes what it is given, which is right for an area and is exactly
+ * the bug that would turn a two-point route into a degenerate triangle. These
+ * hold the type split and `shapePoints` to that, because nothing else will: a
+ * closed line still renders, it just renders something the user did not draw.
+ */
+describe("lines", () => {
+  const line: LineGeometry = {
+    kind: "line",
+    points: [
+      [10, 59],
+      [11, 60],
+      [12, 61],
+    ],
+  };
+
+  it("keeps a line's path open", () => {
+    const points = shapePoints(line);
+
+    expect(points).toHaveLength(3);
+    expect(points[points.length - 1]).not.toEqual(points[0]);
+  });
+
+  it("still closes an area's ring", () => {
+    const ring = shapePoints(square());
+
+    // Four corners plus the repeat that closes it.
+    expect(ring).toHaveLength(5);
+    expect(ring[4]).toEqual(ring[0]);
+  });
+
+  it("does not close a line that happens to end where it started", () => {
+    const loop: LineGeometry = {
+      kind: "line",
+      points: [
+        [0, 0],
+        [1, 1],
+        [0, 0],
+      ],
+    };
+
+    // A path back to its own start is a valid line, and adding a fourth point
+    // would be inventing a segment nobody drew.
+    expect(shapePoints(loop)).toHaveLength(3);
+  });
+
+  it("bounds a line by its own extent", () => {
+    expect(shapeBounds(line)).toEqual({
+      west: 10,
+      south: 59,
+      east: 12,
+      north: 61,
+    });
+  });
+
+  it("centres a line on the mean of its points", () => {
+    expect(shapeCentre(line)).toEqual({ lng: 11, lat: 60 });
+  });
+
+  it("has no bounds for a line with no points", () => {
+    expect(shapeBounds({ kind: "line", points: [] })).toBeNull();
+  });
+
+  it("sorts kinds into areas and not-areas", () => {
+    expect(isAreaKind("circle")).toBe(true);
+    expect(isAreaKind("polygon")).toBe(true);
+    expect(isAreaKind("line")).toBe(false);
+
+    expect(isAreaGeometry(line)).toBe(false);
+    expect(isAreaGeometry(square())).toBe(true);
+  });
+
+  it("carries bonds on the geometry", () => {
+    const bonded: LineGeometry = { ...line, from: "place_a", to: "place_b" };
+
+    // They are part of the geometry rather than columns beside it, so anything
+    // that spreads a line has to carry them — see use-shape-handles.
+    expect(bonded.from).toBe("place_a");
+    expect(shapePoints(bonded)).toHaveLength(3);
   });
 });

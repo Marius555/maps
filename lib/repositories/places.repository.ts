@@ -180,6 +180,10 @@ export async function createPlace(
         lng: input.lng,
         address: input.address,
         category: input.category,
+        // An array column, written as an array. `fields` is JSON, and
+        // serialiseJson already turns an empty object into null rather than "{}".
+        tags: input.tags,
+        fields: serialiseJson(input.fields),
         icon: input.icon,
         description: input.description ?? null,
         phone: input.phone ?? null,
@@ -247,6 +251,8 @@ export async function createPlaces(
           lng: input.lng,
           address: input.address,
           category: input.category,
+          tags: input.tags,
+          fields: serialiseJson(input.fields),
           icon: input.icon,
           description: input.description ?? null,
           phone: input.phone ?? null,
@@ -278,18 +284,21 @@ export async function updatePlace(
   await getPlace(ctx, mapId, placeId);
 
   /*
-   * `hours` and `addressParts` are the fields whose domain shape is not their
-   * column shape — structured here, a JSON string in Appwrite. Spread the rest
+   * `hours`, `addressParts` and `fields` are the ones whose domain shape is not
+   * their column shape — structured here, a JSON string in Appwrite. Spread the rest
    * through untouched so a PATCH carrying one field still writes only that field,
    * and only add a key back when the request actually carried it.
    */
-  const { hours, addressParts, ...rest } = input;
+  const { hours, addressParts, fields, ...rest } = input;
   const data = {
     ...rest,
     ...(hours === undefined ? {} : { hours: serialiseHours(hours) }),
     ...(addressParts === undefined
       ? {}
       : { addressParts: serialiseJson(addressParts) }),
+    // `tags` is not in this list on purpose: it is a real array column, so its
+    // domain shape *is* its column shape and it rides through in `rest`.
+    ...(fields === undefined ? {} : { fields: serialiseJson(fields) }),
   };
 
   try {

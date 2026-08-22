@@ -27,6 +27,8 @@ function place(id: string, groupId = ""): Place {
     lng: 25.28,
     address: "",
     category: "",
+    tags: [],
+    fields: {},
     icon: "",
     description: null,
     phone: null,

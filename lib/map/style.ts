@@ -398,6 +398,23 @@ export const STYLE_PALETTES: Record<BasemapSource, StylePalette> = {
 export const ATTRIBUTION_HTML =
   '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors · tiles by <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a>';
 
+/**
+ * The same credit with no markup, for a surface that has no DOM to put it in.
+ *
+ * An exported PNG or PDF is a rendered map and §12 applies to it in full, but a
+ * canvas capture cannot contain MapLibre's attribution control — that control is
+ * DOM sitting over the canvas, not pixels in it. So the exporter paints this
+ * string on instead.
+ *
+ * Written out rather than derived by stripping tags at runtime: this is the
+ * legally load-bearing line, and a regex over it is one bad edit away from
+ * quietly rendering an empty credit. `style.test.ts` holds the two to each
+ * other, which catches the drift a derivation was supposed to prevent without
+ * putting a parser between us and a constant.
+ */
+export const ATTRIBUTION_TEXT =
+  "© OpenStreetMap contributors · tiles by OpenFreeMap";
+
 export function isMapStyleKey(value: unknown): value is MapStyleKey {
   return (
     typeof value === "string" && (MAP_STYLES as readonly string[]).includes(value)

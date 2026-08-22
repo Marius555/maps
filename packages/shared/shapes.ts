@@ -1,11 +1,17 @@
 /**
- * The geometry of an area on the map, and the one place it is turned into points.
+ * The geometry of a shape on the map, and the one place it is turned into points.
  *
- * A shape is either a circle — a centre and a radius in metres — or a polygon, a
- * ring of points the user clicked. Both are drawn as MapLibre polygons, because
- * MapLibre has no geographic circle: its `circle` layer sizes itself in *pixels*,
- * so a 2km delivery radius drawn that way would silently be a different distance
- * at every zoom level. `circleRing` is what closes that gap.
+ * A shape is a circle — a centre and a radius in metres — a polygon, a ring of
+ * points the user clicked, or a line, an *open* path between two or more points.
+ * The first two are areas and are drawn as MapLibre polygons, because MapLibre
+ * has no geographic circle: its `circle` layer sizes itself in *pixels*, so a 2km
+ * delivery radius drawn that way would silently be a different distance at every
+ * zoom level. `circleRing` is what closes that gap.
+ *
+ * The line is the odd one out, and the whole reason `shapePoints` exists: closing
+ * its path is exactly what would turn a route into a triangle. `shapeRing` and
+ * `shapePolygon` therefore take an `AreaGeometry` and will not accept one, which
+ * makes that mistake a type error rather than a drawing bug.
  *
  * This lives here rather than in /lib because both targets have to draw the same
  * circle, not two that agree today — the same argument darken-style.ts makes. The
@@ -17,7 +23,7 @@
  * imports, the embed inherits.
  */
 
-export type ShapeKind = "circle" | "polygon";
+export type ShapeKind = "circle" | "polygon" | "line";
 
 /** [lng, lat] — GeoJSON's order, so a ring needs no rearranging on the way out. */
 export type LngLatTuple = [number, number];
@@ -36,7 +42,39 @@ export type PolygonGeometry = {
   points: LngLatTuple[];
 };
 
-export type ShapeGeometry = CircleGeometry | PolygonGeometry;
+/**
+ * A path between points, drawn open.
+ *
+ * `from` and `to` bond the two ends to locations by id. A bonded end's stored
+ * coordinates are a *fallback*, not the truth — the renderer replaces them with
+ * wherever that pin is now, which is what makes the line follow a pin someone
+ * drags. Both are optional, and an id naming a location that no longer exists is
+ * ignored rather than cleaned up: the same contract `groupId` has, for the same
+ * reason. See lib/map/line-endpoints.ts.
+ *
+ * They never reach a published snapshot. Publish resolves them to coordinates,
+ * so a visitor downloads a finished path and looks nothing up.
+ */
+export type LineGeometry = {
+  kind: "line";
+  /** Open path. Never closed — closing it is what would make it an area. */
+  points: LngLatTuple[];
+  from?: string;
+  to?: string;
+};
+
+/** The kinds that enclose something, and so have a fill and a ring. */
+export type AreaGeometry = CircleGeometry | PolygonGeometry;
+
+export type ShapeGeometry = AreaGeometry | LineGeometry;
+
+export function isAreaKind(kind: ShapeKind): kind is AreaGeometry["kind"] {
+  return kind !== "line";
+}
+
+export function isAreaGeometry(geometry: ShapeGeometry): geometry is AreaGeometry {
+  return geometry.kind !== "line";
+}
 
 /**
  * How many points a circle is drawn with.
@@ -98,7 +136,7 @@ export function circleRing(
  * The ring either kind of shape renders as — the one function every renderer
  * calls, so neither has to know which kind it is holding.
  */
-export function shapeRing(geometry: ShapeGeometry): LngLatTuple[] {
+export function shapeRing(geometry: AreaGeometry): LngLatTuple[] {
   if (geometry.kind === "circle") return circleRing(geometry);
 
   const points = geometry.points;
@@ -112,8 +150,21 @@ export function shapeRing(geometry: ShapeGeometry): LngLatTuple[] {
 }
 
 /** GeoJSON polygon coordinates — one outer ring, no holes. */
-export function shapePolygon(geometry: ShapeGeometry): LngLatTuple[][] {
+export function shapePolygon(geometry: AreaGeometry): LngLatTuple[][] {
   return [shapeRing(geometry)];
+}
+
+/**
+ * The points a shape occupies, whatever kind it is — closed for an area, open
+ * for a line.
+ *
+ * The one function that can be handed any geometry, so measuring, framing and
+ * hit-testing never have to know which kind they are holding. Drawing still does:
+ * a fill layer needs `shapePolygon` and a line layer needs this, and the two are
+ * not interchangeable.
+ */
+export function shapePoints(geometry: ShapeGeometry): LngLatTuple[] {
+  return geometry.kind === "line" ? [...geometry.points] : shapeRing(geometry);
 }
 
 /**
@@ -155,7 +206,7 @@ export type ShapeBounds = {
  * drawing abandoned before its first click looks like.
  */
 export function shapeBounds(geometry: ShapeGeometry): ShapeBounds | null {
-  const ring = shapeRing(geometry);
+  const ring = shapePoints(geometry);
   if (ring.length === 0) return null;
 
   let west = Infinity;
@@ -212,3 +263,6 @@ export const MIN_CIRCLE_RADIUS_M = 10;
 
 /** Fewest points that enclose an area. Two make a line, one makes nothing. */
 export const MIN_POLYGON_POINTS = 3;
+
+/** Fewest points that make a path. One is a dot, and a dot is a pin's job. */
+export const MIN_LINE_POINTS = 2;

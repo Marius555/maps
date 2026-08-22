@@ -242,3 +242,69 @@ export async function deleteGroup(
     throw toRepositoryError(error);
   }
 }
+
+/**
+ * Deletes the group *and* everything in it.
+ *
+ * The sibling of `deleteGroup`, and its opposite: that one takes the bundle
+ * apart and keeps the contents, this one keeps nothing. Both exist because the
+ * two are genuinely different intentions, and a single control that guessed
+ * which one you meant would guess wrong half the time on an irreversible action.
+ *
+ * Places and shapes both. A group holds both kinds — that is the point of it —
+ * so a delete that emptied half of one would leave a group the user believed was
+ * gone still drawing regions on their map. `setGroupPin` above touches only
+ * places, and that is not an inconsistency: a shape has no pin to change, but it
+ * very much can be deleted.
+ *
+ * Scoped by `mapId` **and** `groupId`, like `setGroupPin` and for the reason it
+ * gives — an id is only meaningful inside the map it was found in, and a bulk
+ * delete keyed on `groupId` alone is one bug away from emptying somebody else's
+ * map. `getGroup` first is the whole authorisation: it resolves the map through
+ * `getMap` and rejects a group belonging to another account.
+ *
+ * Contents before the group, the order `deleteMap` uses: the group row deleted
+ * first would leave its members pointing at nothing, which reads as *ungrouped*
+ * — so a failure half-way would scatter them across the map instead of leaving a
+ * group still holding whatever survived.
+ *
+ * Photos are not deleted, matching `deletePlace` and `deleteMap`. That is a
+ * pre-existing leak across every delete path in the app rather than a decision
+ * taken here; fixing it in one of them would be the inconsistency.
+ */
+export async function deleteGroupContents(
+  ctx: RepoContext,
+  mapId: string,
+  groupId: string,
+): Promise<{ places: number; shapes: number }> {
+  await getGroup(ctx, mapId, groupId);
+
+  const scope = [Query.equal("mapId", mapId), Query.equal("groupId", groupId)];
+
+  try {
+    // Sequential rather than a Promise.all: two bulk deletes against the same
+    // account fired together buy nothing worth the risk of one landing while the
+    // other is rejected for rate.
+    const places = await admin.tablesDB.deleteRows({
+      databaseId: env.databaseId,
+      tableId: TABLES.places,
+      queries: scope,
+    });
+
+    const shapes = await admin.tablesDB.deleteRows({
+      databaseId: env.databaseId,
+      tableId: TABLES.shapes,
+      queries: scope,
+    });
+
+    await admin.tablesDB.deleteRow({
+      databaseId: env.databaseId,
+      tableId: TABLES.groups,
+      rowId: groupId,
+    });
+
+    return { places: places.total, shapes: shapes.total };
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}

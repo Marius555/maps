@@ -18,10 +18,15 @@ import {
 /**
  * Which controls the published map gives visitors.
  *
- * All four were already wired end to end in the embed and read out of the
- * snapshot at publish time — but nothing ever wrote the column, so every map
+ * The original four were already wired end to end in the embed and read out of
+ * the snapshot at publish time — but nothing ever wrote the column, so every map
  * shipped with all four switched on and no way to say otherwise. This is the
  * missing half.
+ *
+ * `list` is the one that changes the shape of the embed rather than adding a
+ * control to it, which is why it leads. A map already published keeps the layout
+ * it was published with: its live snapshot has no `list` key, and the embed
+ * reads an absent one as off (packages/shared/snapshot.ts).
  *
  * It lives on the Publish tab rather than in Settings because these describe
  * what a stranger sees on someone else's website, which is what this whole tab
@@ -30,6 +35,12 @@ import {
  * lives on the map row and bumps its `updatedAt`.
  */
 const CONTROLS = [
+  {
+    name: "list",
+    label: "Show the results list",
+    description:
+      "A scrollable panel of locations beside the map, with search and filters at the top of it. Clicking a row opens that location. Off, the map fills the whole space and the controls float over it.",
+  },
   {
     name: "clustering",
     label: "Group nearby pins",

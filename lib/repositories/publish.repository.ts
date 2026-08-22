@@ -4,6 +4,7 @@ import { admin } from "@/lib/appwrite/admin";
 import { TABLES } from "@/lib/appwrite/config";
 import { toRepositoryError } from "@/lib/appwrite/errors";
 import { env } from "@/lib/env";
+import { gazetteerBase } from "@/lib/gazetteer/config";
 import { buildSnapshot } from "@/lib/snapshot/build";
 import { uploadSnapshot } from "@/lib/snapshot/storage";
 import type { RepoContext } from "./context";
@@ -40,6 +41,15 @@ const MAX_REPORTED_SKIPS = 5;
 export async function publishMap(
   ctx: RepoContext,
   mapId: string,
+  /**
+   * The dashboard's own origin, from the request.
+   *
+   * Only used to resolve the gazetteer base when `NEXT_PUBLIC_GAZETTEER_URL` is
+   * unset, which is what makes development and self-hosting work with no config
+   * — the same fallback `embedScriptUrl` uses. Threaded from the route rather
+   * than read here, because a repository has no request.
+   */
+  origin: string,
 ): Promise<PublishResult> {
   // Ownership first — nothing is generated for a map the caller can't publish.
   const map = await getMap(ctx, mapId);
@@ -49,7 +59,13 @@ export async function publishMap(
   ]);
 
   const generatedAt = new Date().toISOString();
-  const { snapshot, skipped } = buildSnapshot(map, places, shapes, generatedAt);
+  const { snapshot, skipped } = buildSnapshot(
+    map,
+    places,
+    shapes,
+    generatedAt,
+    gazetteerBase(origin),
+  );
 
   // Storage before the row. If the upload fails the map stays exactly as it was,
   // still pointing at the previous snapshot, and the embed keeps serving it.

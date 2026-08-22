@@ -397,6 +397,24 @@
 }
 
 /*
+ * While a shape tool is armed, a location's pin stops being clickable.
+ *
+ * A marker is a DOM element over the canvas and it is about 26px across — wider
+ * than the 12px the line tool snaps from (lib/map/snap-to-place.ts). Left
+ * interactive, it swallowed every click inside the magnet's own reach: the
+ * pointer landed on the marker, that location's card opened, and the map never
+ * saw the click. The snap was unreachable by construction, and the hint bar was
+ * promising it anyway.
+ *
+ * The drag handles are markers too, but they never coexist with this: the
+ * handles hook is passed `null` while a tool is armed, so there are none to
+ * disable. See use-shape-handles.ts.
+ */
+.drawing-shapes .maplibregl-marker {
+  pointer-events: none;
+}
+
+/*
  * Shape handles — the grab points on a selected circle or polygon.
  *
  * Plain CSS for the same reason the pins are: these are DOM elements handed to

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, MapPin, Pencil, Ungroup } from "lucide-react";
+import { ChevronRight, MapPin, Pencil, Trash2, Ungroup } from "lucide-react";
 import { motion } from "motion/react";
 
 import { LIST_ROW_CLASS, listRowMotion } from "@/components/ui/list-row-motion";
@@ -48,6 +48,7 @@ export function GroupListItem({
   onEdit,
   onChangePins,
   onUngroup,
+  onDelete,
   onDropObject,
   acceptsDrop,
   canDrag = false,
@@ -69,6 +70,8 @@ export function GroupListItem({
   onChangePins: () => void;
   /** Take the group apart. Its members are kept — see the menu item's comment. */
   onUngroup: () => void;
+  /** Deletes the group *and* its contents — the destructive twin of Ungroup. */
+  onDelete: () => void;
   onDropObject?: (dragged: DraggedObject) => void;
   /** Whether this header would do anything with what is in the air. */
   acceptsDrop?: (dragged: DraggedObject) => boolean;
@@ -195,6 +198,22 @@ export function GroupListItem({
                 label: "Ungroup",
                 icon: Ungroup,
                 onAction: onUngroup,
+              },
+              /* And the other half of what the bin used to mean, said in
+                 words and marked as destructive.
+
+                 Ungroup gave people a safe way to dismantle a bundle. It did
+                 not give them a way to clear a region off the map, which is a
+                 real thing to want and was previously forty confirmations. The
+                 two sit together because they are the two answers to "I am done
+                 with this group", and separating them across the UI would only
+                 hide the one people occasionally need. */
+              {
+                id: "delete",
+                label: "Delete group and contents",
+                icon: Trash2,
+                isDanger: true,
+                onAction: onDelete,
               },
             ]}
           />

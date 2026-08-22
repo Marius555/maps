@@ -15,8 +15,10 @@ import {
 import { emptyHours } from "@/packages/shared/hours";
 import { ContactSection } from "./sections/contact-section";
 import { EssentialsSection } from "./sections/essentials-section";
+import { FieldsSection } from "./sections/fields-section";
 import { HoursSection } from "./sections/hours-section";
 import { MediaSection } from "./sections/media-section";
+import { TagsSection } from "./sections/tags-section";
 
 /**
  * Edits one location.
@@ -59,6 +61,8 @@ export function PlaceForm({
       name: place.name,
       address: place.address,
       category: place.category,
+      tags: place.tags,
+      fields: place.fields,
       icon: place.icon,
       description: place.description ?? "",
       phone: place.phone ?? "",
@@ -119,6 +123,10 @@ export function PlaceForm({
           control={control}
           hasError={Boolean(errors.phone || errors.email || errors.url)}
         />
+        {/* Both render nothing when the map defines none, so a map that never
+            set either up sees the form it always saw. */}
+        <TagsSection control={control} groups={map.tagGroups} />
+        <FieldsSection control={control} fields={map.fields} />
         <HoursSection control={control} hasError={Boolean(errors.hours)} />
         <MediaSection
           map={map}
