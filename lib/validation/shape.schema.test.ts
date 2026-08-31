@@ -6,6 +6,7 @@ import {
   DEFAULT_SHAPE_OPACITY,
   MAX_BULK_SHAPES,
   MAX_POLYGON_POINTS,
+  MAX_ROUTE_STOPS,
   bulkCreateShapesSchema,
   createShapeSchema,
   shapeGeometrySchema,
@@ -201,5 +202,97 @@ describe("bulkCreateShapesSchema", () => {
     expect(bulkCreateShapesSchema.safeParse({ shapes: tooMany }).success).toBe(
       false,
     );
+  });
+});
+
+/**
+ * A route on the way in.
+ *
+ * The geometry is checked like everything else (CLAUDE.md §9), and the stops in
+ * particular: `points` is what gets drawn and published, so an unchecked
+ * `durationS` beside a path the caller drew itself is a number that means
+ * nothing. It is not a security boundary — it is the owner's own map — but it is
+ * the difference between a figure worth printing and one that is not.
+ */
+describe("a routed line", () => {
+  const route = {
+    profile: "car",
+    stops: [
+      { at: [25.28, 54.687], placeId: "place-1" },
+      { at: [25.3, 54.7] },
+    ],
+    durationS: 900,
+  };
+
+  const geometry = (overrides: Record<string, unknown> = {}) => ({
+    kind: "line",
+    points: [
+      [25.28, 54.687],
+      [25.3, 54.7],
+    ],
+    route,
+    ...overrides,
+  });
+
+  it("accepts a route beside the points", () => {
+    expect(shapeGeometrySchema.safeParse(geometry()).success).toBe(true);
+  });
+
+  it("still accepts a line with no route at all", () => {
+    // Every line written before routes existed, and every one drawn with the
+    // plain tool since.
+    const plain = geometry();
+    delete (plain as { route?: unknown }).route;
+
+    expect(shapeGeometrySchema.safeParse(plain).success).toBe(true);
+  });
+
+  it("accepts a free waypoint with no location id", () => {
+    const parsed = shapeGeometrySchema.safeParse(geometry());
+
+    expect(
+      parsed.success && parsed.data.kind === "line" && parsed.data.route?.stops[1],
+    ).not.toHaveProperty("placeId");
+  });
+
+  it("refuses a route with one stop", () => {
+    const oneStop = geometry({ route: { ...route, stops: [route.stops[0]] } });
+
+    expect(shapeGeometrySchema.safeParse(oneStop).success).toBe(false);
+  });
+
+  it("refuses more stops than the engine will answer", () => {
+    const tooMany = geometry({
+      route: {
+        ...route,
+        stops: Array.from({ length: MAX_ROUTE_STOPS + 1 }, () => ({
+          at: [25.28, 54.687],
+        })),
+      },
+    });
+
+    expect(shapeGeometrySchema.safeParse(tooMany).success).toBe(false);
+  });
+
+  it("refuses a duration that could not be a drive", () => {
+    expect(
+      shapeGeometrySchema.safeParse(
+        geometry({ route: { ...route, durationS: -1 } }),
+      ).success,
+    ).toBe(false);
+
+    expect(
+      shapeGeometrySchema.safeParse(
+        geometry({ route: { ...route, durationS: 999_999_999 } }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("refuses a profile nothing can be routed with", () => {
+    expect(
+      shapeGeometrySchema.safeParse(
+        geometry({ route: { ...route, profile: "teleport" } }),
+      ).success,
+    ).toBe(false);
   });
 });

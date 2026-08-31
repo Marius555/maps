@@ -26,7 +26,8 @@ function place(overrides: Partial<Place> = {}): Place {
     email: "hello@example.com",
     url: "https://example.com",
     hours: [null, null, null, null, null, null, null],
-    photoId: "photo-1",
+    photoIds: ["photo-1"],
+    photoUrls: ["https://cdn.example.com/photo-1"],
     photoUrl: "https://cdn.example.com/photo-1",
     sortOrder: 0,
     geocodeConfidence: 0.95,
@@ -136,12 +137,10 @@ describe("completeness", () => {
     expect(isIncomplete(place())).toBe(false);
   });
 
-  it("counts a photo present when either half of it is", () => {
-    // `photoUrl` is resolved from `photoId` on the server, so a row carrying one
-    // and not the other is mid-flight rather than empty.
+  it("counts a photo present from the gallery alone", () => {
+    // `photoUrl` is only the cover; the gallery is what says there is a photo.
     expect(missingFields(place({ photoUrl: null }))).toEqual([]);
-    expect(missingFields(place({ photoId: null }))).toEqual([]);
-    expect(missingFields(place({ photoId: null, photoUrl: null }))).toEqual([
+    expect(missingFields(place({ photoIds: [], photoUrls: [] }))).toEqual([
       "photo",
     ]);
   });

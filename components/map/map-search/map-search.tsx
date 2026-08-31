@@ -195,7 +195,7 @@ export function MapSearch({
        */}
       <div
         inert={!isOpen}
-        className={`flex w-72 min-w-0 items-center gap-1 overflow-hidden transition-[max-width,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ${
+        className={`relative flex w-72 min-w-0 items-center overflow-hidden transition-[max-width,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ${
           isOpen ? "max-w-72 opacity-100" : "max-w-0 opacity-0"
         }`}
       >
@@ -229,28 +229,44 @@ export function MapSearch({
           <Input
             ref={inputRef}
             placeholder="Find an address"
-            className="h-9 border-0 bg-transparent py-0 text-sm shadow-none focus:inset-ring-2 focus:inset-ring-focus focus:ring-0 data-focused:inset-ring-2 data-focused:inset-ring-focus data-focused:ring-0 md:h-8"
+            // `pe-8` is the room Clear sits in — see below. Padding rather than
+            // a sibling's width, so the text simply stops short of the button
+            // instead of the field stopping short of it.
+            className="h-9 border-0 bg-transparent py-0 pe-8 text-sm shadow-none focus:inset-ring-2 focus:inset-ring-focus focus:ring-0 data-focused:inset-ring-2 data-focused:inset-ring-focus data-focused:ring-0 md:h-8"
           />
         </TextField>
 
         {/*
-         * Clear holds its place instead of appearing on the first keystroke.
-         * It sits inside the clipped field, so the space it reserves is taken
-         * from the input and never reaches the panel — the toolbar does not
-         * change width when you start typing, and there is no visible gap when
-         * you have not, because the input has no border to end short of.
+         * Clear sits *in* the field, at its trailing end, rather than beside it.
+         *
+         * It was a flex sibling of the TextField, and a sibling has a width
+         * whether or not it can be seen: an idle search bar spent about 32px of
+         * a 288px field on a button that was `opacity-0`, which read as the text
+         * mysteriously stopping short of the end. Now it is absolutely
+         * positioned over the `pe-8` the input reserves for it, so an empty bar
+         * is all field and nothing moves when the first keystroke fades it in.
+         *
+         * Absolute rather than HeroUI's own `InputGroup.Suffix`, which is the
+         * built-in shape for this and brings a divider rule, its own padding and
+         * a focus ring around the whole group — three things this field has
+         * already been carefully talked out of, because it has to stand exactly
+         * `.button--sm` tall in a row of toolbar buttons.
+         *
+         * `inert` while empty is what keeps a button nobody can see out of the
+         * tab order; it was already doing that job and still is.
          */}
         <Button
           size="sm"
           variant="tertiary"
           aria-label="Clear search"
+          isIconOnly
           inert={!query}
-          className={`transition-opacity duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ${
+          className={`absolute end-1 top-1/2 size-6 min-w-0 -translate-y-1/2 rounded-md transition-opacity duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ${
             query ? "opacity-100" : "opacity-0"
           }`}
           onPress={clear}
         >
-          <X aria-hidden="true" className="size-4" />
+          <X aria-hidden="true" className="size-3.5" />
         </Button>
       </div>
 

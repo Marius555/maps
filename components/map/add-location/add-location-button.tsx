@@ -15,11 +15,14 @@ import type { CustomPinIcon } from "@/packages/shared/pin-icons";
  * Press it and a grid of pins opens. Drag one of those onto the map and it lands
  * where you let go, wearing that pin — the gesture people already know from every
  * other map they use, and it says what the pin will be before it is one. Press a
- * tile instead and the older sticky add mode arms with that icon: the cursor
- * becomes a crosshair and every click on the map drops another until Esc. That
- * path stays because dragging is a pointer gesture and a map builder has to be
- * usable from the keyboard (§8) — and because dropping forty pins in a row is
- * genuinely faster when you are not dragging each one out of a menu.
+ * tile instead and add mode arms with that icon: the cursor becomes a crosshair,
+ * and the next click on the map drops that pin and disarms. That path stays
+ * because dragging is a pointer gesture and a map builder has to be usable from
+ * the keyboard (§8).
+ *
+ * It used to stay armed until Esc, so that forty pins were one choice and forty
+ * clicks. See `onMapClick` in map-editor.tsx for why one pin per arming is the
+ * better trade.
  *
  * This is the only pin control on the toolbar. There was a second one beside it
  * holding the full set, back when this one held four slots; the grid holds both
@@ -125,7 +128,9 @@ export function AddLocationButton({
           variant={isAdding ? "primary" : "tertiary"}
           aria-pressed={isAdding}
           isPending={isBusy}
-          className={isDragging ? "cursor-grabbing" : "cursor-grab"}
+          // The dragging half is left to `body.is-pin-dragging`, which paints
+          // the arrow over the whole page rather than over this one button.
+          className="cursor-pointer"
         >
           {/* Faded, not hidden: the icon is in the air, and what stays behind
               reads as the socket it came out of rather than as a second pin. */}

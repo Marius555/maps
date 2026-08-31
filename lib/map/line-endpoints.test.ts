@@ -103,3 +103,49 @@ describe("resolveGeometry", () => {
     ]);
   });
 });
+
+describe("resolveGeometry, on a routed line", () => {
+  /**
+   * The one case the rubber band must not fire on.
+   *
+   * A hand-drawn line's endpoint is a fallback and the pin is the truth, which
+   * is what makes it follow a pin somebody drags. A route's points came out of a
+   * routing engine and follow real roads: moving point 0 onto a pin two streets
+   * away does not reroute anything, it draws a straight kink from the pin to
+   * wherever the road geometry starts — on the canvas and in the published
+   * snapshot alike. See lib/map/route-staleness.ts for what happens instead.
+   */
+  const routed = {
+    kind: "line" as const,
+    points: [
+      [10.0, 60.0],
+      [10.5, 60.2],
+      [11.0, 60.4],
+    ] as [number, number][],
+    from: "bergen",
+    route: {
+      profile: "car" as const,
+      stops: [{ at: [10.0, 60.0] as [number, number], placeId: "bergen" }],
+      durationS: 900,
+    },
+  };
+
+  it("returns it by reference, bond or no bond", () => {
+    expect(resolveGeometry(routed, index)).toBe(routed);
+  });
+
+  it("leaves its first point exactly where the engine put it", () => {
+    const resolved = resolveGeometry(routed, index);
+
+    expect(resolved.kind === "line" && resolved.points[0]).toEqual([10.0, 60.0]);
+  });
+
+  it("still rubber-bands a hand-drawn line beside it", () => {
+    const resolved = resolveGeometry(line({ from: "bergen" }), index);
+
+    expect(resolved.kind === "line" && resolved.points[0]).toEqual([
+      BERGEN.lng,
+      BERGEN.lat,
+    ]);
+  });
+});

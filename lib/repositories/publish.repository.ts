@@ -7,6 +7,8 @@ import { env } from "@/lib/env";
 import { gazetteerBase } from "@/lib/gazetteer/config";
 import { buildSnapshot } from "@/lib/snapshot/build";
 import { uploadSnapshot } from "@/lib/snapshot/storage";
+import { effectiveCardLayout } from "@/lib/card/designer-status";
+import { getCardDesign } from "./card-design.repository";
 import type { RepoContext } from "./context";
 import { toAppMap } from "./mappers";
 import { getMap } from "./maps.repository";
@@ -53,9 +55,10 @@ export async function publishMap(
 ): Promise<PublishResult> {
   // Ownership first — nothing is generated for a map the caller can't publish.
   const map = await getMap(ctx, mapId);
-  const [places, shapes] = await Promise.all([
+  const [places, shapes, cardDesign] = await Promise.all([
     listAllPlaces(ctx, mapId),
     listAllShapes(ctx, mapId),
+    getCardDesign(ctx),
   ]);
 
   const generatedAt = new Date().toISOString();
@@ -65,6 +68,7 @@ export async function publishMap(
     shapes,
     generatedAt,
     gazetteerBase(origin),
+    effectiveCardLayout(cardDesign),
   );
 
   // Storage before the row. If the upload fails the map stays exactly as it was,

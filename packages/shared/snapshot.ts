@@ -16,6 +16,7 @@
  * the empty strings add up, and the embed treats absent and empty the same way.
  */
 
+import type { CardLayout } from "./card-layout";
 import type { OpeningHours } from "./hours";
 import type { MapAppearance } from "./map-appearance";
 import type { PinRingWidth, PinShape, PinSize } from "./pin-icons";
@@ -135,8 +136,25 @@ export type SnapshotPlace = {
    * must keep parsing.
    */
   hours?: OpeningHours;
-  /** Public storage URL, composed on the server so no bucket id ships. */
+  /**
+   * The cover photo. Public storage URL, composed on the server so no bucket id
+   * ships. Always `photoUrls[0]` when there is a gallery.
+   */
   photoUrl?: string;
+  /**
+   * The whole gallery, cover first, and only when there is more than one photo
+   * — a place with a single picture says so in `photoUrl` alone and pays no
+   * duplicate bytes for it.
+   *
+   * `photoUrl` is kept beside this rather than replaced by it, and the small
+   * redundancy is the point: snapshots are immutable and every file published
+   * before galleries existed is still live on a customer's site reading
+   * `photoUrl` (§7). Leaving its meaning exactly as it was is what lets those
+   * keep rendering, and what lets the dashboard's own card code stay unchanged.
+   *
+   * Optional, on that same rule.
+   */
+  photoUrls?: string[];
   /**
    * Tag ids, already narrowed to ones the map still defines — a place may be
    * storing ids for tags that were deleted, and those are dropped here rather
@@ -185,8 +203,19 @@ export type SnapshotShape = {
    * editor is written here as the coordinates that location was at when the map
    * was published. The bond itself never ships — the embed would have to look an
    * id up to use it, and it has nothing to look it up in.
+   *
+   * `durationS` is how long the route takes, in seconds, and is present only for
+   * a path that came out of a routing engine. It is the one measurement stored
+   * rather than derived: the popup works a line's *length* out from these very
+   * points, but no arrangement of coordinates says how fast you may drive along
+   * them.
+   *
+   * Optional, and it has to stay that way for the same reason `hours` and
+   * `pinIcons` are: snapshots are immutable, so every file published before
+   * routes existed is still live on a customer's site and must keep parsing.
+   * Absent means a hand-drawn line, which is what every one of them holds.
    */
-  | { kind: "line"; points: [number, number][] }
+  | { kind: "line"; points: [number, number][]; durationS?: number }
 );
 
 /** Which of the embed's optional controls are switched on. */
@@ -350,6 +379,22 @@ export type MapSnapshot = {
    * exactly as it did before this shipped.
    */
   gazetteer?: SnapshotGazetteer;
+  /**
+   * How the location card itself is laid out — which blocks it holds, in which
+   * of its three zones, and how big each one is.
+   *
+   * Designed in the dashboard and baked in here, so the visitor's browser gets a
+   * finished card and never a designer. The blocks are resolved and clamped
+   * before they are written (packages/shared/card-layout.ts), which is what lets
+   * the embed render one without re-deciding any of the rules.
+   *
+   * Optional, and **omitted entirely when it is the default** — for the same
+   * reason `appearance`, `pinIcons` and `shapes` are: snapshots are immutable and
+   * every file published before this existed is still live on a customer's site.
+   * A map whose owner never opened the designer must keep publishing the bytes it
+   * always did, and the embed must keep drawing the card it always drew.
+   */
+  cardLayout?: CardLayout;
   settings: SnapshotSettings;
   /**
    * Hostnames allowed to embed this map. Empty means "anywhere".

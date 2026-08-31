@@ -1,9 +1,13 @@
-import { formatDistanceM, pathLengthM } from "@/packages/shared/geo";
+import {
+  formatDistanceM,
+  formatDuration,
+  pathLengthM,
+} from "@/packages/shared/geo";
 import type { ShapeGeometry } from "@/packages/shared/shapes";
 
 /**
  * What a shape is, in a phrase: "Circle · 2.4 km radius", "Polygon · 8 points",
- * "Line · 463 km".
+ * "Line · 463 km", "Route · 463 km · 6 h 12 min".
  *
  * The card and the sidebar row both print it, from here, so the two cannot end up
  * describing the same shape differently.
@@ -19,7 +23,15 @@ export function shapeSummary(geometry: ShapeGeometry): string {
   }
 
   if (geometry.kind === "line") {
-    return `Line · ${formatDistanceM(pathLengthM(geometry.points))}`;
+    const length = formatDistanceM(pathLengthM(geometry.points));
+
+    // A route leads with what it is and adds the drive. "Line · 463 km" is true
+    // of a route too, and useless — the whole difference between the two is that
+    // one of them follows roads, and the travel time is the only part of the
+    // summary that could not also describe a straight line drawn by hand.
+    return geometry.route
+      ? `Route · ${length} · ${formatDuration(geometry.route.durationS)}`
+      : `Line · ${length}`;
   }
 
   const count = geometry.points.length;

@@ -25,7 +25,7 @@ import { mountRowGhost, moveRowGhost, type RowGhost } from "./row-drag-ghost";
  * out to matter more than the handful of lines it saved:
  *
  * - **It owns the cursor.** From `dragstart` onwards the browser paints its own,
- *   and the row's `cursor: grabbing` is simply ignored. So the gesture with the
+ *   and the row's own drag cursor is simply ignored. So the gesture with the
  *   least feedback in the app was the one that most needed it: nothing said you
  *   had picked anything up.
  * - **It does not fire on touch at all.** Not degraded — absent. Grouping was
@@ -82,8 +82,27 @@ const TOUCH_HOLD_MS = 250;
  */
 const ROW_STYLE: CSSProperties = { touchAction: "pan-y" };
 
+/**
+ * What is in the air.
+ *
+ * The first three are rows of the locations panel. The last two are the card
+ * designer, which runs this same gesture rather than a second one: the threshold,
+ * the 250ms touch hold, the ghost, Escape-to-abort and the edge autoscroll are
+ * all things that took real work to get right, and a designer that felt different
+ * from the list would be a second set of them to keep in step.
+ *
+ * Nothing else in this file reads `type` — it is carried to the drop target and
+ * interpreted there.
+ */
 export type DraggedObject = {
-  type: "place" | "shape" | "group";
+  type:
+    | "place"
+    | "shape"
+    | "group"
+    /** A block being moved on the card. `id` is the block's id. */
+    | "card-block"
+    /** A block being dragged off the palette. `id` is the block *type*. */
+    | "card-new";
   id: string;
 };
 
@@ -102,6 +121,7 @@ export function isSameObject(a: DraggedObject, b: DraggedObject): boolean {
 export function useRowDragSource({
   self,
   canDrag = true,
+  onDroppedOutside,
 }: {
   /** What this row is, for when it is the one being dragged. */
   self: DraggedObject;
@@ -114,6 +134,17 @@ export function useRowDragSource({
    * place the user is guaranteed to see.
    */
   canDrag?: boolean;
+  /**
+   * Released over nothing registered at all — not a target that refused the
+   * drop, a release point with no drop target beneath it whatsoever.
+   *
+   * Omit and a drop like that simply does nothing, which is every row's
+   * behaviour today. The card designer wires this on a placed block to remove
+   * it, which only reads correctly once the card itself is *also* a
+   * registered target (see the catch-all in card-canvas.tsx) — otherwise a
+   * sloppy-but-still-over-the-card drop would count as "outside" too.
+   */
+  onDroppedOutside?: () => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const { setDragged, setOverId, find } = useRowDragState();
@@ -153,7 +184,15 @@ export function useRowDragSource({
   const source = useRef<{
     element: HTMLElement;
     offset: { x: number; y: number };
-    width: number;
+    /**
+     * The row's own box, so the ghost is the size of what was picked up.
+     *
+     * Both dimensions, not just the width: a card block sizes itself against its
+     * parent (a percentage width, a flex basis), and a clone of it appended to
+     * `<body>` resolves those against something else entirely — see
+     * `mountRowGhost`.
+     */
+    size: { width: number; height: number };
   } | null>(null);
 
   /*
@@ -161,9 +200,9 @@ export function useRowDragSource({
    * gesture that re-registered its own `pointerup` half-way through would be one
    * `pointerup` away from listening to nothing.
    */
-  const state = useRef({ self, setDragged, setOverId, find });
+  const state = useRef({ self, setDragged, setOverId, find, onDroppedOutside });
   useEffect(() => {
-    state.current = { self, setDragged, setOverId, find };
+    state.current = { self, setDragged, setOverId, find, onDroppedOutside };
   });
 
   /**
@@ -216,7 +255,7 @@ export function useRowDragSource({
       source.current = {
         element,
         offset: { x: event.clientX - rect.left, y: event.clientY - rect.top },
-        width: rect.width,
+        size: { width: rect.width, height: rect.height },
       };
 
       origin.current = { x: event.clientX, y: event.clientY };
@@ -312,14 +351,18 @@ export function useRowDragSource({
       started.current = false;
       setIsDragging(false);
 
-      const { self: dragged, setDragged, setOverId, find } = state.current;
+      const { self: dragged, setDragged, setOverId, find, onDroppedOutside } =
+        state.current;
       setDragged(null);
       setOverId(null);
 
       if (!wasDragging || !drop) return;
 
       const id = targetAt(event.clientX, event.clientY);
-      if (!id) return;
+      if (!id) {
+        onDroppedOutside?.();
+        return;
+      }
 
       const target = find(id);
       if (target?.accepts(dragged)) target.onDrop(dragged);
@@ -364,7 +407,7 @@ export function useRowDragSource({
    * copy away, un-dim the row and give the page its cursor back. Four exits, one
    * path.
    *
-   * The `grabbing` cursor is a class on `<body>` rather than an inline style,
+   * The drag cursor is a class on `<body>` rather than an inline style,
    * because it has to beat the cursor of every element the pointer crosses — see
    * `body.is-row-dragging *` in app/globals.css. An inline cursor on `<body>` is
    * only inherited, so any button along the way overrode it.
@@ -378,7 +421,7 @@ export function useRowDragSource({
       latest.current.x,
       latest.current.y,
       picked.offset,
-      picked.width,
+      picked.size,
     );
     ghost.current = element;
 
@@ -468,12 +511,23 @@ export function useDropTarget({
   }, [id, register, Boolean(onDrop)]);
 
   const isTarget = Boolean(onDrop) && overId === id && dragged !== null;
+  /*
+   * Would take this drop, whether or not the pointer is over it yet.
+   *
+   * The locations panel has no use for this — a row highlights only under the
+   * pointer — but the card designer does: the moment a block leaves the palette,
+   * every zone that could hold it outlines itself, so the answer to "where can
+   * this go" is on screen before the first guess rather than after it.
+   */
+  const isCandidate = Boolean(onDrop) && dragged !== null && accepts(dragged);
 
   return {
     isTarget,
+    isCandidate,
     targetProps: {
       "data-drop-id": onDrop ? id : undefined,
       "data-drop-target": isTarget || undefined,
+      "data-drop-candidate": isCandidate || undefined,
     },
   };
 }

@@ -100,7 +100,15 @@ export function PlaceStatusFlag({
         role="img"
         aria-label="Approximate address"
         title="Approximate — we matched this pin to the street, not to a building. Add the house number if you know it."
-        className="size-3.5 shrink-0 rounded-full border-2 border-[var(--warning)]"
+        /*
+         * `inline-block`, and it is load-bearing: a bare `span` is inline, and
+         * width and height do not apply to an inline box — so in any parent
+         * that is not a flex container this collapsed to a zero-width box with
+         * a 2px amber border on all four sides, which draws as a short *vertical
+         * amber line*. It was a circle only where a flex parent happened to
+         * blow it up into a flex item.
+         */
+        className="inline-block size-3.5 shrink-0 rounded-full border-2 border-[var(--warning)]"
       />
     );
   }

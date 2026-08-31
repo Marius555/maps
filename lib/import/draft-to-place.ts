@@ -35,7 +35,8 @@ export function draftToPlace(draft: DraftPlace, mapId: string): Place {
     // A CSV column for opening hours would need a format to parse; imports set
     // them afterwards, per location.
     hours: null,
-    photoId: null,
+    photoIds: [],
+    photoUrls: [],
     photoUrl: null,
     sortOrder: draft.rowNumber,
     geocodeConfidence: draft.confidence,

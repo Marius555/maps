@@ -1,18 +1,37 @@
 "use client";
 
-import { Button } from "@heroui/react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect } from "react";
 
-import type { MapCategory, Place } from "@/lib/repositories/types";
+import { CardView } from "@/components/card/card-view";
+import type { MapCategory, MapField, Place } from "@/lib/repositories/types";
+import type { CardLayout } from "@/packages/shared/card-layout";
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { useMapAnchor } from "../use-map-anchor";
-import { PlaceCardDetails } from "./place-card-details";
-import { PlaceCardHeader } from "./place-card-header";
-import { PlaceCardHours } from "./place-card-hours";
+import { PlaceCardChrome } from "./place-card-chrome";
 
-/** Card width (w-64) plus the gap that keeps it off the pin. */
-const FLIP_WIDTH = 256 + 22;
+/** The gap that keeps the card off the pin, added to the card's own width. */
+const FLIP_GAP = 22;
+
+/**
+ * What a location with nothing on it says for itself.
+ *
+ * Editor-only, passed rather than built into `CardView`, because it asks the
+ * reader to go and edit the location — which a visitor to a customer's site can
+ * neither do nor be told to do. The embed passes nothing and shows nothing.
+ *
+ * It sits between the card's blocks and its chrome, so the Edit button
+ * immediately below it is the action the sentence is asking for (CLAUDE.md §8:
+ * an empty state is an invitation, with the primary action right there).
+ */
+function renderEmptyState() {
+  return (
+    <p className="px-[var(--card-pad)] pb-[var(--card-pad)] text-xs text-muted">
+      No details yet. Add an address, description or contact details.
+    </p>
+  );
+}
 
 /**
  * Everything a location holds, beside its pin.
@@ -34,6 +53,9 @@ export function PlaceCard({
   isReady,
   place,
   category,
+  layout,
+  fields,
+  pinIcons,
   onClose,
   onEdit,
 }: {
@@ -41,10 +63,22 @@ export function PlaceCard({
   isReady: boolean;
   place: Place | null;
   category: MapCategory | undefined;
+  /**
+   * The card the owner designed, which the embed's popup draws from too.
+   *
+   * One layout, two renderers: what they arrange here is what a visitor gets,
+   * which is the point of designing it in the dashboard at all.
+   */
+  layout: CardLayout;
+  fields: MapField[];
+  /** The map's pins, for a card whose layout holds a Logo block. */
+  pinIcons: CustomPinIcon[];
   onClose: () => void;
   onEdit?: (placeId: string) => void;
 }) {
-  const anchor = useMapAnchor(map, isReady, place, FLIP_WIDTH);
+  // The card's own width now, not a constant — the owner can make it wider, and
+  // the side the card flips to has to be decided from the width it will be.
+  const anchor = useMapAnchor(map, isReady, place, layout.width + FLIP_GAP);
   const prefersReducedMotion = useReducedMotion();
 
   // Escape closes the card. On the window because focus may still be on the pin,
@@ -111,33 +145,28 @@ export function PlaceCard({
                * the same reason the flip side is CSS: it changes as the map is
                * resized, and this must not depend on a React render to keep up.
                */
-              className="map-card pointer-events-auto flex w-64 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
+              className="pointer-events-auto"
               role="dialog"
               aria-label={place.name}
             >
-              <PlaceCardHeader
+              {/* `map-card` carries the height cap the anchor hook writes from
+                  the map frame, and the floor beside it, so it belongs on the
+                  element that actually is the card — see the note above. */}
+              <CardView
+                layout={layout}
                 place={place}
                 category={category}
-                onClose={onClose}
-              />
-
-              <div className="min-h-0 space-y-3 overflow-y-auto p-3 pt-2">
-                <PlaceCardDetails place={place} />
-                <PlaceCardHours hours={place.hours} />
-              </div>
-
-              {onEdit ? (
-                <div className="shrink-0 border-t border-border p-2">
-                  <Button
-                    size="sm"
-                    variant="tertiary"
-                    fullWidth
-                    onPress={() => onEdit(place.id)}
-                  >
-                    Edit location
-                  </Button>
-                </div>
-              ) : null}
+                fields={fields}
+                pinIcons={pinIcons}
+                className="map-card relative border border-border"
+                renderEmptyState={renderEmptyState}
+              >
+                <PlaceCardChrome
+                  place={place}
+                  onClose={onClose}
+                  onEdit={onEdit}
+                />
+              </CardView>
             </motion.div>
           ) : null}
         </AnimatePresence>

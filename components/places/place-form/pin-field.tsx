@@ -16,7 +16,9 @@ import { PIN_ICONS, CUSTOM_PIN_PREFIX, type CustomPinIcon } from "@/packages/sha
  * dropdown: a pin is a picture, and a list of names would make the user read
  * "Landmark" and imagine it.
  *
- * The tiles do not drag here. There is no map under this form.
+ * The tiles do not drag here. There is a map directly above this row, and it
+ * redraws its marker the moment a tile is pressed — so the picker already has
+ * the feedback a drag would have carried, without the gesture.
  */
 export function PinField({
   value,

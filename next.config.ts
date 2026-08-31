@@ -29,6 +29,11 @@ const nextConfig: NextConfig = {
       // The gazetteer the embed's search fetches, on the same argument: static
       // public files, read by pages on domains that are not ours.
       { source: "/gazetteer/:path*", headers: embedCorsHeaders },
+      // Our own basemap styles, fonts, sprites and raster tiles, once
+      // NEXT_PUBLIC_TILES_URL points here rather than at a CDN. Same argument
+      // again, and the failure without it is the same shape: labels and icons
+      // that render perfectly on our domain and nowhere else.
+      { source: "/tiles/:path*", headers: embedCorsHeaders },
     ];
   },
 };

@@ -4,6 +4,7 @@ import { Button, FieldError, Label } from "@heroui/react";
 
 import {
   DAY_LABELS,
+  DAY_LABELS_SHORT,
   emptyHours,
   type DayHours,
   type OpeningHours,
@@ -52,11 +53,12 @@ export function HoursField({
         ) : null}
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         {DAY_LABELS.map((label, index) => (
           <HoursDayRow
             key={label}
             label={label}
+            shortLabel={DAY_LABELS_SHORT[index]}
             value={hours[index]}
             onChange={(day) => setDay(index, day)}
           />

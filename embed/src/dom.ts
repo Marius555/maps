@@ -29,6 +29,43 @@ export function button(className: string, label: string): HTMLButtonElement {
   return node;
 }
 
+/**
+ * A line-drawn glyph, for the controls that are too small to hold a word.
+ *
+ * `createElementNS`, because SVG is not HTML: `createElement("svg")` produces an
+ * HTMLUnknownElement that renders nothing at all, silently. And built as nodes
+ * rather than assigned as markup, on the same rule as everything else in this
+ * file — the embed sets no `innerHTML` anywhere, so there is no habit to lapse
+ * from when a string does eventually carry customer text.
+ *
+ * `stroke="currentColor"` so a glyph inherits the button's colour and follows
+ * the dark theme with no second rule.
+ */
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+export function icon(paths: string[]): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", "18");
+  svg.setAttribute("height", "18");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  // The button carries the accessible name; the drawing is decoration.
+  svg.setAttribute("aria-hidden", "true");
+
+  for (const d of paths) {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  }
+
+  return svg;
+}
+
 /** Schemes a place's link is allowed to use. */
 const SAFE_SCHEMES = new Set(["http:", "https:", "mailto:", "tel:"]);
 

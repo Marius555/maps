@@ -12,8 +12,9 @@ import { useSyncExternalStore } from "react";
  * tick later. That is a visible flash on every page load.
  *
  * The class is already correct before first paint: the blocking script in
- * app/layout.tsx stamps it in `<head>`, ahead of `<body>` existing. So the DOM is
- * both the earliest and the most reliable source.
+ * components/providers/theme-script.tsx stamps it in `<head>`, ahead of `<body>`
+ * existing. So the DOM is both the earliest and the most reliable source, and
+ * `ThemeSync` puts it back if React ever clears `<html>`.
  *
  * Watching the class attribute rather than `matchMedia` is deliberate too — it
  * catches an explicit light/dark choice *and* the "system" setting following the

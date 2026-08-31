@@ -20,26 +20,42 @@ import type { AppMap, Place } from "@/lib/repositories/types";
  * the editor tab is the full canvas, and making this one tall would push the
  * fields the form is actually about below the fold.
  *
- * `isAdding` is on so a click places the pin: the canvas only reports basemap
- * clicks while it is armed, and click-to-move is the fastest correction there is
- * when the pin is currently off screen somewhere else.
+ * **The pin moves when it is dragged, and at no other time.** This was armed as
+ * add mode, which bought the add cursor, a ghost pin trailing the pointer across
+ * a map that already had the only pin it is ever going to have, and a click
+ * anywhere that moved the location. The first two went; the click stayed one
+ * round longer, and it was the worst of the three — a ghost at least announces
+ * itself, while a click landing on the map while you read it silently relocates
+ * the business. Dragging is the whole gesture now: it is deliberate, it starts
+ * on the thing it moves, and it is the one this caption has always described.
+ *
+ * `icon` is the form's live value rather than the saved row's, so the marker is a
+ * preview of the draft: picking a pin below changes the pin above on the click,
+ * and Cancel puts it back. Nothing here writes anything — `icon` is already in
+ * form state, and the form's own submit is what saves it.
  */
 export function PinMapField({
   map,
   place,
   lat,
   lng,
+  icon,
   onChange,
 }: {
   map: AppMap;
   place: Place;
   lat: number;
   lng: number;
+  /** The form's live pin, which is not yet the one on the stored row. */
+  icon: string;
   onChange: (coords: { lat: number; lng: number }) => void;
 }) {
-  // The stored place with the form's live position, so dragging the pin and
-  // typing a coordinate move the same marker.
-  const places = useMemo(() => [{ ...place, lat, lng }], [place, lat, lng]);
+  // The stored place with the form's live position and pin, so dragging the
+  // marker, typing a coordinate and picking a pin all move the same marker.
+  const places = useMemo(
+    () => [{ ...place, lat, lng, icon }],
+    [place, lat, lng, icon],
+  );
 
   const handle = useRef<MapHandle | null>(null);
 
@@ -84,9 +100,13 @@ export function PinMapField({
           places={places}
           pinIcons={map.pinIcons}
           selectedPlaceId={place.id}
-          isAdding
+          isAdding={false}
           onSelectPlace={() => {}}
-          onMapClick={move}
+          // Required by the canvas, and deliberately inert: with `isAdding`
+          // false this never fires, and a basemap click falls into the browse
+          // branch — which clears a selection this map does not have and looks
+          // for shape layers it was never given. Both no-ops.
+          onMapClick={() => {}}
           onMovePlace={(_placeId, coords) => move(coords)}
           onReady={(ready) => {
             handle.current = ready;
@@ -95,7 +115,7 @@ export function PinMapField({
       </div>
 
       <p className="text-xs text-muted">
-        Drag the pin, or click the map, to move this location.
+        Drag the pin to move this location.
       </p>
     </div>
   );

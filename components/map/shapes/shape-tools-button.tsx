@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Popover, Separator } from "@heroui/react";
-import { Circle, Pentagon, Shapes, Slash, Upload } from "lucide-react";
+import { Circle, Pentagon, Route, Shapes, Slash, Upload } from "lucide-react";
 import { useState } from "react";
 
 import type { ShapeKind } from "@/packages/shared/shapes";
@@ -26,21 +26,31 @@ import type { ShapeKind } from "@/packages/shared/shapes";
  */
 export function ShapeToolsButton({
   drawMode,
+  isRouting,
   isBusy,
   onPickTool,
+  onPickRoute,
   onStopDrawing,
   onImport,
 }: {
   /** The armed tool, or null in browse mode. */
   drawMode: ShapeKind | null;
+  /**
+   * Whether the route tool is armed. Separate from `drawMode` because a route is
+   * not a `ShapeKind` — it saves as a line, and folding it in would arm the plain
+   * line tool alongside it.
+   */
+  isRouting?: boolean;
   isBusy: boolean;
   onPickTool: (kind: ShapeKind) => void;
+  /** Arms the route tool. Omitted where there is no map to route on. */
+  onPickRoute?: () => void;
   onStopDrawing: () => void;
   /** Opens the GeoJSON import dialog. Omitted where there is nowhere to put it. */
   onImport?: () => void;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const isDrawing = drawMode !== null;
+  const isDrawing = drawMode !== null || Boolean(isRouting);
 
   return (
     <Popover.Root
@@ -79,7 +89,7 @@ export function ShapeToolsButton({
 
       <Popover.Content placement="bottom start">
         <Popover.Dialog aria-label="Choose a drawing tool">
-          <div className="flex w-56 flex-col gap-0.5">
+          <div className="flex w-auto flex-col gap-0.5">
             <ToolItem
               icon={Circle}
               label="Circle"
@@ -110,6 +120,24 @@ export function ShapeToolsButton({
                 onPickTool("line");
               }}
             />
+
+            {/* In this menu rather than on the toolbar, for the reason at the
+                top of this file: the panel does not wrap, and a fourth permanent
+                button is the one that pushes the address field off a phone. A
+                route also belongs here on the merits — it makes a shape, and it
+                is drawn with the same gesture as the line above it. */}
+            {onPickRoute ? (
+              <ToolItem
+                icon={Route}
+                label="Route"
+                hint="Click each location, Enter to follow the roads"
+                isArmed={Boolean(isRouting)}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  onPickRoute();
+                }}
+              />
+            ) : null}
 
             {/* Below a rule, because it is the odd one out: the three above arm
                 a gesture and this one opens a dialog. Still in this menu rather

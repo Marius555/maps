@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 
 import { useRowDragState } from "@/components/groups/row-drag-context";
 import { useDropTarget, type DraggedObject } from "@/components/groups/use-row-drag";
+import { GESTURE_SPRING } from "@/components/ui/list-row-motion";
 
 /**
  * Somewhere to drop a row that is leaving its group.
@@ -62,11 +63,15 @@ export function UngroupDropZone({
            * Motion respects `prefers-reduced-motion` for transforms through its
            * own reduced-motion handling, and the strip is legible without the
            * movement because the resting state carries the emphasis.
+           *
+           * `GESTURE_SPRING` is these numbers, exported so the card designer's
+           * removal wall arrives with the same weight rather than with a second
+           * spring that happens to agree today.
            */
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 12 }}
-          transition={{ type: "spring", stiffness: 520, damping: 30, mass: 0.6 }}
+          transition={GESTURE_SPRING}
           className="border-t border-border p-2"
         >
           <div

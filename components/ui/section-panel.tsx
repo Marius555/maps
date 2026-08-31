@@ -18,6 +18,7 @@ export function SectionPanel({
   footer,
   children,
   className = "",
+  bodyClassName = "",
 }: {
   title?: string;
   description?: string;
@@ -27,6 +28,14 @@ export function SectionPanel({
   footer?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
+  /**
+   * Appended to the body's own classes, for a panel whose body has to do
+   * something structural — the card designer's sidebar is a fixed-height column
+   * whose contents scroll, which needs `flex min-h-0 flex-1 flex-col` on this
+   * box specifically. Appended rather than replacing, so the padding and rhythm
+   * every other panel relies on are still there.
+   */
+  bodyClassName?: string;
 }) {
   return (
     <section
@@ -48,7 +57,9 @@ export function SectionPanel({
       ) : null}
 
       {children ? (
-        <div className="space-y-4 px-5 py-5 sm:px-6">{children}</div>
+        <div className={`space-y-4 px-5 py-5 sm:px-6 ${bodyClassName}`}>
+          {children}
+        </div>
       ) : null}
 
       {footer ? (

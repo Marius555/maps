@@ -3,45 +3,41 @@
 import { useWatch, type Control } from "react-hook-form";
 
 import { FormTextArea } from "@/components/ui/form-field";
-import type { AppMap, Place } from "@/lib/repositories/types";
+import type { PhotoSlot } from "@/lib/photos/save-plan";
 import type { PlaceFormValues } from "@/lib/validation/place.schema";
-import { PhotoField } from "../photo-field";
+import { PhotoGalleryField } from "../photo-gallery-field";
 import { FormSection } from "./form-section";
 
 /**
- * The two things that make a popup worth opening, and neither is required.
+ * The two things that make a card worth opening, and neither is required.
  *
- * The photo is not part of form state — it uploads the moment it is picked, for
- * the reason `photo-field.tsx` gives — so the summary reads it off the saved
- * place while the description comes from the live form. Two sources for one line,
- * because the two fields genuinely save at different times, and pretending
- * otherwise would show a photo as missing until the next save.
+ * Both come from the draft now. Photos used to upload the moment they were
+ * picked, so the summary had to read them off the *saved* place while the
+ * description came from the live form — two sources for one line, on the honest
+ * grounds that the two really did save at different times. They no longer do
+ * (`photo-gallery-field.tsx`), so the line counts what is on screen and says the
+ * same thing about both halves.
  */
 export function MediaSection({
-  map,
-  place,
+  photos,
   control,
   hasError,
+  onPhotosChange,
 }: {
-  map: AppMap;
-  place: Place;
+  photos: PhotoSlot[];
   control: Control<PlaceFormValues>;
   hasError?: boolean;
+  onPhotosChange: (next: PhotoSlot[]) => void;
 }) {
   const description = useWatch({ control, name: "description" });
 
-  const has = [
-    Boolean(place.photoId || place.photoUrl),
-    Boolean(description?.trim()),
-  ].filter(Boolean).length;
-
   return (
     <FormSection
-      title="Photo and description"
-      summary={has === 0 ? "Not set" : `${has} of 2`}
+      title="Photos and description"
+      summary={summarise(photos.length, description)}
       hasError={hasError}
     >
-      <PhotoField mapId={map.id} place={place} />
+      <PhotoGalleryField value={photos} onChange={onPhotosChange} />
 
       <FormTextArea
         control={control}
@@ -50,4 +46,18 @@ export function MediaSection({
       />
     </FormSection>
   );
+}
+
+/**
+ * Counted rather than "2 of 2", because these two are not a pair of boxes to
+ * fill: eight photos and no description is a finished location, and "1 of 2"
+ * would read as half done.
+ */
+function summarise(photos: number, description: string | undefined): string {
+  const parts: string[] = [];
+
+  if (photos > 0) parts.push(photos === 1 ? "1 photo" : `${photos} photos`);
+  if (description?.trim()) parts.push("description");
+
+  return parts.length === 0 ? "Not set" : parts.join(" · ");
 }

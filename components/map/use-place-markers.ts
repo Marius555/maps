@@ -3,13 +3,22 @@
 import { Map as MapLibreMap, Marker } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 
+import { takeDropped } from "@/lib/map/dropped-pins";
 import type { Place } from "@/lib/repositories/types";
 import {
   PIN_CSS_VARS,
   pinCssVars,
   type CustomPinIcon,
 } from "@/packages/shared/pin-icons";
-import { createPinElement, setPinIcon, setPinSelected } from "./pin-marker";
+import {
+  createPinElement,
+  playDrop,
+  setPinChecking,
+  setPinIcon,
+  setPinSelected,
+  setPinStop,
+  setPinUnroutable,
+} from "./pin-marker";
 
 /**
  * Keeps the map's markers in sync with the places array by diffing, not by
@@ -24,6 +33,10 @@ export function usePlaceMarkers({
   selectedPlaceIds,
   pinIcons,
   colorFor,
+  isArmed,
+  unroutableIds,
+  checkingId,
+  stopIds,
   onSelect,
   onMove,
 }: {
@@ -47,6 +60,45 @@ export function usePlaceMarkers({
    * Memoise it: its identity is what tells this hook the colours have moved.
    */
   colorFor?: (place: Place, pinColor?: string) => string | undefined;
+  /**
+   * Whether a drawing tool owns the canvas — the same flag that writes
+   * `.drawing-shapes`.
+   *
+   * The stylesheet already takes every marker out of the pointer's way while a
+   * tool is armed, and this is the same rule said again in JavaScript, because
+   * the CSS is one `!important` away from a library that writes
+   * `pointer-events` inline (see the note on that rule in app/globals.css). A
+   * marker that does become clickable anyway must still not select its location
+   * and must still not be draggable: the route tool's every click is *meant*
+   * for the map underneath.
+   */
+  isArmed?: boolean;
+  /**
+   * Locations the routing engine cannot reach.
+   *
+   * Drawn grey, unscaled and without the ripple while the route tool is armed,
+   * so a pin that cannot be a stop stops advertising itself as one. Gathered by
+   * components/map/routes/use-routability.ts; undefined on every canvas that
+   * never routes.
+   */
+  unroutableIds?: ReadonlySet<string>;
+  /**
+   * The one location whose verdict is being fetched right now, if any.
+   *
+   * A click on a pin nobody has asked about yet waits for the answer before it
+   * becomes a stop, and on the public engine that is about a second. Marking
+   * the pin is what stops that second reading as a click that did nothing.
+   */
+  checkingId?: string | null;
+  /**
+   * The locations already taken as stops by the route being drawn.
+   *
+   * Empty at every other moment, and undefined on every canvas that never
+   * routes. It is the *in-progress* list and not a saved route's — a finished
+   * route's stops are read off the shape, and marking them here would leave
+   * pins pulsing at a map nobody is drawing on.
+   */
+  stopIds?: ReadonlySet<string>;
   onSelect: (placeId: string) => void;
   /** Fired once, on drop. Dragging is how a bad geocode gets corrected (§7). */
   onMove?: (placeId: string, coords: { lng: number; lat: number }) => void;
@@ -61,6 +113,11 @@ export function usePlaceMarkers({
    */
   const onSelectRef = useRef(onSelect);
   const onMoveRef = useRef(onMove);
+  /*
+   * Read by the marker's own click listener, which closes over it once. A
+   * marker created in browse mode has to obey a tool armed a minute later.
+   */
+  const isArmedRef = useRef(isArmed);
   /**
    * Markers the pointer is currently holding. A background refetch landing
    * mid-drag would otherwise call setLngLat and yank the pin out of the user's
@@ -71,6 +128,7 @@ export function usePlaceMarkers({
   useEffect(() => {
     onSelectRef.current = onSelect;
     onMoveRef.current = onMove;
+    isArmedRef.current = isArmed;
   });
 
   useEffect(() => {
@@ -101,12 +159,25 @@ export function usePlaceMarkers({
       const element = createPinElement(place.name);
       paint(element, place, pinIcons, colorFor);
 
+      // Only a location someone just placed, and only once — see
+      // lib/map/dropped-pins.ts for why creation is the wrong signal for this.
+      if (takeDropped(place.id)) playDrop(element);
+
       // A drag ends with a mouseup on the element, which the browser then
       // reports as a click. Without this flag, dropping a pin would also
       // select it — and in add mode the map click would drop a second pin.
       let movedWhileDown = false;
 
       element.addEventListener("click", (event) => {
+        /*
+         * A drawing tool owns every click, and this one has to *keep bubbling*
+         * to say so. The marker sits inside `.maplibregl-canvas-container`, so
+         * an un-stopped click still reaches MapLibre's own handler and becomes
+         * a route stop — which is exactly what should happen. Stopping it here
+         * is what turned a click meant for the map into nothing at all.
+         */
+        if (isArmedRef.current) return;
+
         // Without this the click falls through to the map and, in add mode,
         // drops a second pin on top of the one just clicked.
         event.stopPropagation();
@@ -119,7 +190,10 @@ export function usePlaceMarkers({
         onSelectRef.current(place.id);
       });
 
-      const marker = new Marker({ element, draggable: Boolean(onMove) })
+      const marker = new Marker({
+        element,
+        draggable: Boolean(onMove) && !isArmed,
+      })
         .setLngLat([place.lng, place.lat])
         .addTo(instance);
 
@@ -161,7 +235,7 @@ export function usePlaceMarkers({
      * Re-running costs nothing: the loop below diffs, so an unchanged marker is
      * repainted in place rather than rebuilt, and no drop animation restarts.
      */
-  }, [map, isReady, places, pinIcons, onMove, colorFor]);
+  }, [map, isReady, places, pinIcons, onMove, colorFor, isArmed]);
 
   useEffect(() => {
     for (const [id, marker] of markers.current) {
@@ -171,6 +245,67 @@ export function usePlaceMarkers({
       );
     }
   }, [selectedPlaceId, selectedPlaceIds, places]);
+
+  /*
+   * Draggability follows the armed tool, and it is not merely tidy.
+   *
+   * MapLibre binds its drag handler on `setDraggable(true)` and that handler is
+   * what writes `pointer-events: auto` inline on the element (see the note on
+   * `.drawing-shapes .maplibregl-marker` in app/globals.css). Turned off for
+   * the length of a gesture, nothing can stamp a marker mid-drawing and no pin
+   * can be dragged out from under a click that was meant for the map.
+   */
+  useEffect(() => {
+    const canDrag = Boolean(onMove) && !isArmed;
+    for (const marker of markers.current.values()) marker.setDraggable(canDrag);
+  }, [isArmed, onMove, places]);
+
+  /*
+   * Its own effect rather than a line in `paint`, for the reason the selection
+   * above has one: this changes as answers arrive from the routing engine,
+   * which has nothing to do with a place's colour, icon or position, and
+   * folding it in would repaint every marker's SVG each time one pin's verdict
+   * landed. `places` is a dependency so a marker created since the last answer
+   * still gets told.
+   *
+   * `isArmed` is passed through because the verdict is only *said* while a tool
+   * is armed: outside that gesture a pin with no road near it is an ordinary
+   * location that opens an ordinary card, and announcing it disabled there
+   * describes something that is not true.
+   */
+  useEffect(() => {
+    for (const [id, marker] of markers.current) {
+      setPinUnroutable(
+        marker.getElement(),
+        (unroutableIds?.has(id) ?? false) && Boolean(isArmed),
+      );
+    }
+  }, [unroutableIds, isArmed, places]);
+
+  /** At most one pin at a time — the one the last click is waiting on. */
+  useEffect(() => {
+    for (const [id, marker] of markers.current) {
+      setPinChecking(marker.getElement(), id === checkingId);
+    }
+  }, [checkingId, places]);
+
+  /*
+   * Which pins the route being drawn has already taken.
+   *
+   * Its own effect for the reason the two above have one: this changes on every
+   * click of a gesture that has nothing to do with a place's colour, icon or
+   * position, and folding it into `paint` would rebuild every marker's SVG each
+   * time somebody added a stop. `places` is a dependency so a marker created
+   * since the last click still gets told.
+   *
+   * Every marker, not only the ones in the set — a marker recycled onto another
+   * location would otherwise keep pulsing as a stop it never was.
+   */
+  useEffect(() => {
+    for (const [id, marker] of markers.current) {
+      setPinStop(marker.getElement(), stopIds?.has(id) ?? false);
+    }
+  }, [stopIds, places]);
 
   useEffect(() => {
     const current = markers.current;

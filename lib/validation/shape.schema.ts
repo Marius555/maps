@@ -17,6 +17,16 @@ import { groupIdSchema } from "./group.schema";
 
 export const SHAPE_KINDS = ["circle", "polygon", "line"] as const;
 
+/**
+ * The profiles a route may be asked for.
+ *
+ * All three are accepted on the way in even though the UI offers only `car`:
+ * the limit is which profile the configured engine was built with, not which
+ * ones are meaningful, and a self-hosted instance changes that answer without
+ * changing this file. See lib/routing/osrm.ts.
+ */
+export const ROUTE_PROFILES = ["car", "bike", "foot"] as const;
+
 export const DEFAULT_SHAPE_COLOR = "#1c7ed6";
 export const DEFAULT_SHAPE_OPACITY = 0.2;
 
@@ -75,6 +85,44 @@ const bondSchema = z
   .max(36, "That is not a location id.")
   .regex(/^[a-zA-Z0-9_-]*$/, "That is not a location id.");
 
+/**
+ * How many stops one route may have.
+ *
+ * Not a storage limit — twenty-five stops is a few hundred bytes. It is what the
+ * engine will answer: OSRM's own demo policy and every hosted routing free tier
+ * cap waypoints somewhere near here, and a request past the cap fails as a 400
+ * that reads like a bug in our URL building. Twenty-five is also well past what
+ * anyone clicks out by hand.
+ */
+export const MAX_ROUTE_STOPS = 25;
+
+const routeStopSchema = z.object({
+  at: pointSchema,
+  // Optional rather than nullable: absent is what "free waypoint" means, the
+  // same spelling `from` and `to` use for "not bonded".
+  placeId: bondSchema.optional(),
+});
+
+/**
+ * The routing engine's input and the one part of its answer that is stored.
+ *
+ * Validated on the way in like everything else, and deliberately not trusted
+ * from the client: `points` is what gets drawn and published, so a caller could
+ * otherwise claim a two-hour duration over a path it drew itself. That is not a
+ * security boundary — it is the owner's own map — but it is the difference
+ * between a number that means something and one that does not.
+ */
+const routeSchema = z.object({
+  profile: z.enum(ROUTE_PROFILES),
+  stops: z
+    .array(routeStopSchema)
+    .min(MIN_LINE_POINTS, "A route needs at least two stops.")
+    .max(MAX_ROUTE_STOPS, `A route can have up to ${MAX_ROUTE_STOPS} stops.`),
+  // A week, which is longer than any drivable route on Earth. Bounded so a
+  // malformed engine response cannot store a duration that formats as nonsense.
+  durationS: z.number().min(0).max(604_800),
+});
+
 const lineGeometrySchema = z.object({
   kind: z.literal("line"),
   points: z
@@ -88,6 +136,9 @@ const lineGeometrySchema = z.object({
     ),
   from: bondSchema.optional(),
   to: bondSchema.optional(),
+  // Absent means hand-drawn — every line that existed before routes did, and
+  // every one drawn with the plain line tool since.
+  route: routeSchema.optional(),
 });
 
 export const shapeGeometrySchema = z.discriminatedUnion("kind", [

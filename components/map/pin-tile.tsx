@@ -72,7 +72,7 @@ export function PinTile({
       {...dragProps}
       onClick={onPress}
       className={`${pickedTileClass(Boolean(isArmed))} flex flex-col items-center gap-1.5 p-2 text-center disabled:cursor-not-allowed disabled:opacity-40 ${
-        dragProps ? "cursor-grab active:cursor-grabbing" : ""
+        dragProps ? "cursor-pointer" : ""
       } ${size === "lg" ? "w-full" : ""}`}
     >
       <PinPreview icon={icon} pinIcons={pinIcons} size={size} />

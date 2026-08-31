@@ -17,7 +17,8 @@ export type PatchableKey = keyof UpdatePlaceInput & keyof Place;
  * as JSON — so there is no schema to derive them from.
  */
 export const PHOTO_KEYS = [
-  "photoId",
+  "photoIds",
+  "photoUrls",
   "photoUrl",
 ] as const satisfies readonly (keyof Place)[];
 

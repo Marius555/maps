@@ -18,6 +18,7 @@ import {
   STYLE_LABELS,
   STYLE_URLS,
   THEME_KEYS,
+  TILE_CREDITS,
 } from "./style";
 
 describe("resolveMapStyle", () => {
@@ -87,6 +88,18 @@ describe("style tables", () => {
     expect(Object.keys(STYLE_URLS).sort()).toEqual([...BASEMAP_SOURCES].sort());
   });
 
+  /**
+   * Absolute, always. These end up in a published snapshot that a stranger's
+   * page fetches, where a relative URL would resolve against *their* domain —
+   * the same rule `gazetteerBase` is held to.
+   */
+  it("gives every source an absolute https URL", () => {
+    for (const source of BASEMAP_SOURCES) {
+      expect(STYLE_URLS[source]).toMatch(/^https:\/\//);
+      expect(STYLE_URLS[source]).toContain(source);
+    }
+  });
+
   it("resolves every theme to a source URL and a tint", () => {
     for (const style of THEME_KEYS) {
       expect(resolveStyleUrl(style)).toMatch(/^https:\/\//);
@@ -123,16 +136,30 @@ describe("style tables", () => {
   });
 
   /*
-   * Attribution is non-negotiable on every rendered map (§12), and it is now
-   * written twice: once as markup for the controls, once as plain text for the
-   * image exporter, which paints onto a canvas and has no DOM to put a control
-   * in. Two constants can drift; this is what stops them.
+   * Attribution is non-negotiable on every rendered map (§12), and it is written
+   * twice: once as markup for the controls, once as plain text for the image
+   * exporter, which paints onto a canvas and has no DOM to put a control in. Two
+   * constants can drift; this is what stops them.
+   *
+   * Over every credit rather than the live one. Only one pair is selected by any
+   * given environment, so a test that read `ATTRIBUTION_HTML` alone would leave
+   * the self-hosted pair unchecked until the day it went live — which is the day
+   * nobody wants to discover an empty credit.
    */
-  it("says the same thing in markup and in plain text", () => {
-    const stripped = ATTRIBUTION_HTML.replace(/<[^>]+>/g, "");
+  it.each(TILE_CREDITS)("says the same thing in markup and in plain text", (credit) => {
+    const stripped = credit.html.replace(/<[^>]+>/g, "");
 
-    expect(stripped).toBe(ATTRIBUTION_TEXT);
-    expect(ATTRIBUTION_TEXT).toContain("OpenStreetMap");
-    expect(ATTRIBUTION_TEXT).toContain("OpenFreeMap");
+    expect(stripped).toBe(credit.text);
+    // OpenStreetMap is the one name that appears in every credit, whoever is
+    // serving the tiles. §12 puts it beyond a product decision.
+    expect(credit.text).toContain("OpenStreetMap");
+    expect(credit.html).toContain("openstreetmap.org/copyright");
+  });
+
+  it("ships one of those credits, not something assembled elsewhere", () => {
+    expect(TILE_CREDITS).toContainEqual({
+      html: ATTRIBUTION_HTML,
+      text: ATTRIBUTION_TEXT,
+    });
   });
 });

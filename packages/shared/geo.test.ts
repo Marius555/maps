@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { distanceKm, formatDistance, formatDistanceM, pathLengthM } from "./geo";
+import {
+  distanceKm,
+  formatDistance,
+  formatDistanceM,
+  formatDuration,
+  pathLengthM,
+} from "./geo";
 
 /**
  * Real coordinates with a distance anyone can check, because that is the point:
@@ -109,5 +115,34 @@ describe("formatDistance", () => {
     // the embed popup actually call.
     expect(formatDistanceM(463_218)).toBe("463 km");
     expect(formatDistanceM(420)).toBe("420 m");
+  });
+});
+
+describe("formatDuration", () => {
+  it("rounds to whole minutes under an hour", () => {
+    expect(formatDuration(742)).toBe("12 min");
+  });
+
+  it("never reports a route as taking no time", () => {
+    // Two pins on the same street is not "0 min" — it is a short drive.
+    expect(formatDuration(20)).toBe("< 1 min");
+    expect(formatDuration(0)).toBe("< 1 min");
+  });
+
+  it("splits hours from minutes past the hour", () => {
+    expect(formatDuration(5100)).toBe("1 h 25 min");
+  });
+
+  it("drops the minutes when there are none", () => {
+    expect(formatDuration(7200)).toBe("2 h");
+  });
+
+  it("rounds up to a whole hour rather than saying 1 h 60 min", () => {
+    expect(formatDuration(3599)).toBe("1 h");
+  });
+
+  it("says nothing at all for a value that is not a duration", () => {
+    expect(formatDuration(Number.NaN)).toBe("");
+    expect(formatDuration(-1)).toBe("");
   });
 });

@@ -8,7 +8,7 @@ import {
   type Map as MapLibreMap,
 } from "maplibre-gl";
 import { useReducedMotion } from "motion/react";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   boundsIntersectBox,
@@ -19,12 +19,20 @@ import type { ExportView } from "@/lib/export/render-map";
 import { nearestRoad } from "@/lib/map/nearest-road";
 import type { NearestRoad } from "@/lib/map/nearest-road";
 import { registerPmtilesProtocol } from "@/lib/map/pmtiles";
+import { selectionBounds } from "@/lib/map/selection-bounds";
+import { effectiveCardLayout } from "@/lib/card/designer-status";
 import type { MapStyleKey } from "@/lib/map/style";
 import { configureMaplibreWorker } from "@/lib/map/worker";
-import type { MapCategory, Place, Shape } from "@/lib/repositories/types";
+import type {
+  MapCategory,
+  MapField,
+  Place,
+  Shape,
+} from "@/lib/repositories/types";
 import type { Selection, Viewport } from "@/lib/stores/editor-store";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { shapeBounds, type ShapeBounds } from "@/packages/shared/shapes";
+import { useAddModeGhost } from "./add-location/use-add-mode-ghost";
 import { PlaceCard } from "./place-card/place-card";
 import { SelectBox, type SelectBoxHandle } from "./select-box/select-box";
 import { useSelectBox } from "./select-box/use-select-box";
@@ -32,6 +40,14 @@ import { MapShapes, type MapShapesProps } from "./shapes/map-shapes";
 import { SHAPE_HIT_LAYERS } from "./shapes/shape-layers";
 import { useMaplibre } from "./use-maplibre";
 import { usePlaceMarkers } from "./use-place-markers";
+
+/**
+ * One frozen empty set, so "no route is being drawn" is the same value every
+ * time. `usePlaceMarkers` keys an effect on this identity; a fresh `new Set()`
+ * per render would re-stamp every marker on the map sixty times a second while
+ * it is panned.
+ */
+const NO_STOPS: ReadonlySet<string> = new Set<string>();
 
 // Module scope: runs once per page load however many canvases mount, which is
 // what CLAUDE.md §7 asks for. Doing it in a root provider instead would drag
@@ -65,8 +81,12 @@ export type MapHandle = {
    * Frames a box. What `flyTo` is to a pin, this is to an area: a shape has an
    * extent, and flying to its centre at a fixed zoom would show the middle of a
    * region without showing that it is one.
+   *
+   * `animate: false` is for framing that happens *on open* rather than in answer
+   * to a click — there is no previous view to travel from, so the flight is a
+   * journey nobody asked for and a delay before the map is usable.
    */
-  fitBounds: (bounds: ShapeBounds) => void;
+  fitBounds: (bounds: ShapeBounds, options?: { animate?: boolean }) => void;
   /**
    * What a point on the screen is, geographically. `null` when that point is not
    * over the map at all — which is what a pin dragged out of the toolbar and
@@ -117,17 +137,46 @@ export type MapCanvasProps = {
   selectedPlaceId: string | null;
   isAdding: boolean;
   /**
+   * The pin sticky add mode is armed with, so the map can draw it under the
+   * pointer. Optional: the import review reuses this canvas and never adds.
+   */
+  addIcon?: string;
+  /**
    * Frame every pin on first load, instead of honouring center/zoom. For the
    * import review, where the whole point is seeing where everything landed —
    * an import spanning a country would otherwise open on one city.
    */
   fitToPlaces?: boolean;
   /**
+   * Open framed on this box, instead of on center/zoom.
+   *
+   * The caller's own answer to the same question `fitToPlaces` asks, for when
+   * the box is not simply "every pin" — the editor frames pins *and* areas, and
+   * only when the owner has never saved a view of their own.
+   *
+   * Both end up in MapLibre's constructor rather than in a `fitBounds` after
+   * `load`, which is the difference between one tile load and two. See
+   * `Options.bounds` in use-maplibre.ts.
+   */
+  initialBounds?: ShapeBounds | null;
+  /**
    * Show the selected place's card beside its pin. Off by default, so the import
    * review step — which reuses this canvas for drafts that are not saved rows —
    * keeps its bare map. Same idiom as `fitToPlaces` above.
    */
   showPlaceCard?: boolean;
+  /**
+   * The account's own card design, straight off its row — see
+   * lib/repositories/card-design.repository.ts. One design for every map the
+   * account owns, unlike `appearance` and `style` above.
+   *
+   * Resolved here rather than by the caller so an account that predates the
+   * designer, one that has never opened it, and one whose JSON was hand-edited
+   * all mean the same thing.
+   */
+  cardLayout?: Record<string, unknown>;
+  /** The map's extra field definitions, for the card's own rows and buttons. */
+  fields?: MapField[];
   /**
    * A pin's colour, decided in full by the caller — category, group, or the
    * custom pin's own, which is handed in as the second argument rather than
@@ -190,8 +239,12 @@ export default function MapCanvasImpl({
   places,
   selectedPlaceId,
   isAdding,
+  addIcon = "",
   fitToPlaces,
+  initialBounds,
   showPlaceCard,
+  cardLayout: storedCardLayout,
+  fields,
   colorFor,
   pinIcons,
   categoryFor,
@@ -205,9 +258,60 @@ export default function MapCanvasImpl({
 }: MapCanvasProps) {
   const frame = useRef<HTMLDivElement>(null);
   const container = useRef<HTMLDivElement>(null);
+
+  /**
+   * The box the map is *born* framed on, decided before it exists.
+   *
+   * A lazy `useState` rather than a memo, because this has to be the answer from
+   * the first render and must never change afterwards: the map reads it once at
+   * construction, and re-deciding it later would describe a camera move that
+   * already happened. `fitToPlaces` resolves to a box here too, so the import
+   * review takes the same one-tile-load path as the editor.
+   */
+  /**
+   * The locations the route currently being drawn has already taken.
+   *
+   * State, and held here, for the reason `checkingId` is state in
+   * `use-routability.ts`: the marker layer draws it. The gesture belongs to
+   * `MapShapes`, the pins belong to `usePlaceMarkers`, and this component is the
+   * nearest thing that owns both — so the list comes up out of one and goes down
+   * into the other without map-editor.tsx learning that a route has a look.
+   *
+   * A set rather than the array it arrives as: the marker effect asks
+   * `has(id)` once per marker, and a route may hold 25 stops against 3,000 pins.
+   */
+  const [stopIds, setStopIds] = useState<ReadonlySet<string>>(NO_STOPS);
+
+  /*
+   * Stable, so it never re-binds the drawing effect that closes over it — and it
+   * collapses "still empty" back onto `NO_STOPS`, so disarming twice, or a
+   * cleanup landing after a reset, does not restyle every marker for nothing.
+   */
+  const handleStopsChange = useCallback((placeIds: readonly string[]) => {
+    setStopIds(placeIds.length === 0 ? NO_STOPS : new Set(placeIds));
+  }, []);
+
+  const [openingBounds] = useState<ShapeBounds | null>(
+    () =>
+      initialBounds ??
+      (fitToPlaces ? selectionBounds({ points: places, geometries: [] }) : null),
+  );
+
+  /*
+   * Read from the stored blob once per change, not per render: the card reads
+   * `layout.width` to decide which side of the pin it opens on, and a fresh
+   * object every render would re-run that measurement sixty times a second while
+   * the map is panned.
+   */
+  const cardLayout = useMemo(
+    () => effectiveCardLayout(storedCardLayout),
+    [storedCardLayout],
+  );
+
   const { map, isReady } = useMaplibre(frame, container, {
     center,
     zoom,
+    bounds: openingBounds,
     style,
     appearance,
   });
@@ -235,12 +339,27 @@ export default function MapCanvasImpl({
   );
 
   /*
-   * The two mode classes MapLibre's own container wears, derived once so the
-   * effect below and nothing else decides when they are on.
+   * The mode classes MapLibre's own container wears, derived once so the effect
+   * below and nothing else decides when they are on.
    */
+  /*
+   * A route is drawn with the same gesture as a line but is not a `ShapeKind`,
+   * so `drawMode` is null throughout — which quietly excluded it from every flag
+   * derived from `drawMode`, this file's two included. The consequence was not
+   * cosmetic: `drawing-shapes` is what makes the pins inert, and the route tool
+   * is the one tool whose every click is *supposed* to land on a pin. Without it
+   * each click hit the marker, opened that location's card and never reached the
+   * map, so the only stops that could be added were the ones on empty ground.
+   * Every flag below therefore asks about the route tool by name.
+   */
+  const isRouting = Boolean(shapes?.isRouting);
+
   const isCrosshair =
-    isAdding || Boolean(shapes?.drawMode) || Boolean(selection?.isSelecting);
-  const isDrawing = Boolean(shapes?.drawMode);
+    isAdding ||
+    Boolean(shapes?.drawMode) ||
+    isRouting ||
+    Boolean(selection?.isSelecting);
+  const isDrawing = Boolean(shapes?.drawMode) || isRouting;
 
   /*
    * Written with `classList`, never with React's `className`.
@@ -265,16 +384,27 @@ export default function MapCanvasImpl({
    * stylesheet injected at runtime by this module's own dynamic chunk, which is
    * not a fight worth picking twice.
    *
-   * `drawing-shapes` is separate, and only the shape tools set it. A location's
-   * marker is a DOM element over the canvas, roughly 26px across — wider than the
-   * 12px the line tool snaps from. So every click inside the magnet's reach landed
-   * on the marker, opened that location's card, and never reached the map at all:
-   * the hint bar promised a snap the UI made unreachable. The class turns markers
-   * inert for the length of a drawing gesture (app/globals.css).
+   * `drawing-shapes` is separate, and the shape tools and the route tool set it.
+   * A location's marker is a DOM element over the canvas, roughly 26px across —
+   * wider than the 12px the line tool snaps from. So every click inside the
+   * magnet's reach landed on the marker, opened that location's card, and never
+   * reached the map at all: the hint bar promised a snap the UI made unreachable.
+   * The class turns markers inert for the length of a drawing gesture
+   * (app/globals.css). For the route tool it is not a refinement but the whole
+   * feature — see `isRouting` above.
    *
    * Not extended to add mode. Dropping a pin on top of an existing one is a thing
    * people do by accident far more often than on purpose, and its card opening is
    * the feedback that says so.
+   *
+   * `picking-pins` is the route tool alone, and it is an instruction rather than
+   * a behaviour: it grows every pin and ripples it a few times, because a route
+   * is made of locations and nothing else on screen said so. Arming the tool
+   * moved the cursor and wrote a hint bar, while the things you are meant to
+   * click looked exactly as they had a moment before — so the first question
+   * anyone asked was what to do with it. The scale holds for the length of the
+   * gesture; the ripple is a bounded burst, because a Pro map is 3,000 markers
+   * and an endless animation on all of them buys no further information.
    */
   useEffect(() => {
     const element = container.current;
@@ -282,7 +412,20 @@ export default function MapCanvasImpl({
 
     element.classList.toggle("maplibregl-crosshair", isCrosshair);
     element.classList.toggle("drawing-shapes", isDrawing);
-  }, [isCrosshair, isDrawing]);
+    element.classList.toggle("picking-pins", isRouting);
+  }, [isCrosshair, isDrawing, isRouting]);
+
+  /*
+   * The armed pin, under the pointer, for the length of sticky add mode — the
+   * half of "two ways to add a location" that used to show you nothing. See
+   * use-add-mode-ghost.ts.
+   */
+  useAddModeGhost({
+    container,
+    isActive: isAdding,
+    icon: addIcon,
+    pinIcons,
+  });
 
   usePlaceMarkers({
     map,
@@ -292,6 +435,19 @@ export default function MapCanvasImpl({
     selectedPlaceIds,
     colorFor,
     pinIcons,
+    // The same flag that writes `.drawing-shapes` below. The stylesheet takes
+    // markers out of the pointer's way; this says the same thing in JavaScript,
+    // because a library that writes `pointer-events` inline can undo a rule but
+    // not a guard. See the note on that rule in app/globals.css.
+    isArmed: isDrawing,
+    // Drawn grey while the route tool is armed, and inert to it. The set lives
+    // with the shapes props because routing is what gathers it, but the pins are
+    // what wear it.
+    unroutableIds: shapes?.unroutableIds,
+    checkingId: shapes?.checkingId,
+    // Which pins the route being drawn has taken. It comes back up out of
+    // `MapShapes` below — see `handleStopsChange`.
+    stopIds,
     onSelect: onSelectPlace,
     onMove: onMovePlace,
   });
@@ -302,7 +458,10 @@ export default function MapCanvasImpl({
   const selectHandler = useRef(onSelectPlace);
   const selectShapeHandler = useRef(shapes?.onSelectShape);
   const addingRef = useRef(isAdding);
-  const drawingRef = useRef(shapes?.drawMode ?? null);
+  // `isDrawing`, not `shapes?.drawMode`: the route tool arms no `ShapeKind`, and
+  // reading the kind here let every route click fall through to the browse-mode
+  // branch below and select whatever shape it landed on. See `isRouting` above.
+  const drawingRef = useRef(isDrawing);
   const selectingRef = useRef(selection?.isSelecting ?? false);
 
   useEffect(() => {
@@ -310,7 +469,7 @@ export default function MapCanvasImpl({
     selectHandler.current = onSelectPlace;
     selectShapeHandler.current = shapes?.onSelectShape;
     addingRef.current = isAdding;
-    drawingRef.current = shapes?.drawMode ?? null;
+    drawingRef.current = isDrawing;
     selectingRef.current = selection?.isSelecting ?? false;
   });
 
@@ -404,8 +563,13 @@ export default function MapCanvasImpl({
   /**
    * Fit once, not on every places change: refitting would yank the view back
    * every time a pin is dragged, which is exactly when the user is looking at it.
+   *
+   * Pre-armed when the map was already born framed, which is the normal case —
+   * the effect below then never runs at all. What is left for it is the one case
+   * construction cannot cover: a canvas that mounted with nothing on it and got
+   * its first locations afterwards.
    */
-  const hasFitted = useRef(false);
+  const hasFitted = useRef(openingBounds !== null);
 
   useEffect(() => {
     const instance = map.current;
@@ -515,7 +679,7 @@ export default function MapCanvasImpl({
         };
       },
 
-      fitBounds: (bounds) => {
+      fitBounds: (bounds, options) => {
         const instance = map.current;
         if (!instance) return;
 
@@ -529,7 +693,8 @@ export default function MapCanvasImpl({
             // A degenerate box — a polygon whose points all coincide — has zero
             // area and would otherwise zoom to maximum.
             maxZoom: 17,
-            duration: prefersReducedMotion ? 0 : 700,
+            duration:
+              options?.animate === false || prefersReducedMotion ? 0 : 700,
             essential: true,
           },
         );
@@ -614,6 +779,7 @@ export default function MapCanvasImpl({
           // to a location is drawn from wherever that location is now.
           places={places}
           selectedShapeIds={selectedShapeIds}
+          onStopsChange={handleStopsChange}
           {...shapes}
         />
       ) : null}
@@ -641,8 +807,13 @@ export default function MapCanvasImpl({
            * listeners, so one press did both. Unmounted, the card has no listener
            * to fire.
            */
-          place={isAdding || shapes?.drawMode ? null : selectedPlace}
+          place={isAdding || isDrawing ? null : selectedPlace}
           category={selectedPlace ? categoryFor?.(selectedPlace) : undefined}
+          layout={cardLayout}
+          fields={fields ?? []}
+          // The same pins the markers are drawn from, so a card holding a Logo
+          // block shows the pin its own location wears.
+          pinIcons={pinIcons ?? []}
           onClose={() => onSelectPlace(null)}
           onEdit={onEditPlace}
         />

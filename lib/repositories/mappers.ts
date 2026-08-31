@@ -1,18 +1,14 @@
 import { DEFAULT_MAP_STYLE, isMapStyleKey } from "@/lib/map/style";
-import { photoViewUrl } from "@/lib/storage/photo-url";
+import { photoViewUrl, photoViewUrls } from "@/lib/storage/photo-url";
 import { parseHours } from "@/packages/shared/hours";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
-import type {
-  CircleGeometry,
-  LngLatTuple,
-  ShapeGeometry,
-} from "@/packages/shared/shapes";
 import {
   GEOCODE_STATUSES,
   type AddressParts,
   type GeocodeStatus,
 } from "@/lib/validation/place.schema";
 import { DEFAULT_GROUP_COLOR } from "@/lib/validation/group.schema";
+import { toShapeGeometry } from "./shape-geometry";
 import {
   DEFAULT_SHAPE_COLOR,
   DEFAULT_SHAPE_OPACITY,
@@ -85,45 +81,6 @@ export function toAppMap(row: MapRow): AppMap {
  * nothing and can still be selected and deleted, which is a better answer than a
  * map that refuses to load.
  */
-function toShapeGeometry(row: ShapeRow): ShapeGeometry {
-  if (row.kind === "polygon") {
-    const parsed = parseJson<{ points?: LngLatTuple[] }>(row.geometry, {});
-    return { kind: "polygon", points: parsed.points ?? [] };
-  }
-
-  /*
-   * Explicit, because the fall-through below is to a circle. A line decoded by
-   * that path becomes a circle of radius zero — it vanishes from the map, and
-   * nothing anywhere reports an error.
-   *
-   * Empty bonds are dropped rather than kept as "": absent is what "not bonded"
-   * means everywhere else in the geometry, and one spelling is enough.
-   */
-  if (row.kind === "line") {
-    const parsed = parseJson<{
-      points?: LngLatTuple[];
-      from?: string;
-      to?: string;
-    }>(row.geometry, {});
-
-    return {
-      kind: "line",
-      points: parsed.points ?? [],
-      ...(parsed.from ? { from: parsed.from } : {}),
-      ...(parsed.to ? { to: parsed.to } : {}),
-    };
-  }
-
-  const parsed = parseJson<Partial<CircleGeometry>>(row.geometry, {});
-
-  return {
-    kind: "circle",
-    lng: parsed.lng ?? 0,
-    lat: parsed.lat ?? 0,
-    radius: parsed.radius ?? 0,
-  };
-}
-
 export function toShape(row: ShapeRow): Shape {
   return {
     id: row.$id,
@@ -153,6 +110,21 @@ export function toGroup(row: GroupRow): Group {
 }
 
 export function toPlace(row: PlaceRow): Place {
+  /*
+   * One list, from two columns, with a rule rather than a merge.
+   *
+   * `photoIds` is the gallery and `photoId` is the single-photo column it
+   * replaced. Every write sets the first and clears the second, so a row is only
+   * ever using one of them and there is no order to reconcile — a row with a
+   * gallery ignores the legacy column entirely, and a row written before
+   * galleries existed keeps showing the photo it always showed.
+   */
+  const photoIds = row.photoIds?.length
+    ? row.photoIds
+    : row.photoId
+      ? [row.photoId]
+      : [];
+
   return {
     id: row.$id,
     mapId: row.mapId,
@@ -173,8 +145,9 @@ export function toPlace(row: PlaceRow): Place {
     // parseHours holds the same never-throw contract as parseJson above, and adds
     // shape checking on top of it — a hand-edited row degrades to closed days.
     hours: parseHours(row.hours),
-    photoId: row.photoId ?? null,
-    photoUrl: photoViewUrl(row.photoId),
+    photoIds,
+    photoUrls: photoViewUrls(photoIds),
+    photoUrl: photoViewUrl(photoIds[0]),
     sortOrder: row.sortOrder ?? 0,
     geocodeConfidence: row.geocodeConfidence ?? null,
     geocodeStatus: toGeocodeStatus(row.geocodeStatus),

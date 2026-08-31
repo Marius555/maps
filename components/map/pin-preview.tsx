@@ -54,8 +54,12 @@ export function PinPreview({
    * chosen. `lg` fills its slot and is capped; `tile` is a fixed size, for the
    * studio's option tiles — those stretch horizontally but keep a fixed height,
    * and a proportional width would resolve taller than the tile holding it.
+   *
+   * `fill` takes the whole of its box and has no cap, for the card's Logo block:
+   * there the box is a size its owner dragged, so a ceiling would be the Size
+   * slider quietly stopping.
    */
-  size?: "sm" | "md" | "tile" | "lg" | "xl";
+  size?: "sm" | "md" | "tile" | "lg" | "xl" | "fill";
   className?: string;
 }) {
   const pin = resolvePin(icon, pinIcons);

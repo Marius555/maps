@@ -50,6 +50,9 @@ export type PlaceRow = Models.Row & {
   email?: string | null;
   url?: string | null;
   hours?: string | null;
+  /** An array column, so it arrives as an array. Cover first. */
+  photoIds?: string[] | null;
+  /** The single-photo column `photoIds` replaced. Read-only; never written. */
   photoId?: string | null;
   sortOrder?: number | null;
   geocodeConfidence?: number | null;
@@ -152,10 +155,25 @@ export type Place = {
   url: string | null;
   /** Null when no day has been filled in — see packages/shared/hours.ts. */
   hours: OpeningHours | null;
-  photoId: string | null;
   /**
-   * Resolved from photoId on the server. Clients render this directly rather than
-   * composing a storage URL, which keeps the bucket id server-side.
+   * This location's photos, cover first.
+   *
+   * Composed by the mapper from `photoIds`, falling back to the legacy
+   * `photoId` for rows written before galleries existed — so nothing outside the
+   * repository has to know there were ever two columns.
+   */
+  photoIds: string[];
+  /**
+   * The same, resolved to public URLs on the server. Clients render these
+   * directly rather than composing a storage URL, which keeps the bucket id
+   * server-side.
+   */
+  photoUrls: string[];
+  /**
+   * The cover, which is `photoUrls[0]`. Kept as its own field because most
+   * things that show a location show one picture — a list row, a marker card,
+   * the published snapshot's own `photoUrl` — and every one of them would
+   * otherwise index into an array to say so.
    */
   photoUrl: string | null;
   sortOrder: number;

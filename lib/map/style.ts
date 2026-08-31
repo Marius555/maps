@@ -28,13 +28,37 @@ export const BASEMAP_SOURCES = [
 ] as const;
 export type BasemapSource = (typeof BASEMAP_SOURCES)[number];
 
-export const STYLE_URLS: Record<BasemapSource, string> = {
-  liberty: "https://tiles.openfreemap.org/styles/liberty",
-  bright: "https://tiles.openfreemap.org/styles/bright",
-  positron: "https://tiles.openfreemap.org/styles/positron",
-  dark: "https://tiles.openfreemap.org/styles/dark",
-  fiord: "https://tiles.openfreemap.org/styles/fiord",
-};
+/**
+ * Where the five basemaps are served from.
+ *
+ * Unset — the normal case today — means OpenFreeMap's public instance, and every
+ * URL below is byte-for-byte what it has always been. Set it and the whole app
+ * moves, because `resolveStyleUrl` is what `buildSnapshot` bakes into a
+ * published file (lib/snapshot/build.ts): switching tile hosts is a republish,
+ * not a redeploy of every customer's embed. Same shape as `gazetteerBase`
+ * (lib/gazetteer/config.ts) and `embedScriptUrl`, and for the same reason —
+ * development and self-hosting work with no configuration at all.
+ *
+ * The two hosts genuinely have different URL shapes: OpenFreeMap serves its
+ * styles extensionless, ours are JSON files in a bucket. Said out loud here
+ * rather than papered over, because imitating their layout would constrain ours
+ * forever in exchange for one fewer branch.
+ */
+const OPENFREEMAP = "https://tiles.openfreemap.org";
+const TILE_BASE = process.env.NEXT_PUBLIC_TILES_URL?.replace(/\/+$/, "");
+
+/** Whether the tiles are ours. Selects the credit below, and nothing else. */
+export const SELF_HOSTED_TILES = Boolean(TILE_BASE);
+
+function styleUrlFor(source: BasemapSource): string {
+  return TILE_BASE
+    ? `${TILE_BASE}/styles/${source}.json`
+    : `${OPENFREEMAP}/styles/${source}`;
+}
+
+export const STYLE_URLS = Object.fromEntries(
+  BASEMAP_SOURCES.map((source) => [source, styleUrlFor(source)]),
+) as Record<BasemapSource, string>;
 
 /**
  * Every theme is built on Liberty, and that is not laziness.
@@ -394,26 +418,67 @@ export const STYLE_PALETTES: Record<BasemapSource, StylePalette> = {
 /**
  * Attribution for OpenStreetMap and the tile provider must be visible on every
  * rendered map, including the embed. Non-negotiable (CLAUDE.md §12).
- */
-export const ATTRIBUTION_HTML =
-  '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors · tiles by <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a>';
-
-/**
- * The same credit with no markup, for a surface that has no DOM to put it in.
  *
- * An exported PNG or PDF is a rendered map and §12 applies to it in full, but a
- * canvas capture cannot contain MapLibre's attribution control — that control is
- * DOM sitting over the canvas, not pixels in it. So the exporter paints this
- * string on instead.
+ * A pair per tile host, chosen by the same variable that chooses the style URLs.
+ * The two halves have to travel together: the markup is what a snapshot carries
+ * and what the map controls render, and the plain text is what the exporter
+ * paints onto a PNG or PDF. A credit still naming OpenFreeMap once the tiles are
+ * ours would be false on every exported file — quietly, with nothing to catch it,
+ * which is exactly the failure §12 exists to prevent.
  *
  * Written out rather than derived by stripping tags at runtime: this is the
  * legally load-bearing line, and a regex over it is one bad edit away from
- * quietly rendering an empty credit. `style.test.ts` holds the two to each
- * other, which catches the drift a derivation was supposed to prevent without
- * putting a parser between us and a constant.
+ * quietly rendering an empty credit. `style.test.ts` holds each pair's two
+ * halves to each other, which catches the drift a derivation was supposed to
+ * prevent without putting a parser between us and a constant.
  */
-export const ATTRIBUTION_TEXT =
-  "© OpenStreetMap contributors · tiles by OpenFreeMap";
+export type TileCredit = {
+  /** Rendered on a map, and carried in a published snapshot. */
+  html: string;
+  /**
+   * The same words with no markup, for a surface that has no DOM to put them in.
+   *
+   * An exported PNG or PDF is a rendered map and §12 applies to it in full, but a
+   * canvas capture cannot contain MapLibre's attribution control — that control
+   * is DOM sitting over the canvas, not pixels in it. So the exporter paints this
+   * string on instead (lib/export/compose.ts).
+   */
+  text: string;
+};
+
+const OSM_HTML =
+  '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors';
+const OSM_TEXT = "© OpenStreetMap contributors";
+
+export const OPENFREEMAP_CREDIT: TileCredit = {
+  html: `${OSM_HTML} · tiles by <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a>`,
+  text: `${OSM_TEXT} · tiles by OpenFreeMap`,
+};
+
+/**
+ * Our own planetiler output: OpenStreetMap for the data, OpenMapTiles for the
+ * schema. No credit for us — none is owed, and a customer's basemap is not the
+ * place to advertise.
+ */
+export const SELF_HOSTED_CREDIT: TileCredit = {
+  html: `${OSM_HTML} · © <a href="https://openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a>`,
+  text: `${OSM_TEXT} · © OpenMapTiles`,
+};
+
+/**
+ * Every credit that can ship, so the test holds all of them to the rules rather
+ * than only whichever one this environment happens to select. Without this the
+ * self-hosted pair would go unchecked until the day it went live.
+ */
+export const TILE_CREDITS: readonly TileCredit[] = [
+  OPENFREEMAP_CREDIT,
+  SELF_HOSTED_CREDIT,
+];
+
+const TILE_CREDIT = SELF_HOSTED_TILES ? SELF_HOSTED_CREDIT : OPENFREEMAP_CREDIT;
+
+export const ATTRIBUTION_HTML = TILE_CREDIT.html;
+export const ATTRIBUTION_TEXT = TILE_CREDIT.text;
 
 export function isMapStyleKey(value: unknown): value is MapStyleKey {
   return (

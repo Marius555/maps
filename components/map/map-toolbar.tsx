@@ -49,6 +49,7 @@ export function MapToolbar({
   isBusy,
   isDrawingBusy,
   drawMode,
+  isRouting,
   isSelecting,
   isSavingView,
   hasSavedView,
@@ -58,6 +59,7 @@ export function MapToolbar({
   onPickIcon,
   onStopAdding,
   onPickTool,
+  onPickRoute,
   onStopDrawing,
   onImportShapes,
   onStartSelecting,
@@ -83,6 +85,8 @@ export function MapToolbar({
   isDrawingBusy: boolean;
   /** The armed drawing tool, or null — see components/map/shapes. */
   drawMode: ShapeKind | null;
+  /** The route tool is armed — see components/map/routes. */
+  isRouting?: boolean;
   /** The marquee is armed — see components/map/select-box. */
   isSelecting: boolean;
   isSavingView: boolean;
@@ -96,6 +100,8 @@ export function MapToolbar({
   onPickIcon: (icon: string) => void;
   onStopAdding: () => void;
   onPickTool: (kind: ShapeKind) => void;
+  /** Arms the route tool, from inside the Draw menu. */
+  onPickRoute?: () => void;
   onStopDrawing: () => void;
   /** Opens the GeoJSON importer, from inside the Draw menu. */
   onImportShapes?: () => void;
@@ -164,8 +170,10 @@ export function MapToolbar({
             and the rule separates those from the things you do *to* it. */}
         <ShapeToolsButton
           drawMode={drawMode}
+          isRouting={isRouting}
           isBusy={isDrawingBusy}
           onPickTool={onPickTool}
+          onPickRoute={onPickRoute}
           onStopDrawing={onStopDrawing}
           onImport={onImportShapes}
         />

@@ -43,6 +43,7 @@ export function useShapeLayers({
   selectedShapeId,
   selectedShapeIds,
   drawMode,
+  isRouting,
   colorFor,
   onSelect,
 }: {
@@ -59,10 +60,21 @@ export function useShapeLayers({
   selectedShapeIds?: ReadonlySet<string>;
   /** The armed drawing tool, or null. Only the hover cursor cares. */
   drawMode: ShapeKind | null;
+  /**
+   * Whether the route tool is armed.
+   *
+   * Separate from `drawMode` because a route is not a `ShapeKind`. Every guard
+   * below asks `isArmed` rather than `drawMode` for that reason: each one that
+   * read the kind alone was a click the route tool never received.
+   */
+  isRouting?: boolean;
   /** Paint colour per shape, group colour included. Defaults to `shape.color`. */
   colorFor?: (shape: Shape) => string;
   onSelect: (shapeId: string) => void;
 }) {
+  /** Any tool that reads clicks off the canvas, route tool included. */
+  const isArmed = drawMode !== null || Boolean(isRouting);
+
   const shapesRef = useRef(shapes);
   const selectedRef = useRef(selectedShapeId);
   const selectedManyRef = useRef(selectedShapeIds);
@@ -116,6 +128,17 @@ export function useShapeLayers({
     if (!instance || !isReady) return;
 
     const install = () => {
+      /*
+       * Only when the style swap actually took the source away.
+       *
+       * `styledata` is not one event per style — it fires repeatedly while a
+       * style and its tiles load, and this used to re-serialise every shape on
+       * the map each time. On a first load that is the areas visibly redrawing
+       * over and over behind a basemap that is still arriving. The add below is
+       * idempotent, so the guard is about `redraw`, not about it.
+       */
+      if (instance.getSource(SHAPE_SOURCE)) return;
+
       addShapeLayers(instance);
       // The source is added empty and filled here, so there is one code path
       // that turns shapes into features rather than two to keep in step.
@@ -159,6 +182,15 @@ export function useShapeLayers({
     if (!instance || !isReady) return;
 
     const handleClick = (event: MapLayerMouseEvent) => {
+      /*
+       * An armed tool owns every click, which is the rule the canvas's own
+       * handler already states. Without it a click meant for the tool *also*
+       * selects whatever shape it landed on — and for the route tool that is not
+       * an edge case but the ordinary one, since stops are pins and pins are
+       * routinely inside a delivery radius or a district somebody drew.
+       */
+      if (isArmed) return;
+
       const id = event.features?.[0]?.properties?.id;
       if (typeof id === "string" && id) onSelectRef.current(id);
     };
@@ -172,11 +204,11 @@ export function useShapeLayers({
      * something this handler ever knew about.
      */
     const enter = () => {
-      if (drawMode) return;
+      if (isArmed) return;
       instance.getCanvas().style.cursor = "pointer";
     };
     const leave = () => {
-      if (drawMode) return;
+      if (isArmed) return;
       instance.getCanvas().style.cursor = "";
     };
 
@@ -193,7 +225,7 @@ export function useShapeLayers({
         instance.off("mouseleave", layer, leave);
       }
     };
-  }, [map, isReady, drawMode]);
+  }, [map, isReady, isArmed]);
 
   /*
    * Arming a tool while the pointer already sits on a shape leaves the inline
@@ -201,13 +233,13 @@ export function useShapeLayers({
    * about what happens next, not about what is already on the element.
    */
   useEffect(() => {
-    if (!drawMode) return;
+    if (!isArmed) return;
 
     const instance = map.current;
     if (!instance || !isReady) return;
 
     instance.getCanvas().style.cursor = "";
-  }, [map, isReady, drawMode]);
+  }, [map, isReady, isArmed]);
 
   /** Override one saved shape's geometry for the length of a drag. */
   const preview = useCallback(

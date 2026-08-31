@@ -10,10 +10,10 @@ import type {
   CreateShapeInput,
   UpdateShapeInput,
 } from "@/lib/validation/shape.schema";
-import type { ShapeGeometry } from "@/packages/shared/shapes";
 import type { RepoContext } from "./context";
 import { NotFoundError, PlanLimitError } from "./errors";
 import { toShape } from "./mappers";
+import { toShapeColumns } from "./shape-geometry";
 import { getMap, ownerPermissions } from "./maps.repository";
 import { PLAN_LIMITS, getUserPlan } from "./plan-limits";
 import type { Page, Shape, ShapeRow } from "./types";
@@ -39,40 +39,6 @@ type ListOptions = {
 
 /** Creation order, for the same determinism reason places sort this way. */
 const ORDER = Query.orderAsc("$createdAt");
-
-/**
- * The `kind` column and the geometry payload, split out of the domain union.
- *
- * The union carries `kind` because both renderers switch on it; the row keeps it
- * in its own column so a query could filter on it one day. Splitting here rather
- * than storing the union whole is what stops the two copies disagreeing.
- */
-function toColumns(geometry: ShapeGeometry): { kind: string; geometry: string } {
-  if (geometry.kind === "circle") {
-    const { lng, lat, radius } = geometry;
-    return { kind: "circle", geometry: JSON.stringify({ lng, lat, radius }) };
-  }
-
-  // The bonds ride along with the points because they are part of what the line
-  // *is*: without them a bonded end is a stale coordinate that stops following
-  // its pin the moment the page reloads.
-  if (geometry.kind === "line") {
-    const { points, from, to } = geometry;
-    return {
-      kind: "line",
-      geometry: JSON.stringify({
-        points,
-        ...(from ? { from } : {}),
-        ...(to ? { to } : {}),
-      }),
-    };
-  }
-
-  return {
-    kind: "polygon",
-    geometry: JSON.stringify({ points: geometry.points }),
-  };
-}
 
 export async function listShapes(
   ctx: RepoContext,
@@ -205,7 +171,7 @@ export async function createShape(
         opacity: input.opacity,
         sortOrder: input.sortOrder,
         groupId: input.groupId ?? "",
-        ...toColumns(input.geometry),
+        ...toShapeColumns(input.geometry),
       },
       permissions: ownerPermissions(ctx.userId),
     });
@@ -270,7 +236,7 @@ export async function createShapes(
           opacity: input.opacity,
           sortOrder: existing + start + offset,
           groupId: input.groupId ?? "",
-          ...toColumns(input.geometry),
+          ...toShapeColumns(input.geometry),
         })),
       });
 
@@ -298,7 +264,7 @@ export async function updateShape(
    * a name, which is what a rename during a drag depends on.
    */
   const { geometry, ...rest } = input;
-  const data = { ...rest, ...(geometry === undefined ? {} : toColumns(geometry)) };
+  const data = { ...rest, ...(geometry === undefined ? {} : toShapeColumns(geometry)) };
 
   try {
     const row = await admin.tablesDB.updateRow<ShapeRow>({

@@ -1,10 +1,12 @@
 "use client";
 
-import { Button, FieldError, Input, Label, TextField } from "@heroui/react";
+import { FieldError, InputGroup, Label, TextField } from "@heroui/react";
+import { Search } from "lucide-react";
 import { useState } from "react";
 
 import { GeocodeResultList } from "@/components/geocode/geocode-result-list";
 import { ErrorMessage } from "@/components/ui/error-message";
+import { IconButton } from "@/components/ui/icon-button";
 import type { GeocodeCandidate } from "@/lib/geocoding/types";
 import { useGeocodeSearch } from "@/lib/query/geocode";
 
@@ -16,10 +18,11 @@ import { useGeocodeSearch } from "@/lib/query/geocode";
  * guess costs nothing (CLAUDE.md §7).
  *
  * Shared with the import review step, which is why the label and the hint are
- * props. The behaviour is identical in both places and the copy is not: in the
- * edit dialog the hint points at the map beside the field, while in a review row
- * it points at the row's own actions. A second search field that agreed with
- * this one on the day it was written is the drift worth avoiding.
+ * props. The behaviour is identical in both places and the copy is not: in a
+ * review row the hint points at the row's own actions, while the edit dialog now
+ * has the map directly above this field and says the same thing there. A second
+ * search field that agreed with this one on the day it was written is the drift
+ * worth avoiding.
  */
 export function AddressSearchField({
   mapId,
@@ -72,28 +75,31 @@ export function AddressSearchField({
         <Label className={hideLabel ? "sr-only" : undefined}>{label}</Label>
 
         {/*
-         * The button sits on the input's own line, inside the field rather than
-         * under it. They are one control — type an address, look it up — and a
-         * full-width box with a small button orphaned on the next row spent a
-         * whole row of the dialog saying so.
+         * The lookup is a magnifier at the end of the box, not a button beside
+         * it. They were always one control — type an address, look it up — and
+         * the word "Find on map" spent a third of the row saying what the icon
+         * says, which is a third of the row this form does not have now that the
+         * address shares a line with the name.
          *
-         * Nested rather than a sibling flex row so `FieldError` stays a child of
-         * `TextField`: that is what associates the message with the input for a
-         * screen reader, and it is also why the error goes *under* this line
-         * instead of inside it.
+         * `InputGroup` rather than a hand-rolled flex row: its root reads
+         * `TextFieldContext`, so it inherits the field's variant and invalid
+         * state, and `InputGroup.Input` is still the TextField's own input —
+         * which is what keeps `FieldError` associated with it for a screen
+         * reader, and why the error lands under this line rather than inside it.
          */}
-        <div className="flex items-center gap-2">
-          <Input className="min-w-0 flex-1" />
-          <Button
-            className="shrink-0"
-            variant="secondary"
-            isPending={search.isPending}
-            isDisabled={value.trim().length < 3}
-            onPress={run}
-          >
-            Find on map
-          </Button>
-        </div>
+        <InputGroup fullWidth>
+          <InputGroup.Input />
+          <InputGroup.Suffix className="px-1">
+            <IconButton
+              label="Find this address on the map"
+              icon={Search}
+              variant="tertiary"
+              isPending={search.isPending}
+              isDisabled={value.trim().length < 3}
+              onPress={run}
+            />
+          </InputGroup.Suffix>
+        </InputGroup>
 
         {error ? <FieldError>{error}</FieldError> : null}
       </TextField>

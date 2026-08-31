@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
+import { markDropped } from "@/lib/map/dropped-pins";
 import type { Place } from "@/lib/repositories/types";
 import type {
   CreatePlaceInput,
@@ -124,8 +125,9 @@ export function useCreatePlace(mapId: string) {
         email: input.email ?? null,
         url: input.url ?? null,
         hours: input.hours ?? null,
-        photoId: null,
         // A place can't have a photo before it exists.
+        photoIds: [],
+        photoUrls: [],
         photoUrl: null,
         sortOrder: input.sortOrder ?? 0,
         geocodeConfidence: input.geocodeConfidence ?? null,
@@ -153,6 +155,17 @@ export function useCreatePlace(mapId: string) {
     // Swap the temp row for the real one rather than appending, or the marker
     // diff would draw two pins in the same spot.
     onSuccess: (place, _input, context) => {
+      /*
+       * Before the cache write, not after: the write is what renders the marker,
+       * and the marker asks on the way in (components/map/use-place-markers.ts).
+       *
+       * The server's id rather than the temp one, because the swap above rebuilds
+       * the element — a ripple started on the optimistic pin would be cut off
+       * partway through. The optimistic pin is already the feedback that says
+       * *where*; the ripple is the one that says it saved.
+       */
+      markDropped(place.id);
+
       queryClient.setQueryData<Place[]>(listKey, (places = []) =>
         places.map((existing) =>
           existing.id === context?.tempId ? place : existing,

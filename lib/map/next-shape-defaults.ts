@@ -3,7 +3,7 @@ import { CATEGORY_COLORS } from "@/lib/validation/category.schema";
 import type { ShapeKind } from "@/packages/shared/shapes";
 
 /** Matches the placeholder names this module hands out, and only those. */
-const PLACEHOLDER_NAME = /^(Circle|Area|Line) (\d+)$/;
+const PLACEHOLDER_NAME = /^(Circle|Area|Line|Route) (\d+)$/;
 
 export type ShapeDefaults = {
   name: string;
@@ -28,16 +28,27 @@ export type ShapeDefaults = {
  *
  * "Line" is both, so it stays as it is: the gesture and the object have the same
  * name, and inventing a second word for one of them would only be a word to learn.
+ *
+ * "Route" is not a `ShapeKind` and never will be — a route is stored as a line
+ * (packages/shared/shapes.ts). It is a name in this list all the same, because
+ * this list is the vocabulary the *owner* reads, and a thing whose card says
+ * "Route · 12 km · 19 min" cannot be called "Line 3". Routes number themselves
+ * separately from lines for the same reason circles do from areas: the numbering
+ * is a way of telling two of the same thing apart.
  */
-const NOUNS: Record<ShapeKind, string> = {
+const NOUNS: Record<ShapeNoun, string> = {
   circle: "Circle",
   polygon: "Area",
   line: "Line",
+  route: "Route",
 };
+
+/** What a shape is called to its owner — see NOUNS. */
+export type ShapeNoun = ShapeKind | "route";
 
 export function nextShapeDefaults(
   shapes: readonly Pick<Shape, "name" | "sortOrder">[],
-  kind: ShapeKind,
+  kind: ShapeNoun,
 ): ShapeDefaults {
   const noun = NOUNS[kind];
 

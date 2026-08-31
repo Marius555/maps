@@ -1,6 +1,12 @@
 "use client";
 
-import { MapIcon, MapPin, Settings, Share2 } from "lucide-react";
+import {
+  LayoutTemplate,
+  MapIcon,
+  MapPin,
+  Settings,
+  Share2,
+} from "lucide-react";
 
 import { useMap } from "@/lib/query/maps";
 import { SidebarGroupLabel } from "./sidebar-group-label";
@@ -35,6 +41,9 @@ export function SidebarMapNav({
   const items: NavItem[] = [
     { href: `/maps/${mapId}`, label: "Map", icon: MapIcon, exact: true },
     { href: `/maps/${mapId}/places`, label: "Locations", icon: MapPin },
+    // After Locations, because the card is what a location looks like — you
+    // have to have some before designing what they show.
+    { href: `/maps/${mapId}/card`, label: "Card", icon: LayoutTemplate },
     { href: `/maps/${mapId}/publish`, label: "Publish", icon: Share2 },
     { href: `/maps/${mapId}/settings`, label: "Settings", icon: Settings },
   ];

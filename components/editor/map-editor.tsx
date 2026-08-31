@@ -12,12 +12,15 @@ import { MapHintBar } from "@/components/map/map-hint-bar";
 import { MapSearch } from "@/components/map/map-search/map-search";
 import { MapToolbar } from "@/components/map/map-toolbar";
 import { PinStudio } from "@/components/map/pin-studio/pin-studio";
+import { useRouteRequest } from "@/components/map/routes/use-route-request";
+import { useRoutability } from "@/components/map/routes/use-routability";
 import { SelectionBar } from "@/components/map/selection-bar";
 import { BulkTagMenu } from "@/components/tags/bulk-tag-menu";
 import { PlaceEditDialog } from "@/components/places/place-form/place-edit-dialog";
 import { PreviewDialog } from "@/components/preview/preview-dialog";
 import { ImportShapesDialog } from "@/components/shapes/import/import-shapes-dialog";
 import type { GeocodeCandidate } from "@/lib/geocoding/types";
+import { isDefaultView } from "@/lib/map/default-view";
 import { roundCoord } from "@/lib/map/geo";
 import { groupAction, groupActionLabel } from "@/lib/map/group-action";
 import { membersOf } from "@/lib/map/group-members";
@@ -43,6 +46,7 @@ import {
   usePlacesSnapshot,
   useUpdatePlace,
 } from "@/lib/query/places";
+import { useCardDesign } from "@/lib/query/card-design";
 import {
   useCreateShape,
   useShapes,
@@ -53,12 +57,15 @@ import { nextShapeDefaults } from "@/lib/map/next-shape-defaults";
 import type { AppMap, Group, Place, Shape } from "@/lib/repositories/types";
 import {
   drawKindOf,
+  isDrawingRoute,
   selectionSize,
   useEditorStore,
 } from "@/lib/stores/editor-store";
 import { placeIndex, resolveGeometry } from "@/lib/map/line-endpoints";
 import {
+  routeOf,
   shapeBounds,
+  type ShapeBounds,
   type ShapeGeometry,
   type ShapeKind,
 } from "@/packages/shared/shapes";
@@ -79,6 +86,7 @@ export function MapEditor({
   initialPlaces,
   initialShapes,
   initialGroups,
+  initialCardDesign,
   placeLimit,
   shapeLimit,
 }: {
@@ -86,6 +94,8 @@ export function MapEditor({
   initialPlaces: Place[];
   initialShapes: Shape[];
   initialGroups: Group[];
+  /** The account's own card design, for the place card this canvas pops open. */
+  initialCardDesign: Record<string, unknown>;
   placeLimit: number;
   /** Read by the GeoJSON importer, which has to state it before its button. */
   shapeLimit: number;
@@ -101,6 +111,7 @@ export function MapEditor({
   const { data: places = [] } = usePlaces(map.id, initialPlaces);
   const { data: storedShapes = [] } = useShapes(map.id, initialShapes);
   const { data: groups = [] } = useGroups(map.id, initialGroups);
+  const { data: cardDesign = initialCardDesign } = useCardDesign(initialCardDesign);
 
   /*
    * Bonded lines resolved once, here, and everything downstream reads the
@@ -145,6 +156,26 @@ export function MapEditor({
     retainOnly,
   } = useAddressResolution(map.id);
 
+  /**
+   * Which locations the routing engine can reach, gathered as the route tool is
+   * used and remembered for as long as this editor is open.
+   *
+   * Beside the address lookup because it is the same kind of thing: knowledge
+   * about locations that only a server can supply, keyed by place id, worth
+   * nothing after a reload. The two are also related in fact — a pin with no
+   * address near it usually has no road near it either — which is why the route
+   * tool checks exactly those first.
+   */
+  const {
+    unroutableIds,
+    checkingId,
+    probe: probeRoutability,
+    abort: stopProbingRoutability,
+    check: checkRoutability,
+    markUnroutable,
+    retainOnly: retainRoutability,
+  } = useRoutability(map.id);
+
   const mode = useEditorStore((state) => state.mode);
   const addIcon = useEditorStore((state) => state.addIcon);
   const selectedPlaceId = useEditorStore((state) => state.selectedPlaceId);
@@ -153,6 +184,7 @@ export function MapEditor({
   const setMode = useEditorStore((state) => state.setMode);
   const startAdding = useEditorStore((state) => state.startAdding);
   const startDrawing = useEditorStore((state) => state.startDrawing);
+  const startRouting = useEditorStore((state) => state.startRouting);
   const startSelecting = useEditorStore((state) => state.startSelecting);
   const selectPlace = useEditorStore((state) => state.selectPlace);
   const selectShape = useEditorStore((state) => state.selectShape);
@@ -169,7 +201,16 @@ export function MapEditor({
 
   const isAdding = mode === "add";
   const drawMode = drawKindOf(mode);
+  const isRouting = isDrawingRoute(mode);
   const isSelecting = mode === "select";
+
+  // The only place in the app that reaches a routing engine. Its answer is
+  // written into a shape and published as plain coordinates, so a map with a
+  // route on it costs a visitor exactly what one without it costs (§2).
+  const routeRequest = useRouteRequest(map.id, {
+    places,
+    onUnroutable: markUnroutable,
+  });
 
   const selectedPlaceIds = useMemo(
     () => new Set(selection.placeIds),
@@ -266,8 +307,11 @@ export function MapEditor({
    * state is keyed by place id and nothing else prunes it.
    */
   useEffect(() => {
-    retainOnly(new Set(places.map((place) => place.id)));
-  }, [places, retainOnly]);
+    const ids = new Set(places.map((place) => place.id));
+
+    retainOnly(ids);
+    retainRoutability(ids);
+  }, [places, retainOnly, retainRoutability]);
 
   /*
    * Declared above the callbacks that use it, not beside the canvas it belongs
@@ -276,9 +320,79 @@ export function MapEditor({
    * temporal dead zone when they are evaluated.
    */
   const mapHandle = useRef<MapHandle | null>(null);
+  /*
+   * A ref cannot wake an effect, and the framing below has to run once the map
+   * exists *and* the locations have arrived — two things that land in either
+   * order. The state flip is what lets the effect depend on the first of them.
+   */
+  const [isMapReady, setIsMapReady] = useState(false);
   const handleReady = useCallback((handle: MapHandle) => {
     mapHandle.current = handle;
+    setIsMapReady(true);
   }, []);
+
+  /**
+   * Open on what the map is about, when nobody has said where to open.
+   *
+   * `center`/`zoom` are read once at construction (use-maplibre.ts), so this
+   * cannot be a prop — and it must not be one either: a saved view is a
+   * deliberate answer and re-framing over it would throw away the thing the
+   * "Save this view" button exists to store. `isDefaultView` is the whole
+   * condition, and it is false the moment the owner presses that button.
+   *
+   * Bounds over pins *and* areas, through the same `selectionBounds` a group
+   * header click goes through: a map whose content is one delivery radius has no
+   * pins to frame and would otherwise sit on the whole world beside it.
+   *
+   * Decided **before the map is built**, and handed to it as `initialBounds`.
+   * All four queries are seeded from the server render, so the locations are
+   * already here on the first render and there is nothing to wait for. Framing
+   * afterwards instead — once `load` had fired — meant the map opened on the
+   * whole world, downloaded every tile of it, and was then jumped to its own
+   * content, which threw all of them away and downloaded a second set. That is
+   * the reload-everything-twice this replaced.
+   *
+   * A lazy `useState` because it must be the answer from the first render and
+   * must not change after: dragging a pin changes `places`, and re-deciding
+   * would describe a camera move that already happened.
+   */
+  const [openingBounds] = useState<ShapeBounds | null>(() =>
+    isDefaultView(map)
+      ? selectionBounds({
+          points: places,
+          geometries: shapes.map((shape) => shape.geometry),
+        })
+      : null,
+  );
+
+  /**
+   * Pre-armed when the map was already born framed, which leaves the effect
+   * below covering the one case construction cannot: a map that had nothing on
+   * it when it mounted, whose owner then drops their first location.
+   */
+  const hasFramed = useRef(openingBounds !== null);
+
+  useEffect(() => {
+    if (hasFramed.current || !isMapReady) return;
+
+    if (!isDefaultView(map)) {
+      hasFramed.current = true;
+      return;
+    }
+
+    const bounds = selectionBounds({
+      points: places,
+      geometries: shapes.map((shape) => shape.geometry),
+    });
+
+    if (!bounds) return;
+
+    hasFramed.current = true;
+    // This one *does* fly. It is a response to something the user just did, and
+    // a jump would leave them wondering where their map went — unlike the
+    // opening frame, which has no previous view to travel from.
+    mapHandle.current?.fitBounds(bounds);
+  }, [isMapReady, map, places, shapes]);
 
   /*
    * The export renders a second map off screen, so it needs the same data the
@@ -463,7 +577,13 @@ export function MapEditor({
         // succession would otherwise both see the same list and land as two
         // "Circle 1"s sharing a sortOrder. Same reason the pins read theirs here.
         const created = await createShapeMutate({
-          ...nextShapeDefaults(readShapes(), geometry.kind),
+          // "route", not "line", when the engine drew it: the card will say
+          // "Route · 12 km · 19 min" and a name reading "Line 3" beside that is
+          // the app disagreeing with itself.
+          ...nextShapeDefaults(
+            readShapes(),
+            routeOf(geometry) ? "route" : geometry.kind,
+          ),
           geometry,
           opacity: DEFAULT_SHAPE_OPACITY,
         });
@@ -790,8 +910,8 @@ export function MapEditor({
     [assignMembers, places, shapes],
   );
 
-  // Escape leaves add mode — the toolbar toggle stays sticky so several pins can
-  // be dropped in a row.
+  // Escape leaves add mode without dropping anything. A click leaves it too, by
+  // dropping something — see `onMapClick` below.
   useEffect(() => {
     if (!isAdding) return;
 
@@ -937,8 +1057,9 @@ export function MapEditor({
           recentIcons={recentIcons}
           pinIcons={map.pinIcons}
           isBusy={createPlace.isPending}
-          isDrawingBusy={createShape.isPending}
+          isDrawingBusy={createShape.isPending || routeRequest.isPending}
           drawMode={drawMode}
+          isRouting={isRouting}
           isSelecting={isSelecting}
           isSavingView={updateMap.isPending}
           hasSavedView={savedViewAt !== null}
@@ -960,6 +1081,7 @@ export function MapEditor({
           onPickIcon={startAdding}
           onStopAdding={() => setMode("browse")}
           onPickTool={startDrawing}
+          onPickRoute={startRouting}
           onStopDrawing={() => setMode("browse")}
           onImportShapes={() => setIsImportingShapes(true)}
           onStartSelecting={startSelecting}
@@ -992,10 +1114,14 @@ export function MapEditor({
             of the two because it is about something that already happened. */}
         <MapHintBar
           isVisible={
-            (isAdding || isDraggingPin || drawMode !== null || isSelecting) &&
+            (isAdding ||
+              isDraggingPin ||
+              drawMode !== null ||
+              isRouting ||
+              isSelecting) &&
             selectionSize(selection) === 0
           }
-          message={hintFor({ isDraggingPin, drawMode, isSelecting })}
+          message={hintFor({ isDraggingPin, drawMode, isRouting, isSelecting })}
         />
 
         <SelectionBar
@@ -1023,20 +1149,44 @@ export function MapEditor({
         <MapCanvas
           center={{ lng: map.defaultLng, lat: map.defaultLat }}
           zoom={map.defaultZoom}
+          initialBounds={openingBounds}
           style={map.style}
           appearance={map.appearance}
+          cardLayout={cardDesign}
+          fields={map.fields}
           places={places}
           selectedPlaceId={selectedPlaceId}
           isAdding={isAdding}
+          // The same icon `onMapClick` below drops, so the pin hovering over the
+          // map and the pin that lands are one choice seen twice.
+          addIcon={addIcon}
           colorFor={colorFor}
           pinIcons={map.pinIcons}
           categoryFor={categoryFor}
           showPlaceCard
           onSelectPlace={selectPlace}
           onEditPlace={setEditingId}
-          // Sticky add mode keeps the icon it was armed with, so dropping forty
-          // cafés is one choice and forty clicks, not forty choices.
-          onMapClick={(coords) => void addPlace(coords, undefined, addIcon)}
+          /*
+           * One click, one pin, and then the tool puts itself away.
+           *
+           * Add mode used to be sticky — armed until Escape — so that dropping
+           * forty cafés was one choice and forty clicks. In practice the pin
+           * that gets dropped is nearly always the only one, and an armed tool
+           * that looks exactly like a browsing map except for the cursor is a
+           * map where the next click lands a location nobody asked for. The
+           * toolbar button still reads "Stop adding" while it is armed, and
+           * Escape still gets out of it, but neither is now the *only* way back
+           * to browsing.
+           *
+           * Disarmed here rather than inside `addPlace`, and before the await:
+           * the other two callers — the drag-and-drop gesture and the search's
+           * `+` — never armed anything, and a mode left live for the length of a
+           * round trip is a second pin from a double click.
+           */
+          onMapClick={(coords) => {
+            setMode("browse");
+            void addPlace(coords, undefined, addIcon);
+          }}
           onMovePlace={movePlace}
           onReady={handleReady}
           shapes={{
@@ -1049,6 +1199,14 @@ export function MapEditor({
             onCreateShape: (geometry) => void addShape(geometry),
             onUpdateShape: moveShape,
             onStopDrawing: () => setMode("browse"),
+            isRouting,
+            onRoute: routeRequest.request,
+            isRoutePending: routeRequest.isPending,
+            unroutableIds,
+            checkingId,
+            onProbeRoutability: (candidates) => void probeRoutability(candidates),
+            onCheckRoutability: checkRoutability,
+            onStopProbing: stopProbingRoutability,
           }}
           selection={{
             selected: selection,
@@ -1180,13 +1338,22 @@ function asMembers(object: DraggedObject): GroupMembers {
 function hintFor({
   isDraggingPin,
   drawMode,
+  isRouting,
   isSelecting,
 }: {
   isDraggingPin: boolean;
   drawMode: ShapeKind | null;
+  isRouting: boolean;
   isSelecting: boolean;
 }): string | undefined {
   if (isDraggingPin) return "Drop the pin where the location is.";
+
+  // Says the one rule this tool has, because it is a rule of omission and those
+  // are invisible: clicks that miss a location do nothing, and a tool that
+  // ignores half your clicks without saying why reads as broken.
+  if (isRouting) {
+    return "Click each location to add it as a stop. Enter to follow the roads, Esc to stop.";
+  }
 
   switch (drawMode) {
     case "circle":

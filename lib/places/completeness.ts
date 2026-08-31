@@ -39,9 +39,7 @@ const HAS: Record<OptionalField, (place: Place) => boolean> = {
   phone: (place) => Boolean(place.phone),
   email: (place) => Boolean(place.email),
   url: (place) => Boolean(place.url),
-  // Either half is enough: `photoUrl` is resolved on the server from `photoId`,
-  // so a row that has one and not the other is mid-flight, not empty.
-  photo: (place) => Boolean(place.photoId || place.photoUrl),
+  photo: (place) => place.photoUrls.length > 0,
   hours: (place) => Boolean(place.hours),
   description: (place) => Boolean(place.description),
 };

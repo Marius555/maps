@@ -28,6 +28,14 @@ import { Protocol } from "pmtiles";
  * OpenFreeMap, which needs none of this; registering now means switching to our
  * own PMTiles extract on R2 is a URL change in the snapshot and nothing else —
  * no redeploy of an embed already pasted into customer sites.
+ *
+ * `metadata: true` carries the whole of §12 on a pmtiles-backed map. Without it
+ * the protocol answers a TileJSON request from the archive header alone, with no
+ * `attribution` field — and this bundle deliberately does not pass
+ * `snapshot.attribution` to MapLibre (see map.ts), because the tile source is
+ * what renders the credit. So the flag is the only thing standing between a
+ * pmtiles style and a published map with no OpenStreetMap credit on it, failing
+ * silently on somebody else's website. Mirrored in lib/map/pmtiles.ts.
  */
 
 // Held in a variable so the bundler treats the URL as runtime-resolved rather
@@ -37,4 +45,4 @@ const WORKER_FILE = "./maplibre-gl-worker.mjs";
 
 config.WORKER_URL = new URL(WORKER_FILE, import.meta.url).href;
 
-addProtocol("pmtiles", new Protocol().tile);
+addProtocol("pmtiles", new Protocol({ metadata: true }).tile);

@@ -4,7 +4,9 @@ import { Button } from "@heroui/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect } from "react";
 
-import type { Shape } from "@/lib/repositories/types";
+import { RouteSummary } from "@/components/map/routes/route-summary";
+import type { Place, Shape } from "@/lib/repositories/types";
+import { routeOf } from "@/packages/shared/shapes";
 import { ShapeCardHeader } from "./shape-card-header";
 
 /**
@@ -28,14 +30,31 @@ import { ShapeCardHeader } from "./shape-card-header";
  */
 export function ShapeCard({
   shape,
+  places,
+  isRouteStale,
+  isRecalculating,
   onClose,
   onEdit,
+  onFocusStop,
+  onRemoveStop,
+  onRecalculate,
 }: {
   shape: Shape | null;
+  /** Names for a route's bonded stops. Empty where the caller has no locations. */
+  places?: readonly Place[];
+  isRouteStale?: boolean;
+  isRecalculating?: boolean;
   onClose: () => void;
   onEdit?: (shapeId: string) => void;
+  /** Move the map to one of a route's stops. Same omission as `onRecalculate`. */
+  onFocusStop?: (index: number) => void;
+  /** Drop one of a route's stops and reroute. Same omission as `onRecalculate`. */
+  onRemoveStop?: (index: number) => void;
+  /** Omitted on the screens that only display a map — preview, import review. */
+  onRecalculate?: () => void;
 }) {
   const prefersReducedMotion = useReducedMotion();
+  const route = shape ? routeOf(shape.geometry) : null;
 
   // Escape closes the card. On the window because focus may be on a handle, on
   // the sidebar row, or nowhere at all.
@@ -89,11 +108,31 @@ export function ShapeCard({
           >
             <ShapeCardHeader shape={shape} onClose={onClose} />
 
-            {shape.description ? (
-              <div className="min-h-0 overflow-y-auto p-3 pt-2">
-                <p className="text-sm whitespace-pre-line text-muted">
-                  {shape.description}
-                </p>
+            {/*
+             * One scroller for everything under the header, rather than one per
+             * block. A route's stops and a long description are both variable
+             * height, and two independent scrollers inside a 24rem card is two
+             * places to lose the end of the text.
+             */}
+            {route || shape.description ? (
+              <div className="flex min-h-0 flex-col gap-2 overflow-y-auto pb-3">
+                {route ? (
+                  <RouteSummary
+                    route={route}
+                    places={places ?? []}
+                    isStale={isRouteStale ?? false}
+                    isRecalculating={isRecalculating ?? false}
+                    onFocusStop={onFocusStop}
+                    onRemoveStop={onRemoveStop}
+                    onRecalculate={onRecalculate}
+                  />
+                ) : null}
+
+                {shape.description ? (
+                  <p className="px-3 pt-1 text-sm whitespace-pre-line text-muted">
+                    {shape.description}
+                  </p>
+                ) : null}
               </div>
             ) : (
               // The header's own padding stops at the title, so without this the

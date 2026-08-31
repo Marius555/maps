@@ -111,7 +111,9 @@
 }
 
 .lm-root--dark .maplibregl-popup-content {
-  background: var(--lm-surface);
+  /* `--lm-card-bg` is only set when the owner chose a colour; unset is what
+     keeps a card readable on a dark map — see the shell rules further down. */
+  background: var(--lm-card-bg, var(--lm-surface));
   color: var(--lm-foreground);
 }
 
@@ -191,6 +193,17 @@
   white-space: nowrap;
 }
 
+/* A control whose whole label is a glyph. Square, and sized to match the height
+   of the search box beside it so the toolbar reads as one row of controls. */
+.lm-button--icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  color: var(--lm-foreground);
+}
+
 .lm-button:hover,
 .lm-chip:hover {
   border-color: #c9ced7;
@@ -202,24 +215,11 @@
   gap: 6px;
 }
 
-/* The dot is the legend: the chip is both "what this colour means" and the
-   control that filters by it. */
-.lm-chip::before {
-  content: "";
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: var(--lm-category-color, var(--lm-muted));
-  vertical-align: -1px;
-}
-
+/* No colour dot: every chip left is a tag, and a tag has no colour. The one
+   that had one was the category chip, which the search box replaced. */
 .lm-chip--on {
-  border-color: var(--lm-category-color, var(--lm-foreground));
-  box-shadow:
-    var(--lm-shadow),
-    inset 0 0 0 1px var(--lm-category-color, var(--lm-foreground));
+  border-color: var(--lm-foreground);
+  box-shadow: var(--lm-shadow), inset 0 0 0 1px var(--lm-foreground);
 }
 
 .lm-root :focus-visible {
@@ -241,6 +241,8 @@
   background: var(--lm-foreground);
   color: var(--lm-on-foreground);
   box-shadow: var(--lm-shadow);
+  /* It clears itself, but a click takes it away sooner — see `showStatus`. */
+  cursor: pointer;
 }
 
 .lm-status:empty {
@@ -260,21 +262,330 @@
 
 /* Popup ------------------------------------------------------------------ */
 
+/*
+ * The card can never be taller than the frame it floats in.
+ *
+ * `--lm-popup-max` is written per open by `fitCard` in map.ts, from the room
+ * the card actually has on the side MapLibre put it. It cannot be a CSS answer:
+ * `.lm-root` is an inline-size container, so `cqh` does not resolve, and the
+ * popup is positioned against the map canvas rather than contained by it.
+ *
+ * Unset means unclamped, which is the common case — with "More details" folded
+ * away a card is short. It is also what `fitCard` relies on: it clears the
+ * property before measuring, so a card squeezed once can grow back.
+ */
 .lm-popup {
+  display: flex;
+  flex-direction: column;
   max-width: 260px;
+  max-height: var(--lm-popup-max, none);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/*
+ * The card's own shell, as the owner designed it.
+ *
+ * Set on MapLibre's content box rather than on ours, because that is the element
+ * that actually paints the card — see `styleCard` in map.ts, which writes these
+ * properties onto the popup container so they cascade down to here. Every one
+ * falls back to what the popup looked like before the designer existed, which is
+ * what a map nobody has redesigned keeps getting.
+ *
+ * `--lm-card-bg` is deliberately *not* defaulted to a colour: unset means the
+ * dark-mode rule further up still decides, and a card that hardcoded white would
+ * stop working the moment a visitor's map went dark.
+ */
+.maplibregl-popup-content {
+  /* The zones carry the padding now, because a photo has to be able to bleed
+     out through it. */
+  padding: 0;
+  border-radius: var(--lm-card-radius, 4px);
+  background: var(--lm-card-bg, #ffffff);
+  border: var(--lm-card-border, none);
+  box-shadow: var(--lm-card-shadow, 0 1px 2px rgba(0, 0, 0, 0.1));
+  /* So a bleeding photo takes the card's own corners rather than squaring them
+     off. The close button is inside this box, so it is unaffected. */
+  overflow: hidden;
+}
+
+/*
+ * A zone is the unit the owner arranges blocks within, and the middle one is the
+ * card's scroller.
+ *
+ * The padding lives here rather than on the card, so a block can bleed out of it
+ * — a photo that touches the card's edges is the one thing on a location card
+ * that should not be inset.
+ */
+.lm-popup__zone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lm-card-gap, 6px);
+  padding-inline: var(--lm-card-pad, 10px);
+  min-width: 0;
+  /*
+   * `none`, and this is load-bearing.
+   *
+   * `.lm-popup` is a flex column with a max-height that `fitCard` writes from
+   * the room the card has on the map. A shrinkable zone inside that box does not
+   * scroll when the card runs out of room — it *collapses*, because the gallery
+   * above it is a fixed height and the middle is the only thing that can give.
+   * On a short map that took the name, the category and the address off the card
+   * entirely and left a photo sitting directly on the links.
+   *
+   * The card scrolls as a whole instead, which is what it has always done.
+   */
+  flex: none;
+}
+
+/*
+ * A floor as well as a cap, and on the location card alone — a shape's popup is
+ * a name and a sentence and is deliberately smaller (see `buildShapePopup`).
+ *
+ * `min()` because `min-height` beats `max-height` in CSS: without it a short map
+ * would push the card past the room `fitCard` measured for it. Same number as
+ * the dashboard's `.map-card`, for the same reason — a location holding nothing
+ * but its name is still a card, and content-sized it came out at about seventy
+ * pixels, which reads as broken rather than as empty.
+ */
+.lm-popup--place {
+  min-height: min(140px, var(--lm-popup-max, 140px));
+}
+
+/*
+ * The ends of the card, which are the zones that *drew* rather than the ones
+ * named top and bottom — `buildPopup` puts these two classes on the first and
+ * last sections it appended, and the note there says why. With all three zones
+ * present they land on `--top` and `--bottom`, so nothing about a populated
+ * card changes.
+ */
+.lm-popup__zone--pad-top {
+  padding-top: var(--lm-card-pad, 10px);
+}
+
+.lm-popup__zone--pad-bottom {
+  padding-bottom: var(--lm-card-pad, 10px);
+}
+
+/*
+ * And the bottom zone pads its own top as well, first or not — the twin of the
+ * `padsTop` rule in the dashboard's `zoneClass`, which carries the argument.
+ * Zones are stacked with nothing between them, which is what a photo bleeding to
+ * the card's top edge wants and what the contact row underneath a week of
+ * opening hours does not: flush against the last of them it reads as one more
+ * row of hours.
+ */
+.lm-popup__zone--bottom {
+  padding-top: var(--lm-card-pad, 10px);
+}
+
+/*
+ * `--lm-block-offset` is the empty space the owner left above this block, over
+ * and above the zone's own gap. A custom property rather than an inline
+ * `margin-top`, because the rule below needs to *add* it to the bleed cancel —
+ * an inline style would simply beat that rule, and a photo pushed down the card
+ * would stop reaching its top edge.
+ */
+.lm-popup__block {
+  min-width: 0;
+  /*
+   * `--lm-block-overlap-above` is how far a block is pulled over the one before
+   * it — a logo straddling the bottom edge of a photo. It composes with the
+   * offset here rather than replacing it, which is the whole reason both are
+   * custom properties: a logo can be nudged down from the photo *and* pulled up
+   * over it, and an inline margin could only say one of the two. `wrapBlock`
+   * sets neither on a block at the end of its zone, where there is no sibling to
+   * overlap.
+   */
+  margin-top: calc(
+    var(--lm-block-offset, 0px) - var(--lm-block-overlap-above, 0px)
+  );
+  margin-bottom: calc(var(--lm-block-overlap-below, 0px) * -1);
+}
+
+/*
+ * A line holding one or two blocks side by side.
+ *
+ * Built only for a shared row (`wrapRow` in popup.ts) — a full-width block stays
+ * a direct child of its zone, which is what keeps the three `--bleed` rules
+ * below working, two of them being `:first-child`/`:last-child` under a `>`
+ * combinator.
+ *
+ * A row of *one* is not a degenerate case to tidy away: it is a block narrowed
+ * with room deliberately left beside it, and the row is what makes that share a
+ * width rather than a height.
+ *
+ * `column-gap` is written inline from the card's own gap rather than read from
+ * `--lm-card-gap` here, because the flex basis each block carries is
+ * `calc(share% - gap/2)` and that number is computed in shared code that knows
+ * nothing about either renderer's variable names. One number, one source, no
+ * pair of names to keep in step.
+ *
+ * `align-items` is left at `stretch`: a photo with a height sets the line's
+ * height and the block beside it fills it, rather than the two coming out
+ * different sizes with a step between them.
+ */
+.lm-popup__row {
+  display: flex;
+  min-width: 0;
+  margin-top: var(--lm-block-offset, 0px);
+}
+
+/*
+ * Out through the card's padding, to its edges.
+ *
+ * Only at the very top or the very bottom does it also cancel the vertical
+ * padding: a full-bleed photo in the middle of a card is a band across it, and a
+ * band should not eat the gap above the block after it.
+ */
+.lm-popup__block--bleed {
+  margin-inline: calc(var(--lm-card-pad, 10px) * -1);
+}
+
+.lm-popup__zone--top > .lm-popup__block--bleed:first-child {
+  margin-top: calc(var(--lm-card-pad, 10px) * -1 + var(--lm-block-offset, 0px));
+}
+
+.lm-popup__zone--bottom > .lm-popup__block--bleed:last-child {
+  margin-bottom: calc(var(--lm-card-pad, 10px) * -1);
+}
+
+/*
+ * The location's own pin, as a badge on the card.
+ *
+ * The block's box is already the size its owner dragged (`wrapBlock` writes a
+ * width and a height from `blockBox`), so this fills it and the pin's own size
+ * step is a transform on top — the same arrangement `.pin-preview` uses in the
+ * dashboard, and the same rules underneath it.
+ *
+ * Those four `.pin-svg__*` rules are a hand-kept copy of the dashboard's, in
+ * app/globals.css, for the reason `CARD_SHADOWS` is one in card-frame.tsx:
+ * neither renderer imports the other's stylesheet, and the geometry they share
+ * lives in packages/shared/pin-icons.ts. The colours differ deliberately — the
+ * dashboard falls back to its theme variables and a snapshot has none, so the
+ * fallbacks here are literals a stranger's page cannot change.
+ *
+ * The drop shadow is not decoration: the ring is usually white, and a white ring
+ * on a white card is invisible without an edge to be seen against. The two ship
+ * together or neither does.
+ */
+.lm-popup__logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.28));
+}
+
+.lm-popup__logo > .pin-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scale(var(--pin-scale, 1));
+}
+
+.lm-popup__logo .pin-svg__body {
+  fill: var(--pin-color, #7a828f);
+  stroke: var(--pin-ring, #fff);
+  stroke-width: var(--pin-ring-width, 1.5);
+  stroke-linejoin: round;
+}
+
+.lm-popup__logo .pin-svg__glyph {
+  stroke: var(--pin-icon-color, #fff);
+}
+
+/*
+ * An uploaded logo in the pin's head, rounded off. CSS rather than a `<clipPath>`
+ * because a clip path needs an id, and an id is either shared and dangling or
+ * duplicated per pin — the same call app/globals.css makes.
+ */
+.lm-popup__logo .pin-svg__image {
+  clip-path: circle(50%);
+}
+
+.lm-popup__divider {
+  height: 1px;
+  background: currentColor;
+  opacity: 0.14;
+}
+
+/* Nothing to see — it exists to take up the height it was given. */
+.lm-popup__spacer {
+  height: 100%;
+}
+
+/* The image and the controls that sit on it. */
+.lm-popup__gallery {
+  position: relative;
+  height: 100%;
 }
 
 .lm-popup__photo {
   display: block;
   width: 100%;
-  height: 120px;
-  margin-bottom: 8px;
-  border-radius: 6px;
-  object-fit: cover;
+  /*
+   * Fills whatever height the owner gave the gallery block, and no more. No
+   * minimum: a gallery dragged down to 10% of the card must actually be that,
+   * or the handle is lying about what it does.
+   */
+  height: 100%;
+  /*
+   * Fill, unless the owner asked for Fit. `--lm-card-fit` is written onto the
+   * block by `applyBox` (popup.ts) and only when it differs from this fallback,
+   * so a layout saved before the control existed — and every snapshot already
+   * live on a customer's site — still crops exactly as it did.
+   */
+  object-fit: var(--lm-card-fit, cover);
+}
+
+/*
+ * On the picture rather than under it: a row of controls below the image is
+ * another line of a card whose whole point is being short.
+ */
+.lm-popup__step {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  background: rgba(16, 18, 22, 0.55);
+  color: #ffffff;
+  cursor: pointer;
+  place-items: center;
+}
+
+.lm-popup__step:hover {
+  background: rgba(16, 18, 22, 0.75);
+}
+
+.lm-popup__step--back {
+  left: 6px;
+}
+
+.lm-popup__step--on {
+  right: 6px;
+}
+
+.lm-popup__count {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(16, 18, 22, 0.55);
+  color: #ffffff;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .lm-popup__name {
-  margin: 0 0 2px;
+  /* The zone's gap carries the rhythm now, so blocks own no outer margin —
+     otherwise a gap the owner set would be added to one they cannot see. */
+  margin: 0;
   font-size: 14px;
   font-weight: 600;
 }
@@ -292,7 +603,6 @@
 
 .lm-popup__category {
   display: inline-block;
-  margin-bottom: 4px;
   font-size: 12px;
   color: var(--lm-muted);
 }
@@ -309,7 +619,7 @@
 
 .lm-popup__address,
 .lm-popup__description {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 13px;
   color: var(--lm-muted);
 }
@@ -386,11 +696,51 @@
   color: var(--lm-foreground, inherit);
 }
 
+/*
+ * The fold that keeps the card short.
+ *
+ * Same construction as the hours summary directly above — a <details> with the
+ * default marker removed on both engines, because the row already reads as
+ * expandable and the triangle sits badly against the chevron that replaced it.
+ */
+.lm-popup__more {
+  margin: 0;
+  border-top: 1px solid var(--lm-border);
+  padding-top: 6px;
+}
+
+.lm-popup__more-summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--lm-muted);
+  font-size: 12px;
+}
+
+.lm-popup__more-summary::-webkit-details-marker {
+  display: none;
+}
+
+.lm-popup__more-summary svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 150ms ease;
+}
+
+.lm-popup__more[open] .lm-popup__more-summary svg {
+  transform: rotate(180deg);
+}
+
+.lm-popup__more-body {
+  padding-top: 6px;
+}
+
 .lm-popup__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 6px;
 }
 
 .lm-popup__link {
@@ -422,9 +772,20 @@
  * as belonging to it. `.lm-toolbar` keeps its floating rules for maps with the
  * list switched off; this modifier undoes them.
  */
+/*
+ * Two fifths of the box, not 320px of it.
+ *
+ * A fixed panel is a different *proportion* of every embed it lands in: at the
+ * 700px of the editor's preview dialog it took more of the frame than the map
+ * did, which is exactly backwards for a widget whose subject is the map. A
+ * fraction keeps the same balance at every size, and the floor stops it
+ * collapsing to something a row of results cannot be read in — below 640px the
+ * container query overrides both and stacks them anyway.
+ */
 .lm-panel {
   display: flex;
-  flex: 0 0 320px;
+  flex: 0 0 40%;
+  min-width: 240px;
   flex-direction: column;
   min-height: 0;
   border-right: 1px solid var(--lm-border);
@@ -458,7 +819,7 @@
 }
 
 .lm-toolbar--docked .lm-chip--on {
-  box-shadow: inset 0 0 0 1px var(--lm-category-color, var(--lm-foreground));
+  box-shadow: inset 0 0 0 1px var(--lm-foreground);
 }
 
 .lm-list {
@@ -603,7 +964,9 @@
   }
 
   .lm-canvas {
-    flex: 0 0 55%;
+    /* The same 60/40 the side-by-side layout uses, so the balance does not
+       change as the embed crosses the breakpoint. */
+    flex: 0 0 60%;
     /*
      * The map goes first when the columns become rows.
      *
@@ -658,12 +1021,6 @@
   font-weight: 500;
 }
 
-/* A tag has no colour, and borrowing the category chip's dot would invent a
-   legend that means nothing. */
-.lm-chip--plain::before {
-  display: none;
-}
-
 /* Custom fields ---------------------------------------------------------- */
 
 .lm-popup__fields {
@@ -684,6 +1041,23 @@
 .lm-popup__field-label {
   flex: none;
   color: var(--lm-muted);
+}
+
+/* A linked value carries the same colour as the links in the actions row. Left
+   to the browser it is the default navy, which on a dark card is unreadable —
+   these are anchors with only this class on them, so nothing else colours
+   them. */
+a.lm-popup__field-value {
+  color: #1c7ed6;
+  text-decoration: none;
+}
+
+a.lm-popup__field-value:hover {
+  text-decoration: underline;
+}
+
+.lm-root--dark a.lm-popup__field-value {
+  color: var(--lm-focus);
 }
 
 .lm-popup__field-value {

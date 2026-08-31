@@ -142,9 +142,9 @@ export async function updateMap(
 ): Promise<AppMap> {
   const before = await getMap(ctx, mapId);
 
-  // `categories`, `tagGroups`, `fields`, `pinIcons`, `settings` and `appearance`
-  // are JSON text columns, so they have to be serialised. Everything else maps
-  // straight onto its column.
+  // `categories`, `tagGroups`, `fields`, `pinIcons`, `settings` and
+  // `appearance` are JSON text columns, so they have to be serialised.
+  // Everything else maps straight onto its column.
   const { categories, tagGroups, fields, pinIcons, settings, appearance, ...rest } =
     input;
   const data: Record<string, unknown> = { ...rest };

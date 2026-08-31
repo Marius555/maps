@@ -30,7 +30,7 @@ const THEMES = [
  * `useTheme` is HeroUI's own hook. It persists to localStorage and sets both the
  * `.dark` class and `data-theme`, which is exactly what globals.css keys off, so
  * no theme provider or extra dependency is needed. The pre-paint script in
- * app/layout.tsx handles the first render.
+ * components/providers/theme-script.tsx handles the first render.
  */
 export function UserMenu({
   user,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { AUTO_STYLE, BASEMAP_SOURCES, CONCRETE_MAP_STYLES } from "@/lib/map/style";
 import type { AppMap, MapCategory, Place, Shape } from "@/lib/repositories/types";
+import { defaultCardLayout, type CardLayout } from "@/packages/shared/card-layout";
 import { emptyHours } from "@/packages/shared/hours";
 import { buildSnapshot } from "./build";
 
@@ -49,7 +50,8 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     email: null,
     url: null,
     hours: null,
-    photoId: null,
+    photoIds: [],
+    photoUrls: [],
     photoUrl: null,
     sortOrder: 0,
     geocodeConfidence: null,
@@ -169,6 +171,59 @@ describe("buildSnapshot", () => {
     expect(snapshot.appearance?.layers?.poi).toBe(false);
     // Absent keys fall back to what the basemap ships, not to `undefined`.
     expect(snapshot.appearance?.layers?.transit).toBe(true);
+  });
+
+  /**
+   * The card design follows that same rule, and has to: the embed falls back to
+   * the card it has always built, so a map nobody has redesigned must publish
+   * nothing at all here rather than publish the default spelled out.
+   */
+  it("omits the card layout when it is the untouched default", () => {
+    const { snapshot } = buildSnapshot(makeMap(), [], [], GENERATED_AT);
+
+    expect(snapshot.cardLayout).toBeUndefined();
+    expect(JSON.stringify(snapshot)).not.toContain("cardLayout");
+  });
+
+  it("carries a card layout the owner actually changed", () => {
+    const layout = defaultCardLayout();
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [],
+      [],
+      GENERATED_AT,
+      undefined,
+      { ...layout, zones: { ...layout.zones, bottom: [] } },
+    );
+
+    expect(snapshot.cardLayout?.zones.bottom).toEqual([]);
+    expect(snapshot.cardLayout?.zones.top.map((block) => block.type)).toEqual([
+      "gallery",
+    ]);
+  });
+
+  /**
+   * Resolved on the way out, so what a live site reads is already drawable —
+   * see cardLayoutField. A gallery claiming four times the card's height is 70%
+   * by the time it is written, not by the time it is rendered.
+   */
+  it("clamps a stored card layout before publishing it", () => {
+    const layout = defaultCardLayout();
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [],
+      [],
+      GENERATED_AT,
+      undefined,
+      {
+        ...layout,
+        width: 5000,
+        zones: { ...layout.zones, top: [{ id: "g", type: "gallery", heightPct: 400 }] },
+      } as unknown as CardLayout,
+    );
+
+    expect(snapshot.cardLayout?.width).toBe(480);
+    expect(snapshot.cardLayout?.zones.top[0].heightPct).toBe(70);
   });
 
   /** A hand-edited console row must not publish nonsense to live sites. */
@@ -609,17 +664,74 @@ describe("buildSnapshot", () => {
     expect(snapshot.allowedDomains).toEqual(["example.com", "www.example.com"]);
   });
 
-  it("leaks no internal fields onto a published place", () => {
+  it("publishes one photo as the cover alone", () => {
+    // A place with a single picture says so once. `photoUrls` on top of it would
+    // be the same string twice on every place of a 3,000-place map.
     const { snapshot } = buildSnapshot(
       makeMap(),
-      [makePlace({ photoId: "file-1", photoUrl: "https://cdn/x.jpg" })],
+      [
+        makePlace({
+          photoIds: ["file-1"],
+          photoUrls: ["https://cdn/a.jpg"],
+          photoUrl: "https://cdn/a.jpg",
+        }),
+      ],
       [],
       GENERATED_AT,
     );
 
-    // photoId is a storage id; the embed gets the resolved URL and nothing that
+    expect(snapshot.places[0].photoUrl).toBe("https://cdn/a.jpg");
+    expect(snapshot.places[0]).not.toHaveProperty("photoUrls");
+  });
+
+  it("publishes a gallery as the cover plus the whole set", () => {
+    // The cover is repeated inside `photoUrls` deliberately: an embed published
+    // before galleries existed reads `photoUrl` and must keep finding a picture.
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [
+        makePlace({
+          photoIds: ["file-1", "file-2"],
+          photoUrls: ["https://cdn/a.jpg", "https://cdn/b.jpg"],
+          photoUrl: "https://cdn/a.jpg",
+        }),
+      ],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.places[0].photoUrl).toBe("https://cdn/a.jpg");
+    expect(snapshot.places[0].photoUrls).toEqual([
+      "https://cdn/a.jpg",
+      "https://cdn/b.jpg",
+    ]);
+  });
+
+  it("publishes no photo fields at all when there are none", () => {
+    const { snapshot } = buildSnapshot(makeMap(), [makePlace()], [], GENERATED_AT);
+
+    expect(snapshot.places[0]).not.toHaveProperty("photoUrl");
+    expect(snapshot.places[0]).not.toHaveProperty("photoUrls");
+  });
+
+  it("leaks no internal fields onto a published place", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [
+        makePlace({
+          photoIds: ["file-1"],
+          photoUrls: ["https://cdn/x.jpg"],
+          photoUrl: "https://cdn/x.jpg",
+        }),
+      ],
+      [],
+      GENERATED_AT,
+    );
+
+    // photoIds are storage ids; the embed gets resolved URLs and nothing that
     // would let it address the bucket.
     expect(snapshot.places[0]).not.toHaveProperty("photoId");
+    expect(snapshot.places[0]).not.toHaveProperty("photoIds");
     expect(snapshot.places[0]).not.toHaveProperty("mapId");
     expect(snapshot.places[0]).not.toHaveProperty("geocodeStatus");
     expect(snapshot.places[0]).not.toHaveProperty("sortOrder");
@@ -795,6 +907,117 @@ describe("buildSnapshot", () => {
         const { snapshot } = buildSnapshot(makeMap(), [], [line()], GENERATED_AT);
 
         expect(snapshot.shapes).toHaveLength(1);
+      });
+
+      /**
+       * A route is a line whose points came from a routing engine, and the whole
+       * difference it makes to a snapshot is one optional number.
+       *
+       * Distance is deliberately not among them: the popup sums it from these
+       * very points, and a figure shipped beside the geometry it describes is one
+       * republish away from disagreeing with it. Travel time cannot be
+       * recomputed from coordinates at any price, so it is the one thing that
+       * travels.
+       */
+      describe("routes", () => {
+        const routed = (durationS = 5400) =>
+          line({
+            geometry: {
+              kind: "line",
+              points: [
+                [25.28, 54.687],
+                [25.29, 54.693],
+                [25.3, 54.7],
+              ],
+              from: "place-1",
+              route: {
+                profile: "car",
+                stops: [
+                  { at: [25.28, 54.687], placeId: "place-1" },
+                  { at: [25.3, 54.7] },
+                ],
+                durationS,
+              },
+            },
+          });
+
+        it("publishes the travel time", () => {
+          const { snapshot } = buildSnapshot(
+            makeMap(),
+            [makePlace({ id: "place-1", lng: 25.28, lat: 54.687 })],
+            [routed()],
+            GENERATED_AT,
+          );
+
+          const shape = snapshot.shapes?.[0];
+          if (shape?.kind !== "line") throw new Error("expected a line");
+
+          expect(shape.durationS).toBe(5400);
+        });
+
+        it("rounds it to whole seconds", () => {
+          const { snapshot } = buildSnapshot(
+            makeMap(),
+            [],
+            [routed(5400.7)],
+            GENERATED_AT,
+          );
+
+          const shape = snapshot.shapes?.[0];
+          if (shape?.kind !== "line") throw new Error("expected a line");
+
+          expect(shape.durationS).toBe(5401);
+        });
+
+        it("never ships the stops", () => {
+          // They name rows in a database the embed has no access to, and the
+          // points are already resolved — so a stop that reached a snapshot
+          // would be bytes describing a relationship nothing could act on.
+          const { snapshot } = buildSnapshot(
+            makeMap(),
+            [],
+            [routed()],
+            GENERATED_AT,
+          );
+
+          expect(snapshot.shapes?.[0]).not.toHaveProperty("route");
+          expect(snapshot.shapes?.[0]).not.toHaveProperty("stops");
+          expect(snapshot.shapes?.[0]).not.toHaveProperty("profile");
+        });
+
+        it("does not rubber-band a route onto a moved pin", () => {
+          /*
+           * The trap this whole design turns on. A hand-drawn line follows its
+           * bonded pin, which is the test above. A route must not: its points
+           * follow roads, and dragging point 0 onto a pin two streets away draws
+           * a straight kink from the pin to where the road geometry starts —
+           * baked into a file live customer sites read forever.
+           */
+          const { snapshot } = buildSnapshot(
+            makeMap(),
+            [makePlace({ id: "place-1", lng: 11, lat: 61 })],
+            [routed()],
+            GENERATED_AT,
+          );
+
+          const shape = snapshot.shapes?.[0];
+          if (shape?.kind !== "line") throw new Error("expected a line");
+
+          expect(shape.points[0]).toEqual([25.28, 54.687]);
+        });
+
+        it("omits the duration for a hand-drawn line", () => {
+          // The immutability rule: a line published before routes existed must
+          // keep publishing exactly the bytes it always did.
+          const { snapshot } = buildSnapshot(
+            makeMap(),
+            [makePlace()],
+            [line()],
+            GENERATED_AT,
+          );
+
+          expect(snapshot.shapes?.[0]).not.toHaveProperty("durationS");
+        });
       });
 
       it("leaves out a line with only one point", () => {

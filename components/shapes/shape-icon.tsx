@@ -1,6 +1,6 @@
-import { Circle, Pentagon, Slash } from "lucide-react";
+import { Circle, Pentagon, Route, Slash } from "lucide-react";
 
-import type { ShapeGeometry } from "@/packages/shared/shapes";
+import { routeOf, type ShapeGeometry } from "@/packages/shared/shapes";
 
 /**
  * What a shape is, as a silhouette.
@@ -21,6 +21,12 @@ import type { ShapeGeometry } from "@/packages/shared/shapes";
  * The line is the one glyph drawn solid. Dashes say "an outline around nothing",
  * which is exactly right for an area and exactly wrong here — a dashed line reads
  * as a dashed line, a property of the thing rather than a way of drawing it.
+ *
+ * A route saves as a line and is drawn as one, but it does not get the line's
+ * glyph: the whole difference between the two is that a route bends around roads,
+ * and a straight stroke is the one picture that says it does not. The row's text
+ * says "Route" underneath, and an icon that contradicts the text is worse than no
+ * icon.
  */
 export function ShapeIcon({
   geometry,
@@ -33,7 +39,13 @@ export function ShapeIcon({
   className?: string;
 }) {
   const isLine = geometry.kind === "line";
-  const Glyph = isLine ? Slash : geometry.kind === "circle" ? Circle : Pentagon;
+  const Glyph = routeOf(geometry)
+    ? Route
+    : isLine
+      ? Slash
+      : geometry.kind === "circle"
+        ? Circle
+        : Pentagon;
 
   return (
     <Glyph

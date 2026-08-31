@@ -18,7 +18,9 @@ import type {
   Shape,
 } from "@/lib/repositories/types";
 import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
+import { isDefaultCardLayout } from "@/lib/validation/card-layout.schema";
 import { readMapAppearance } from "@/lib/validation/map-appearance.schema";
+import { resolveCardLayout, type CardLayout } from "@/packages/shared/card-layout";
 import {
   isPlainAppearance,
   type MapAppearance,
@@ -85,6 +87,15 @@ export function buildSnapshot(
    * origin, and on the server that comes off the request.
    */
   gazetteerBase?: string,
+  /**
+   * The account's own card design, or `null`/omitted for none.
+   *
+   * Passed in rather than read off `map`: the card design moved from a per-map
+   * column to one design per account (lib/repositories/card-design.repository.ts),
+   * and this function has to stay pure — it cannot look the account up itself,
+   * for the same reason `generatedAt` and `gazetteerBase` are injected above.
+   */
+  cardLayout?: CardLayout | null,
 ): BuildSnapshotResult {
   const usable: Place[] = [];
   const skipped: Place[] = [];
@@ -180,6 +191,7 @@ export function buildSnapshot(
       // never opened the appearance menu publishes the exact bytes it published
       // before any of this existed.
       ...appearanceField(map),
+      ...cardLayoutField(cardLayout),
       ...gazetteerField(gazetteerBase, usable),
       settings: readEmbedSettings(map.settings),
       allowedDomains: map.allowedDomains,
@@ -235,6 +247,28 @@ function appearanceField(map: AppMap): { appearance?: MapAppearance } {
   };
 
   return isPlainAppearance(appearance) ? {} : { appearance };
+}
+
+/**
+ * The card design, or nothing at all.
+ *
+ * Resolved on the way out — every number clamped, every misplaced block dropped
+ * — so the embed reads a layout it can draw without re-deciding any of the
+ * rules. `resolveCardLayout` runs regardless of whether the caller already
+ * resolved its input, which is what keeps this safe against a hand-edited
+ * value and idempotent against an already-clamped one.
+ *
+ * Omitted when it is the untouched default, which is the load-bearing half. An
+ * account that has never opened the designer publishes the exact bytes it
+ * published before any of this existed, on every map it owns, and the embed
+ * falls back to the card it has always drawn (§7).
+ */
+function cardLayoutField(
+  cardLayout: CardLayout | null | undefined,
+): { cardLayout?: CardLayout } {
+  const layout = resolveCardLayout(cardLayout ?? {});
+
+  return isDefaultCardLayout(layout) ? {} : { cardLayout: layout };
 }
 
 /**
@@ -387,7 +421,15 @@ function toSnapshotPlace(
   // An all-closed week is the same as no hours at all, and shipping seven nulls
   // per place would be pure weight on a 3,000-place map.
   if (!isEmptyHours(place.hours)) snapshot.hours = place.hours ?? undefined;
+  /*
+   * The cover always, the gallery only when there is one.
+   *
+   * `photoUrl` keeps exactly the meaning it has always had, so a card built by
+   * an embed published before galleries existed still finds its picture — and a
+   * place with a single photo pays no duplicate bytes for saying so twice.
+   */
   if (place.photoUrl) snapshot.photoUrl = place.photoUrl;
+  if (place.photoUrls.length > 1) snapshot.photoUrls = place.photoUrls;
 
   // Narrowed, not copied: a place can be wearing a tag the map deleted, and the
   // embed has nothing to resolve that id against. Omitted entirely when nothing
@@ -454,13 +496,31 @@ function toSnapshotShape(shape: Shape): SnapshotShape {
   ]);
 
   /*
-   * `from` and `to` are deliberately not carried across. They name rows in a
-   * database the embed has no access to and no reason to want one — the points
-   * above are already resolved, so the bond has nothing left to contribute
-   * except bytes on every visitor's download.
+   * `from`, `to` and a route's `stops` are deliberately not carried across. They
+   * name rows in a database the embed has no access to and no reason to want one
+   * — the points above are already resolved, so the bond has nothing left to
+   * contribute except bytes on every visitor's download.
+   *
+   * `durationS` is the exception, and the reason is that it is the one thing the
+   * geometry cannot give back. A line's *length* is a sum over its own points,
+   * measured wherever it is drawn (packages/shared/geo.ts), which is why no
+   * distance is written here — a number shipped beside the geometry it describes
+   * is one republish away from disagreeing with it. How long the drive takes
+   * depends on speed limits and turn penalties that never reach the points, so
+   * either it travels or the visitor never learns it.
+   *
+   * Omitted for a hand-drawn line, on the rule every optional field here follows:
+   * a line published before routes existed must keep publishing the same bytes.
    */
   return shape.geometry.kind === "line"
-    ? { ...common, kind: "line", points }
+    ? {
+        ...common,
+        kind: "line",
+        points,
+        ...(shape.geometry.route
+          ? { durationS: Math.round(shape.geometry.route.durationS) }
+          : {}),
+      }
     : { ...common, kind: "polygon", points };
 }
 

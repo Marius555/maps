@@ -14,5 +14,6 @@ export const TABLES = {
   places: "places",
   shapes: "shapes",
   groups: "groups",
+  cardDesigns: "cardDesigns",
   subscriptions: "subscriptions",
 } as const;

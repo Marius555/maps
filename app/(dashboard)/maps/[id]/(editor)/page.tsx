@@ -5,6 +5,7 @@ import { MapEditor } from "@/components/editor/map-editor";
 import { Container } from "@/components/ui/container";
 import { PageTitle } from "@/components/ui/page-title";
 import { requireUser } from "@/lib/auth/current-user";
+import { getCardDesign } from "@/lib/repositories/card-design.repository";
 import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
 import { listAllGroups } from "@/lib/repositories/groups.repository";
@@ -61,6 +62,7 @@ export default async function MapEditorPage(props: PageProps<"/maps/[id]">) {
         initialPlaces={data.places}
         initialShapes={data.shapes}
         initialGroups={data.groups}
+        initialCardDesign={data.cardDesign}
         placeLimit={data.placeLimit}
         shapeLimit={data.shapeLimit}
       />
@@ -73,11 +75,12 @@ async function loadEditor(
   mapId: string,
   userId: string,
 ) {
-  const [map, places, shapes, groups, plan] = await Promise.all([
+  const [map, places, shapes, groups, cardDesign, plan] = await Promise.all([
     loadMap(userId, mapId),
     listAllPlaces(ctx, mapId),
     listAllShapes(ctx, mapId),
     listAllGroups(ctx, mapId),
+    getCardDesign(ctx),
     getUserPlan(userId),
   ]);
 
@@ -86,6 +89,7 @@ async function loadEditor(
     places,
     shapes,
     groups,
+    cardDesign,
     placeLimit: PLAN_LIMITS[plan].places,
     /*
      * The shape limit is back, and the importer is what wanted it.

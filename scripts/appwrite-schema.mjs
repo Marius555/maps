@@ -140,6 +140,20 @@ export const TABLES = [
       varchar("email", 254),
       varchar("url", 512),
       text("hours"),
+      /*
+       * The location's photos, cover first.
+       *
+       * A real array column rather than JSON, on the same argument `tags` makes:
+       * these are ids, they are read whole, and reordering one is a write of the
+       * array rather than a rewrite of a text blob.
+       *
+       * `photoId` below is the single-photo column this replaced, and it is
+       * never written again — every write here also clears it. So the gallery is
+       * "`photoIds` if the row has any, else the legacy `photoId`", which is one
+       * source of truth at every instant, and rows written before this column
+       * existed keep showing the photo they always showed with no migration.
+       */
+      varchar("photoIds", 36, { array: true }),
       varchar("photoId", 36),
       integer("sortOrder", { min: 0, xdefault: 0 }),
       float("geocodeConfidence", { min: 0, max: 1 }),
@@ -234,6 +248,32 @@ export const TABLES = [
         type: "key",
         columns: ["mapId", "sortOrder"],
         orders: ["asc", "asc"],
+      },
+    ],
+  },
+  {
+    // The design of the card a visitor sees when they click a location: which
+    // blocks it holds, in which of its three zones, and how big each one is.
+    // One row per account, found by `userId` rather than a fixed row id — every
+    // map an owner has shares one card design, so a customer with three maps
+    // redesigns the popup once rather than three times. Used to live as a
+    // `cardLayout` column on `maps`; that column is still there, unused, since
+    // this script never drops one.
+    id: "cardDesigns",
+    name: "Card designs",
+    columns: [
+      varchar("userId", 36, { required: true }),
+      // Bounded by the zone rules in packages/shared/card-layout.ts (only
+      // dividers and spacers repeat), so a real card is a dozen small objects;
+      // `text` regardless, because it is read whole and never queried on.
+      text("cardLayout"),
+    ],
+    indexes: [
+      {
+        key: "idx_carddesigns_userId",
+        type: "unique",
+        columns: ["userId"],
+        orders: ["asc"],
       },
     ],
   },

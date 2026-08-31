@@ -122,6 +122,30 @@
   --duration-panel: 220ms;
 
   --font-sans: var(--font-instrument-sans);
+
+  /*
+   * The pointing arrow, drawn by us — lucide's `mouse-pointer-2`.
+   *
+   * The one exception to the rule stated further down at `.is-draggable`, which
+   * refuses drawn cursors because a hand that does not match the operating
+   * system's other twenty reads as broken. This is not a second drawing of
+   * something the OS already has a word for: it *is* the arrow, and it replaces
+   * a `crosshair`, which is the wrong verb for every tool that has it. Drawing
+   * a pin, drawing a route and dropping a location are all "put this exact
+   * thing here", and a crosshair says "measure" — a tip you aim with says what
+   * these tools actually do.
+   *
+   * `4 4` is the hotspot: the path's own corner sits at (4.04, 4.04) in the
+   * 24-unit box, so that is the pixel the click lands on. Get this wrong and
+   * every pin drops a few metres from where it was aimed. The fallback keyword
+   * after the comma is required by the spec and is what a browser that cannot
+   * load the image falls back to.
+   *
+   * White fill, near-black stroke, and both are load-bearing: this cursor spends
+   * its life over map tiles, which are pale in one theme and near-black in the
+   * other, and a single-colour arrow disappears into one of them.
+   */
+  --cursor-point: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23fff' stroke='%23111' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z'/%3E%3C/svg%3E") 4 4, default;
 }
 
 .dark,
@@ -344,8 +368,20 @@
  * from the map frame's height. The fallback matters: the card is rendered in the
  * commit before the hook's first measurement, and an uncapped frame of that is a
  * flash of a card taller than the map.
+ *
+ * And how short it may get, which is a separate fact and a newer one. The card
+ * is content-sized, so a location holding nothing but its name opened seventy
+ * pixels tall — a title, a button and no card around either. A floor gives it
+ * the shape of the thing it is; the zone padding above it is what stops the
+ * content sitting on the edges of that shape.
+ *
+ * `min()` and not a bare `min-height`, because `min-height` *beats*
+ * `max-height` in CSS. On a short map frame the floor would otherwise win over
+ * the cap the anchor hook just measured and push the card out of the viewport
+ * it was measured against.
  */
 .map-card {
+  min-height: min(8.75rem, var(--map-anchor-max-height, 24rem));
   max-height: var(--map-anchor-max-height, 24rem);
 }
 
@@ -409,9 +445,44 @@
  * The drag handles are markers too, but they never coexist with this: the
  * handles hook is passed `null` while a tool is armed, so there are none to
  * disable. See use-shape-handles.ts.
+ *
+ * **`!important`, and it is the whole rule working.** MapLibre writes this same
+ * property *inline* on a marker of its own accord — `Marker._onUp` in
+ * maplibre-gl 6.2.0 ends with `this._element.style.pointerEvents = "auto"`, and
+ * `_onUp` runs on the mouseup after any mousedown inside a draggable marker, a
+ * plain click included. So every pin the owner has ever clicked or dragged
+ * carries an inline declaration that beats an ordinary rule here, permanently,
+ * for the life of the page. The symptom was the route tool: on a freshly loaded
+ * map every stop landed, and after one click on a pin that pin alone stopped
+ * taking stops and started being grabbed instead. Second instance of this trap
+ * in this file — see the note on `opacity: 1` below.
  */
 .drawing-shapes .maplibregl-marker {
-  pointer-events: none;
+  pointer-events: none !important;
+}
+
+/*
+ * What an armed tool's cursor actually is.
+ *
+ * `maplibregl-crosshair` is MapLibre's own class and map-canvas-impl.tsx toggles
+ * it, for the reasons written there: the cursor the pointer reads comes from
+ * `.maplibregl-canvas-container.maplibregl-interactive`, a *child* of the
+ * container, and MapLibre's rule for it sits at (0,2,0) — a utility class on the
+ * container is dead over the canvas. So the class stays, and this changes what
+ * it draws.
+ *
+ * The selectors are MapLibre's own, repeated verbatim, plus `!important`.
+ * Matching its specificity is not enough on its own: maplibre-gl.css is injected
+ * at runtime by the map's dynamic chunk, so which of the two stylesheets comes
+ * last is not something this file can decide. `!important` also beats the inline
+ * cursor `use-shape-layers.ts` writes on a shape hover — which is correct, and
+ * is the same conclusion that file already reached from the other side: an armed
+ * tool owns the pointer for the length of its gesture.
+ */
+.maplibregl-crosshair,
+.maplibregl-crosshair .maplibregl-interactive,
+.maplibregl-crosshair .maplibregl-interactive:active {
+  cursor: var(--cursor-point) !important;
 }
 
 /*
@@ -433,7 +504,7 @@
   background: var(--surface);
   border: 2px solid var(--foreground);
   box-shadow: 0 1px 4px oklch(0% 0 0 / 0.35);
-  cursor: grab;
+  cursor: pointer;
   transition: transform 120ms ease-out;
 }
 
@@ -518,8 +589,9 @@
   place-items: center;
   width: 2.75rem;
   height: 2.75rem;
-  /* Draggable pins advertise it. Falls back to pointer where drag is disabled. */
-  cursor: grab;
+  /* The one hand the app uses — see `.is-draggable`. A pin is clickable whether
+     or not it can be dragged, so the same cursor is right either way. */
+  cursor: pointer;
   background: none;
   border: 0;
   padding: 0;
@@ -569,14 +641,26 @@
  * between. The teardrop this replaced needed a -40.83% nudge to put its *tip* on
  * the coordinate, and that number had to be repeated in every transform below.
  */
-.map-pin--icon .map-pin__dot,
-.map-pin--icon .map-pin__pulse {
+.map-pin--icon .map-pin__dot {
   display: none;
+}
+
+/* The halo has to clear the shape it comes out from, and the shape is more than
+   twice the dot's size. At the keyframe's scale(3.2) the dot's 0.875rem peaks at
+   2.8rem — barely past a 2.25rem pin, which reads as a smudge under it rather
+   than a ripple out of it. */
+.map-pin--icon {
+  --map-pin-pulse-size: 1.5rem;
 }
 
 .map-pin__shape {
   --map-pin-size: 2.25rem;
 
+  /* Above the pulse, which is a later sibling: `setPinIcon` prepends the shape,
+     so without this the ripple washes over the pin instead of out from behind
+     it. */
+  position: relative;
+  z-index: 1;
   display: block;
   width: var(--map-pin-size);
   height: var(--map-pin-size);
@@ -644,16 +728,29 @@
   border-radius: 9999px;
 }
 
-/* The drop. Motion here is feedback — it says "that landed" (§8). */
+/*
+ * The drop. Motion here is feedback — it says "that landed" (§8).
+ *
+ * The animation is on `.map-pin--dropped`, not here. CSS starts an animation
+ * when the element it matches enters the document, so a rule on the bare pulse
+ * was really animating "a marker element was created": it played for every pin
+ * on page load, twice for every drop (the optimistic row is swapped for the
+ * server's and the element rebuilt), and never for a marker the diff pass
+ * recycled. `playDrop` in components/map/pin-marker.ts adds the class, and
+ * lib/map/dropped-pins.ts is what knows a location was actually dropped.
+ */
 .map-pin__pulse {
   position: absolute;
   inset: 0;
   margin: auto;
-  width: 0.875rem;
-  height: 0.875rem;
+  width: var(--map-pin-pulse-size, 0.875rem);
+  height: var(--map-pin-pulse-size, 0.875rem);
   border-radius: 9999px;
   background: var(--pin-color, var(--accent));
   opacity: 0;
+}
+
+.map-pin--dropped .map-pin__pulse {
   animation: map-pin-drop 420ms ease-out 1;
 }
 
@@ -665,6 +762,190 @@
   100% {
     opacity: 0;
     transform: scale(3.2);
+  }
+}
+
+/*
+ * While the route tool is armed, every pin says it is the thing to click.
+ *
+ * A route is made of locations and only locations — a click on open ground adds
+ * nothing (lib/map/route-stops.ts) — and nothing on screen used to say so. The
+ * cursor changed and a hint bar appeared, while the pins looked exactly as they
+ * had a moment before, so the tool read as one you drew with.
+ *
+ * Two halves, and they do different jobs. The scale holds for the whole gesture,
+ * which is what keeps the affordance up while you work; it also puts the pin at
+ * about the 22px `ROUTE_SNAP_RADIUS_PX` grabs from, so what you can hit is what
+ * you can see. The ripple is three passes and then done — a Pro map is 3,000
+ * markers (§6), and an endless animation on all of them is a compositor bill for
+ * information already delivered.
+ *
+ * A hover still reads over the top of it — `.map-pin:hover .map-pin__dot` is a
+ * pseudo-class more specific, so it wins wherever it sits in the file. Selected
+ * does not, and should not: while the tool is armed the answer to "which pin
+ * matters" is all of them — except the ones below, which cannot be stops at all.
+ */
+.picking-pins .map-pin__dot,
+.picking-pins .map-pin__shape {
+  transform: scale(1.2);
+}
+
+.picking-pins .map-pin__pulse {
+  animation: map-pin-drop 900ms ease-out 3;
+}
+
+/*
+ * The pins that cannot be stops, while the route tool is armed.
+ *
+ * A route's stops are locations and only locations, and the routing engine
+ * cannot attach every location to a road — a pin in the middle of a field has no
+ * road to snap to, and a route through it comes back refused. Those pins used to
+ * scale and ripple with the rest, promising a click that then did nothing, which
+ * is exactly how a rule reads as a broken tool.
+ *
+ * So they say the opposite of what the block above says: no scale, no ripple,
+ * grey. The *stillness* carries as much as the colour, against neighbours that
+ * are visibly bigger and pulsing — and clicking one still explains itself in a
+ * toast (components/map/shapes/map-shapes.tsx), because a control that only
+ * goes quiet is indistinguishable from a broken one.
+ *
+ * Scoped entirely under `.picking-pins`. Outside this gesture a location with no
+ * road near it is an ordinary location that opens an ordinary card, and greying
+ * it there would be inventing a second meaning for the word. `transform: none`
+ * rather than a smaller scale, so it also cancels the rule above at equal
+ * specificity by coming later in the file.
+ *
+ * No `pointer-events` and no cursor: `.drawing-shapes .maplibregl-marker` has
+ * already taken every marker out of the pointer's way, and the click that has to
+ * be refused is one the *map* receives.
+ *
+ * **The custom properties go on the children, and putting them on
+ * `.map-pin--unroutable` itself silently does nothing.** `setPinVars` in
+ * components/map/use-place-markers.ts writes `--pin-color`, `--pin-ring` and
+ * `--pin-icon-color` as *inline* declarations on the marker element, and inline
+ * wins on the element it is written on. Declared here, on the elements whose own
+ * rules actually consume them — `.pin-svg__body`, `.pin-svg__glyph` and
+ * `.map-pin__dot`'s background — they beat the value inherited from the parent,
+ * because a declaration on the element itself outranks anything it inherits.
+ *
+ * This replaced `filter: grayscale(1)` plus `opacity: 0.5`, which was the wrong
+ * tool twice over. Grayscale preserves luminance, so a bright pin came out light
+ * grey and a white glyph stayed white; the fade then made the whole thing read
+ * as *faint* rather than as *off*, and on a dark basemap a faint pin is a pin
+ * you cannot see at all rather than one you are being told not to click. Named
+ * colours say the thing outright and survive all sixteen basemaps.
+ *
+ * The glyph is darker than the body rather than the same grey. Its default is
+ * `--accent-foreground`, which is near-white and is what makes an icon legible
+ * on a saturated pin; grey on grey erases the icon, and an unreadable pin is not
+ * a disabled pin, it is a smudge.
+ */
+.picking-pins .map-pin--unroutable .map-pin__dot,
+.picking-pins .map-pin--unroutable .map-pin__shape {
+  --pin-color: oklch(72% 0.005 260);
+  --pin-ring: oklch(15% 0.01 260);
+  --pin-icon-color: oklch(32% 0.01 260);
+
+  transform: none;
+}
+
+/*
+ * The dot's outline is a real `border`, not one of the pin variables, so it has
+ * to be named separately — see `.map-pin__dot` above. A location with no icon is
+ * a plain ball, and the ring is the only thing distinguishing a grey one from a
+ * pale category colour.
+ *
+ * Whatever goes here must not be `opacity`, and must not go on the marker. See
+ * the `.picking-pins .map-pin--checking` note below for why.
+ */
+.picking-pins .map-pin--unroutable .map-pin__dot {
+  border-color: var(--pin-ring);
+}
+
+.picking-pins .map-pin--unroutable .map-pin__pulse {
+  animation: none;
+}
+
+/*
+ * The one pin a click is waiting on.
+ *
+ * A click on a pin nobody has asked the engine about blocks until the answer
+ * lands — about a second on the public server, nothing at all on a warm cache
+ * (components/map/routes/use-routability.ts). Unmarked, that second is a click
+ * that appeared to do nothing, which is the exact failure the grey pins exist to
+ * prevent, arriving one step earlier.
+ *
+ * A pulse rather than a spinner: there is no room for chrome on a 36px marker,
+ * and the pin already knows how to ripple. Never both this and `--unroutable` —
+ * a pin is either being asked about or answered for.
+ *
+ * On the children, and never on `.maplibregl-marker`: MapLibre writes
+ * `opacity: 1` inline on every marker element of its own accord (it is how
+ * `opacityWhenCovered` works), so an opacity rule up there is silently ignored.
+ * That is worth knowing before writing the next one.
+ */
+.picking-pins .map-pin--checking .map-pin__dot,
+.picking-pins .map-pin--checking .map-pin__shape {
+  animation: map-pin-checking 900ms ease-in-out infinite;
+}
+
+@keyframes map-pin-checking {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+}
+
+/*
+ * The pins this route has already been drawn through.
+ *
+ * A route is clicked out pin by pin, and nothing on the map said which ones had
+ * been taken. The draft runs between the stops, but a pin sitting under the
+ * middle of a long leg looks exactly like one that was clicked, so the only way
+ * to find out was to finish the route and read the card.
+ *
+ * Breathing rather than a static mark, and for the whole gesture rather than a
+ * burst, because the question it answers is asked repeatedly — every click adds
+ * a stop and moves the draft, and "which ones are mine" has to still be
+ * answerable at the tenth. That is affordable here and is not on the ambient
+ * `.picking-pins` ripple above for one reason: this set is bounded by
+ * `MAX_ROUTE_STOPS` at 25, where that one plays on every marker of a map §6
+ * allows 3,000 locations in.
+ *
+ * On the children, never on `.map-pin` or `.maplibregl-marker` — MapLibre writes
+ * `opacity` and `pointer-events` inline up there, as the two notes above record.
+ * Three classes, so it beats the `.picking-pins` scale at two and the hover rule
+ * at two: a stop under the cursor keeps breathing, which is right, because it is
+ * still a stop. It cannot collide with `--unroutable`; `take()` in
+ * use-draw-route.ts refuses a grey pin before it can ever become one.
+ */
+.picking-pins .map-pin--stop .map-pin__dot,
+.picking-pins .map-pin--stop .map-pin__shape {
+  /* The static carrier, and it is not decoration. The blanket
+     `prefers-reduced-motion` rule at the bottom of this file cuts every
+     animation to a single 0.01ms pass, so a state told only in motion is told to
+     nobody — this held size is what those readers get instead, and it still
+     stands a stop apart from the 1.2 every other pin is wearing. */
+  transform: scale(1.4);
+  animation: map-pin-stop 1100ms ease-in-out infinite;
+}
+
+/* Both ends re-state a scale rather than leaving one out, the way
+   `map-pin-checking` does: an unstated end frame is read from the element's own
+   `transform`, and that would make the breath drift with whatever rule last won
+   there. */
+@keyframes map-pin-stop {
+  0%,
+  100% {
+    transform: scale(1.2);
+  }
+  50% {
+    transform: scale(1.55);
   }
 }
 
@@ -801,6 +1082,35 @@
 }
 
 /*
+ * The copy in your hand, once letting go would throw the thing away.
+ *
+ * The card designer removes a block by dragging it off the card, and that used
+ * to happen in silence — the block simply vanished, and nothing beforehand said
+ * it would. The signal has to be *here*, on the ghost, because by the time the
+ * pointer has left the card it can be anywhere on screen, including nowhere near
+ * the workspace that is also marking itself (see DesignerCanvasArea).
+ *
+ * A ring and no words. The sentence belongs to the workspace's own pill, which
+ * is always in view — a label hung off the ghost repeats it a second time on
+ * the same screen, and falls off the bottom of the window whenever the drag
+ * ends up down there.
+ *
+ * Driven by a class on `<body>` rather than by React, for the reason this whole
+ * file exists for the ghost: it is plain DOM moved sixty times a second, and
+ * restyling it from a component would be a render per pointer sample. The class
+ * is toggled once, when the answer changes.
+ *
+ * `--danger` is a theme variable, so this reads correctly on a dark dashboard
+ * without a second rule.
+ */
+body.is-drop-remove .row-ghost {
+  border-color: var(--danger);
+  box-shadow:
+    0 0 0 2px var(--danger),
+    0 10px 24px oklch(0% 0 0 / 0.28);
+}
+
+/*
  * The row left behind, for the length of the gesture.
  *
  * It stays in the list rather than collapsing out of it, so nothing shifts under
@@ -813,32 +1123,422 @@
 }
 
 /*
- * The drag cursors — the browser's own hands, deliberately.
+ * ── The card designer's drop chrome ──────────────────────────────────────────
  *
- * These were briefly drawn as SVG, to fix a real problem: the hand Windows draws
- * is white, and this panel is white, so the resting cursor is easy to lose.
- * Drawn hands solved that and looked worse than the problem — a cursor is a piece
- * of the operating system's furniture, and one that does not match the other
- * twenty on screen reads as broken rather than as designed. Reverted.
+ * All of it lives on an overlay above the card rather than in the card's own
+ * flex column — see components/card/designer/card-drop-overlay.tsx for why. The
+ * consequence for this file is that **none of these rules can reflow anything**,
+ * which is what lets a mark be the full size of the block it is promising. The
+ * lanes they replaced had to stay at one fixed 8px height precisely because they
+ * were in the layout, and even then two of them either side of a thin divider
+ * drew over each other.
+ *
+ * `card-drop-halo` is the pulse on the removal strip's trash icon, and only on
+ * the icon — it used to wrap the whole 4rem pill, which at the strip's present
+ * size would be a column the height of the card breathing in and out beside it.
+ *
+ * **Its 0% and 100% are the resting appearance, and that is not stylistic.** The
+ * blanket `prefers-reduced-motion` rule at the bottom of this file sets
+ * `animation-duration: 0.01ms` and `animation-iteration-count: 1`, so an animated
+ * element lands on its final keyframe and stays there. A halo that peaked at 100%
+ * would leave every reduced-motion user with a permanently swollen icon.
+ *
+ * It grows by `inset` rather than by `transform: scale()`. `inset` grows any
+ * shape by the same few pixels on every side, which is what a ripple actually
+ * is, and it leaves `transform` free — which matters here, because Motion owns
+ * the transform of the element this sits inside.
+ */
+@keyframes card-drop-halo {
+  0%,
+  100% {
+    opacity: 0;
+    inset: 0;
+  }
+  50% {
+    opacity: 0.3;
+    inset: -6px;
+  }
+}
+
+/*
+ * The shadow layer over the card while something is in the air.
+ *
+ * The point of it is separation: the drop marks used to be dashed boxes drawn
+ * *among* the blocks, so a card with anything on it became a tangle of the
+ * design and the chrome for arranging it. A veil under the marks and over the
+ * design settles which of the two the eye is reading.
+ *
+ * Dark rather than a theme surface, and the same in both themes, because it has
+ * to darken a card whose own background the owner picked — including a dark one.
+ * Light: the card stays legible, since knowing what you are arranging around is
+ * the reason to look at it at all, and at 0.35 the whole workspace read as grey
+ * rather than as a card with something over it.
+ *
+ * No fade of its own. The overlay this sits in is a `motion.div` that fades the
+ * whole layer in and out with the gesture (card-drop-overlay.tsx) — a second
+ * animation here would be two easings on one element.
+ */
+.card-drop-scrim {
+  background: oklch(0% 0 0 / 0.28);
+}
+
+/*
+ * The line shown when the card has nowhere at all to put what is in the air.
+ *
+ * Its own dark chip rather than text on the veil. The veil is deliberately
+ * medium — the card underneath stays legible, which is the point of it — so
+ * light text laid straight on it sits over a still-bright card and reads at
+ * nothing like 4.5:1. The chip supplies its own ground, and is then the same
+ * contrast on every card whatever colour its owner chose.
+ */
+.card-drop-note {
+  border-radius: 9999px;
+  background: oklch(0% 0 0 / 0.78);
+  padding: 0.375rem 0.75rem;
+  color: oklch(100% 0 0 / 0.95);
+}
+
+/*
+ * One place the block could go: a dashed box the size of the block, and nothing
+ * else in it.
+ *
+ * **An outline with no fill and no content.** The mark this replaces drew the
+ * real block — its text, on an opaque ground mixed from the card's own
+ * background — so a card with anything on it had that thing hidden behind a
+ * preview of something else, and the whole gesture read as the design being
+ * replaced by the chrome for arranging it. The dashes say *where*; the card
+ * underneath is still what says *what*.
+ *
+ * `border`, not `outline`. The box is sized by us now (`dropSlots` works out
+ * both its top and its height), so there is nothing to avoid adding height to —
+ * and a border is clipped by the card's own `overflow: hidden` the way the
+ * content is, while an outline offset outwards is shaved off at the edges.
+ *
+ * **There is one of these on screen at a time**, and that is why it is drawn at
+ * full accent. The overlay draws it for the place the pointer is in and no other
+ * (card-drop-overlay.tsx). Every *other* place the block could go is drawn at the
+ * same time by `.card-drop-region` below, which is the same vocabulary two steps
+ * quieter — a dozen boxes at this weight crowding the design was the thing that
+ * had to be kept quiet, and the split is what lets both answers be on screen at
+ * once.
+ *
+ * **It stays dashed.** A solid edge is the one difference the eye reads as
+ * *finished* rather than as *proposed*, and the card has not taken the block
+ * yet. Dashes mean a place a block can go, and nothing else on this layer draws
+ * an edge.
+ *
+ * **Nothing here transitions and nothing here transforms.** Motion owns the
+ * element's `transform` outright — the settle from 92% as it arrives is its —
+ * and the box's own top, height and width are set straight from the measured
+ * geometry, so it follows the pointer from place to place instead of easing
+ * along behind it.
+ */
+.card-drop-slot {
+  border: 2px dashed var(--accent);
+  border-radius: 0.375rem;
+}
+
+/*
+ * Somewhere the block could go — all of them, for the whole gesture.
+ *
+ * The same vocabulary as `.card-drop-slot` and deliberately so: dashes mean a
+ * place a block can go, and these are places. What differs is the volume. There
+ * are as many of these as the card has room in it, they are on screen from the
+ * moment the block leaves the palette, and they are chrome laid over a design
+ * someone is looking at — so a thin edge at under half strength, where the one
+ * bold box is the answer and these are the question.
+ *
+ * **Areas, not slots.** A run of free space holds as many insertion points as the
+ * block in hand fits into, and outlining thirteen stacked boxes on an empty card
+ * is what the one-outline design was retreating from. `dropRegions` draws the
+ * free space those insertion points were measured from — not the union of their
+ * boxes, which starts and stops wherever the marks happen to fall — so what is
+ * drawn here is *anywhere in here* while the bold mark keeps saying *exactly
+ * here*. A logo is no exception: one box per area, the full width of the line,
+ * with where it sits *across* that line left to the bold square.
+ *
+ * Nothing transitions: these are set from geometry measured once when the drag
+ * begins and they do not move again, so a transition would only be something to
+ * catch up with when the next gesture starts.
+ */
+.card-drop-region {
+  border: 1px dashed color-mix(in oklab, var(--accent) 45%, transparent);
+  border-radius: 0.375rem;
+}
+
+/*
+ * A place with no room in it — the insertion point between two blocks that are
+ * already touching, or into a zone with nothing to spare.
+ *
+ * Drawn as a rule rather than a box, because a box would be promising space the
+ * card does not have: dropping here pushes everything below it down, which is
+ * the honest outcome, and the mark should look like the thin thing it is.
+ *
+ * **Only ever drawn under the pointer**, which is why there is one rule here and
+ * not a resting pair. A seam always lands on a boundary something else already
+ * owns — the bottom edge of the block above it, or, for an empty zone, the card
+ * edge where the next zone's first dashed box begins. Shown at rest that was two
+ * lines on one pixel at the top, the middle and the bottom of an empty card:
+ * chrome ruled across the design rather than a place to put something. Shown
+ * only when it is the answer, it is unambiguous and there is exactly one.
+ *
+ * Dashed, like every other mark on this layer, and that is a rule about the
+ * whole overlay rather than about this line. It used to be solid, on the
+ * argument that by the time a seam draws it is no longer asking to be noticed —
+ * but a solid rule at a block's edge, a solid accent ring on the block itself
+ * and a dashed box over the top of both were three vocabularies for one answer,
+ * and the card read as three different things happening at once. There is now
+ * one vocabulary: **dashes mean a place a block can go**, and nothing else on
+ * this layer draws an edge.
+ *
+ * Two pixels rather than three, since it no longer has to out-shout the dashes
+ * around it. No outer ring: a `box-shadow` spread is drawn outside the border
+ * box, so on a thin rule it read as a fuzzy band across the card rather than as
+ * a line. The same reason `--active` above lost its.
+ */
+.card-drop-seam {
+  border-top: 2px dashed var(--accent);
+}
+
+/*
+ * A line that already has something on it — the block in the air cannot go here.
+ *
+ * **Not dashed, and that is the whole design of it.** Every other mark on this
+ * layer is dashed because dashes mean a place a block can go; this is the one
+ * answer that is not one, so it may not borrow the vocabulary. A hatch is the
+ * opposite reading — a surface ruled out rather than an edge proposed — and it is
+ * the hatch `.card-spacer-hint` already uses on this canvas for "this area is a
+ * thing, not a gap".
+ *
+ * **Not `--danger`.** Red on this canvas already means the removal wall
+ * (`body.is-drop-remove .row-ghost`), so a red box over a block reads as *this
+ * will be deleted* — which is the one outcome a refused drop is specifically not.
+ * The refusal has to look like nothing happening.
+ *
+ * Its own dark ground, for the reason `.card-drop-note` has one: the veil over
+ * the card is deliberately medium, so a hatch mixed from `currentColor` would
+ * read at a different strength on every card its owner styled differently. On its
+ * own ground it is the same refusal on all of them.
+ */
+.card-drop-blocked {
+  border-radius: 0.375rem;
+  background-color: oklch(0% 0 0 / 0.5);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    oklch(100% 0 0 / 0.18) 0 5px,
+    transparent 5px 10px
+  );
+}
+
+/*
+ * A gap on the designer canvas, so it can be seen and picked up.
+ *
+ * The Space block draws nothing — that is the entire point of it — which on a
+ * surface you arrange by hand makes it a block with no edges, no surface to aim
+ * at and no way to tell it apart from the card behind it. A faint hatch says
+ * "this space is a thing someone put here" without ever looking like a design
+ * element in its own right, and it is drawn only in the studio: a visitor's card
+ * gets the empty box, because there it really is nothing.
+ *
+ * `currentColor` at 7%, so it reads the same on a light card and a dark one —
+ * including a card whose background its owner chose.
+ */
+.card-spacer-hint {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, currentColor 7%, transparent) 0 4px,
+    transparent 4px 8px
+  );
+  border-radius: 0.25rem;
+}
+
+/*
+ * The removal target: a wall down the right of the workspace.
+ *
+ * It was a strip the height of the card, floating with a gap around it — which
+ * reads as a panel that appeared, not as something the gesture summoned. A wall
+ * is flush: it runs the full height of the workspace, hard against its right
+ * edge, and it slides in from off-screen right when a block is picked up (see
+ * `wallMotion` in components/ui/list-row-motion.ts). Only its *left* edge is
+ * drawn, because that is the only edge it has — the other three are the
+ * workspace's own.
+ *
+ * **Clamped, and that is the difference between a target and an alarm.** It
+ * wants to be the gap between the card's right edge and the workspace's — that
+ * is where the hand already is, and it is why this is not pinned to the far
+ * right of the column the way an earlier version was. But on a wide screen
+ * beside a 320px card that gap is half the workspace, and a red slab that size
+ * appearing the instant a block is picked up is not something you aim at, it is
+ * something that goes wrong. So `clamp` keeps it between a thumb's width and
+ * 9rem whatever the workspace does. `--card-w` is published by
+ * `DesignerCanvasArea`; the fallback is the default card.
+ *
+ * **It also clips.** The wall slides in from beyond the right edge, and a
+ * translated box hanging past the right edge of a scrollable parent adds to that
+ * parent's scrollable width — which is a horizontal scrollbar appearing and the
+ * page shifting sideways, every time a block is picked up. `overflow: hidden`
+ * here is what makes the entrance free; `.card-remove-zone__slide` inside is
+ * what actually moves.
+ */
+.card-remove-zone {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  width: clamp(4.5rem, calc(50% - (var(--card-w, 320px) / 2) - 20px), 9rem);
+  overflow: hidden;
+}
+
+/* The part that travels. Nothing else about it — see `wallMotion`. */
+.card-remove-zone__slide {
+  height: 100%;
+}
+
+/* The whole strip is the target. It has slack of its own now, so the
+   transparent padding this used to carry would only shrink the thing the user
+   is aiming at. */
+.card-remove-zone__hit {
+  height: 100%;
+}
+
+/*
+ * The wall's own face.
+ *
+ * **One border, on the left.** A box outlined on all four sides is a panel; a
+ * surface with a single edge facing the hand is a wall the gesture is pushing
+ * against. The other three sides are the workspace's own edges, so drawing them
+ * would be drawing them twice.
+ *
+ * **Translucent, not `--surface`.** It used to be the theme's opaque surface,
+ * which on a light theme is a white column the height of the card appearing
+ * beside a white card — by far the brightest thing on the screen at the moment
+ * the user is looking at something else. A wash of the danger colour says the
+ * same thing without taking the eye, and the blur keeps the workspace behind it
+ * legible as *behind* rather than *through*.
+ */
+.card-remove-pill {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  border-left: 2px dashed color-mix(in oklab, var(--danger) 45%, transparent);
+  background: color-mix(in oklab, var(--danger) 8%, transparent);
+  backdrop-filter: blur(2px);
+  color: var(--muted);
+  /* Cast leftwards, towards the card — the direction the wall came from. */
+  box-shadow: -8px 0 20px oklch(0% 0 0 / 0.1);
+  transition:
+    background var(--duration-fast) var(--ease-out-fluid),
+    border-color var(--duration-fast) var(--ease-out-fluid),
+    color var(--duration-fast) var(--ease-out-fluid);
+}
+
+/* What the halo is drawn around — the icon alone, not the strip. */
+.card-remove-pill__icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.card-remove-pill__halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--danger);
+  opacity: 0;
+  animation: card-drop-halo 1.5s ease-in-out infinite;
+}
+
+/*
+ * Under the pointer: committed, and no longer asking to be noticed.
+ *
+ * The wall is translucent by design, so this deepens the same wash rather than
+ * swapping in a ground of its own — the workspace has to stay visible behind it
+ * or the card the user is dragging *from* disappears at the moment they are
+ * deciding whether to let go.
+ */
+.card-remove-pill--active {
+  border-left-style: solid;
+  border-left-color: var(--danger);
+  background: color-mix(in oklab, var(--danger) 18%, transparent);
+  color: var(--danger);
+}
+
+.card-remove-pill--active .card-remove-pill__halo {
+  animation: none;
+  opacity: 0;
+}
+
+/*
+ * The drag cursors — one hand at rest, the browser's fist while dragging.
+ *
+ * **`pointer`, not `grab`, and that is the whole of this rule.** The two are not
+ * the same drawing: `pointer` is the operating system's own hand, which ships at
+ * every scale factor and keeps its dark outline, while `grab` comes from a bitmap
+ * Chrome carries itself. Side by side on a white panel the second reads as a
+ * white hand with no edge at all, and a card studio drawn on white is where that
+ * is worst. So there is exactly one resting hand in the app now, and every
+ * surface that can be picked up shows it — rows, palette chips, card blocks, map
+ * pins, shape handles.
+ *
+ * Drawn SVG hands were tried before this and reverted, and stay refused: a cursor
+ * is a piece of the operating system's furniture, and one that does not match the
+ * other twenty on screen reads as broken rather than as designed. This fixes the
+ * same complaint by *removing* the odd one out instead of adding another.
+ *
+ * The cost is that resting on something draggable no longer looks different from
+ * resting on a link. Worth it — an affordance nobody can see is not one.
  *
  * The resting hand, on a row that can be picked up.
  */
 .is-draggable {
-  cursor: grab;
+  cursor: pointer;
 }
 
 /*
- * And the closed hand, for the length of a drag.
+ * And the same hand, unchanged, for the length of a drag.
+ *
+ * **`pointer`, not `grabbing`, and it is the rule above carried through to the
+ * end of the gesture.** `grabbing` is the other half of the bitmap pair the note
+ * above rejects: Chrome's own closed fist, which on the white locations panel is
+ * a white hand with no outline at all — the exact complaint that took `grab` out
+ * of the resting state. Picking a row up used to swap a crisp OS hand for that
+ * one, so the cursor got *worse* the moment the gesture became real. Now the
+ * hand you press with is the hand you drag with, and nothing changes shape
+ * mid-gesture.
  *
  * On `<body>` because the pointer spends the gesture nowhere near the row it
  * started on. The descendant selector and `!important` are both load-bearing: the
  * pointer crosses other rows, their buttons and the map, each setting a cursor of
- * its own, and without this the hand flickers to a pointer every time it passes
- * over one. Specificity alone cannot beat an inline cursor on the map canvas.
+ * its own, and without this the hand flickers every time it passes over one.
+ * Specificity alone cannot beat an inline cursor on the map canvas.
  */
 body.is-row-dragging,
 body.is-row-dragging * {
-  cursor: grabbing !important;
+  cursor: pointer !important;
+}
+
+/*
+ * A pin in the air, for the length of a drag out of the toolbar.
+ *
+ * The same shape as the rule above and set for the same reasons, but the arrow
+ * rather than the hand: what is being carried is a *location*, and the gesture
+ * ends by putting its tip on a point. The ghost under the pointer is the pin
+ * itself, so a hand as well would be two objects claiming the same coordinate.
+ *
+ * A class rather than the inline `body.style.cursor` this replaces
+ * (use-drag-to-add.ts), because an inline declaration cannot beat the
+ * `!important` on the crosshair rule above — dragging a pin across a map with a
+ * shape tool armed would have shown the map's cursor instead of the drag's.
+ */
+body.is-pin-dragging,
+body.is-pin-dragging * {
+  cursor: var(--cursor-point) !important;
 }
 
 /*
@@ -908,6 +1608,20 @@ body.is-row-dragging * {
 .pin-preview--xl {
   width: 4.5rem;
   height: 4.5rem;
+}
+
+/*
+ * The whole of whatever box it was given — a card's Logo block, which is square
+ * and whose size its owner drags.
+ *
+ * No cap, unlike `--lg`. That one fills a carousel slot whose width is arithmetic
+ * nobody chose, so it needs a ceiling; this one fills a box that *is* the chosen
+ * size, and capping it would mean the Size slider stopped doing anything past a
+ * number written down here.
+ */
+.pin-preview--fill {
+  width: 100%;
+  height: 100%;
 }
 
 .pin-preview > .pin-svg {
@@ -1043,6 +1757,36 @@ body.is-row-dragging * {
 }
 
 /*
+ * A pending button says so.
+ *
+ * HeroUI v3's `Button` takes `isPending` — every submit in this app passes it —
+ * and does exactly one thing with it: `.button[data-pending=true]` sets
+ * `pointer-events: none`. So the button silently stopped accepting clicks and
+ * looked identical while it did, which reads as a dead control rather than a
+ * busy one. Twenty-five call sites had the same nothing.
+ *
+ * Here rather than in a wrapper component, because `Button` is imported straight
+ * from `@heroui/react` at all of those sites: one rule fixes every one of them
+ * and every one written after it, where a wrapper fixes only the files somebody
+ * remembers to change.
+ *
+ * `::after` rather than an inserted element: `.button` is `inline-flex` with its
+ * own `gap`, so the pseudo-element lands after the label already spaced. Sized
+ * in `em` so it tracks the button's own font size across `sm`/`md`/`lg`, and
+ * drawn in `currentColor` so it is legible on every variant without naming one.
+ * `spin` is HeroUI's own keyframe, already in the bundle.
+ */
+.button[data-pending="true"]::after {
+  content: "";
+  width: 0.875em;
+  height: 0.875em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 9999px;
+  animation: spin 0.6s linear infinite;
+}
+
+/*
  * Reduced motion, once, for everything.
  *
  * This used to name `.map-pin__pulse` and `.map-pin__dot` specifically, which
@@ -1062,5 +1806,18 @@ body.is-row-dragging * {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /*
+   * The one exception, and it is the line §8 actually draws: a spinner is
+   * feedback, not decoration. Caught by the blanket rule above it would land on
+   * its final keyframe and stop — a static ring beside a label, which is the
+   * pending state told to nobody again, exactly what `.map-pin--stop` argues
+   * about further up this file. Slowed rather than stopped, and scoped to this
+   * one pseudo-element so nothing else comes back to life.
+   */
+  .button[data-pending="true"]::after {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
   }
 }

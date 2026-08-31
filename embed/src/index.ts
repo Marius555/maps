@@ -15,23 +15,20 @@ import {
   type EmbedConfig,
 } from "./config";
 import { button, el } from "./dom";
-import {
-  createFilters,
-  createTagFilters,
-  matchesCategories,
-  matchesTags,
-  tagGroupIndex,
-} from "./filters";
+import { createTagFilters, matchesTags, tagGroupIndex } from "./filters";
 import { createGazetteer } from "./gazetteer";
 import { nearestPlace, formatDistance, distanceKm, type Located } from "./geo";
 import { createList, type ListHandle } from "./list";
 import { createMap, type MapHandle } from "./map";
 import { fetchSnapshot } from "./snapshot";
 import {
+  buildSearchIndex,
   createNearestButton,
   createSearchField,
   currentPosition,
-  matchesQuery,
+  locationFailure,
+  matchesSearch,
+  searchNeedle,
 } from "./search";
 import embedCss from "./styles.css?inline";
 import "./worker";
@@ -179,11 +176,7 @@ async function render(
   const layout = el("div", "lm-layout");
   const canvas = el("div", "lm-canvas");
   const toolbar = el("div", "lm-toolbar");
-  const status = el("div", "lm-status");
-  // Announced without stealing focus, so a filter result reaches a screen
-  // reader the same moment it reaches the map.
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
+  const status = createStatus();
 
   /*
    * The two halves refer to each other, so one of them has to be built before
@@ -218,7 +211,7 @@ async function render(
   // Floating controls hang off the root rather than the layout: they are
   // positioned against the whole box, and the layout is the flex row.
   if (!list) root.append(toolbar);
-  root.append(status);
+  root.append(status.element);
 
   container.replaceChildren(root);
 
@@ -256,6 +249,61 @@ function resolveTheme(snapshot: MapSnapshot): boolean {
   );
 }
 
+type StatusHandle = {
+  element: HTMLElement;
+  /**
+   * The one way the pill is written to. Empty text hides it.
+   *
+   * `sticky` is for a message describing something still true, or still
+   * happening — "no locations match" stands until the filter changes, and
+   * "finding your location" is replaced by its own outcome. Everything else is
+   * an outcome, and an outcome goes away.
+   */
+  show: (text: string, sticky?: boolean) => void;
+};
+
+/**
+ * The floating pill over the bottom of the map.
+ *
+ * It is `:empty { display: none }` that hides this, so a message used to sit
+ * there until something happened to write over it — and after a failed location
+ * lookup nothing did. On a map published with neither search nor filters there
+ * was no code path that could clear it at all, so "couldn't get your location"
+ * was permanent for the life of the page.
+ *
+ * It is shaped like a toast, so it behaves like one: long enough to read a
+ * sentence twice, and a click takes it away sooner. Built as a handle rather
+ * than a bare element so the timer and the element cannot be written to
+ * separately.
+ */
+function createStatus(): StatusHandle {
+  const element = el("div", "lm-status");
+
+  // Announced without stealing focus, so a filter result reaches a screen
+  // reader the same moment it reaches the map.
+  element.setAttribute("role", "status");
+  element.setAttribute("aria-live", "polite");
+  element.title = "Dismiss";
+
+  const LINGER_MS = 6_000;
+  let timer = 0;
+
+  const show = (text: string, sticky = false) => {
+    window.clearTimeout(timer);
+    element.textContent = text;
+
+    if (!text || sticky) return;
+
+    timer = window.setTimeout(() => {
+      element.textContent = "";
+    }, LINGER_MS);
+  };
+
+  element.addEventListener("click", () => show(""));
+
+  return { element, show };
+}
+
 function wireControls({
   map,
   snapshot,
@@ -266,11 +314,13 @@ function wireControls({
   map: MapHandle;
   snapshot: MapSnapshot;
   toolbar: HTMLElement;
-  status: HTMLElement;
+  status: StatusHandle;
   list: ListHandle | null;
 }): void {
-  let query = "";
-  let selected = new Set<string>();
+  const showStatus = status.show;
+
+  /** The typed text, already trimmed and lowercased — see ./search.ts. */
+  let needle = "";
   let tags = new Set<string>();
   /*
    * Which group each tag belongs to, built once. `matchesTags` needs it on every
@@ -278,6 +328,12 @@ function wireControls({
    * three thousand places times sixty tags of work per character typed.
    */
   const groupOf = tagGroupIndex(snapshot.tagGroups ?? []);
+  /*
+   * Everything about a place a visitor might type, composed once for the same
+   * reason. This is what makes "retail" find the retail locations now that the
+   * category chips are gone.
+   */
+  const searchIndex = buildSearchIndex(snapshot);
   /**
    * Where the visitor is measuring from, once anything has said. Null until
    * then, and the list keeps the owner's own order while it is.
@@ -324,8 +380,7 @@ function wireControls({
   const visible = (): SnapshotPlace[] =>
     snapshot.places.filter(
       (place) =>
-        matchesQuery(place, query) &&
-        matchesCategories(place.category, selected) &&
+        matchesSearch(searchIndex, place, needle) &&
         matchesTags(place.tags, tags, groupOf),
     );
 
@@ -338,21 +393,24 @@ function wireControls({
     list?.setPlaces(places, origin);
 
     if (places.length === 0) {
-      status.textContent = "No locations match.";
+      // Sticky: this describes the map as it stands, not something that just
+      // finished, so it stays until the filter that caused it changes.
+      showStatus("No locations match.", true);
       return;
     }
 
-    status.textContent = "";
+    showStatus("");
     // Only re-frame when something is actually narrowing the set; refitting on
     // an empty filter would yank the map back every time a search box clears.
-    if (query || selected.size > 0) map.fitTo(places);
+    // Tags count as narrowing — they always did, and were left out by mistake.
+    if (needle || tags.size > 0) map.fitTo(places);
   };
 
   if (snapshot.settings.search) {
     toolbar.append(
       createSearchField({
         onQuery: (value) => {
-          query = value;
+          needle = searchNeedle(value);
           apply();
         },
         onPlace: (place) => setOrigin({ lat: place.lat, lng: place.lng }, place.label),
@@ -362,19 +420,18 @@ function wireControls({
   }
 
   if (snapshot.settings.nearest) {
-    toolbar.append(createNearestButton(() => void goToNearest()));
+    // The promise is handed back rather than voided, so the button can disable
+    // itself for as long as the lookup actually takes.
+    toolbar.append(createNearestButton(() => goToNearest()));
   }
 
+  /*
+   * Tag chips only. The category chips this switch used to raise are gone —
+   * their question is answered by typing the label now (./filters.ts) — but the
+   * switch keeps its meaning, because tags are what is left of filtering and a
+   * map whose owner turned filtering off must still get no chips.
+   */
   if (snapshot.settings.filters) {
-    const filters = createFilters(snapshot.categories, (next) => {
-      selected = next;
-      apply();
-    });
-
-    if (filters) toolbar.append(filters);
-
-    // The same switch governs both: they are one control to a visitor, and a map
-    // whose owner turned filtering off should not sprout half of it back.
     const tagFilters = createTagFilters(snapshot.tagGroups ?? [], (next) => {
       tags = next;
       apply();
@@ -384,7 +441,8 @@ function wireControls({
   }
 
   async function goToNearest(): Promise<void> {
-    status.textContent = "Finding your location…";
+    // Sticky: it is replaced by its own outcome, which may be ten seconds away.
+    showStatus("Finding your location…", true);
 
     try {
       const position = await currentPosition();
@@ -403,18 +461,39 @@ function wireControls({
       const nearest = nearestPlace(position, visible());
 
       if (!nearest) {
-        status.textContent = "No locations match.";
+        showStatus("No locations match.", true);
         return;
       }
 
       map.focusPlace(nearest);
-      status.textContent = `${nearest.name} — ${formatDistance(
-        distanceKm(position, nearest),
-      )} away`;
-    } catch {
-      // The browser's own permission prompt already explained itself; this just
-      // says the action didn't complete.
-      status.textContent = "Couldn't get your location.";
+      /*
+       * Written after `setOrigin`, which runs `apply()` and blanks the pill —
+       * and not sticky, because the answer is now on the map and in the list's
+       * own order. Leaving it up meant a distance from a lookup several minutes
+       * old sitting over someone's map until they searched for something.
+       */
+      showStatus(
+        `${nearest.name} — ${formatDistance(distanceKm(position, nearest))} away`,
+      );
+    } catch (error) {
+      /*
+       * Which of the four it was. The browser's own prompt explains itself only
+       * when there *was* a prompt — a permission already denied, an insecure
+       * origin and a ten-second timeout all arrive with nothing shown, and one
+       * sentence covering all of them tells the visitor nothing they can act on
+       * (§8).
+       */
+      const reason = locationFailure(error);
+
+      showStatus(
+        reason === "denied"
+          ? "Location is off for this site. Turn it on in your browser, then try again."
+          : reason === "timeout"
+            ? "Couldn't find you in time. Try again."
+            : reason === "unsupported"
+              ? "This browser can't share a location."
+              : "Couldn't get your location.",
+      );
     }
   }
 

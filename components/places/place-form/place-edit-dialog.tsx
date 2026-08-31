@@ -31,7 +31,7 @@ export function PlaceEditDialog({
         {/* Wider than a form dialog normally wants, because this one holds a map
             and two-column field rows. At 520px the essentials stacked into a
             single column and the map was a letterbox. */}
-        <Modal.Dialog className="sm:max-w-3xl">
+        <Modal.Dialog className="sm:max-w-1xl ">
           <Modal.CloseTrigger />
           <Modal.Header>
             <Modal.Heading>Edit location</Modal.Heading>

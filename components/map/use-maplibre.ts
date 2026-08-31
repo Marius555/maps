@@ -13,11 +13,23 @@ import { resolveStyleUrl, type MapStyleKey } from "@/lib/map/style";
 import { collapseAttribution } from "@/packages/shared/attribution";
 import { loadMapStyle } from "@/packages/shared/load-style";
 import type { MapAppearance } from "@/packages/shared/map-appearance";
+import type { ShapeBounds } from "@/packages/shared/shapes";
 import { usePrefersDark } from "@/lib/theme/use-prefers-dark";
 
 type Options = {
   center: { lng: number; lat: number };
   zoom: number;
+  /**
+   * Open framed on this box instead of on `center`/`zoom`.
+   *
+   * Read once at construction like the two it overrides, and handed to
+   * MapLibre's own constructor rather than applied afterwards — that is the
+   * whole point of it. A map built at one view and then moved to another
+   * downloads two complete tile pyramids: everything at the view it was born
+   * with, then everything again at the view it wanted. Framing at construction
+   * makes the first tile request the right one.
+   */
+  bounds?: ShapeBounds | null;
   style: MapStyleKey;
   /**
    * The map's stored `appearance` blob, straight off the row. Normalised here
@@ -127,11 +139,31 @@ export function useMaplibre(
 
       if (cancelled) return;
 
+      /*
+       * MapLibre applies `bounds` after `center`/`zoom` and calls `resize()`
+       * itself before fitting, so passing both is not a conflict: the box wins
+       * when there is one, and the pair is what a map with a saved view opens
+       * on. See the note on `Options.bounds` for why this is not a `fitBounds`
+       * once the map is up.
+       */
+      const opening = initial.current.bounds;
+
       map = new MapLibreMap({
         container: element,
         style,
         center: [initial.current.center.lng, initial.current.center.lat],
         zoom: initial.current.zoom,
+        ...(opening
+          ? {
+              bounds: [
+                [opening.west, opening.south],
+                [opening.east, opening.north],
+              ] as [[number, number], [number, number]],
+              // A single pin is a zero-area box and would otherwise open at
+              // maximum zoom — the same guard the imperative fit carries.
+              fitBoundsOptions: { padding: 48, maxZoom: 14, duration: 0 },
+            }
+          : {}),
         // MapLibre defaults antialias to false, which leaves every road casing,
         // building edge and diagonal label looking jagged. Vector basemaps are
         // almost all diagonal geometry, so this is the single biggest visual win
@@ -163,6 +195,17 @@ export function useMaplibre(
 
       const instance = map;
 
+      /*
+       * The size the opening frame above was computed against.
+       *
+       * The constructor measures the container, and the comment on the resize
+       * below explains that it can be measuring a layout that has not settled.
+       * When it was, the fit is right and nothing more happens; when it was not,
+       * neither the fit *nor its tile request* meant anything, so re-fitting on
+       * load is still the first real load rather than a second one.
+       */
+      const built = box.getBoundingClientRect();
+
       map.on("load", () => {
         setIsReady(true);
         collapseAttribution(element);
@@ -191,6 +234,26 @@ export function useMaplibre(
          * observation to the frame removed it and took the basemap with it.
          */
         instance.resize();
+
+        // Only when the constructor measured a box that has since changed —
+        // see `built`. On a frame that was already laid out this is skipped, and
+        // the map never moves after the view it was born with.
+        if (opening) {
+          const now = box.getBoundingClientRect();
+          const moved =
+            Math.round(now.width) !== Math.round(built.width) ||
+            Math.round(now.height) !== Math.round(built.height);
+
+          if (moved) {
+            instance.fitBounds(
+              [
+                [opening.west, opening.south],
+                [opening.east, opening.north],
+              ],
+              { padding: 48, maxZoom: 14, duration: 0 },
+            );
+          }
+        }
       });
 
       /*

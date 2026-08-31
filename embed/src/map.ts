@@ -7,6 +7,9 @@ import {
   type GeoJSONSource,
   type LngLatLike,
   type MapGeoJSONFeature,
+  type Point,
+  type PointLike,
+  type PositionAnchor,
   type StyleSpecification,
 } from "maplibre-gl";
 
@@ -20,6 +23,11 @@ import {
   type CustomPinIcon,
 } from "@/packages/shared/pin-icons";
 import { shapePolygon, type AreaGeometry } from "@/packages/shared/shapes";
+import {
+  defaultCardLayout,
+  type CardLayout,
+  type CardShadow,
+} from "@/packages/shared/card-layout";
 import type {
   MapSnapshot,
   SnapshotPlace,
@@ -82,12 +90,27 @@ const AREA_ZOOM = 11;
  * Popup offsets, in pixels above the point.
  *
  * Two of them because there are two sizes. Both pins are balls centred on their
- * coordinate, so each offset is that ball's radius plus the same 6px of air: 8
- * for the dot, 18 for the 36px icon pin. The icon offset was 40 when the pin was
- * a teardrop standing on its tip and every pixel of it was *above* the point.
+ * coordinate, so each offset is that ball's radius plus 6px of air. The icon
+ * offset was 40 when the pin was a teardrop standing on its tip and every pixel
+ * of it was *above* the point.
  */
 const DOT_POPUP_OFFSET = 14;
 const PIN_POPUP_OFFSET = 24;
+
+/** Air between an open card and the edge of the frame, in pixels. */
+const CARD_MARGIN = 10;
+
+/** No card is squeezed below this, however short the frame. */
+const MIN_CARD_HEIGHT = 120;
+
+/**
+ * How far from a route a click still counts as on it.
+ *
+ * A line is drawn four pixels wide, and four pixels is not a target anybody hits
+ * with a finger. MapLibre's own `map.on(type, layer)` tests the exact pointer
+ * pixel, which is why the shape handlers below do their own querying.
+ */
+const TAP_SLOP = 6;
 
 export type MapHandle = {
   setPlaces: (places: SnapshotPlace[]) => void;
@@ -198,9 +221,28 @@ export function createMap(
     snapshot.categories.map((category) => [category.id, category]),
   );
   const colors = colorsOf(snapshot);
+  /*
+   * The card's design, decided in the dashboard and baked into the snapshot.
+   *
+   * Absent means the owner never opened the designer, or the file predates it —
+   * both of which have to keep drawing the card they always drew (§7). It is
+   * already resolved and clamped by the time it is written, so nothing here
+   * re-decides any of it.
+   */
+  const cardLayout = snapshot.cardLayout ?? defaultCardLayout();
+  /*
+   * The map's pins, for a card whose layout holds a Logo block. Resolved out
+   * here rather than inside `map.on("load")` where the marker images are
+   * registered, because `showPopup` below is in this scope and a second call is
+   * one map of the same rows.
+   */
+  const cardPins = pinsOf(snapshot);
   const popup = new Popup({
     closeButton: true,
-    maxWidth: "280px",
+    // The owner's width, not a constant. MapLibre caps the popup itself, so a
+    // wider card needs this raised or it would be clipped by the shell rather
+    // than by anything the designer showed.
+    maxWidth: `${String(cardLayout.width)}px`,
     offset: DOT_POPUP_OFFSET,
   });
 
@@ -280,6 +322,7 @@ export function createMap(
       showShapePopup(shape, at),
     );
 
+
     /*
      * A deep link replaces the opening view rather than animating away from it.
      * Fitting the whole map and then flying to one pin shows the visitor a
@@ -318,6 +361,9 @@ export function createMap(
       .setLngLat(at)
       .setDOMContent(buildShapePopup(shape))
       .addTo(map);
+
+    resetCard(popup);
+    placeCard(map, popup);
   };
 
   const showPopup = (place: SnapshotPlace) => {
@@ -334,9 +380,17 @@ export function createMap(
           place,
           categories.get(place.category ?? ""),
           snapshot.fields ?? [],
+          cardLayout,
+          cardPins,
         ),
       )
       .addTo(map);
+
+    // After `addTo`, which is when the shell element exists — the card's own
+    // background, radius and padding live on MapLibre's container, not on ours.
+    styleCard(popup, cardLayout);
+    resetCard(popup);
+    placeCard(map, popup);
   };
 
   return {
@@ -391,6 +445,350 @@ export function createMap(
 
     destroy: () => map.remove(),
   };
+}
+
+/**
+ * The card's own shell — its padding, corners, border and shadow.
+ *
+ * These belong to `.maplibregl-popup-content`, which is MapLibre's element and
+ * sits *above* ours, so they cannot be set on `.lm-popup` and inherited. Written
+ * as custom properties on the popup container, where they cascade down to the
+ * content box and the stylesheet picks them up.
+ *
+ * A colour left unset is left unset, never resolved to a literal here: absent
+ * means "whatever surface this theme uses", which is the only way a card stays
+ * readable when the visitor's map is dark. Writing `#ffffff` for a card the
+ * owner never recoloured would break exactly that.
+ */
+function styleCard(popup: Popup, layout: CardLayout): void {
+  const shell = popup.getElement();
+  if (!shell) return;
+
+  const set = (name: string, value: string | undefined) => {
+    if (value === undefined) shell.style.removeProperty(name);
+    else shell.style.setProperty(name, value);
+  };
+
+  set("--lm-card-pad", `${String(layout.padding)}px`);
+  set("--lm-card-radius", `${String(layout.radius)}px`);
+  set("--lm-card-gap", `${String(layout.gap)}px`);
+  set("--lm-card-bg", layout.background);
+  set(
+    "--lm-card-border",
+    layout.border && layout.borderWidth > 0
+      ? `${String(layout.borderWidth)}px solid ${layout.border}`
+      : undefined,
+  );
+  set("--lm-card-shadow", CARD_SHADOWS[layout.shadow]);
+}
+
+/**
+ * Three shadows, and "none" is a real choice rather than a missing value.
+ *
+ * Undefined would fall back to MapLibre's own, which is the opposite of what an
+ * owner who picked "none" asked for.
+ */
+const CARD_SHADOWS: Record<CardShadow, string> = {
+  none: "none",
+  soft: "0 1px 2px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.12)",
+  strong: "0 2px 6px rgba(0, 0, 0, 0.16), 0 12px 32px rgba(0, 0, 0, 0.22)",
+};
+
+/**
+ * A card is opening: forget the last one, and retire anything still deciding
+ * about it.
+ *
+ * One `Popup` serves every pin and every shape on the map, so both halves of
+ * this are about the card that was there a moment ago. `options.anchor` holds
+ * `placeCard`'s verdict, and left alone it would open the next card beside the
+ * next pin whatever room *that* one has — cleared rather than re-decided here,
+ * because the decision needs a measurement and the card has no layout until the
+ * next frame, and until then MapLibre's own guess is the better one to show.
+ *
+ * The counter is the other half, and it is what makes "the map moves once"
+ * true. A placement pass waiting on `moveend` outlives the card it was measuring
+ * for — click one pin and then another mid-flight and the first pass lands on
+ * the second card, with a pin position it never looked at, and pans the map
+ * somewhere neither click asked for. Every pass carries the number it started
+ * on and gives up when it no longer matches.
+ */
+function resetCard(popup: Popup): void {
+  popup.options.anchor = undefined;
+
+  const card = popup.getElement();
+  if (card) card.dataset.lmOpen = String(Number(card.dataset.lmOpen ?? 0) + 1);
+}
+
+/**
+ * The four sides a card can open on, and where the pin has to be for the whole
+ * of it to fit on each.
+ *
+ * A band is `[anchor, minX, maxX, minY, maxY]` in the frame's own pixels: the
+ * rectangle the pin may sit in for a card of this size to clear every edge by
+ * `CARD_MARGIN`. Written this way round — the room the *pin* needs rather than
+ * the room the card needs — because that is the form both questions want. "Does
+ * it fit where the pin already is?" is a point-in-rectangle test, and "how far
+ * would the map have to move for it to?" is the distance from the point to that
+ * rectangle. A band whose min is past its max is a side this frame is simply too
+ * small for.
+ *
+ * `left` and `right` name the edge of the *card* that is pinned, which is
+ * MapLibre's convention and reads backwards until you have been caught by it
+ * once: `left` puts the card to the right of the pin.
+ */
+function cardBands(
+  width: number,
+  height: number,
+  frameWidth: number,
+  frameHeight: number,
+  gap: number,
+): [PositionAnchor, number, number, number, number][] {
+  const m = CARD_MARGIN;
+  const halfW = width / 2;
+  const halfH = height / 2;
+
+  return [
+    // Above the pin, centred on it. MapLibre's own preference, and the shape
+    // people expect a map popup to have, so it is asked about first.
+    ["bottom", halfW + m, frameWidth - halfW - m, height + gap + m, frameHeight - m],
+    // Below the pin.
+    ["top", halfW + m, frameWidth - halfW - m, m, frameHeight - height - gap - m],
+    // To the right of the pin, centred on it vertically.
+    ["left", m, frameWidth - width - gap - m, halfH + m, frameHeight - halfH - m],
+    // To its left.
+    ["right", width + gap + m, frameWidth - m, halfH + m, frameHeight - halfH - m],
+  ];
+}
+
+/**
+ * Where an open card goes, and what it costs to put it there.
+ *
+ * MapLibre picks a popup's side itself, and its rule is "above the point if the
+ * card fits above, otherwise below" — which is the right answer right up to the
+ * moment the card fits on *neither* side. Then it goes below, whatever is down
+ * there, and hangs off the bottom of the map.
+ *
+ * That is the ordinary case for a location card rather than the edge one. A card
+ * with a photo, a description, a week of opening hours and three extra fields is
+ * taller than a good many of the frames it opens in — the Preview dialog, a
+ * sidebar embed, a phone. Measured in the Preview dialog: a 430×436 frame, a
+ * 320×289 card, and a pin dead in the middle of it because the map had just
+ * flown there. 184px of room above, 184px below, and 181px either side: nowhere
+ * for the card to go, and every choice a bad one.
+ *
+ * So this asks a different question. Not "which side does it fit on" but **"what
+ * is the least the map has to move for it to fit somewhere"** — `cardBands`
+ * above turns each of the four sides into the rectangle the pin would have to be
+ * in, and the answer is the nearest point of the nearest of those rectangles. A
+ * pin already inside one costs nothing and nothing moves, which is every pin on
+ * a frame with room in it. The middle pin above costs a 105px pan, and shows the
+ * whole card afterwards instead of two thirds of one.
+ *
+ * **The pan is safe here specifically because of the `isMoving` guard below.**
+ * Panning was the first answer to this and was withdrawn as unreliable, for a
+ * good reason: `focusPlace` opens its card the instant a flight starts, and a
+ * pan issued mid-flight *interrupts* it — so the location the visitor asked for
+ * never arrives. What makes it sound now is that nothing is measured, and so
+ * nothing is panned, until the camera is at rest. It is the same guard the cap
+ * always needed, doing a second job.
+ *
+ * A cap is still the last resort, for a frame too small for the card on any
+ * side however the map moves. Whatever cannot be shown scrolls inside the card.
+ *
+ * `--lm-popup-max` is cleared before measuring so each pass sees the card's own
+ * natural size rather than the cap the last one left — otherwise a card that was
+ * once squeezed could never grow back when there was room. The anchor goes into
+ * `popup.options`, which is a public field, and `setOffset` is what makes
+ * MapLibre act on it: it is the one public method that re-runs the positioning
+ * pass, and handing it back the offset it already has changes nothing else.
+ *
+ * Deferred a frame because the card is measured, and a node appended this tick
+ * has no layout yet.
+ */
+function placeCard(map: MapLibreMap, popup: Popup): void {
+  const card = popup.getElement();
+  if (!card) return;
+
+  /*
+   * And again whenever the card changes size under the visitor.
+   *
+   * Opening "More details" adds a description, a week of hours and the field
+   * rows to a card that was measured without them.
+   *
+   * Capture, because `toggle` does not bubble: the capture phase still visits
+   * every ancestor on the way down to the <details> that fired it, which is what
+   * lets one listener cover the fold and the hours inside it.
+   *
+   * Once per popup element. MapLibre reuses one container for every card it
+   * shows, so subscribing on each open would stack a listener per pin clicked.
+   */
+  if (!card.dataset.lmFits) {
+    card.dataset.lmFits = "1";
+    card.addEventListener("toggle", () => placeCard(map, popup), true);
+  }
+
+  /*
+   * Which card this pass is about. Everything below is deferred — a frame, or a
+   * whole flight — and by the time it runs the popup may be showing somewhere
+   * else entirely. See `resetCard`.
+   */
+  const open = card.dataset.lmOpen;
+
+  requestAnimationFrame(() => {
+    if (card.dataset.lmOpen !== open) return;
+
+    /*
+     * Never measure — and so never pan — against a camera that is still moving.
+     *
+     * `focusPlace` opens its card the instant the flight starts, and a popup is
+     * anchored to a coordinate, so mid-flight the card is wherever that
+     * coordinate currently projects to: for a hop between cities, tens of
+     * thousands of pixels outside the frame. Waiting for the landing is also
+     * what keeps the pan below from cutting the flight short — an `easeTo`
+     * issued into a `flyTo` replaces it, and the location the visitor asked for
+     * never arrives.
+     *
+     * **`moveend` is later than the map looks**, and measurably so: a flight's
+     * target is the pin itself, so the pin reaches the middle of the frame and
+     * stops while the zoom is still easing in behind it. Measured on the
+     * Preview dialog, the card stopped moving 1.4s after the click and `moveend`
+     * came at 3.8s. Nothing is lost in that gap — `resetCard` leaves
+     * `options.anchor` unset, so MapLibre is placing the card by its own rule
+     * throughout, which is exactly what it did before any of this existed — but
+     * it is why the good placement can arrive as a visible settle rather than as
+     * part of the flight.
+     *
+     * `isMoving` rather than `isEasing`, which the published `Map` type does not
+     * expose. It is broader — a finger still on the map counts — and broader is
+     * the right way to be wrong here: the worst case is measuring one `moveend`
+     * later than strictly necessary.
+     */
+    if (map.isMoving()) {
+      map.once("moveend", () => {
+        if (card.dataset.lmOpen === open) placeCard(map, popup);
+      });
+      return;
+    }
+
+    const at = popup.getLngLat();
+    if (!at) return;
+
+    /*
+     * Two boxes, and the difference between them matters. `card` is MapLibre's
+     * container — our card plus its tip — and it is what has to fit inside the
+     * frame. `content` is what a cap applies to. Capping the container's height
+     * on the content would leave the chrome hanging over the edge by exactly the
+     * chrome's own size.
+     */
+    const content = card.querySelector<HTMLElement>(".lm-popup");
+    if (!content) return;
+
+    card.style.removeProperty("--lm-popup-max");
+
+    const frame = map.getContainer();
+    const point = map.project(at);
+    /*
+     * Numeric by construction — `showPopup` sets one of the two pin radii and
+     * `showShapePopup` sets zero — but the option's type also allows a Point and
+     * a per-anchor table, neither of which has one number to subtract.
+     */
+    const gap =
+      typeof popup.options.offset === "number" ? popup.options.offset : 0;
+
+    const height = card.offsetHeight;
+    const bands = cardBands(
+      card.offsetWidth,
+      height,
+      frame.clientWidth,
+      frame.clientHeight,
+      gap,
+    );
+
+    /*
+     * The nearest point of the nearest viable band, and how far away it is.
+     *
+     * Strictly nearer, so a tie goes to the band asked about first — which is
+     * why `cardBands` is in the order it is: two sides that would both cost
+     * nothing should resolve to the one people expect, not to the last one
+     * tested.
+     */
+    let best: { anchor: PositionAnchor; x: number; y: number; move: number } | null =
+      null;
+
+    for (const [anchor, minX, maxX, minY, maxY] of bands) {
+      if (minX > maxX || minY > maxY) continue;
+
+      const x = Math.min(Math.max(point.x, minX), maxX);
+      const y = Math.min(Math.max(point.y, minY), maxY);
+      const move = Math.hypot(x - point.x, y - point.y);
+
+      if (!best || move < best.move) best = { anchor, x, y, move };
+    }
+
+    /*
+     * No band at all: the frame is smaller than the card on every side, so there
+     * is nothing to move towards and the card is capped instead. The roomier of
+     * above and below, since a card that has to be cut short should at least be
+     * cut as little as possible.
+     */
+    if (!best) {
+      const above = point.y - gap - CARD_MARGIN;
+      const below = frame.clientHeight - point.y - gap - CARD_MARGIN;
+
+      setAnchor(popup, above >= below ? "bottom" : "top");
+      card.style.setProperty(
+        "--lm-popup-max",
+        `${String(
+          Math.max(
+            Math.max(above, below) -
+              (height - content.getBoundingClientRect().height),
+            MIN_CARD_HEIGHT,
+          ),
+        )}px`,
+      );
+      return;
+    }
+
+    setAnchor(popup, best.anchor);
+
+    /*
+     * Under a pixel is where the pin already is, which is every pin on a frame
+     * with room in it. Panning by a rounding error is an animation the visitor
+     * can see for no reason.
+     */
+    if (best.move < 1) return;
+
+    /*
+     * One pan, and nothing listens for it to finish.
+     *
+     * The pin lands inside a band, and a band is the set of positions the whole
+     * card fits from — so there is nothing left to decide when the map stops,
+     * and re-entering here would be a second question with a second chance of
+     * moving the map again. `dev.html` says this out loud, because "the map
+     * settles somewhere sensible eventually" and "the map moves once" look the
+     * same in a screenshot and nothing like each other to watch.
+     *
+     * `panBy` is stated as an offset applied to the map rather than to what is
+     * drawn on it, so its sign is the opposite of the pin's own travel: to move
+     * the pin *down* the frame, the map goes up.
+     */
+    map.panBy([point.x - best.x, point.y - best.y]);
+  });
+}
+
+/**
+ * Which side the card opens on, told to MapLibre.
+ *
+ * `setOffset` is the lever rather than the message: it is the one public method
+ * that re-runs the positioning pass, and the offset it is handed is the one it
+ * already had. Skipped when nothing changed, so a card that is merely being
+ * re-measured does not repaint its own position.
+ */
+function setAnchor(popup: Popup, anchor: PositionAnchor): void {
+  if (popup.options.anchor === anchor) return;
+
+  popup.options.anchor = anchor;
+  popup.setOffset(popup.options.offset);
 }
 
 function addLayers(map: MapLibreMap, snapshot: MapSnapshot): void {
@@ -568,12 +966,26 @@ function toGeometry(shape: Exclude<SnapshotShape, { kind: "line" }>): AreaGeomet
 }
 
 /**
- * Clicking an area opens its card.
+ * Clicking an area — or a route — opens its card.
  *
- * The pins are wired the same way, and MapLibre fires both layers' handlers for a
- * click on a pin that happens to sit inside a shape. The pin wins because its
- * handler runs second and replaces the popup's content — which is the right
- * answer: the visitor aimed at the pin, not at the region under it.
+ * **A pin inside a shape belongs to the pin, and that has to be said out loud
+ * here.** MapLibre's `map.on(type, layer, fn)` is a thin wrapper: each
+ * registration adds its own `click` listener that runs its own
+ * `queryRenderedFeatures` scoped to its own layer, and they fire in
+ * registration order with no arbitration between them. There is no "topmost
+ * layer wins". So a click on a pin standing on a delivery radius ran the pin's
+ * handler and then the shape's, and the shape's replaced the card with the
+ * region's — the card jumped off the pin, the list row de-selected, and the
+ * location was unopenable for as long as it stood inside a shape.
+ *
+ * Which is why this listens to the map rather than to a layer, and decides for
+ * itself: pins first, then the shapes in an order it chooses. A guard bolted
+ * onto per-layer listeners would work too and would come undone the next time
+ * somebody reordered the registrations in `load`.
+ *
+ * Routes could not be clicked at all before this. `SHAPE_FILL_LAYER` is filtered
+ * to polygons, nothing listened on the outline layer, and a `kind: "line"` shape
+ * therefore rendered, invited a click with its pointer cursor, and did nothing.
  */
 function wireShapeInteractions(
   map: MapLibreMap,
@@ -588,20 +1000,88 @@ function wireShapeInteractions(
 
   const byId = new Map(shapes.map((shape) => [shape.id, shape]));
 
-  map.on("click", SHAPE_FILL_LAYER, (event) => {
-    const id = event.features?.[0]?.properties?.id;
-    const shape = typeof id === "string" ? byId.get(id) : undefined;
+  const shapeAt = (point: Point): SnapshotShape | null => {
+    if (hitsAPlace(map, point)) return null;
+
+    const found = (layer: string, at: PointLike | [PointLike, PointLike]) =>
+      idsAt(map, layer, at)
+        .map((id) => byId.get(id))
+        .filter((shape): shape is SnapshotShape => shape !== undefined);
+
+    /*
+     * The outline layer first, and with room around the pointer. It draws every
+     * route at four pixels wide, which is not a target a finger can hit — and it
+     * also draws every area's edge, so this is what makes clicking a region's
+     * border open that region.
+     *
+     * A route wins over an edge it happens to cross. Both are in this layer and
+     * both can be in the box, and of the two the route is the smaller and more
+     * deliberate aim: an area can be opened from anywhere in its fill, and a
+     * route has only its own four pixels.
+     */
+    const outlines = found(SHAPE_LINE_LAYER, boxAround(point));
+    const route = outlines.find((shape) => shape.kind === "line");
+
+    return route ?? outlines[0] ?? found(SHAPE_FILL_LAYER, point)[0] ?? null;
+  };
+
+  map.on("click", (event) => {
+    const shape = shapeAt(event.point);
     if (!shape) return;
 
     onSelect(shape, event.lngLat);
   });
 
-  map.on("mouseenter", SHAPE_FILL_LAYER, () => {
-    map.getCanvas().style.cursor = "pointer";
+  map.on("mousemove", (event) => {
+    // Whatever `wireInteractions` set for a pin wins: it runs its own mousemove
+    // and this one only ever writes when it has something of its own to say.
+    if (shapeAt(event.point)) map.getCanvas().style.cursor = "pointer";
   });
-  map.on("mouseleave", SHAPE_FILL_LAYER, () => {
-    map.getCanvas().style.cursor = "";
-  });
+}
+
+/** A square of forgiveness around the pointer, for the layers that need it. */
+function boxAround(point: Point): [PointLike, PointLike] {
+  return [
+    [point.x - TAP_SLOP, point.y - TAP_SLOP],
+    [point.x + TAP_SLOP, point.y + TAP_SLOP],
+  ];
+}
+
+/**
+ * The shape ids drawn at a point, in one layer.
+ *
+ * Guarded on the layer existing, because a map with no shapes adds neither of
+ * them and `queryRenderedFeatures` throws for a layer that is not there — the
+ * same guard MapLibre's own delegated listeners apply.
+ */
+function idsAt(
+  map: MapLibreMap,
+  layer: string,
+  at: PointLike | [PointLike, PointLike],
+): string[] {
+  if (!map.getLayer(layer)) return [];
+
+  return map
+    .queryRenderedFeatures(at, { layers: [layer] })
+    .map((feature) => feature.properties?.id)
+    .filter((id): id is string => typeof id === "string");
+}
+
+/**
+ * Whether one of the map's own locations is under this point.
+ *
+ * Filtered to layers that exist, because clustering is optional and a style
+ * without the layer makes `queryRenderedFeatures` throw rather than return
+ * nothing — the same filtering MapLibre's own delegated listeners do.
+ */
+function hitsAPlace(map: MapLibreMap, point: PointLike): boolean {
+  const layers = [POINT_LAYER, PIN_LAYER, CLUSTER_LAYER].filter((layer) =>
+    map.getLayer(layer),
+  );
+
+  if (layers.length === 0) return false;
+
+  return map.queryRenderedFeatures(point, { layers }).length > 0;
 }
 
 function wireInteractions(

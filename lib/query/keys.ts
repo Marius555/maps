@@ -18,4 +18,6 @@ export const queryKeys = {
     all: (mapId: string) => ["maps", mapId, "groups"] as const,
     list: (mapId: string) => ["maps", mapId, "groups", "list"] as const,
   },
+  /** One design for the whole account — see lib/repositories/card-design.repository.ts. */
+  cardDesign: ["cardDesign"] as const,
 } as const;

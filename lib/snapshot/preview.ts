@@ -1,5 +1,6 @@
 import { gazetteerBase } from "@/lib/gazetteer/config";
 import type { AppMap, Place, Shape } from "@/lib/repositories/types";
+import type { CardLayout } from "@/packages/shared/card-layout";
 import type { MapSnapshot } from "@/packages/shared/snapshot";
 import { buildSnapshot } from "./build";
 
@@ -32,6 +33,8 @@ export function buildPreviewSnapshot(
   map: AppMap,
   places: Place[],
   shapes: Shape[],
+  /** The account's own card design — see buildSnapshot's own parameter. */
+  cardLayout?: CardLayout | null,
 ): MapSnapshot {
   const origin = globalThis.location?.origin ?? "";
   const { snapshot } = buildSnapshot(
@@ -40,6 +43,7 @@ export function buildPreviewSnapshot(
     shapes,
     map.updatedAt,
     origin ? gazetteerBase(origin) : undefined,
+    cardLayout,
   );
 
   return { ...snapshot, allowedDomains: [] };

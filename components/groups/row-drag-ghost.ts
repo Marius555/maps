@@ -41,20 +41,47 @@ export function mountRowGhost(
   x: number,
   y: number,
   offset: GrabOffset,
-  width: number,
+  size: { width: number; height: number },
 ): RowGhost {
   const root = document.createElement("div");
   root.className = "row-ghost";
   root.setAttribute("aria-hidden", "true");
 
   /*
-   * An explicit width, because the row is `flex-1` inside its `<li>` and has no
-   * width of its own — appended to `<body>` it would shrink to its contents and
-   * the copy would be visibly narrower than the row it came from.
+   * The box the source actually occupied, both dimensions, measured at the press.
+   *
+   * A row is `flex-1` inside its `<li>` and has no width of its own, so appended
+   * to `<body>` it would shrink to its contents and the copy would be visibly
+   * narrower than the row it came from. That was the original reason for the
+   * width; the height is here for a stronger one, below.
    */
-  root.style.width = `${width}px`;
+  root.style.width = `${size.width}px`;
+  root.style.height = `${size.height}px`;
 
   const copy = source.cloneNode(true) as HTMLElement;
+
+  /*
+   * The copy fills that box, whatever it thought it was.
+   *
+   * **A clone keeps its inline styles, and they mean something else here.** A
+   * card block narrowed to 40% carries `flex: 0 0 calc(40% - 4px)` — which this
+   * root is not a flex container to honour — and before that it carried
+   * `width: 40%`, which resolved against a root that was *already* the block's
+   * 40%. The thing under the pointer was 16% of the card: a strip, which reads
+   * as dragging the block's border rather than the block, and which then wore
+   * the removal ring's red outline the moment it left the card. A bleeding
+   * gallery's negative inline margins shifted the copy inside its own root the
+   * same way.
+   *
+   * So every property that sized the source *against its parent* is neutralised,
+   * and the root — measured off the real element — is what says how big the
+   * ghost is. Nothing about how the block looks is touched.
+   */
+  copy.style.width = "100%";
+  copy.style.height = "100%";
+  copy.style.flex = "none";
+  copy.style.margin = "0";
+  copy.style.alignSelf = "auto";
 
   /*
    * The two attributes the hit test looks for.

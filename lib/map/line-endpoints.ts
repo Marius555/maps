@@ -25,7 +25,22 @@ export function resolveGeometry(
   geometry: ShapeGeometry,
   places: ReadonlyMap<string, LocatedPlace>,
 ): ShapeGeometry {
-  return geometry.kind === "line" ? resolveLine(geometry, places) : geometry;
+  if (geometry.kind !== "line") return geometry;
+
+  /*
+   * A routed line is not rubber-banded, and this is the one line that stops it.
+   *
+   * The whole trick below is that an endpoint's stored coordinate is a fallback
+   * and the pin is the truth — which is right for a path somebody clicked out,
+   * and wrong for one a routing engine snapped to roads. Overwriting point 0
+   * there does not reroute anything; it draws a straight kink from the moved pin
+   * to wherever the road geometry starts, on the canvas and in the published
+   * snapshot alike. A routed line's stops rubber-band instead, and a moved one
+   * marks the route stale. See lib/map/route-staleness.ts.
+   */
+  if (geometry.route) return geometry;
+
+  return resolveLine(geometry, places);
 }
 
 export function resolveLine(

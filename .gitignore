@@ -48,3 +48,8 @@ next-env.d.ts
 
 # built by `npm run build:gazetteer` from GeoNames dumps — data, not source
 /public/gazetteer/
+
+# built by `npm run build:tile-styles` and `npm run mirror:tile-assets` — our own
+# copies of the basemap styles, fonts, sprites and the Natural Earth raster.
+# Mirrored assets and generated documents, not source; see docs/self-hosting-tiles.md
+/public/tiles/

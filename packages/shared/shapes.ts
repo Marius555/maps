@@ -61,6 +61,55 @@ export type LineGeometry = {
   points: LngLatTuple[];
   from?: string;
   to?: string;
+  /**
+   * Present when this path came out of a routing engine rather than out of
+   * clicks — see below. Absent means hand-drawn, which is every line written
+   * before routes existed and every line drawn with the plain line tool since.
+   */
+  route?: LineRoute;
+};
+
+/**
+ * How a route was asked for. Only `car` is offered in v1: OSRM runs one process
+ * per profile and the public demo server serves driving alone, so a bike or foot
+ * picker would be a control that 400s against the default endpoint. The union is
+ * written out anyway so storage and the snapshot need no change the day a
+ * self-hosted engine answers the other two.
+ */
+export type RouteProfile = "car" | "bike" | "foot";
+
+/**
+ * One end of a leg: a pin on the map, or a point somebody clicked.
+ *
+ * `at` is always the coordinate, even when `placeId` is set — a stop bonded to a
+ * location that is later deleted still knows where it was, which is the same
+ * fallback contract the line's own `from`/`to` have.
+ */
+export type RouteStop = {
+  at: LngLatTuple;
+  /** Location id when this stop is a pin. Absent for a free waypoint. */
+  placeId?: string;
+};
+
+/**
+ * The engine's input and the one part of its answer the geometry cannot yield.
+ *
+ * `stops` is what was asked; `LineGeometry.points` is what came back, snapped to
+ * roads. They are deliberately different lengths — two or three stops become
+ * hundreds of points — and the stops are the source of truth: recomputing the
+ * route means sending these again.
+ *
+ * `durationS` is stored because nothing can derive it. A path's *length* is a
+ * sum over its own points, which is why it is measured at render time and not
+ * kept here; how long it takes to drive depends on speed limits, turn penalties
+ * and road classes that never reach the geometry.
+ */
+export type LineRoute = {
+  profile: RouteProfile;
+  /** 2..N, in order. */
+  stops: RouteStop[];
+  /** Seconds, as the engine reported them. */
+  durationS: number;
 };
 
 /** The kinds that enclose something, and so have a fill and a ring. */
@@ -266,3 +315,15 @@ export const MIN_POLYGON_POINTS = 3;
 
 /** Fewest points that make a path. One is a dot, and a dot is a pin's job. */
 export const MIN_LINE_POINTS = 2;
+
+/**
+ * The route behind a shape, or null.
+ *
+ * One narrowing helper rather than `geometry.kind === "line" && geometry.route`
+ * spelled out at each call site: the card, the summary, the publish step and the
+ * staleness check all ask the same question, and a missed `kind` check reads a
+ * route off a circle as `undefined` with no error anywhere.
+ */
+export function routeOf(geometry: ShapeGeometry): LineRoute | null {
+  return geometry.kind === "line" ? (geometry.route ?? null) : null;
+}

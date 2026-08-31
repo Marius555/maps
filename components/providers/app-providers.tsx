@@ -5,6 +5,7 @@ import { MotionConfig } from "motion/react";
 import { useEffect, useState } from "react";
 
 import { makeQueryClient } from "@/lib/query/client";
+import { ThemeSync } from "./theme-sync";
 import { ToastRegion } from "./toast-region";
 
 /**
@@ -41,6 +42,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <MotionConfig reducedMotion="user">
         {children}
+        <ThemeSync />
         <ToastRegion />
       </MotionConfig>
     </QueryClientProvider>

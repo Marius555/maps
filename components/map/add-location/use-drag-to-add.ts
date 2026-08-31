@@ -192,9 +192,18 @@ export function useDragToAdd({
   }, []);
 
   /*
-   * The ghost exists only for the length of a drag, and so do two body styles: a
-   * pointer dragged across the page still selects text and still shows whatever
-   * cursor it passes over, and neither belongs in a gesture carrying a pin.
+   * The ghost exists only for the length of a drag, and so do two things on the
+   * body: a pointer dragged across the page still selects text and still shows
+   * whatever cursor it passes over, and neither belongs in a gesture carrying a
+   * pin.
+   *
+   * The cursor is a **class**, not the inline `body.style.cursor` this used to
+   * set. An inline declaration loses to the `!important` on
+   * `.maplibregl-crosshair` (app/globals.css), so dragging a pin across a map
+   * that already had a tool armed showed the map's cursor rather than the
+   * drag's. The class carries the same `!important` and wins wherever the
+   * pointer goes. `is-pin-dragging` is also what the add-mode hover ghost
+   * watches, so the two never draw a pin each — see `useAddModeGhost`.
    *
    * `mountDragGhost` takes the pointer's current position rather than waiting for
    * the next `pointermove`, which is also what lets it grow out of the button
@@ -212,15 +221,15 @@ export function useDragToAdd({
     ghost.current = element;
 
     const { body } = document;
-    const previous = { cursor: body.style.cursor, userSelect: body.style.userSelect };
-    body.style.cursor = "grabbing";
+    const previousUserSelect = body.style.userSelect;
+    body.classList.add("is-pin-dragging");
     body.style.userSelect = "none";
 
     return () => {
       element.remove();
       ghost.current = null;
-      body.style.cursor = previous.cursor;
-      body.style.userSelect = previous.userSelect;
+      body.classList.remove("is-pin-dragging");
+      body.style.userSelect = previousUserSelect;
     };
   }, [isDragging]);
 

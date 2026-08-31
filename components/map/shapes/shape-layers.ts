@@ -35,6 +35,21 @@ import {
 export const SHAPE_SOURCE = "editor-shapes";
 export const SHAPE_FILL_LAYER = "editor-shape-fills";
 export const SHAPE_LINE_LAYER = "editor-shape-outlines";
+/**
+ * The outline of whatever is being drawn right now — dashed, and its own layer.
+ *
+ * `line-dasharray` *is* data-driven in maplibre-gl 6, so this could have been a
+ * `case` on the one line layer. It is not, for one reason: a dashed line is
+ * drawn by a different shader (the SDF path), and a `case` puts every feature in
+ * that layer through it — including every saved shape, which would then be
+ * rasterised differently from the identical shape the embed draws beside it in
+ * the preview panel. A second layer keeps the committed outline on exactly the
+ * pixels it has always been on and confines the change to the draft.
+ *
+ * Not in `SHAPE_HIT_LAYERS`: a draft has no row and no id, so there is nothing
+ * for a click on it to select.
+ */
+export const SHAPE_DRAFT_LINE_LAYER = "editor-shape-draft-outlines";
 export const SHAPE_VERTEX_LAYER = "editor-shape-vertices";
 
 /**
@@ -55,6 +70,14 @@ type ShapeProperties = {
    * hairline rather than the object itself.
    */
   isLine: boolean;
+  /**
+   * Still being drawn, and not yet a row anybody could open.
+   *
+   * Which of the two outline layers paints it. Nothing else reads it — a draft
+   * is otherwise an ordinary feature, and this is deliberately *not* the same
+   * question as `id === ""`, which is what hit-testing already asks.
+   */
+  draft: boolean;
 };
 
 export type ShapeFeatures = GeoJSON.FeatureCollection<
@@ -95,6 +118,7 @@ export function shapeFeature(
       opacity: shape.opacity,
       selected: isSelected,
       isLine,
+      draft: false,
     },
   };
 }
@@ -116,6 +140,7 @@ export function draftFeatures(
     opacity: DEFAULT_SHAPE_OPACITY,
     selected: true,
     isLine: geometry.kind === "line",
+    draft: true,
   };
 
   if (geometry.kind === "circle") {
@@ -218,6 +243,10 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
         id: SHAPE_LINE_LAYER,
         type: "line",
         source: SHAPE_SOURCE,
+        // Saved shapes only. The draft has its own layer below, and without this
+        // it would be painted twice — solid underneath its own dashes, which is
+        // simply a solid line.
+        filter: ["!", ["get", "draft"]],
         layout: { "line-join": "round", "line-cap": "round" },
         paint: {
           "line-color": ["get", "color"],
@@ -233,6 +262,51 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
             ["case", ["get", "selected"], 6, 4],
             ["case", ["get", "selected"], 3, 2],
           ],
+        },
+      },
+      beforeId,
+    );
+  }
+
+  /*
+   * The shape under the cursor: thin, and dashed.
+   *
+   * Every drawing tool paints through the same draft channel, so one layer
+   * covers all of them — the circle being dragged out, the polygon being clicked
+   * round, the line, and the straight run between a route's stops. That is the
+   * point of styling the *channel* rather than each tool: a dashed outline means
+   * "this is not saved yet" wherever it appears, and a new tool inherits the
+   * vocabulary without having to remember it.
+   *
+   * It says something true in each case, and something extra for a route.
+   * `use-draw-route.ts` draws the straight run between stops deliberately,
+   * because until the engine answers nobody knows where the roads go; a dashed
+   * straight line reads as the placeholder it is, where a solid one read as a
+   * route that had been worked out and went through buildings.
+   *
+   * Thinner for the same reason. A draft carries `selected: true`, so on the
+   * layer above it was drawn at the heaviest width there is — the boldest thing
+   * on the map was the one thing that did not exist yet.
+   *
+   * Dash lengths are multiples of the line width, so the 2px width below makes
+   * this a 4px dash and a 4px gap. Change one and the other moves.
+   */
+  if (!map.getLayer(SHAPE_DRAFT_LINE_LAYER)) {
+    map.addLayer(
+      {
+        id: SHAPE_DRAFT_LINE_LAYER,
+        type: "line",
+        source: SHAPE_SOURCE,
+        filter: ["get", "draft"],
+        // Butt rather than the round cap above: a round cap adds half a width at
+        // each end of every dash, which at this size closes the gaps and draws a
+        // solid line with dents in it.
+        layout: { "line-join": "round", "line-cap": "butt" },
+        paint: {
+          "line-color": ["get", "color"],
+          "line-opacity": 1,
+          "line-width": 2,
+          "line-dasharray": [2, 2],
         },
       },
       beforeId,

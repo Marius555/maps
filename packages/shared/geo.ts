@@ -75,6 +75,31 @@ export function formatDistanceM(metres: number): string {
   return formatDistance(metres / 1000);
 }
 
+/**
+ * A travel time, rounded the way a person would say it.
+ *
+ * "12 min", "1 h 25 min", "2 h". Minutes are dropped once they are zero rather
+ * than printed as "2 h 0 min", and anything under a minute reads as "< 1 min" —
+ * a route between two pins on the same street is not "0 min".
+ *
+ * Here rather than beside either renderer, for the reason this file exists: the
+ * editor's shape card and the embed's popup describe the same route, and the
+ * preview panel puts the real embed bundle beside the editor's own canvas. Two
+ * formatters would print two different times for one route on one screen.
+ */
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "";
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 1) return "< 1 min";
+  if (minutes < 60) return `${minutes} min`;
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}
+
 function toRadians(degrees: number): number {
   return (degrees * Math.PI) / 180;
 }

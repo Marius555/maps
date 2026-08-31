@@ -1,7 +1,4 @@
-import type {
-  SnapshotCategory,
-  SnapshotTagGroup,
-} from "@/packages/shared/snapshot";
+import type { SnapshotTagGroup } from "@/packages/shared/snapshot";
 
 import { matchesTags, tagGroupIndex } from "@/packages/shared/tags";
 
@@ -16,58 +13,21 @@ import { button, el } from "./dom";
  */
 export { matchesTags, tagGroupIndex };
 
-/**
- * Category filter chips.
+/*
+ * There are no category chips here any more, and that is deliberate.
  *
- * Toggles rather than a dropdown: with a handful of categories the whole set is
- * visible at a glance, and each chip carries its own colour so the legend and
- * the filter are the same control instead of two things to reconcile.
+ * They were a row of toggles that doubled as the colour legend, and they cost a
+ * line of a panel that is now a proportion of the embed rather than a fixed
+ * 320px. The question they answered — "show me the retail ones" — is answered by
+ * typing the word instead: category labels are part of the search index
+ * (@/packages/shared/search-text.ts), so the word a visitor reads off a pin's
+ * own card is the word that filters the map. The legend is not lost either;
+ * every card and every list row still carries the label with its colour dot.
+ *
+ * The tag chips below stay, because search cannot replace them: the embed reads
+ * tags as AND across groups and OR within one, and a text box has no way to say
+ * "sells bikes OR skis, AND opens on Sundays".
  */
-export function createFilters(
-  categories: SnapshotCategory[],
-  onChange: (selected: Set<string>) => void,
-): HTMLElement | null {
-  if (categories.length === 0) return null;
-
-  const selected = new Set<string>();
-  const root = el("div", "lm-filters");
-  root.setAttribute("role", "group");
-  root.setAttribute("aria-label", "Filter by category");
-
-  for (const category of categories) {
-    const chip = button("lm-chip", category.label);
-    chip.style.setProperty("--lm-category-color", category.color);
-    // Toggle state belongs on the element, so assistive tech hears it change.
-    chip.setAttribute("aria-pressed", "false");
-
-    chip.addEventListener("click", () => {
-      const isOn = selected.has(category.id);
-
-      if (isOn) selected.delete(category.id);
-      else selected.add(category.id);
-
-      chip.setAttribute("aria-pressed", String(!isOn));
-      chip.classList.toggle("lm-chip--on", !isOn);
-
-      onChange(new Set(selected));
-    });
-
-    root.append(chip);
-  }
-
-  return root;
-}
-
-/**
- * Nothing selected means everything is shown — an empty filter set is "no
- * filter", not "no results".
- */
-export function matchesCategories(
-  category: string | undefined,
-  selected: Set<string>,
-): boolean {
-  return selected.size === 0 || selected.has(category ?? "");
-}
 
 /**
  * The tag chips, one labelled row per group.
@@ -104,9 +64,7 @@ export function createTagFilters(
     const chips = el("div", "lm-filters");
 
     for (const tag of group.tags) {
-      // No colour dot: a tag has no colour, and borrowing the category chip's
-      // would invent a legend that means nothing.
-      const chip = button("lm-chip lm-chip--plain", tag.label);
+      const chip = button("lm-chip", tag.label);
       chip.setAttribute("aria-pressed", "false");
 
       chip.addEventListener("click", () => {

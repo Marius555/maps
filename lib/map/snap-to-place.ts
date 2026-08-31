@@ -32,6 +32,26 @@ export type Snap = {
  */
 export const SNAP_RADIUS_PX = 12;
 
+/**
+ * The same question for the route tool, answered at the size of the pin.
+ *
+ * Twelve is right where a snap is *sugar*: the line tool can put a point
+ * anywhere, so a magnet that only grabs when you are nearly on the pin costs
+ * nothing when it misses. For a route a miss costs the whole click — a stop is a
+ * location and only a location (`lib/map/route-stops.ts`), so a click that fails
+ * to snap adds nothing at all and the tool reads as broken.
+ *
+ * Measured, it was: clicks registered at 0, 8 and 11px from a pin's centre and
+ * were silently discarded at 13, 16 and 20px — against a pin drawn 36px wide.
+ * The outer half of every icon pin did nothing.
+ *
+ * 22 is `.map-pin`'s own half-width (2.75rem / 2): the element you are actually
+ * aiming at. It has to stay in step with the `.picking-pins` scale in
+ * app/globals.css, which grows a pin to about that while the tool is armed — a
+ * pin bigger than its own magnet is the bug above, drawn.
+ */
+export const ROUTE_SNAP_RADIUS_PX = 22;
+
 export function snapToPlace(
   places: readonly Located[],
   at: { x: number; y: number },

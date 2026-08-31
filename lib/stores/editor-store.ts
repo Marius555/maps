@@ -23,8 +23,19 @@ import type { ShapeKind } from "@/packages/shared/shapes";
  * "select" hands the drag to the marquee instead — see
  * components/map/select-box. It is a mode for the same reason the others are:
  * while it is on, a drag stops panning the map.
+ *
+ * "draw-route" is spelled out rather than falling out of the template, and that
+ * is the honest description of it: a route is *not* a new `ShapeKind`. It saves
+ * as a line, and making it a kind would earn it a fill layer, an Appwrite enum
+ * value and a second line branch in every switch that reads geometry. It is a
+ * way of producing a line, so it gets a mode and nothing else.
  */
-export type EditorMode = "browse" | "add" | `draw-${ShapeKind}` | "select";
+export type EditorMode =
+  | "browse"
+  | "add"
+  | `draw-${ShapeKind}`
+  | "draw-route"
+  | "select";
 
 export type Viewport = {
   lng: number;
@@ -80,6 +91,8 @@ type EditorState = {
   startAdding: (icon: string) => void;
   /** Arm a drawing tool — what pressing an item in the shapes menu does. */
   startDrawing: (kind: ShapeKind) => void;
+  /** Arm the route tool. Clears the selection exactly as `startDrawing` does. */
+  startRouting: () => void;
   /** Arm the marquee — what pressing the select tool does. */
   startSelecting: () => void;
   selectPlace: (placeId: string | null) => void;
@@ -119,6 +132,13 @@ export const useEditorStore = create<EditorState>()((set) => ({
   startDrawing: (kind) =>
     set({
       mode: `draw-${kind}`,
+      selectedPlaceId: null,
+      selectedShapeId: null,
+      selection: EMPTY_SELECTION,
+    }),
+  startRouting: () =>
+    set({
+      mode: "draw-route",
       selectedPlaceId: null,
       selectedShapeId: null,
       selection: EMPTY_SELECTION,
@@ -187,4 +207,17 @@ export function drawKindOf(mode: EditorMode): ShapeKind | null {
   if (mode === "draw-polygon") return "polygon";
   if (mode === "draw-line") return "line";
   return null;
+}
+
+/**
+ * Whether the route tool is armed.
+ *
+ * Deliberately not folded into `drawKindOf`. A route saves as a line, so
+ * answering "line" here would arm the plain line tool alongside it and every
+ * click would be handled twice — and the two gestures differ in the one way that
+ * matters, since a route bonds *every* stop to a pin it lands on and a line bonds
+ * only its two ends.
+ */
+export function isDrawingRoute(mode: EditorMode): boolean {
+  return mode === "draw-route";
 }

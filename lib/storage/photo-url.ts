@@ -22,3 +22,10 @@ export function photoViewUrl(fileId: string | null | undefined): string | null {
     `/files/${fileId}/view?project=${APPWRITE_PROJECT_ID}`
   );
 }
+
+/** The same, for a gallery. Order is preserved: the first is the cover. */
+export function photoViewUrls(fileIds: readonly string[]): string[] {
+  return fileIds
+    .map((fileId) => photoViewUrl(fileId))
+    .filter((url): url is string => url !== null);
+}
