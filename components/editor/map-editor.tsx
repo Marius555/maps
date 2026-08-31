@@ -25,6 +25,7 @@ import { roundCoord } from "@/lib/map/geo";
 import { groupAction, groupActionLabel } from "@/lib/map/group-action";
 import { membersOf } from "@/lib/map/group-members";
 import { nextGroupDefaults } from "@/lib/map/next-group-defaults";
+import type { PlanHeadroom } from "@/lib/map/plan-headroom";
 import { recentPinIcons } from "@/lib/map/recent-pins";
 import { selectionBounds } from "@/lib/map/selection-bounds";
 import { nextPlaceDefaults } from "@/lib/places/next-place-defaults";
@@ -54,6 +55,8 @@ import {
   useUpdateShape,
 } from "@/lib/query/shapes";
 import { nextShapeDefaults } from "@/lib/map/next-shape-defaults";
+import { shapeSeedColor } from "@/lib/map/shape-seed-color";
+import type { PlanId } from "@/lib/repositories/plan-limits";
 import type { AppMap, Group, Place, Shape } from "@/lib/repositories/types";
 import {
   drawKindOf,
@@ -62,6 +65,7 @@ import {
   useEditorStore,
 } from "@/lib/stores/editor-store";
 import { placeIndex, resolveGeometry } from "@/lib/map/line-endpoints";
+import { resolvePin } from "@/packages/shared/pin-icons";
 import {
   routeOf,
   shapeBounds,
@@ -87,6 +91,7 @@ export function MapEditor({
   initialShapes,
   initialGroups,
   initialCardDesign,
+  plan,
   placeLimit,
   shapeLimit,
 }: {
@@ -96,8 +101,13 @@ export function MapEditor({
   initialGroups: Group[];
   /** The account's own card design, for the place card this canvas pops open. */
   initialCardDesign: Record<string, unknown>;
+  /** Named in the sentence the toolbar says at a limit — see lib/map/plan-headroom.ts. */
+  plan: PlanId;
   placeLimit: number;
-  /** Read by the GeoJSON importer, which has to state it before its button. */
+  /**
+   * Read by the GeoJSON importer, which has to state it before its button, and
+   * by the Draw menu, which greys its tools at the ceiling.
+   */
   shapeLimit: number;
 }) {
   /*
@@ -136,6 +146,27 @@ export function MapEditor({
       return geometry === shape.geometry ? shape : { ...shape, geometry };
     });
   }, [storedShapes, places]);
+  /*
+   * What the plan still has room for, counted off the live arrays.
+   *
+   * `places` and `shapes` are the query cache's own lists, not the server
+   * render, and both mutations are optimistic — so the tenth pin greys the menu
+   * the instant it lands rather than a refetch later. `shapes` is a 1:1 map of
+   * `storedShapes` above, so its length is the stored count.
+   *
+   * The toolbar is the only consumer, but it is built here because this is where
+   * the counts and the limits are both in scope, and because a component that
+   * takes a count and a limit separately can be handed one of each from
+   * different resources.
+   */
+  const limits = useMemo(
+    () => ({
+      places: { plan, limit: placeLimit, used: places.length } satisfies PlanHeadroom,
+      shapes: { plan, limit: shapeLimit, used: shapes.length } satisfies PlanHeadroom,
+    }),
+    [plan, placeLimit, places.length, shapeLimit, shapes.length],
+  );
+
   const createPlace = useCreatePlace(map.id);
   const updatePlace = useUpdatePlace(map.id);
   const createShape = useCreateShape(map.id);
@@ -261,6 +292,20 @@ export function MapEditor({
   const shapeColorFor = useCallback(
     (shape: Shape) => groupColorById.get(shape.groupId) ?? shape.color,
     [groupColorById],
+  );
+
+  /**
+   * One pin's colour, with nothing else to hand.
+   *
+   * `colorFor` takes the custom pin's own colour as an argument because the
+   * marker layer has already resolved the pin by the time it paints one. Nothing
+   * has, at the moment a route is drawn, so this resolves it and asks the same
+   * question — group, then the pin's own, then the category.
+   */
+  const placeColorFor = useCallback(
+    (place: Place) =>
+      colorFor(place, resolvePin(place.icon, map.pinIcons)?.color ?? undefined),
+    [colorFor, map.pinIcons],
   );
 
   // The card needs the label too, not just the colour the pins take.
@@ -583,6 +628,8 @@ export function MapEditor({
           ...nextShapeDefaults(
             readShapes(),
             routeOf(geometry) ? "route" : geometry.kind,
+            // The first pin it was drawn through, when it was drawn through one.
+            shapeSeedColor(geometry, readPlaces(), placeColorFor) ?? undefined,
           ),
           geometry,
           opacity: DEFAULT_SHAPE_OPACITY,
@@ -597,7 +644,14 @@ export function MapEditor({
         toastPlanLimit(error, "Shape");
       }
     },
-    [createShapeMutate, readShapes, selectShape, setMode],
+    [
+      createShapeMutate,
+      readShapes,
+      readPlaces,
+      placeColorFor,
+      selectShape,
+      setMode,
+    ],
   );
 
   /**
@@ -1065,9 +1119,11 @@ export function MapEditor({
           hasSavedView={savedViewAt !== null}
           style={map.style}
           appearance={appearance}
+          limits={limits}
           search={
             <MapSearch
               mapId={map.id}
+              headroom={limits.places}
               onPick={(candidate) => mapHandle.current?.flyTo(candidate)}
               onAdd={(candidate) => {
                 // The whole match, so this pin skips the reverse lookup it would

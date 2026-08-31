@@ -49,6 +49,12 @@ export type ShapeNoun = ShapeKind | "route";
 export function nextShapeDefaults(
   shapes: readonly Pick<Shape, "name" | "sortOrder">[],
   kind: ShapeNoun,
+  /**
+   * A colour the gesture itself supplied — the first pin a line or route was
+   * drawn through. See lib/map/shape-seed-color.ts. Absent for a circle or a
+   * polygon, which are dragged out over ground with no pin in them.
+   */
+  preferredColor?: string,
 ): ShapeDefaults {
   const noun = NOUNS[kind];
 
@@ -75,10 +81,17 @@ export function nextShapeDefaults(
 
   return {
     name: `${noun} ${Math.max(highestNumber, sameKind) + 1}`,
-    // Cycled through the same palette the categories offer, so two shapes drawn
-    // in a row are not the same colour and neither has to be recoloured by hand
-    // to tell them apart.
-    color: CATEGORY_COLORS[shapes.length % CATEGORY_COLORS.length],
+    /*
+     * A line or a route takes the colour of the pin it was drawn from, because
+     * that is a colour the owner has already chosen for something on this map.
+     *
+     * Everything else cycles through the same palette the categories offer, so
+     * two areas drawn in a row are not the same colour and neither has to be
+     * recoloured by hand to tell them apart. Two routes out of one depot *are*
+     * the same colour, and that is the point of the rule rather than a cost of
+     * it: they are both that depot's.
+     */
+    color: preferredColor ?? CATEGORY_COLORS[shapes.length % CATEGORY_COLORS.length],
     sortOrder: highestSortOrder + 1,
   };
 }

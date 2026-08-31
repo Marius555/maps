@@ -63,6 +63,7 @@ export default async function MapEditorPage(props: PageProps<"/maps/[id]">) {
         initialShapes={data.shapes}
         initialGroups={data.groups}
         initialCardDesign={data.cardDesign}
+        plan={data.plan}
         placeLimit={data.placeLimit}
         shapeLimit={data.shapeLimit}
       />
@@ -90,6 +91,13 @@ async function loadEditor(
     shapes,
     groups,
     cardDesign,
+    /*
+     * The plan's own name, for the sentence the toolbar now says *before* the
+     * click — "…included on the free plan". `planLimitUsage` composes it from
+     * the resource, the ceiling and this, and nothing else on the client knows
+     * which plan the user is on.
+     */
+    plan,
     placeLimit: PLAN_LIMITS[plan].places,
     /*
      * The shape limit is back, and the importer is what wanted it.
@@ -102,6 +110,10 @@ async function loadEditor(
      * An import is the case that breaks. Thirteen provinces against a limit of
      * three has to be said *before* the button, with the number in it, and the
      * dialog cannot work that out from a rejection it has not made yet.
+     *
+     * The Draw menu wants it now too, for the same reason one step earlier: it
+     * greys its tools at the ceiling rather than arming a gesture whose save is
+     * already refused.
      */
     shapeLimit: PLAN_LIMITS[plan].shapes,
     // No group limit: a group cannot outnumber the places and shapes in it, and

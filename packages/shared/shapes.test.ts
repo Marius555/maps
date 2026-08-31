@@ -10,6 +10,9 @@ import {
   shapeBounds,
   shapeCentre,
   shapePoints,
+  strokeWidthOf,
+  DEFAULT_AREA_STROKE_WIDTH,
+  DEFAULT_LINE_STROKE_WIDTH,
   shapeRing,
   type CircleGeometry,
   type LineGeometry,
@@ -230,5 +233,38 @@ describe("lines", () => {
     // that spreads a line has to carry them — see use-shape-handles.
     expect(bonded.from).toBe("place_a");
     expect(shapePoints(bonded)).toHaveLength(3);
+  });
+});
+
+describe("strokeWidthOf", () => {
+  /*
+   * The whole point of this function is that "nobody has chosen a width" has a
+   * different answer for a line than for an area's edge — which is why it cannot
+   * be a column default and has to live somewhere both renderers can ask.
+   */
+  it("falls back to a different width per kind", () => {
+    expect(strokeWidthOf(true)).toBe(DEFAULT_LINE_STROKE_WIDTH);
+    expect(strokeWidthOf(false)).toBe(DEFAULT_AREA_STROKE_WIDTH);
+  });
+
+  it("reads 0, null and undefined as unset", () => {
+    // 0 is what every row written before the column existed reads back as, and
+    // null is what the mapper turns that into. Neither is a zero-width outline.
+    for (const stored of [0, null, undefined]) {
+      expect(strokeWidthOf(true, stored)).toBe(DEFAULT_LINE_STROKE_WIDTH);
+      expect(strokeWidthOf(false, stored)).toBe(DEFAULT_AREA_STROKE_WIDTH);
+    }
+  });
+
+  it("keeps a width somebody chose", () => {
+    expect(strokeWidthOf(true, 1)).toBe(1);
+    expect(strokeWidthOf(false, 12)).toBe(12);
+  });
+
+  it("draws the widths both renderers used to hard-code", () => {
+    // The numbers themselves are the contract: every shape already on a customer's
+    // site has no stored width, so changing either of these moves a live map.
+    expect(DEFAULT_LINE_STROKE_WIDTH).toBe(4);
+    expect(DEFAULT_AREA_STROKE_WIDTH).toBe(2);
   });
 });

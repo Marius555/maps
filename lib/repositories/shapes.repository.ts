@@ -169,6 +169,10 @@ export async function createShape(
         description: input.description ?? null,
         color: input.color,
         opacity: input.opacity,
+        // 0 and "solid" are the columns' own "nobody has chosen one" — see
+        // strokeWidthOf. Nothing picks either at the moment a shape is drawn.
+        strokeWidth: input.strokeWidth ?? 0,
+        strokeStyle: input.strokeStyle ?? "solid",
         sortOrder: input.sortOrder,
         groupId: input.groupId ?? "",
         ...toShapeColumns(input.geometry),
@@ -234,6 +238,8 @@ export async function createShapes(
           description: input.description ?? null,
           color: input.color,
           opacity: input.opacity,
+          strokeWidth: input.strokeWidth ?? 0,
+          strokeStyle: input.strokeStyle ?? "solid",
           sortOrder: existing + start + offset,
           groupId: input.groupId ?? "",
           ...toShapeColumns(input.geometry),

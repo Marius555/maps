@@ -501,11 +501,15 @@ export default function MapCanvasImpl({
          * is under the pointer is how this tells the two apart, and it does not
          * depend on which listener happened to be registered first.
          */
+        // Filtered to the layers that are actually there:
+        // `queryRenderedFeatures` throws on a layer it cannot find, and a map
+        // with no shapes has added none of them.
+        const layers = SHAPE_HIT_LAYERS.filter((layer) =>
+          instance.getLayer(layer),
+        );
         const onShape =
-          Boolean(instance.getLayer(SHAPE_HIT_LAYERS[0])) &&
-          instance.queryRenderedFeatures(event.point, {
-            layers: SHAPE_HIT_LAYERS,
-          }).length > 0;
+          layers.length > 0 &&
+          instance.queryRenderedFeatures(event.point, { layers }).length > 0;
 
         // A place and a shape are never selected at once, so either way the
         // location's card closes. The shape's only closes when the click landed

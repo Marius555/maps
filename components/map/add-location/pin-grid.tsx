@@ -1,8 +1,11 @@
 "use client";
 
 import { ChevronLeft, MoreHorizontal, Plus } from "lucide-react";
+import { useId } from "react";
 
 import { PinTile, type DragProps } from "@/components/map/pin-tile";
+import { PlanLimitNote } from "@/components/map/plan-limit-note";
+import { isAtLimit, type PlanHeadroom } from "@/lib/map/plan-headroom";
 import { pinPages } from "@/lib/map/pin-pages";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 
@@ -36,6 +39,13 @@ import type { CustomPinIcon } from "@/packages/shared/pin-icons";
  * by being under the cursor as a grab handle; a line of prose explaining a
  * direct-manipulation gesture is a sign the gesture is not obvious, not a fix
  * for it.
+ *
+ * At the plan's location limit every *pin* goes grey and stops responding, while
+ * Back, More and New stay live. The split is on what a cell does: a pin drops a
+ * location and there is no room for one, but paging through the library and
+ * designing a pin in the studio both cost nothing and are the things somebody at
+ * the limit is most likely to be doing while they decide what to delete. A pin
+ * made in the studio is still saved, and simply cannot be dropped yet.
  */
 export function PinGrid({
   page,
@@ -43,6 +53,7 @@ export function PinGrid({
   icons,
   armedIcon,
   isAdding,
+  headroom,
   dragProps,
   onPageChange,
   onPick,
@@ -56,6 +67,11 @@ export function PinGrid({
   /** The icon add mode is currently armed with, if it is armed at all. */
   armedIcon: string;
   isAdding: boolean;
+  /**
+   * The location allowance. Omitted where there is no plan to check against —
+   * nothing greys, which is what every caller got before this existed.
+   */
+  headroom?: PlanHeadroom;
   dragProps: (icon: string) => DragProps;
   onPageChange: (page: number) => void;
   onPick: (icon: string) => void;
@@ -68,6 +84,11 @@ export function PinGrid({
 
   const hasBack = current > 0;
   const hasMore = current < pages.length - 1;
+
+  const isFull = headroom ? isAtLimit(headroom) : false;
+  // Shared by every disabled tile's `aria-describedby` and the note itself, so
+  // the reason is announced with the tile rather than stranded below the grid.
+  const noteId = useId();
 
   return (
     /* `grid-cols-4` literally. Tailwind reads class names, not constants, so
@@ -89,7 +110,12 @@ export function PinGrid({
           label={icon === "" ? "Plain" : undefined}
           pinIcons={pinIcons}
           isArmed={isAdding && armedIcon === icon}
-          dragProps={dragProps(icon)}
+          isDisabled={isFull}
+          describedBy={noteId}
+          /* Withheld at the limit as well as refused inside the tile. A drag
+             that can only end in a rejected create is a gesture that carries a
+             pin across the map to say no. */
+          dragProps={isFull ? undefined : dragProps(icon)}
           onPress={() => onPick(icon)}
         />
       ))}
@@ -110,6 +136,14 @@ export function PinGrid({
         icon={Plus}
         onPress={onOpenStudio}
       />
+
+      {/* Spans the row it sits on rather than living in a wrapper, so the grid
+          stays the one thing laying this menu out. */}
+      {isFull && headroom ? (
+        <div className="col-span-4 pt-1">
+          <PlanLimitNote id={noteId} resource="places" headroom={headroom} />
+        </div>
+      ) : null}
     </div>
   );
 }

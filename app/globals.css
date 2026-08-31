@@ -105,6 +105,35 @@
   --danger: oklch(65.32% 0.2378 359.62);
   --danger-foreground: oklch(99.11% 0 0);
 
+  /*
+   * A pin that is switched off, wherever one is drawn.
+   *
+   * Three values rather than one, for the reason spelled out in full at
+   * `.picking-pins .map-pin--unroutable` below: the glyph has to stay darker
+   * than the body or a grey-on-grey pin is a smudge rather than a disabled
+   * control, and the ring is what tells a grey ball from a pale category
+   * colour. They started life inline in that rule and were lifted here when the
+   * plan limit needed the same grey on a *tile* — one "off" for a pin the
+   * router cannot reach and a pin the plan will not let you drop, because they
+   * mean the same thing to the person looking at them.
+   *
+   * The tile takes the body and the glyph and leaves the ring: see
+   * `.pin-preview--muted`, which wears the ordinary white one, because the dark
+   * outline exists to survive an unknown basemap and a tile's background is not
+   * unknown. `--pin-muted-ring` is therefore read by the marker alone now.
+   *
+   * Deliberately not redefined under `.dark`. These are read against a pin's own
+   * saturated colours and against sixteen different basemaps, not against the
+   * page, and a grey that moved with the theme would have to be legible on all
+   * of them twice. On a tile the same value happens to land on the right side of
+   * both plates — well above `--default` at 27% in the dark theme, well below it
+   * at 94% in the light one — so the pin separates from what it sits on in each,
+   * even though only the dark half separates *upwards*.
+   */
+  --pin-muted: oklch(72% 0.005 260);
+  --pin-muted-ring: oklch(15% 0.01 260);
+  --pin-muted-icon: oklch(32% 0.01 260);
+
   /* Multiplier for the whole radius scale — see rule 2. `--field-radius` is
      deliberately unset so it derives to calc(var(--radius) * 1.5). */
   --radius: 0.5rem;
@@ -839,12 +868,15 @@
  * `--accent-foreground`, which is near-white and is what makes an icon legible
  * on a saturated pin; grey on grey erases the icon, and an unreadable pin is not
  * a disabled pin, it is a smudge.
+ *
+ * The three greys are `--pin-muted*` at the top of this file, because a pin the
+ * plan limit has switched off wears the same ones — see `.pin-preview--muted`.
  */
 .picking-pins .map-pin--unroutable .map-pin__dot,
 .picking-pins .map-pin--unroutable .map-pin__shape {
-  --pin-color: oklch(72% 0.005 260);
-  --pin-ring: oklch(15% 0.01 260);
-  --pin-icon-color: oklch(32% 0.01 260);
+  --pin-color: var(--pin-muted);
+  --pin-ring: var(--pin-muted-ring);
+  --pin-icon-color: var(--pin-muted-icon);
 
   transform: none;
 }
@@ -1662,6 +1694,64 @@ body.is-pin-dragging * {
 
 .pin-preview .pin-svg__glyph {
   stroke: var(--pin-icon-color, var(--accent-foreground));
+}
+
+/*
+ * A pin you are being told you cannot have — the plan limit, or a pin library
+ * that is full.
+ *
+ * The same three greys the unroutable marker wears, and for the same reasons
+ * argued at length up there: not `opacity`, which reads as *faint* rather than
+ * as *off*, and not `grayscale(1)`, which preserves luminance and leaves a
+ * white glyph white.
+ *
+ * **The properties go on `.pin-svg__body` and `.pin-svg__glyph`, never on
+ * `.pin-preview--muted` itself.** `pinCssVars` writes `--pin-color` and friends
+ * as *inline* declarations on the `.pin-preview` span, and inline beats
+ * anything the span inherits — so a rule on that same element loses to the
+ * pin's own colour and the tile stays vermilion. On the children, which are the
+ * elements whose `fill` and `stroke` actually consume the variables, the
+ * declaration outranks the inherited value. This is the identical trap the
+ * marker rule documents; it is repeated here because the two are far apart in
+ * this file and the symptom — a tile that simply does not go grey — gives no
+ * hint of the cause.
+ *
+ * An uploaded logo is the one part of a pin the variables cannot reach: it is
+ * raster, so `fill` means nothing to it. `grayscale(1)` is rejected everywhere
+ * else here and is the only tool for this one, and it is right on a photograph
+ * where it was wrong on a flat colour.
+ */
+.pin-preview--muted .pin-svg__body {
+  --pin-color: var(--pin-muted);
+
+  /*
+   * A white ring, not `--pin-muted-ring`.
+   *
+   * The marker's near-black outline is right *out on a basemap*, where it is the
+   * only thing separating a grey ball from pale ground it might be part of. A
+   * tile is not a basemap: it has a known fill under it, and twelve pins each
+   * ringed in black read as twelve holes punched in the popover. So the tile
+   * keeps the ring every ordinary pin wears — `--accent-foreground`, the same
+   * default the unmuted rule above falls back to — and the pin says "off" with
+   * its colour alone, which is the one thing that actually changed.
+   *
+   * The width is pinned as well, and that is not belt and braces. A pin the user
+   * built can choose `none`, which `pinCssVars` writes as `--pin-ring-width: 0`
+   * inline on the `.pin-preview` span — so those pins, and only those, would
+   * come out of this with no outline at all: a grey blob on a grey plate. Both
+   * properties are set on this element rather than the span for the reason the
+   * comment above gives; inherited values lose here, inline ones do not.
+   */
+  --pin-ring: var(--accent-foreground);
+  --pin-ring-width: 1.5;
+}
+
+.pin-preview--muted .pin-svg__glyph {
+  --pin-icon-color: var(--pin-muted-icon);
+}
+
+.pin-preview--muted .pin-svg__image {
+  filter: grayscale(1);
 }
 
 /*

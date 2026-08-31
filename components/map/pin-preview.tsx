@@ -40,6 +40,7 @@ export function PinPreview({
   color,
   fallbackColor,
   size = "md",
+  isMuted,
   className = "",
 }: {
   /** "" for a plain pin, a built-in id, or `custom:<id>`. */
@@ -60,6 +61,15 @@ export function PinPreview({
    * slider quietly stopping.
    */
   size?: "sm" | "md" | "tile" | "lg" | "xl" | "fill";
+  /**
+   * Draws the pin switched off — grey body, darker glyph, greyed logo.
+   *
+   * For a pin you are being told you cannot pick: the plan limit has been
+   * reached, or the map's pin library is full. The colours still arrive through
+   * `pinCssVars` below; `.pin-preview--muted` overrides them on the SVG's own
+   * children, which is the only place it can (see app/globals.css).
+   */
+  isMuted?: boolean;
   className?: string;
 }) {
   const pin = resolvePin(icon, pinIcons);
@@ -68,8 +78,8 @@ export function PinPreview({
     <span
       aria-hidden="true"
       className={`pin-preview${size === "md" ? "" : ` pin-preview--${size}`}${
-        className ? ` ${className}` : ""
-      }`}
+        isMuted ? " pin-preview--muted" : ""
+      }${className ? ` ${className}` : ""}`}
       // Ring, thickness, glyph colour and size travel with the fill, through the
       // one helper the markers and the drag ghost also use.
       style={pinCssVars(pin, color, fallbackColor) as CSSProperties}

@@ -3,7 +3,7 @@ import type { Models } from "node-appwrite";
 import type { MapStyleKey } from "@/lib/map/style";
 import type { OpeningHours } from "@/packages/shared/hours";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
-import type { ShapeGeometry } from "@/packages/shared/shapes";
+import type { ShapeGeometry, ShapeStrokeStyle } from "@/packages/shared/shapes";
 import type { AddressParts, GeocodeStatus } from "@/lib/validation/place.schema";
 import type { CustomFieldInput } from "@/lib/validation/field.schema";
 import type { TagGroupInput } from "@/lib/validation/tag.schema";
@@ -68,6 +68,9 @@ export type ShapeRow = Models.Row & {
   description?: string | null;
   color?: string | null;
   opacity?: number | null;
+  /** 0 for every row written before the column existed. See `strokeWidthOf`. */
+  strokeWidth?: number | null;
+  strokeStyle?: string | null;
   geometry: string;
   sortOrder?: number | null;
   groupId?: string | null;
@@ -204,8 +207,18 @@ export type Shape = {
   description: string | null;
   /** Hex. A shape's own, not a category's — see the schema for why. */
   color: string;
-  /** 0–1. The fill only; the outline is always drawn solid. */
+  /** 0–1. The fill only; the outline is always drawn at full opacity. */
   opacity: number;
+  /**
+   * The outline's width in pixels, or null for the default for this kind.
+   *
+   * Null rather than a number, because the default is 4px for a line and 2px for
+   * an area's edge and this type does not know which it is. `strokeWidthOf` in
+   * packages/shared/shapes.ts is what resolves it, and both renderers call it.
+   */
+  strokeWidth: number | null;
+  /** Solid, dashed or dotted. Never null — an unreadable row reads as solid. */
+  strokeStyle: ShapeStrokeStyle;
   geometry: ShapeGeometry;
   sortOrder: number;
   /** The group this belongs to, or "" — see the `Group` type below. */

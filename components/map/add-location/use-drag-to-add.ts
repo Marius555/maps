@@ -91,11 +91,22 @@ export function useDragToAdd({
   });
 
   /*
-   * There is no `isDisabled` here any more, and its absence is the point. The
-   * plan limit used to switch this off, so a customer at ten locations dragged a
-   * pin that never left the button and was told nothing. The gesture now always
-   * runs; the 403 it earns is what carries the explanation (see
-   * lib/query/plan-limit-toast.ts).
+   * There is no `isDisabled` here, and there never should be.
+   *
+   * The plan limit used to switch this hook off, and that was reverted: a
+   * customer at ten locations dragged a pin that never left the button and was
+   * told nothing, so the gesture was made unconditional and the 403 it earned
+   * carried the explanation instead.
+   *
+   * The limit *does* stop a drag again now — but a step up, by withholding
+   * `dragProps` from the tiles and from the add button's wrapper, next to the
+   * grey pin and the sentence saying why (see pin-grid.tsx). That is the
+   * difference the revert was about: the refusal and its reason arrive together,
+   * on the control, rather than as a dead gesture. This hook stays a gesture and
+   * knows nothing about plans; a source that hands it no props starts no drag.
+   *
+   * So do not reintroduce a flag here. There would then be two places deciding
+   * one thing, and the one without the sentence beside it would win silently.
    */
   const onPointerDown = useCallback(
     (event: React.PointerEvent, payload: string) => {

@@ -327,3 +327,43 @@ export const MIN_LINE_POINTS = 2;
 export function routeOf(geometry: ShapeGeometry): LineRoute | null {
   return geometry.kind === "line" ? (geometry.route ?? null) : null;
 }
+
+/**
+ * How a shape's outline is marked out: one continuous stroke, dashes, or dots.
+ *
+ * Here rather than in /lib because the embed draws it too, and here rather than
+ * beside `ShapeKind` in the schema because it is not a discriminator — a dotted
+ * circle is still a circle, and nothing switches on this except the renderers.
+ *
+ * "solid" is first and is what absent means. Every shape written before this
+ * existed reads back as solid, which is exactly what it has always been drawn as.
+ */
+export const SHAPE_STROKE_STYLES = ["solid", "dashed", "dotted"] as const;
+
+export type ShapeStrokeStyle = (typeof SHAPE_STROKE_STYLES)[number];
+
+/**
+ * The widths a shape is drawn at when nobody has chosen one.
+ *
+ * A line is the whole object, so it is drawn heavier than an area's edge — and
+ * with no fill behind it, a hairline is also a thing you cannot reliably click.
+ * These are the two numbers both renderers hard-coded before the width was
+ * settable, and they stay the answer so that no existing map moves.
+ */
+export const DEFAULT_LINE_STROKE_WIDTH = 4;
+export const DEFAULT_AREA_STROKE_WIDTH = 2;
+
+/**
+ * The width a shape is actually drawn at.
+ *
+ * `stored` is 0 for every row written before the column existed, and null for a
+ * shape whose owner has never opened the control — both mean "the default for
+ * this kind", which is a value no column default could hold because it depends
+ * on the kind. Resolved here, once, so neither renderer's paint expression has
+ * to know the rule and the two cannot drift.
+ */
+export function strokeWidthOf(isLine: boolean, stored?: number | null): number {
+  if (stored != null && stored > 0) return stored;
+
+  return isLine ? DEFAULT_LINE_STROKE_WIDTH : DEFAULT_AREA_STROKE_WIDTH;
+}

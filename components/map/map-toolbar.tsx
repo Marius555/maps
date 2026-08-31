@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 import { IconButton } from "@/components/ui/icon-button";
 import type { ExportOptions } from "@/lib/export/export-map";
+import type { PlanHeadroom } from "@/lib/map/plan-headroom";
 import type { MapStyleKey } from "@/lib/map/style";
 import type { MapAppearanceSettings } from "@/lib/validation/map-appearance.schema";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
@@ -55,6 +56,7 @@ export function MapToolbar({
   hasSavedView,
   style,
   appearance,
+  limits,
   search,
   onPickIcon,
   onStopAdding,
@@ -96,6 +98,20 @@ export function MapToolbar({
   style: MapStyleKey;
   /** Labels and layer toggles, normalised. */
   appearance: MapAppearanceSettings;
+  /**
+   * What the plan still has room for, so the controls that spend it can say so
+   * before they are used rather than after.
+   *
+   * One object rather than four scalars, following `exportControl` below: these
+   * numbers are only ever read together, and a component that takes `placeLimit`
+   * and `placeCount` separately is one refactor away from being handed a count
+   * and somebody else's limit. Optional throughout — absent, nothing greys,
+   * which is exactly what this toolbar did before.
+   */
+  limits?: {
+    places: PlanHeadroom;
+    shapes: PlanHeadroom;
+  };
   search?: ReactNode;
   onPickIcon: (icon: string) => void;
   onStopAdding: () => void;
@@ -158,6 +174,7 @@ export function MapToolbar({
           recentIcons={recentIcons}
           pinIcons={pinIcons}
           isBusy={isBusy}
+          headroom={limits?.places}
           onPickIcon={onPickIcon}
           onStopAdding={onStopAdding}
           onDropPin={onDropPin}
@@ -172,6 +189,7 @@ export function MapToolbar({
           drawMode={drawMode}
           isRouting={isRouting}
           isBusy={isDrawingBusy}
+          headroom={limits?.shapes}
           onPickTool={onPickTool}
           onPickRoute={onPickRoute}
           onStopDrawing={onStopDrawing}

@@ -72,6 +72,8 @@ function makeShape(overrides: Partial<Shape> = {}): Shape {
     description: null,
     color: "#1c7ed6",
     opacity: 0.2,
+    strokeWidth: null,
+    strokeStyle: "solid",
     geometry: { kind: "circle", lng: 25.28, lat: 54.687, radius: 1200 },
     sortOrder: 0,
     groupId: "",
@@ -775,6 +777,46 @@ describe("buildSnapshot", () => {
       expect(snapshot.shapes?.[0]).not.toHaveProperty("description");
       expect(snapshot.shapes?.[0]).not.toHaveProperty("mapId");
       expect(snapshot.shapes?.[0]).not.toHaveProperty("sortOrder");
+    });
+
+    /*
+     * The bytes are the point. A map whose owner never opened the stroke
+     * controls has to publish the same file it published before those controls
+     * existed — otherwise a republish is a change to a live customer's site, and
+     * the embed falls back to a width and a marking of its own for every one of
+     * the snapshots already out there.
+     */
+    it("says nothing about a stroke nobody chose", () => {
+      const { snapshot } = buildSnapshot(makeMap(), [], [makeShape()], GENERATED_AT);
+
+      expect(snapshot.shapes?.[0]).not.toHaveProperty("strokeWidth");
+      expect(snapshot.shapes?.[0]).not.toHaveProperty("strokeStyle");
+    });
+
+    it("publishes a stroke somebody did choose", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap(),
+        [],
+        [makeShape({ strokeWidth: 8, strokeStyle: "dotted" })],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.shapes?.[0]).toMatchObject({
+        strokeWidth: 8,
+        strokeStyle: "dotted",
+      });
+    });
+
+    it("still omits a marking left on solid", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap(),
+        [],
+        [makeShape({ strokeWidth: 8, strokeStyle: "solid" })],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.shapes?.[0]).toHaveProperty("strokeWidth", 8);
+      expect(snapshot.shapes?.[0]).not.toHaveProperty("strokeStyle");
     });
 
     it("rounds coordinates and radius", () => {

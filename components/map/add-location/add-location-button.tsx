@@ -4,6 +4,7 @@ import { Button, Popover } from "@heroui/react";
 import { MapPin } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { isAtLimit, type PlanHeadroom } from "@/lib/map/plan-headroom";
 import { allPinIcons } from "@/lib/map/pin-pages";
 import { PinGrid } from "./pin-grid";
 import { useDragToAdd } from "./use-drag-to-add";
@@ -39,6 +40,17 @@ import type { CustomPinIcon } from "@/packages/shared/pin-icons";
  * in `onOpenChange` rather than in a press handler because that is now the only
  * thing a press does here: the flag is read-clears, and two consumers of it would
  * leave one reading false.
+ *
+ * **At the plan's location limit this button still opens, and that is the whole
+ * design.** The pins inside go grey and a line under them says why (see
+ * PinGrid). Disabling the control itself would put the only explanation behind
+ * the state it explains, which is the mistake this greying was reverted for once
+ * before — lib/query/plan-limit-toast.ts has the history.
+ *
+ * Its own drag has to be withheld separately, though, and that is easy to miss:
+ * this button is a drag source in its own right, carrying a plain pin from the
+ * wrapper span below, and it is *not* one of the grid's tiles. Greying the grid
+ * alone would leave the oldest route to a new location wide open at the limit.
  */
 export function AddLocationButton({
   isAdding,
@@ -46,6 +58,7 @@ export function AddLocationButton({
   recentIcons,
   pinIcons,
   isBusy,
+  headroom,
   onPickIcon,
   onStopAdding,
   onDropPin,
@@ -60,6 +73,8 @@ export function AddLocationButton({
   /** The map's own pins, for drawing a `custom:` id in the grid and the ghost. */
   pinIcons: CustomPinIcon[];
   isBusy: boolean;
+  /** The location allowance, for greying the grid — see PinGrid. */
+  headroom?: PlanHeadroom;
   onPickIcon: (icon: string) => void;
   onStopAdding: () => void;
   onDropPin: (clientX: number, clientY: number, icon: string) => void;
@@ -74,6 +89,8 @@ export function AddLocationButton({
     () => allPinIcons(pinIcons, recentIcons),
     [pinIcons, recentIcons],
   );
+
+  const isFull = headroom ? isAtLimit(headroom) : false;
 
   const { isDragging, dragProps, consumeDidDrag } = useDragToAdd({
     onDrop: onDropPin,
@@ -121,8 +138,12 @@ export function AddLocationButton({
        * It drags a *plain* pin, not the armed icon, because the button draws a
        * plain pin — what you drag should be what you can see you are dragging.
        * The grid is where a shaped pin comes from.
+       *
+       * Withheld at the plan limit, matching the grid's tiles: there is nowhere
+       * for the pin to land, and carrying one across the map to be refused is
+       * the gesture this greying exists to stop.
        */}
-      <span {...dragProps("")} className="inline-flex">
+      <span {...(isFull ? {} : dragProps(""))} className="inline-flex">
         <Button
           size="sm"
           variant={isAdding ? "primary" : "tertiary"}
@@ -184,6 +205,7 @@ export function AddLocationButton({
             pinIcons={pinIcons}
             armedIcon={addIcon}
             isAdding={isAdding}
+            headroom={headroom}
             dragProps={dragProps}
             onPageChange={setPage}
             onPick={(icon) => {

@@ -8,17 +8,38 @@ import { ApiError } from "./fetcher";
  * Say the plan limit out loud.
  *
  * `planLimitMessage` in lib/repositories/errors.ts composes a good sentence — what
- * you have used, out of what, on which plan, and the two ways out of it — and
- * until now the map editor made sure nobody ever read it. Being at the limit
- * disabled the add button, the drag gesture and the search's `+`, so the 403 that
- * carries the sentence was never provoked. What the user got was a grey button.
+ * you have used, out of what, on which plan, and the two ways out of it. There was
+ * a version of the editor where nobody ever read it: being at the limit disabled
+ * the add button, the drag gesture and the search's `+`, so the 403 that carries
+ * the sentence was never provoked, and what the user got was a grey button. The
+ * controls were made live again and this toast was the other half — the attempt
+ * goes through, the server refuses it, and the refusal is shown.
  *
- * The controls are live again and this is the other half: the attempt goes
- * through, the server refuses it, and the refusal is shown. A toast rather than
- * an alert in the sidebar because the three paths that hit this — dragging a pin,
- * clicking the map in add mode, pressing `+` in the search — all happen out on the
- * canvas, where there is no inline space to put a sentence and no reason to think
- * the user is looking at the panel.
+ * **The controls grey again now, and this is still needed.** What changed is that
+ * the greying no longer happens on its own: the pin grid and the Draw menu render
+ * the first half of that sentence beside the tiles they switch off — the count and
+ * the plan, from `planLimitUsage`, which this message is built on top of — so the
+ * reason arrives with the refusal instead of a gesture later (see
+ * lib/map/plan-headroom.ts). That was the whole objection, and it is answered.
+ *
+ * The half the menu leaves out is the half a toast owes and an inline note does
+ * not: "delete a location to add another, or upgrade for more" is worth saying to
+ * someone whose gesture was just refused out on the canvas, and is scenery under a
+ * grid of tiles in a menu they opened on purpose.
+ *
+ * This covers everything that grey cannot, which is more than it sounds:
+ *
+ *   - A count that was right when the menu rendered and is not any more — a
+ *     second tab, an import, a plan that lapsed.
+ *   - The map click of an add mode armed *before* the limit was reached. Add mode
+ *     is deliberately not disarmed by a create landing, so the pin that fills the
+ *     last slot leaves a tool armed for one more click.
+ *   - A drawing gesture already in progress when the ceiling arrives. The Draw
+ *     menu never takes a tool out from under a half-drawn polygon.
+ *
+ * A toast rather than an alert in the sidebar because every one of those happens
+ * out on the canvas, where there is no inline space for a sentence and no reason
+ * to think the user is looking at the panel.
  *
  * Sits beside `applyFieldErrors`, which does the same kind of work for forms:
  * take an ApiError, put it where it belongs, and report whether it was handled so

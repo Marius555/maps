@@ -7,6 +7,8 @@ import {
   MAX_BULK_SHAPES,
   MAX_POLYGON_POINTS,
   MAX_ROUTE_STOPS,
+  MAX_STROKE_WIDTH,
+  MIN_STROKE_WIDTH,
   bulkCreateShapesSchema,
   createShapeSchema,
   shapeGeometrySchema,
@@ -91,6 +93,63 @@ describe("createShapeSchema", () => {
     });
 
     expect(parsed.color).toBe("#e8590c");
+  });
+
+  /*
+   * Unlike colour and opacity, the stroke is *not* filled in. Nothing chooses a
+   * thickness or a marking at the moment a shape is drawn, and absent is what
+   * lets the repository write the column's own "unset" — which is what makes a
+   * shape drawn today look identical to one drawn before these existed.
+   */
+  it("leaves the stroke unset on a drawn shape", () => {
+    const parsed = createShapeSchema.parse({ name: "Zone", geometry: circle });
+
+    expect(parsed.strokeWidth).toBeUndefined();
+    expect(parsed.strokeStyle).toBeUndefined();
+  });
+
+  it("accepts a stroke somebody chose", () => {
+    const parsed = createShapeSchema.parse({
+      name: "Zone",
+      geometry: circle,
+      strokeWidth: 8,
+      strokeStyle: "dotted",
+    });
+
+    expect(parsed.strokeWidth).toBe(8);
+    expect(parsed.strokeStyle).toBe("dotted");
+  });
+
+  it("holds thickness to the range the column allows", () => {
+    for (const width of [MIN_STROKE_WIDTH, MAX_STROKE_WIDTH]) {
+      expect(
+        createShapeSchema.safeParse({ name: "Zone", geometry: circle, strokeWidth: width })
+          .success,
+      ).toBe(true);
+    }
+
+    // 0 is the column's "unset", not a width anyone may ask for, and anything
+    // past the cap would be refused by Appwrite as a 500 rather than by us.
+    for (const width of [0, MAX_STROKE_WIDTH + 1, 2.5, -1]) {
+      expect(
+        createShapeSchema.safeParse({ name: "Zone", geometry: circle, strokeWidth: width })
+          .success,
+      ).toBe(false);
+    }
+  });
+
+  it("takes only the three markings", () => {
+    for (const style of ["solid", "dashed", "dotted"]) {
+      expect(
+        createShapeSchema.safeParse({ name: "Zone", geometry: circle, strokeStyle: style })
+          .success,
+      ).toBe(true);
+    }
+
+    expect(
+      createShapeSchema.safeParse({ name: "Zone", geometry: circle, strokeStyle: "wavy" })
+        .success,
+    ).toBe(false);
   });
 });
 

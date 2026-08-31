@@ -10,6 +10,10 @@ import {
 import { DEFAULT_GROUP_COLOR } from "@/lib/validation/group.schema";
 import { toShapeGeometry } from "./shape-geometry";
 import {
+  SHAPE_STROKE_STYLES,
+  type ShapeStrokeStyle,
+} from "@/packages/shared/shapes";
+import {
   DEFAULT_SHAPE_COLOR,
   DEFAULT_SHAPE_OPACITY,
 } from "@/lib/validation/shape.schema";
@@ -81,6 +85,17 @@ export function toAppMap(row: MapRow): AppMap {
  * nothing and can still be selected and deleted, which is a better answer than a
  * map that refuses to load.
  */
+/**
+ * A stored stroke style, or solid.
+ *
+ * Membership rather than a cast, for the reason at the top of this file: a row
+ * hand-edited in the Appwrite console, or written by a newer version of the app,
+ * must read as something rather than take the whole list down.
+ */
+function toStrokeStyle(value: string | null | undefined): ShapeStrokeStyle {
+  return SHAPE_STROKE_STYLES.find((style) => style === value) ?? "solid";
+}
+
 export function toShape(row: ShapeRow): Shape {
   return {
     id: row.$id,
@@ -89,6 +104,10 @@ export function toShape(row: ShapeRow): Shape {
     description: row.description ?? null,
     color: row.color ?? DEFAULT_SHAPE_COLOR,
     opacity: row.opacity ?? DEFAULT_SHAPE_OPACITY,
+    // 0 is the column's own "nobody has chosen one", which is every row written
+    // before the column existed — not a zero-width outline.
+    strokeWidth: row.strokeWidth && row.strokeWidth > 0 ? row.strokeWidth : null,
+    strokeStyle: toStrokeStyle(row.strokeStyle),
     geometry: toShapeGeometry(row),
     sortOrder: row.sortOrder ?? 0,
     groupId: row.groupId ?? "",

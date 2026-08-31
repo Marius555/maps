@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { planLimitMessage, planLimitUsage } from "./errors";
 import { PLAN_LIMITS } from "./plan-limits";
 
 /**
@@ -385,5 +386,34 @@ describe("createShapes", () => {
     const { rows } = createRows.mock.calls[0][0];
     expect(rows[0].kind).toBe("polygon");
     expect(JSON.parse(rows[0].geometry)).not.toHaveProperty("kind");
+  });
+});
+
+describe("planLimitMessage", () => {
+  /*
+   * The refusal and the pre-emptive warning under the pin grid are one sentence
+   * cut in half — `planLimitUsage` is the half the menu shows (see
+   * lib/map/plan-headroom.ts). Nothing else holds them together, so if the
+   * composers are ever edited apart this is where it shows up rather than as two
+   * screens quietly disagreeing about the same ceiling.
+   */
+  it("opens with the warning's own words", () => {
+    const full = planLimitMessage("places", 10, "free");
+
+    expect(full.startsWith(planLimitUsage("places", 10, "free"))).toBe(true);
+  });
+
+  it("adds the two ways out, which the toast is what carries", () => {
+    expect(planLimitMessage("shapes", 3, "free")).toBe(
+      "You've used all 3 shapes included on the free plan. " +
+        "Delete a shape to add another, or upgrade for more.",
+    );
+  });
+
+  it("says one map rather than all 1 maps", () => {
+    // The free plan's map allowance is the only limit that is ever 1.
+    expect(planLimitUsage("maps", 1, "free")).toBe(
+      "You've used 1 map included on the free plan.",
+    );
   });
 });

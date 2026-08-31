@@ -107,6 +107,8 @@ export function useCreateShape(mapId: string) {
         description: input.description ?? null,
         color: input.color ?? DEFAULT_SHAPE_COLOR,
         opacity: input.opacity ?? DEFAULT_SHAPE_OPACITY,
+        strokeWidth: input.strokeWidth ?? null,
+        strokeStyle: input.strokeStyle ?? "solid",
         geometry: input.geometry,
         sortOrder: input.sortOrder ?? 0,
         groupId: input.groupId ?? "",

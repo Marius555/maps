@@ -10,8 +10,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { Shape } from "@/lib/repositories/types";
 import type { ShapeGeometry, ShapeKind } from "@/packages/shared/shapes";
 import {
-  SHAPE_FILL_LAYER,
-  SHAPE_LINE_LAYER,
+  SHAPE_HIT_LAYERS,
   SHAPE_SOURCE,
   addShapeLayers,
   draftFeatures,
@@ -212,14 +211,17 @@ export function useShapeLayers({
       instance.getCanvas().style.cursor = "";
     };
 
-    for (const layer of [SHAPE_FILL_LAYER, SHAPE_LINE_LAYER]) {
+    // Every layer a shape can be drawn in, dashed and dotted included — a
+    // marking must not decide whether the thing wearing it can be clicked. The
+    // canvas's own handler tests the same list.
+    for (const layer of SHAPE_HIT_LAYERS) {
       instance.on("click", layer, handleClick);
       instance.on("mouseenter", layer, enter);
       instance.on("mouseleave", layer, leave);
     }
 
     return () => {
-      for (const layer of [SHAPE_FILL_LAYER, SHAPE_LINE_LAYER]) {
+      for (const layer of SHAPE_HIT_LAYERS) {
         instance.off("click", layer, handleClick);
         instance.off("mouseenter", layer, enter);
         instance.off("mouseleave", layer, leave);

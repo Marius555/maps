@@ -70,6 +70,8 @@ function makeShape(updatedAt: string): Shape {
     description: null,
     color: "#1c7ed6",
     opacity: 0.2,
+    strokeWidth: null,
+    strokeStyle: "solid",
     geometry: { kind: "circle", lng: 25.28, lat: 54.687, radius: 1200 },
     sortOrder: 0,
     groupId: "",

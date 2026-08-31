@@ -11,7 +11,9 @@ import {
   MIN_POLYGON_POINTS,
   shapePoints,
   shapePolygon,
+  strokeWidthOf,
   type ShapeGeometry,
+  type ShapeStrokeStyle,
 } from "@/packages/shared/shapes";
 
 /**
@@ -36,6 +38,26 @@ export const SHAPE_SOURCE = "editor-shapes";
 export const SHAPE_FILL_LAYER = "editor-shape-fills";
 export const SHAPE_LINE_LAYER = "editor-shape-outlines";
 /**
+ * The two markings that are not one continuous stroke.
+ *
+ * A layer each rather than a data-driven `line-dasharray` on the layer above,
+ * for the reason the draft layer below gives at length: a dash is drawn by the
+ * SDF shader, and a `case` puts *every* feature in the layer through it —
+ * including every solid shape, which would then be rasterised differently from
+ * the identical shape the embed draws beside it in the preview panel. Splitting
+ * them leaves a solid outline on exactly the pixels it has always been on.
+ *
+ * Splitting them is also what lets each have its own cap, and the caps are not
+ * interchangeable. A round cap adds half a width at each end of every dash,
+ * which closes a [2, 2] gap — and a round cap on a zero-length dash is exactly
+ * what turns [0, 2] into a row of dots.
+ *
+ * Dash lengths are multiples of the line width, so both patterns scale with a
+ * shape's own thickness without either number being touched.
+ */
+export const SHAPE_DASHED_LINE_LAYER = "editor-shape-dashed-outlines";
+export const SHAPE_DOTTED_LINE_LAYER = "editor-shape-dotted-outlines";
+/**
  * The outline of whatever is being drawn right now — dashed, and its own layer.
  *
  * `line-dasharray` *is* data-driven in maplibre-gl 6, so this could have been a
@@ -56,7 +78,12 @@ export const SHAPE_VERTEX_LAYER = "editor-shape-vertices";
  * The layers a click has to be tested against before it counts as a click on the
  * basemap. The canvas reads this to decide whether a click clears the selection.
  */
-export const SHAPE_HIT_LAYERS = [SHAPE_FILL_LAYER, SHAPE_LINE_LAYER];
+export const SHAPE_HIT_LAYERS = [
+  SHAPE_FILL_LAYER,
+  SHAPE_LINE_LAYER,
+  SHAPE_DASHED_LINE_LAYER,
+  SHAPE_DOTTED_LINE_LAYER,
+];
 
 type ShapeProperties = {
   id: string;
@@ -65,11 +92,27 @@ type ShapeProperties = {
   /** MapLibre expressions read booleans fine; it is the nesting it can't take. */
   selected: boolean;
   /**
-   * Drives line width. An area's outline is a 2px edge around a fill that is
-   * doing most of the talking; a line has no fill, so the same 2px reads as a
-   * hairline rather than the object itself.
+   * Whether a fill is meaningful here, and which default width applies. An
+   * area's outline is an edge around a fill that is doing most of the talking;
+   * a line has no fill, so the same width reads as a hairline rather than as
+   * the object itself.
    */
   isLine: boolean;
+  /**
+   * The outline's width in pixels, already resolved.
+   *
+   * Resolved in TypeScript rather than in the paint expression because the
+   * default depends on the kind, and `strokeWidthOf` is the one place that rule
+   * lives — the embed asks it the same question about the same shape.
+   */
+  width: number;
+  /**
+   * Which of the three outline layers paints this feature.
+   *
+   * One tri-state string rather than a `dashed` and a `dotted` boolean: two
+   * booleans have four states and only three of them mean anything.
+   */
+  stroke: ShapeStrokeStyle;
   /**
    * Still being drawn, and not yet a row anybody could open.
    *
@@ -118,6 +161,8 @@ export function shapeFeature(
       opacity: shape.opacity,
       selected: isSelected,
       isLine,
+      width: strokeWidthOf(isLine, shape.strokeWidth),
+      stroke: shape.strokeStyle,
       draft: false,
     },
   };
@@ -140,6 +185,11 @@ export function draftFeatures(
     opacity: DEFAULT_SHAPE_OPACITY,
     selected: true,
     isLine: geometry.kind === "line",
+    // The draft has a layer of its own with its own constant width and dash, so
+    // neither of these is read while `draft` is true. They are set to what the
+    // draft layer draws so that the two cannot disagree if that ever changes.
+    width: 2,
+    stroke: "solid",
     draft: true,
   };
 
@@ -198,6 +248,36 @@ function firstSymbolLayerId(map: MapLibreMap): string | undefined {
   return map.getStyle().layers?.find((layer) => layer.type === "symbol")?.id;
 }
 
+/**
+ * How much heavier a selected shape is drawn.
+ *
+ * A multiplier and not an increment, so it means the same thing at every width:
+ * at 1px an added 2px would treble a hairline, and at 12px it would be invisible.
+ */
+const SELECTED_WIDTH_SCALE = 1.5;
+
+/**
+ * One outline layer per marking, in the order they are stacked.
+ *
+ * A table rather than three near-identical `addLayer` calls: the paint block is
+ * the same in all three and only the filter, the cap and the dash differ, so the
+ * ways they can drift apart are exactly the ways they are meant to.
+ */
+const OUTLINE_LAYERS: {
+  id: string;
+  stroke: ShapeStrokeStyle;
+  cap: "round" | "butt";
+  dash: [number, number] | null;
+}[] = [
+  { id: SHAPE_LINE_LAYER, stroke: "solid", cap: "round", dash: null },
+  // Butt, because a round cap adds half a width at each end of every dash and at
+  // this spacing that closes the gaps and draws a solid line with dents in it.
+  { id: SHAPE_DASHED_LINE_LAYER, stroke: "dashed", cap: "butt", dash: [2, 2] },
+  // Round, and a zero-length dash: a cap on nothing is a circle, which is the
+  // only way MapLibre draws a dotted line.
+  { id: SHAPE_DOTTED_LINE_LAYER, stroke: "dotted", cap: "round", dash: [0, 2] },
+];
+
 /** Idempotent: safe to call again after a style swap has dropped everything. */
 export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): void {
   if (!map.getSource(SHAPE_SOURCE)) {
@@ -237,31 +317,44 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
     );
   }
 
-  if (!map.getLayer(SHAPE_LINE_LAYER)) {
+  for (const outline of OUTLINE_LAYERS) {
+    if (map.getLayer(outline.id)) continue;
+
     map.addLayer(
       {
-        id: SHAPE_LINE_LAYER,
+        id: outline.id,
         type: "line",
         source: SHAPE_SOURCE,
-        // Saved shapes only. The draft has its own layer below, and without this
-        // it would be painted twice — solid underneath its own dashes, which is
-        // simply a solid line.
-        filter: ["!", ["get", "draft"]],
-        layout: { "line-join": "round", "line-cap": "round" },
+        filter: [
+          "all",
+          // Saved shapes only. The draft has its own layer below, and without
+          // this it would be painted twice — solid underneath its own dashes,
+          // which is simply a solid line.
+          ["!", ["get", "draft"]],
+          ["==", ["get", "stroke"], outline.stroke],
+        ],
+        layout: { "line-join": "round", "line-cap": outline.cap },
         paint: {
           "line-color": ["get", "color"],
-          // The outline is solid whatever the fill is set to. A shape at 5% fill
-          // still has to be findable, and its edge is what makes it so.
+          // The outline is drawn at full opacity whatever the fill is set to. A
+          // shape at 5% fill still has to be findable, and its edge is what
+          // makes it so.
           "line-opacity": 1,
-          // A line is the whole object, so it is drawn heavier than an area's
-          // edge — and it has no fill to widen its hit target, so a hairline
-          // would also be a thing you cannot reliably click.
+          /*
+           * The width is already resolved per feature — see `shapeFeature`.
+           *
+           * Selecting a shape multiplies it rather than adding to it, which
+           * reproduces exactly what the two hard-coded pairs used to say (an
+           * area's 2 became 3, a line's 4 became 6) and keeps saying something
+           * proportionate once the owner picks 10.
+           */
           "line-width": [
             "case",
-            ["get", "isLine"],
-            ["case", ["get", "selected"], 6, 4],
-            ["case", ["get", "selected"], 3, 2],
+            ["get", "selected"],
+            ["*", ["get", "width"], SELECTED_WIDTH_SCALE],
+            ["get", "width"],
           ],
+          ...(outline.dash ? { "line-dasharray": outline.dash } : {}),
         },
       },
       beforeId,

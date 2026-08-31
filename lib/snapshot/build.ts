@@ -470,12 +470,24 @@ function isDrawableShape(shape: Shape): boolean {
  * here, and the geometry is flattened into the union the embed reads.
  */
 function toSnapshotShape(shape: Shape): SnapshotShape {
+  /*
+   * The stroke is written only where it says something.
+   *
+   * `strokeWidth` is null for every shape whose owner has never opened the
+   * control, and `strokeStyle` is "solid" for every one of them — so a map that
+   * predates these fields, or simply never used them, publishes byte-identical
+   * JSON to the file it published before they existed. That is the same
+   * discipline `description` and `durationS` already follow, and it is what
+   * keeps a republish from being a change to a customer's live site.
+   */
   const common = {
     id: shape.id,
     name: shape.name,
     color: shape.color,
     opacity: shape.opacity,
     ...(shape.description ? { description: shape.description } : {}),
+    ...(shape.strokeWidth ? { strokeWidth: shape.strokeWidth } : {}),
+    ...(shape.strokeStyle !== "solid" ? { strokeStyle: shape.strokeStyle } : {}),
   };
 
   if (shape.geometry.kind === "circle") {

@@ -22,7 +22,12 @@ import {
   UNCATEGORISED_PIN_COLOR,
   type CustomPinIcon,
 } from "@/packages/shared/pin-icons";
-import { shapePolygon, type AreaGeometry } from "@/packages/shared/shapes";
+import {
+  shapePolygon,
+  strokeWidthOf,
+  type AreaGeometry,
+  type ShapeStrokeStyle,
+} from "@/packages/shared/shapes";
 import {
   defaultCardLayout,
   type CardLayout,
@@ -66,6 +71,32 @@ const PIN_LAYER = "place-pins";
 const SHAPE_SOURCE_ID = "shapes";
 const SHAPE_FILL_LAYER = "shape-fills";
 const SHAPE_LINE_LAYER = "shape-outlines";
+const SHAPE_DASHED_LINE_LAYER = "shape-dashed-outlines";
+const SHAPE_DOTTED_LINE_LAYER = "shape-dotted-outlines";
+
+/**
+ * One line layer per marking, matching the editor's own table.
+ *
+ * A layer each rather than a data-driven `line-dasharray`, for the reason
+ * components/map/shapes/shape-layers.ts spells out: a `case` puts every feature
+ * in the layer through the SDF shader, solid ones included, and the editor draws
+ * the same shape beside this bundle in its preview panel. The caps are not
+ * interchangeable either — round closes a [2, 2] gap, and round on a zero-length
+ * dash is the only way MapLibre draws a dot.
+ *
+ * Dashes are multiples of the line width, so both patterns scale with a shape's
+ * own thickness.
+ */
+const OUTLINE_LAYERS: {
+  id: string;
+  stroke: ShapeStrokeStyle;
+  cap: "round" | "butt";
+  dash: [number, number] | null;
+}[] = [
+  { id: SHAPE_LINE_LAYER, stroke: "solid", cap: "round", dash: null },
+  { id: SHAPE_DASHED_LINE_LAYER, stroke: "dashed", cap: "butt", dash: [2, 2] },
+  { id: SHAPE_DOTTED_LINE_LAYER, stroke: "dotted", cap: "round", dash: [0, 2] },
+];
 
 /** Past this zoom, show individual pins rather than bubbles. */
 const CLUSTER_MAX_ZOOM = 14;
@@ -902,7 +933,10 @@ function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
           id: shape.id,
           color: shape.color,
           opacity: shape.opacity,
-          isLine: shape.kind === "line",
+          // Both absent on every snapshot published before these existed, which
+          // is what makes those maps draw exactly as they always have.
+          width: strokeWidthOf(shape.kind === "line", shape.strokeWidth),
+          stroke: shape.strokeStyle ?? "solid",
         },
       })),
     },
@@ -925,22 +959,26 @@ function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
     },
   });
 
-  map.addLayer({
-    id: SHAPE_LINE_LAYER,
-    type: "line",
-    source: SHAPE_SOURCE_ID,
-    layout: { "line-join": "round" },
-    paint: {
-      "line-color": ["get", "color"],
-      // Solid whatever the fill is set to: a shape at 5% fill still has to be
-      // findable, and its edge is what makes it so.
-      "line-opacity": 1,
-      // A line is the whole object rather than an area's edge, so it is drawn
-      // heavier — and with no fill behind it, a hairline is also a thing a
-      // visitor cannot reliably tap.
-      "line-width": ["case", ["get", "isLine"], 4, 2],
-    },
-  });
+  for (const outline of OUTLINE_LAYERS) {
+    map.addLayer({
+      id: outline.id,
+      type: "line",
+      source: SHAPE_SOURCE_ID,
+      filter: ["==", ["get", "stroke"], outline.stroke],
+      layout: { "line-join": "round", "line-cap": outline.cap },
+      paint: {
+        "line-color": ["get", "color"],
+        // Full opacity whatever the fill is set to: a shape at 5% fill still has
+        // to be findable, and its edge is what makes it so.
+        "line-opacity": 1,
+        // Already resolved per feature — a line is the whole object rather than
+        // an area's edge, so it defaults heavier, and with no fill behind it a
+        // hairline is also a thing a visitor cannot reliably tap.
+        "line-width": ["get", "width"],
+        ...(outline.dash ? { "line-dasharray": outline.dash } : {}),
+      },
+    });
+  }
 }
 
 /**
@@ -1003,26 +1041,35 @@ function wireShapeInteractions(
   const shapeAt = (point: Point): SnapshotShape | null => {
     if (hitsAPlace(map, point)) return null;
 
-    const found = (layer: string, at: PointLike | [PointLike, PointLike]) =>
-      idsAt(map, layer, at)
+    const found = (
+      layers: string[],
+      at: PointLike | [PointLike, PointLike],
+    ) =>
+      idsAt(map, layers, at)
         .map((id) => byId.get(id))
         .filter((shape): shape is SnapshotShape => shape !== undefined);
 
     /*
-     * The outline layer first, and with room around the pointer. It draws every
-     * route at four pixels wide, which is not a target a finger can hit — and it
-     * also draws every area's edge, so this is what makes clicking a region's
-     * border open that region.
+     * The outline layers first, and with room around the pointer. They draw
+     * every route a handful of pixels wide, which is not a target a finger can
+     * hit — and they also draw every area's edge, so this is what makes clicking
+     * a region's border open that region.
      *
-     * A route wins over an edge it happens to cross. Both are in this layer and
-     * both can be in the box, and of the two the route is the smaller and more
-     * deliberate aim: an area can be opened from anywhere in its fill, and a
-     * route has only its own four pixels.
+     * All three, because a marking must not decide whether the thing wearing it
+     * can be tapped: a dotted route is mostly gaps, and `queryRenderedFeatures`
+     * tests the line's geometry rather than its dashes, so a gap still hits.
+     *
+     * A route wins over an edge it happens to cross. Both can be in the box, and
+     * of the two the route is the smaller and more deliberate aim: an area can
+     * be opened from anywhere in its fill, and a route has only its own width.
      */
-    const outlines = found(SHAPE_LINE_LAYER, boxAround(point));
+    const outlines = found(
+      OUTLINE_LAYERS.map((outline) => outline.id),
+      boxAround(point),
+    );
     const route = outlines.find((shape) => shape.kind === "line");
 
-    return route ?? outlines[0] ?? found(SHAPE_FILL_LAYER, point)[0] ?? null;
+    return route ?? outlines[0] ?? found([SHAPE_FILL_LAYER], point)[0] ?? null;
   };
 
   map.on("click", (event) => {
@@ -1048,21 +1095,22 @@ function boxAround(point: Point): [PointLike, PointLike] {
 }
 
 /**
- * The shape ids drawn at a point, in one layer.
+ * The shape ids drawn at a point, across the given layers.
  *
- * Guarded on the layer existing, because a map with no shapes adds neither of
+ * Filtered to the layers that exist, because a map with no shapes adds none of
  * them and `queryRenderedFeatures` throws for a layer that is not there — the
  * same guard MapLibre's own delegated listeners apply.
  */
 function idsAt(
   map: MapLibreMap,
-  layer: string,
+  layerIds: string[],
   at: PointLike | [PointLike, PointLike],
 ): string[] {
-  if (!map.getLayer(layer)) return [];
+  const layers = layerIds.filter((layer) => map.getLayer(layer));
+  if (layers.length === 0) return [];
 
   return map
-    .queryRenderedFeatures(at, { layers: [layer] })
+    .queryRenderedFeatures(at, { layers })
     .map((feature) => feature.properties?.id)
     .filter((id): id is string => typeof id === "string");
 }

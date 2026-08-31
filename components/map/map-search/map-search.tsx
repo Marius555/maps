@@ -2,12 +2,14 @@
 
 import { Button, Input, Label, TextField } from "@heroui/react";
 import { Plus, Search, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { GeocodeResultList } from "@/components/geocode/geocode-result-list";
+import { PlanLimitNote } from "@/components/map/plan-limit-note";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { IconButton } from "@/components/ui/icon-button";
 import type { GeocodeCandidate } from "@/lib/geocoding/types";
+import { isAtLimit, type PlanHeadroom } from "@/lib/map/plan-headroom";
 import { useGeocodeSearch } from "@/lib/query/geocode";
 
 const MIN_QUERY = 3;
@@ -56,10 +58,17 @@ const MIN_QUERY = 3;
  */
 export function MapSearch({
   mapId,
+  headroom,
   onPick,
   onAdd,
 }: {
   mapId: string;
+  /**
+   * The location allowance. The `+` is the third way to add one — beside the
+   * pin grid and the drag — so it greys with them; searching itself never does,
+   * because moving the camera to an address costs no location.
+   */
+  headroom?: PlanHeadroom;
   onPick: (candidate: GeocodeCandidate) => void;
   onAdd: (candidate: GeocodeCandidate) => void;
 }) {
@@ -73,6 +82,9 @@ export function MapSearch({
   const isTooShort = query.trim().length < MIN_QUERY;
   /** Anything the user would lose if the bar folded right now. */
   const isHolding = search.isPending || candidates !== null || search.error !== null;
+
+  const isFull = headroom ? isAtLimit(headroom) : false;
+  const noteId = useId();
 
   // Opening puts the caret in the field. An effect rather than `autoFocus`,
   // because the input is never remounted — and it has to run after the commit
@@ -299,6 +311,8 @@ export function MapSearch({
                 variant="primary"
                 iconClassName="size-3"
                 className="relative size-4 min-w-0 rounded-md p-0 after:absolute after:-inset-2 after:content-['']"
+                isDisabled={isFull}
+                aria-describedby={isFull ? noteId : undefined}
                 onPress={() => {
                   onAdd(candidate);
                   clear();
@@ -310,6 +324,24 @@ export function MapSearch({
             // make comparing two of them a second search.
             onPick={onPick}
           />
+
+          {/*
+           * Why every `+` above is grey.
+           *
+           * A line under the list rather than a tooltip on the button. The
+           * `IconButton` wraps a React Aria `Button`, and React Aria does not
+           * fire a tooltip for a disabled trigger — so the explanation would
+           * exist only in markup nobody can reach. This is visible without
+           * hovering, matches the two menus, and is the same sentence they use.
+           *
+           * Native `disabled` is right here, unlike the tiles and tool rows:
+           * these buttons are one per result in a list that also has its own
+           * `onPick` on every row, so the reason is reachable by keyboard
+           * through the row itself and there is nothing stranded.
+           */}
+          {isFull && headroom ? (
+            <PlanLimitNote id={noteId} resource="places" headroom={headroom} />
+          ) : null}
         </div>
       ) : null}
     </div>

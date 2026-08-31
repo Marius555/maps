@@ -43,6 +43,9 @@ const enumeration = (key, elements, opts = {}) => ({
 
 export const GEOCODE_STATUSES = ["ok", "low", "failed", "manual"];
 export const SHAPE_KINDS = ["circle", "polygon", "line"];
+// Hand-copied from packages/shared/shapes.ts, the way SHAPE_KINDS is copied from
+// lib/validation/shape.schema.ts: this script is plain .mjs and cannot import TS.
+export const SHAPE_STROKE_STYLES = ["solid", "dashed", "dotted"];
 export const PLANS = ["free", "starter", "pro"];
 export const SUBSCRIPTION_STATUSES = [
   "active",
@@ -201,6 +204,18 @@ export const TABLES = [
       // A fill dark enough to read as a region, light enough to see the map
       // through. The stroke is drawn at full opacity regardless.
       float("opacity", { min: 0, max: 1, xdefault: 0.2 }),
+      /*
+       * How the outline is drawn. Absent means what every shape drawn before
+       * these columns existed was drawn as, which is what lets them ship with no
+       * migration and no republish.
+       *
+       * 0 is not a width, it is "the default for this kind" — 4px for a line, 2px
+       * for an area's edge. That default depends on the kind, so no column
+       * default could hold it; strokeWidthOf in packages/shared/shapes.ts is
+       * where it actually lives, and both renderers ask it.
+       */
+      integer("strokeWidth", { min: 0, max: 12, xdefault: 0 }),
+      enumeration("strokeStyle", SHAPE_STROKE_STYLES, { xdefault: "solid" }),
       // A circle's centre and radius, or a polygon's ring. JSON for the same
       // reason `hours` is: read whole, never queried on, and unbounded in length.
       text("geometry", { required: true }),

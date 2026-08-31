@@ -4,6 +4,7 @@ import {
   MIN_CIRCLE_RADIUS_M,
   MIN_LINE_POINTS,
   MIN_POLYGON_POINTS,
+  SHAPE_STROKE_STYLES,
 } from "@/packages/shared/shapes";
 import { hexColorSchema, latSchema, lngSchema } from "./common";
 import { groupIdSchema } from "./group.schema";
@@ -29,6 +30,17 @@ export const ROUTE_PROFILES = ["car", "bike", "foot"] as const;
 
 export const DEFAULT_SHAPE_COLOR = "#1c7ed6";
 export const DEFAULT_SHAPE_OPACITY = 0.2;
+
+/**
+ * The range the thickness slider offers.
+ *
+ * One is a hairline, which is a legitimate look for a boundary traced over a
+ * coastline. Twelve is about where a line stops reading as a route and starts
+ * reading as a region — and it is also the cap on the column, so a value past it
+ * would be refused by Appwrite as a 500 rather than by us as a field error.
+ */
+export const MIN_STROKE_WIDTH = 1;
+export const MAX_STROKE_WIDTH = 12;
 
 /**
  * A polygon is capped, and the cap is about the snapshot rather than the
@@ -158,12 +170,32 @@ const opacitySchema = z
   .min(0, "Opacity runs from 0 to 1.")
   .max(1, "Opacity runs from 0 to 1.");
 
+const strokeWidthSchema = z
+  .number()
+  .int("Thickness is a whole number of pixels.")
+  .min(MIN_STROKE_WIDTH, `Thickness runs from ${MIN_STROKE_WIDTH} to ${MAX_STROKE_WIDTH} pixels.`)
+  .max(MAX_STROKE_WIDTH, `Thickness runs from ${MIN_STROKE_WIDTH} to ${MAX_STROKE_WIDTH} pixels.`);
+
+const strokeStyleSchema = z.enum(SHAPE_STROKE_STYLES);
+
 export const createShapeSchema = z.object({
   name: nameSchema,
   geometry: shapeGeometrySchema,
   description: z.string().max(5000).optional(),
   color: hexColorSchema.default(DEFAULT_SHAPE_COLOR),
   opacity: opacitySchema.default(DEFAULT_SHAPE_OPACITY),
+  /*
+   * Optional rather than defaulted, unlike the two above.
+   *
+   * Nothing chooses a thickness or a marking at the moment a shape is drawn —
+   * they are picked afterwards, in the form, against the shape you can see. So
+   * absent here means "not chosen", which is a different statement from "chosen
+   * as 4px solid" and is the one that lets the repository write the column's own
+   * "unset" value. It also keeps every existing CreateShapeInput builder — the
+   * shape importer included — compiling untouched.
+   */
+  strokeWidth: strokeWidthSchema.optional(),
+  strokeStyle: strokeStyleSchema.optional(),
   sortOrder: z.number().int().min(0).default(0),
   // Optional, not defaulted — see createPlaceSchema: nothing is drawn into a
   // group, it joins one afterwards.
@@ -177,6 +209,8 @@ export const updateShapeSchema = z
     description: z.string().max(5000),
     color: hexColorSchema,
     opacity: opacitySchema,
+    strokeWidth: strokeWidthSchema,
+    strokeStyle: strokeStyleSchema,
     sortOrder: z.number().int().min(0),
     groupId: groupIdSchema,
   })
@@ -196,6 +230,11 @@ export const shapeFormSchema = z.object({
   description: z.string().max(5000),
   color: hexColorSchema,
   opacity: opacitySchema,
+  // Required here where they are optional on the way in: the form always holds a
+  // concrete value, because it opens on the width the shape is already drawn at
+  // rather than on a blank.
+  strokeWidth: strokeWidthSchema,
+  strokeStyle: strokeStyleSchema,
 });
 
 /**

@@ -12,9 +12,13 @@ import { applyFieldErrors } from "@/lib/query/form-errors";
 import { useUpdateShape } from "@/lib/query/shapes";
 import type { Shape } from "@/lib/repositories/types";
 import {
+  MAX_STROKE_WIDTH,
+  MIN_STROKE_WIDTH,
   shapeFormSchema,
   type ShapeFormValues,
 } from "@/lib/validation/shape.schema";
+import { strokeWidthOf } from "@/packages/shared/shapes";
+import { StrokeStyleField } from "./stroke-style-field";
 
 /**
  * Edits one shape.
@@ -55,6 +59,13 @@ export function ShapeForm({
       description: shape.description ?? "",
       color: shape.color,
       opacity: shape.opacity,
+      // Resolved, not the stored null: the slider has to open on the width the
+      // shape is actually drawn at, or its first nudge would jump.
+      strokeWidth: strokeWidthOf(
+        shape.geometry.kind === "line",
+        shape.strokeWidth,
+      ),
+      strokeStyle: shape.strokeStyle,
     },
   });
 
@@ -94,10 +105,49 @@ export function ShapeForm({
         )}
       />
 
-      {/* A line has no fill to set, and its stroke is drawn solid on purpose —
-          a shape at 5% still has to be findable, and its outline is what makes
-          it so. Left out rather than disabled: a greyed slider invites you to
-          work out why, and the answer is that the control does not apply. */}
+      {/* Every kind, unlike Fill below. An area's edge is a stroke too, and a
+          boundary traced over a coastline is a different thing at 1px than at 8. */}
+      <Controller
+        control={control}
+        name="strokeWidth"
+        render={({ field }) => (
+          <Slider.Root
+            minValue={MIN_STROKE_WIDTH}
+            maxValue={MAX_STROKE_WIDTH}
+            step={1}
+            value={field.value}
+            onChange={(value) =>
+              field.onChange(Array.isArray(value) ? value[0] : value)
+            }
+          >
+            <div className="flex items-center justify-between">
+              <Label>Thickness</Label>
+              {/* Not Slider.Output: the number means pixels, and a bare "8"
+                  beside a "40%" one control down reads as a second percentage. */}
+              <span className="text-xs tabular-nums text-muted">
+                {field.value} px
+              </span>
+            </div>
+            <Slider.Track>
+              <Slider.Fill />
+              <Slider.Thumb />
+            </Slider.Track>
+          </Slider.Root>
+        )}
+      />
+
+      <Controller
+        control={control}
+        name="strokeStyle"
+        render={({ field }) => (
+          <StrokeStyleField value={field.value} onChange={field.onChange} />
+        )}
+      />
+
+      {/* A line has no fill to set, and its stroke is drawn at full opacity on
+          purpose — a shape at 5% still has to be findable, and its outline is
+          what makes it so. Left out rather than disabled: a greyed slider
+          invites you to work out why, and the answer is that it does not apply. */}
       {shape.geometry.kind === "line" ? null : (
         <Controller
           control={control}

@@ -20,6 +20,7 @@ import type { CardLayout } from "./card-layout";
 import type { OpeningHours } from "./hours";
 import type { MapAppearance } from "./map-appearance";
 import type { PinRingWidth, PinShape, PinSize } from "./pin-icons";
+import type { ShapeStrokeStyle } from "./shapes";
 
 export type SnapshotCategory = {
   id: string;
@@ -190,9 +191,21 @@ export type SnapshotShape = {
   name: string;
   /** Hex, already resolved — the embed fills straight from this. */
   color: string;
-  /** 0–1. The fill only; the outline is always drawn solid. */
+  /** 0–1. The fill only; the outline is always drawn at full opacity. */
   opacity: number;
   description?: string;
+  /**
+   * The outline's width in pixels.
+   *
+   * Optional, and omitted whenever it is the default for this kind — 4px for a
+   * line, 2px for an area's edge. `strokeWidthOf` in ./shapes.ts is what fills
+   * it back in, so absent draws exactly what every snapshot written before this
+   * field existed draws. Same immutability rule as `hours` and `durationS`:
+   * those files are live on customers' sites and must keep parsing.
+   */
+  strokeWidth?: number;
+  /** How the outline is marked out. Absent means solid, which is every old file. */
+  strokeStyle?: ShapeStrokeStyle;
 } & (
   | { kind: "circle"; lat: number; lng: number; radius: number }
   | { kind: "polygon"; points: [number, number][] }
