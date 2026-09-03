@@ -21,6 +21,8 @@
  * which is pixels too.
  */
 
+import { isCardFont } from "./card-fonts";
+
 export type CardZone = "top" | "middle" | "bottom";
 
 export const CARD_ZONES: readonly CardZone[] = ["top", "middle", "bottom"];
@@ -29,13 +31,45 @@ export type CardBlockType =
   | "gallery"
   | "logo"
   | "name"
+  /**
+   * Retired. Categories merged into tags, so this draws the location's *first*
+   * tag — the one that colours its pin, which is what a category was.
+   *
+   * Kept in the union rather than removed, because a layout saved while
+   * categories existed still parses and still names it, and a block that stopped
+   * being a block would silently drop a row out of somebody's design. Nothing
+   * puts it in a new layout: it is out of `defaultCardLayout` and marked
+   * `retired`, so the palette does not offer it.
+   */
   | "category"
+  | "tags"
   | "address"
   | "description"
   | "hours"
-  | "fields"
+  /**
+   * Retired. The fold could only ever hold the description and the week, and
+   * the default card carries both — so on the card everybody gets it drew
+   * nothing at all, while still being a control the palette offered.
+   *
+   * Kept in the union on the Category block's terms, and for its reason: a
+   * layout saved while it was offered still names it, and a block that stopped
+   * being a block would silently drop a row out of somebody's design. It is out
+   * of `defaultCardLayout` and marked `retired`, so nothing new picks it up,
+   * and both renderers still build it wherever a stored layout asks.
+   */
   | "details"
   | "actions"
+  /**
+   * One call to action, drawn as a button rather than as a line of text.
+   *
+   * The card's own `actions` row is the ways to *reach* a place — a phone
+   * number, an address to route to — laid out as small links because three
+   * filled buttons ate a third of a card. This is the other thing a card is
+   * for: the one press its owner actually wants, sized and coloured to be
+   * pressed. Not unique, because "Directions" and "Book a fitting" are two
+   * buttons rather than one with two jobs.
+   */
+  | "button"
   | "divider"
   | "spacer";
 
@@ -79,6 +113,40 @@ export type CardBlockType =
  *   stack, so it straddles the edge between them instead of following it. Only
  *   the logo has one, because it is the only block small enough to sit on top of
  *   another without hiding it.
+ * - `text` — the typeface, size, colour and weight of a block made of words. One
+ *   control rather than four, because they are one group in the panel and a
+ *   block that has words has all four or none of them. Offered by exactly the
+ *   types whose content is text; a photo, a mark, a rule and a gap have nothing
+ *   for it to move, which is this table's own rule.
+ * - `hours` — the three things only a week of opening times can be asked: whether
+ *   it starts open or closed, whether its days are named in full, and how far
+ *   apart its rows sit.
+ * - `clamp` — whether a paragraph is shown whole or clipped after a few lines.
+ *   Only the description has one; it is the only block holding text of a length
+ *   its owner did not choose.
+ * - `chips` — the ground, the outline and the roominess of the pills a block
+ *   draws its content *as*. Its own control rather than more of `text`, because
+ *   `text` moves words and this moves the box they sit in; the two blocks that
+ *   have it are the two whose content is not a run of words at all. It is also
+ *   what makes `align` work on them: a row of chips is a flex row, which
+ *   `text-align` cannot move, so `chipStyleOf` hands back the `justify-content`
+ *   that can.
+ * - `logo` — whether the mark is drawn as the location's whole pin or as the
+ *   uploaded logo inside it, on its own. Only the logo block has one, and it is
+ *   the only control whose two answers are two different *drawings* rather than
+ *   two sizes of the same one.
+ * - `button` — what a button *does*: directions or a link, where that link comes
+ *   from, and what it says. The one control whose answers change where a press
+ *   goes rather than what it looks like, which is why it is separate from the
+ *   one below and sits in the panel's Content group with the other two.
+ * - `buttonStyle` — the ground, the outline and the corner of the box a button
+ *   is drawn as. Its own control rather than more of `button`, on exactly the
+ *   split `text` and `chips` already make: one moves the words, the other moves
+ *   the box around them, and a panel that groups them together is a panel that
+ *   has stopped answering questions one at a time.
+ * - `links` — which of the four ways to reach a place the Links row draws. Only
+ *   that block has one, and it is a control about *content* rather than about
+ *   the box, which is where the panel puts it.
  */
 export type CardBlockControl =
   | "height"
@@ -88,13 +156,30 @@ export type CardBlockControl =
   | "margin"
   | "fit"
   | "valign"
-  | "overlap";
+  | "overlap"
+  | "text"
+  | "hours"
+  | "clamp"
+  | "chips"
+  | "logo"
+  | "button"
+  | "buttonStyle"
+  | "links";
 
 export type CardBlockSpec = {
   /** The zones this block may be dropped into, and the only ones. */
   zones: readonly CardZone[];
   /** At most one per card — two names is not a design, it is a mistake. */
   unique: boolean;
+  /**
+   * A block that still renders but is no longer offered.
+   *
+   * The palette reads it (`availableBlocks`), so a saved layout keeps drawing
+   * what it drew while nothing new can pick the block up. This is the shape a
+   * block gets deleted in: a card in a published snapshot is read forever (§7),
+   * and dropping the type outright would change what those files draw.
+   */
+  retired?: boolean;
   /** What the designer offers for this block. See `CardBlockControl`. */
   controls: readonly CardBlockControl[];
   /** Starting height, as a percentage of the card. `height` blocks only. */
@@ -134,6 +219,18 @@ export type CardBlockSpec = {
    * every card drawn before any of this existed drawing what it drew.
    */
   defaultAlign?: CardBlockAlign;
+  /**
+   * A *newly dropped* block of this type fills its block rather than hugging its
+   * label. `buttonStyle` blocks only.
+   *
+   * One entry uses it, and the reason is the same one `defaultAlign` gives: a
+   * call to action across the foot of a card is what almost everyone wants, so a
+   * hugging button was every owner's first thing to fix. Read only by
+   * `makeCardBlock` — `buttonFull` still means what it always meant, and absent
+   * is still a button the width of what it says, so no card already published
+   * moves (CLAUDE.md §7).
+   */
+  defaultButtonFull?: true;
 };
 
 /**
@@ -309,8 +406,12 @@ export const CARD_BLOCKS: Record<CardBlockType, CardBlockSpec> = {
      * is tall is a wordmark and belongs in the name.
      *
      * `align` here moves the *box*, not the words — see `SELF_SIZED`.
+     *
+     * `logo` is the one thing about this block that is not a measurement: a pin
+     * carrying an uploaded image can be drawn as that image on its own, without
+     * the body and ring around it. See `logoImageOf`.
      */
-    controls: ["height", "align", "overlap", "margin"],
+    controls: ["height", "align", "overlap", "margin", "logo"],
     /*
      * 14% of a 440px card is 62px, which is about the size a brand mark reads at
      * over a photo without becoming the photo. The ceiling is well under the
@@ -327,49 +428,87 @@ export const CARD_BLOCKS: Record<CardBlockType, CardBlockSpec> = {
     // caption for the block above rather than as the name of the place.
     zones: ["top", "middle"],
     unique: true,
-    controls: ["width", "align", "padding", "margin", "valign"],
+    controls: ["width", "align", "padding", "margin", "valign", "text"],
     ...NARROWABLE,
     ...TEXT_PADDING,
   },
+  // Retired — see `CardBlockType`. Same controls as it always had, because a
+  // layout that set them is still drawing them.
   category: {
     zones: ["top", "middle"],
     unique: true,
-    controls: ["width", "align", "padding", "margin", "valign"],
+    retired: true,
+    // `chips` alongside the rest because this draws a chip too — one, the
+    // location's first tag. A retired block still has to be editable by whoever
+    // saved it, and a panel poorer than the Tags one would make the fix for that
+    // "delete the block and drop a different one", which is a design somebody
+    // made being thrown away.
+    controls: [
+      "width",
+      "align",
+      "padding",
+      "margin",
+      "valign",
+      "text",
+      "chips",
+    ],
+    ...NARROWABLE,
+    ...TEXT_PADDING,
+  },
+  /*
+   * The tags this location wears, as a row of chips.
+   *
+   * A wrapping row of however many apply, which makes it the one text block
+   * whose height genuinely varies with the *location* rather than with its
+   * words. That is why it sits below the description in the default layout
+   * rather than under the name — a stockist carrying six product lines would
+   * otherwise push the address off the card.
+   */
+  tags: {
+    zones: ["top", "middle"],
+    unique: true,
+    controls: [
+      "width",
+      "align",
+      "padding",
+      "margin",
+      "valign",
+      "text",
+      "chips",
+    ],
     ...NARROWABLE,
     ...TEXT_PADDING,
   },
   address: {
     zones: ["top", "middle"],
     unique: true,
-    controls: ["width", "align", "padding", "margin", "valign"],
+    controls: ["width", "align", "padding", "margin", "valign", "text"],
     ...NARROWABLE,
     ...TEXT_PADDING,
   },
   description: {
     zones: ["middle"],
     unique: true,
-    controls: ["align", "padding", "margin"],
+    controls: ["align", "padding", "margin", "text", "clamp"],
     ...TEXT_PADDING,
   },
   hours: {
     zones: ["middle", "bottom"],
     unique: true,
-    controls: ["align", "padding", "margin"],
+    controls: ["align", "padding", "margin", "text", "hours"],
     ...TEXT_PADDING,
   },
-  fields: {
-    zones: ["middle", "bottom"],
-    unique: true,
-    controls: ["align", "padding", "margin"],
-    ...TEXT_PADDING,
-  },
+  // Retired — see `CardBlockType`. Same controls as it always had, because a
+  // layout that still names it is still drawing it, and an owner who saved one
+  // has to be able to space it the way they always could.
   details: {
     zones: ["middle", "bottom"],
     unique: true,
+    retired: true,
     // A summary line over a stack of rows. Room around it is the one thing
     // worth choosing; it is full width by nature and its rows are not text
     // `text-align` can move.
-    controls: ["padding", "margin"],
+    controls: ["padding", "margin", "text"],
     ...TEXT_PADDING,
   },
   actions: {
@@ -377,7 +516,43 @@ export const CARD_BLOCKS: Record<CardBlockType, CardBlockSpec> = {
     // its calls to action above the address has buried the answer under them.
     zones: ["bottom"],
     unique: true,
-    controls: ["padding", "margin"],
+    /*
+     * `align` is here, and it needed a second thing to work at all: this row is
+     * a wrapping flex list, and `align` reaches a block as `text-align`, which
+     * cannot move a flex item. Both renderers read `justifyOf` for it — the
+     * same fix `chipStyleOf`'s own `justify` is, and the reason that mapping is
+     * exported now.
+     */
+    controls: ["align", "padding", "margin", "text", "links"],
+  },
+  /*
+   * One press, drawn as a button.
+   *
+   * Middle as well as bottom, where the `actions` row is bottom-only: that rule
+   * is about a *row of every way to reach a place* landing above the address it
+   * is competing with. A single call to action under the description is a real
+   * design, and the block is not the row.
+   *
+   * Not unique, for the divider's reason: two buttons is the point. Directions
+   * and "Book a fitting" are different presses, and a card that could hold only
+   * one of them would make its owner choose between them.
+   */
+  button: {
+    zones: ["middle", "bottom"],
+    unique: false,
+    defaultButtonFull: true,
+    controls: [
+      "width",
+      "align",
+      "padding",
+      "margin",
+      "valign",
+      "text",
+      "button",
+      "buttonStyle",
+    ],
+    ...NARROWABLE,
+    ...TEXT_PADDING,
   },
   divider: {
     zones: CARD_ZONES,
@@ -559,11 +734,18 @@ export function upwardLiftOf(
   return overlapOf(block, layout);
 }
 
-/** The blocks the "More details" fold can hold, in the order it shows them. */
+/**
+ * The blocks the "More details" fold can hold, in the order it shows them.
+ *
+ * Both of them are on the default card, so the default card's fold draws
+ * nothing — `detailsContents` subtracts whatever has been placed, and
+ * `hasBlockContent("details")` is false for an empty fold. That is the fold
+ * doing its job rather than a gap in it: it is there for the owner who drags
+ * the description or the week *off* the card and wants them one click away.
+ */
 export const DETAILS_CONTENTS: readonly CardBlockType[] = [
   "description",
   "hours",
-  "fields",
 ];
 
 export type CardBlockAlign = "start" | "center" | "end";
@@ -742,9 +924,309 @@ export type CardBlock = {
    * Absent means none — which is every card drawn before this field existed, so
    * a layout saved then, and a snapshot already live on a customer's site, keep
    * drawing exactly what they drew.
+   *
+   * It is a **ceiling, not a reservation**. Every renderer draws it as a box
+   * that gives way when the card runs out of room and comes back when the room
+   * returns (`leadBox`), so what is stored is the space this block would like
+   * above it and what is drawn is as much of that as the card can spare.
    */
   offset?: number;
+  /**
+   * The typeface this block's words are set in, as a `font-family` value.
+   * `text` blocks only.
+   *
+   * A **stack**, not a name — the whole string, ready to write onto the
+   * element. See packages/shared/card-fonts.ts for why the catalogue's key is
+   * not what travels, and why the list is closed.
+   *
+   * Absent inherits the card's own font, which is what every block drew before
+   * this field existed.
+   */
+  font?: string;
+  /**
+   * Type size in CSS pixels. `text` blocks only.
+   *
+   * Pixels, for the reason `padding` and `margin` are: it is set against a card
+   * whose every other measurement is pixels, and a percentage of a 320px card
+   * says nothing about how big a letter is.
+   *
+   * Absent is the block's own default size — 14px for a name, 13px for an
+   * address — which each renderer keeps as the fallback in its own stylesheet
+   * rather than resolving here. That is what makes this field free to add: a
+   * block nobody has sized draws the pixels it always drew.
+   */
+  fontSize?: number;
+  /**
+   * The colour of this block's words, as a hex string. `text` blocks only.
+   *
+   * Absent is the block's own default — the foreground for a name, the muted
+   * shade for an address — and, as with `CardLayout.background`, absent is
+   * emphatically *not* a literal. A stored `#111111` is a card that stops
+   * working the moment a visitor's map is dark.
+   */
+  color?: string;
+  /**
+   * Bold. `text` blocks only.
+   *
+   * `true` or absent, never `false`: the absence *is* the block's own weight,
+   * which for a name is already 600. So this cannot un-bold a heading — it can
+   * only make something bold that was not. The panel says so by showing the
+   * name's checkbox already ticked.
+   */
+  bold?: true;
+  /**
+   * The week starts open rather than showing only today. `hours` blocks only.
+   *
+   * Absent collapses, and that is load-bearing rather than arbitrary: the embed
+   * has always drawn a collapsed `<details>` here, and the embed is what a
+   * customer publishes. Reading absence as anything else would reopen every
+   * card already live on a customer's site.
+   */
+  hoursOpen?: true;
+  /** "Monday" rather than "Mon". `hours` blocks only. Absent is short. */
+  hoursLongDays?: true;
+  /**
+   * Space between the week's rows, in CSS pixels. `hours` blocks only.
+   *
+   * Absent is `DEFAULT_HOURS_ROW_GAP`, which is what the embed's list has
+   * always drawn — so a week nobody has spaced out is the week it was.
+   */
+  hoursRowGap?: number;
+  /**
+   * Clip the paragraph after this many lines. `clamp` blocks only.
+   *
+   * Absent shows the whole thing, which is what both renderers have always
+   * done. So the control reads as *"show the whole description"*, ticked, and
+   * unticking it is what writes a number here.
+   *
+   * **A clipped paragraph is also a fold**, and this is the only field that says
+   * so. Both renderers give it the chevron the week has, opening onto the rest
+   * of the text — because clipping a description with no way to read the end of
+   * it is not a design, it is a paragraph with its last sentence deleted. A
+   * description nobody has clipped stays the plain `<p>` it has always been, so
+   * no published card grows a control it did not have.
+   */
+  clampLines?: number;
+  /**
+   * The ground each chip is drawn on, as a hex string. `chips` blocks only.
+   *
+   * Absent is the soft neutral both renderers already draw, and absent is
+   * emphatically *not* a literal, for `color`'s reason one step further out: a
+   * stored `#f1f3f5` is a row of pale pills that disappear the moment a
+   * visitor's map is dark. The colour belongs to the tags on a card, not to the
+   * theme the card is being read in.
+   */
+  chipBackground?: string;
+  /**
+   * Room inside each chip, in CSS pixels, on top of what a chip already has.
+   * `chips` blocks only.
+   *
+   * Additive rather than absolute, which is what keeps it free to add: absent is
+   * zero, and zero is the pill every card has drawn since there were chips at
+   * all. It is also the honest shape of the control — someone dragging this is
+   * making the chips roomier than they are, not specifying a box from scratch.
+   */
+  chipPadding?: number;
+  /**
+   * The outline around each chip, as a hex string. `chips` blocks only.
+   *
+   * Absent is **no outline at all**, which is the pill both renderers have drawn
+   * since there were chips — not a colour resolved from the theme. That is the
+   * difference between this and `chipBackground`, whose absence is a real ground
+   * the stylesheet paints: there is nothing to fall back to here, so absent has
+   * to mean off, and `chipBorderWidth` is only a width of something once this is
+   * set.
+   */
+  chipBorder?: string;
+  /**
+   * How thick that outline is, in CSS pixels. `chips` blocks only.
+   *
+   * Absent and zero are the same nothing, and zero is what every card already
+   * draws — which is what makes the pair free to add (CLAUDE.md §7). The panel
+   * only offers it once there is a colour, for the reason the card's own Border
+   * width is only offered once the card has a border: a width with no colour is
+   * a control that visibly does nothing.
+   */
+  chipBorderWidth?: number;
+  /**
+   * Draw the pin's uploaded image on its own, instead of the whole pin. `logo`
+   * blocks only.
+   *
+   * Spelled as the one non-default value the way `fit` is: **absent is the pin**,
+   * body and ring and glyph, which is what every card drawn before this field
+   * existed draws and what a location with no uploaded logo still gets. See
+   * `logoImageOf`, which is the one place the fallback is decided.
+   */
+  logoMode?: "image";
+  /**
+   * What pressing this button does. `button` blocks only.
+   *
+   * Spelled as the one non-default value, the way `fit` and `logoMode` are —
+   * and **the absence is Directions**, which is the choice worth explaining. A
+   * block arrives on the card before anybody configures it, and directions are
+   * the one destination every location can answer for: it needs a coordinate,
+   * and a coordinate is the one thing a place cannot be missing. A button that
+   * defaulted to a link would draw nothing until its owner found the picker,
+   * which reads as a block that failed to render.
+   */
+  buttonAction?: "link";
+  /**
+   * Which of the location's own values holds the link. `button` blocks only,
+   * and only in link mode.
+   *
+   * Absent is the location's **Website** (`place.url`); a value is the id of one
+   * of the map's custom fields. Website is the absence rather than a reserved
+   * word, so there is no sentinel that a field id could one day collide with —
+   * the same reason `newTagId` never derives an id from a label.
+   *
+   * A **source**, never a URL. The card design is saved per account and drawn
+   * for every location on every map, so a URL stored here would send three
+   * thousand pins to one page. The consequence is that a button bound to a
+   * custom field draws nothing on a map that has no such field — which is
+   * exactly what it does for a location that left the field blank, and the rule
+   * every other block already follows.
+   */
+  buttonSource?: string;
+  /**
+   * What the button says. `button` blocks only.
+   *
+   * Absent is the action's own word — "Directions", "Website", or the custom
+   * field's own label, which is what the card's CTA rows already use in
+   * preference to the value (forty characters of tracking parameters is not a
+   * label).
+   */
+  buttonLabel?: string;
+  /**
+   * The ground the button is drawn on, as a hex string. `buttonStyle` blocks
+   * only.
+   *
+   * Absent is the ground the stylesheet paints, and absent is emphatically
+   * *not* a literal — `chipBackground`'s argument, which bites harder here: a
+   * stored `#ffffff` is a button that vanishes into a dark card, and a button
+   * nobody can see is the one block on the card whose whole job is to be
+   * pressed.
+   */
+  buttonBackground?: string;
+  /**
+   * The outline around the button, as a hex string. `buttonStyle` blocks only.
+   *
+   * Absent is **the button's own label colour**, which is `currentColor` in both
+   * stylesheets — so an outline nobody has picked a colour for is theme-aware,
+   * where a stored literal could not be, and an Outline treatment keeps the
+   * colour the theme gave it.
+   *
+   * **Unlike `chipBorder`, this half is optional on its own.** A chip has
+   * nothing under its edge to fall back to, so there absent has to mean off and
+   * the pair travels as one. A button does: its label is already a colour the
+   * owner can see, and the width alone is a complete answer to "put a line
+   * round it". That is deliberate divergence rather than drift — the control
+   * that used to enforce the pair here did it by stamping a hard-coded blue on
+   * the first nudge of the width, which is a colour nobody picked appearing in
+   * a field nobody opened.
+   */
+  buttonBorder?: string;
+  /**
+   * How thick that outline is, in CSS pixels. `buttonStyle` blocks only.
+   *
+   * Stands alone — see `buttonBorder`. Absent and zero are the same nothing,
+   * which is what every card published before this existed draws.
+   */
+  buttonBorderWidth?: number;
+  /**
+   * How round the button's corners are, in CSS pixels. `buttonStyle` blocks
+   * only. Absent is the corner the stylesheet already draws.
+   */
+  buttonRadius?: number;
+  /**
+   * Room inside the button, in CSS pixels, on top of what it already has.
+   * `buttonStyle` blocks only.
+   *
+   * Additive rather than absolute, which is what keeps it free to add and is
+   * the honest shape of the control: someone dragging this is making the button
+   * chunkier than it is, not specifying a box from scratch. It is a different
+   * question from the block's own `padding` — that holds the button off its
+   * neighbours, this holds the label off the button's own edge.
+   */
+  buttonPadding?: number;
+  /**
+   * The button fills its block rather than hugging its label. `buttonStyle`
+   * blocks only.
+   *
+   * `true` or absent, never `false` — the absence is a button the width of what
+   * it says, which is what `align` then has something to move. Full width is
+   * the state that has to be asked for, because a full-width button is a
+   * decision about the card and a hugging one is just a button.
+   */
+  buttonFull?: true;
+  /**
+   * How the button's ground is painted. `buttonStyle` blocks only.
+   *
+   * **Absent is the filled button every card already draws**, which is what
+   * makes this free to add (CLAUDE.md §7): a design published before this field
+   * existed carries none of it and still draws the solid accent box it drew.
+   *
+   * Three treatments rather than three colours, and that is the decision worth
+   * explaining. Outline, soft and ghost all need a *transparent or translucent*
+   * ground, and `hex` below accepts `#rgb`/`#rrggbb` alone — no alpha, no
+   * keyword — so none of them can be said as a `buttonBackground`. Widening the
+   * colour parser was the alternative and is worse twice over: it puts a value
+   * `ColorPickerField` cannot draw into the one field an owner edits by hand,
+   * and it stores a literal where the absence is what keeps a card theme-aware.
+   *
+   * As a treatment instead, each one takes its line and its label from
+   * `--card-button-bg`, which falls back to the theme's own accent — so a ghost
+   * button stays readable on a dark card, where a stored `#ffffff` could not.
+   * The renderers turn this into a class rather than a value; see `buildButton`
+   * in embed/src/popup.ts, which must look the class up rather than trust the
+   * string, because the embed draws a published snapshot without re-parsing it.
+   */
+  buttonVariant?: CardButtonVariant;
+  /**
+   * What the button does under the pointer. `buttonStyle` blocks only.
+   *
+   * **Absent is the darkening wash**, which is the hover both stylesheets have
+   * always drawn — so, again, nothing already live moves. Spelled as the three
+   * departures from it, the way `fit`, `logoMode` and `buttonAction` each spell
+   * only their non-default value.
+   *
+   * It is here at all because a button is the one block on a card whose whole
+   * job is to be pressed, and an owner who has coloured one to their brand has
+   * no way to say that the wash over it is wrong.
+   */
+  buttonHover?: CardButtonHover;
+  /**
+   * The ways to reach a place this Links row does **not** draw. `links` blocks
+   * only.
+   *
+   * Four fields rather than one list, because each is a separate question with
+   * a separate checkbox, and a list would have to be sorted, deduplicated and
+   * validated against a vocabulary to say the same thing.
+   *
+   * **Spelled as the hidden state, so absent means shown.** Every card already
+   * live on a customer's site draws all four; were these `showPhone` the
+   * absence would have to be read as `true`, and every snapshot would be
+   * carrying a field whose meaning is the opposite of what it says. This way a
+   * card nobody has touched publishes the bytes it always did — the same
+   * argument `half`, `bleed` and `newLine` each carry.
+   */
+  hidePhone?: true;
+  hideEmail?: true;
+  hideWebsite?: true;
+  hideDirections?: true;
 };
+
+/**
+ * How a button's ground is painted. See `CardBlock.buttonVariant`, which holds
+ * the argument for why this is a treatment rather than three stored colours.
+ *
+ * Absent — a filled button — is deliberately not a member: it is the state the
+ * field says by not being there, and a word for it would be a second way to say
+ * the same thing that every published card already says with silence.
+ */
+export type CardButtonVariant = "outline" | "soft" | "ghost";
+
+/** What a button does under the pointer. Absent is the darkening wash. */
+export type CardButtonHover = "none" | "lighten" | "lift";
 
 export type CardShadow = "none" | "soft" | "strong";
 
@@ -791,13 +1273,152 @@ const CARD_LIMITS = {
    * as far in as the card itself could push everything, and no further.
    */
   blockMargin: [0, 28],
+  /*
+   * Type size, in pixels.
+   *
+   * The floor is where text stops being readable rather than merely small; the
+   * ceiling is a name across a 220px card, which is the narrowest card there
+   * can be. Anything larger is not a card, it is a poster.
+   */
+  fontSize: [10, 32],
+  /*
+   * How far apart the rows of a week sit, in pixels.
+   *
+   * Zero is the rows touching, which is a dense but real design. Twelve is
+   * already seven times twelve pixels of leading in a card capped at 720, so
+   * there is no honest reason to go further.
+   */
+  hoursRowGap: [0, 12],
+  /*
+   * Extra room inside a chip, in pixels, on top of what a chip already has.
+   *
+   * Ten rather than `blockPadding`'s twenty-four, and the ceiling is a different
+   * question from the block's: this is added on *every* chip, so on a location
+   * wearing six of them it is paid six times across a card that may be 220px
+   * wide. Ten already turns a 20px pill into a 40px one.
+   */
+  chipPadding: [0, 10],
+  /*
+   * How thick a chip's outline is, in pixels.
+   *
+   * Four, and low on purpose: this is a hairline around a 20px pill, not a
+   * frame. Past four the outline is most of what the chip is, and it is drawn
+   * on every chip a location wears — the same multiplier `chipPadding` above is
+   * capped for. Zero is off, which is what every published card draws.
+   */
+  chipBorderWidth: [0, 4],
+  /*
+   * How many lines of a description are shown before it is clipped.
+   *
+   * One is a headline; six is most of a 440px card. The absence of a number is
+   * "all of it", which is the case this range does not have to cover.
+   */
+  clampLines: [1, 6],
+  /*
+   * How thick a button's outline is, in pixels.
+   *
+   * The card's own `borderWidth` ceiling rather than a chip's four: a button is
+   * a box the size of a control, not a 20px pill, and there is exactly one of
+   * it — so the multiplier that keeps `chipBorderWidth` low does not apply.
+   */
+  buttonBorderWidth: [0, 6],
+  /*
+   * How round a button's corners are, in pixels.
+   *
+   * The card's own `radius` ceiling. Past it a button is rounder than the card
+   * holding it, which reads as a mistake rather than as a design — and at 28 on
+   * a button about 32px tall it is already a pill, which is the roundest thing
+   * anyone is reaching for.
+   */
+  buttonRadius: [0, 28],
+  /*
+   * How much room a button has inside its own box, in pixels.
+   *
+   * Its own number rather than `blockPadding`'s, because it is paid twice over:
+   * the block's padding holds the button off its neighbours, and this holds the
+   * label off the button's own edge. Fourteen on each side of a 220px card is
+   * already a wide button with a short word in it.
+   */
+  buttonPadding: [0, 14],
 } as const;
+
+/** The narrowest and widest type a block may be set in, for the control. */
+export const MIN_BLOCK_FONT_SIZE: number = CARD_LIMITS.fontSize[0];
+export const MAX_BLOCK_FONT_SIZE: number = CARD_LIMITS.fontSize[1];
+
+/** The ceiling on the space between a week's rows, for the control. */
+export const MAX_HOURS_ROW_GAP: number = CARD_LIMITS.hoursRowGap[1];
+
+/**
+ * What a week's rows sit apart by when nobody has said.
+ *
+ * One pixel, because that is what `.lm-popup__hours-list` has always drawn and
+ * a published card must not move. The dashboard's own list drew zero, which is
+ * the one pixel of drift this field closes rather than preserves.
+ */
+export const DEFAULT_HOURS_ROW_GAP = 1;
+
+/** How many lines an unticked "show it all" clips to. */
+export const DEFAULT_CLAMP_LINES = 2;
+
+/** The most lines a clipped description may keep, for the control. */
+export const MAX_CLAMP_LINES: number = CARD_LIMITS.clampLines[1];
+
+/** The thickest a chip's outline may be, for the control that sets it. */
+export const MAX_CHIP_BORDER_WIDTH: number = CARD_LIMITS.chipBorderWidth[1];
+
+/**
+ * What an outline is set to the first time a colour is picked for one.
+ *
+ * A colour with no width would be a picker that visibly does nothing, so the
+ * control seeds this alongside it. One pixel is a hairline, which is what an
+ * outlined chip usually wants.
+ */
+export const DEFAULT_CHIP_BORDER_WIDTH = 1;
 
 /** The ceiling on a block's own padding, for the control that sets it. */
 export const MAX_BLOCK_PADDING: number = CARD_LIMITS.blockPadding[1];
 
+/** The ceiling on the extra room inside a chip, for the control that sets it. */
+export const MAX_CHIP_PADDING: number = CARD_LIMITS.chipPadding[1];
+
 /** The ceiling on a block's own margin, for the control that sets it. */
 export const MAX_BLOCK_MARGIN: number = CARD_LIMITS.blockMargin[1];
+
+/** The thickest a button's outline may be, for the control that sets it. */
+export const MAX_BUTTON_BORDER_WIDTH: number = CARD_LIMITS.buttonBorderWidth[1];
+
+/**
+ * What a button's outline is set to the first time a colour is picked for one.
+ *
+ * `DEFAULT_CHIP_BORDER_WIDTH`'s reason exactly: a colour with no width is a
+ * picker that visibly does nothing, so the control seeds this alongside it.
+ */
+export const DEFAULT_BUTTON_BORDER_WIDTH = 1;
+
+/** The roundest a button's corners may be, for the control that sets it. */
+export const MAX_BUTTON_RADIUS: number = CARD_LIMITS.buttonRadius[1];
+
+/** The most room a button may have inside it, for the control that sets it. */
+export const MAX_BUTTON_PADDING: number = CARD_LIMITS.buttonPadding[1];
+
+/**
+ * The longest a button's own label may be, for the control and the schema.
+ *
+ * Forty characters is already more than fits across a 220px card, which is the
+ * narrowest card there can be. It is a cap on what can be *stored* rather than
+ * on what reads well — the card clips what does not fit either way, and the
+ * reason to have a number at all is that this text is written into a stranger's
+ * page.
+ */
+export const MAX_BUTTON_LABEL = 40;
+
+/**
+ * The longest a button's source id may be. A custom field id, and ids in this
+ * codebase are short random strings — this is a bound on nonsense, not a
+ * meaningful limit.
+ */
+export const MAX_BUTTON_SOURCE = 64;
 
 /**
  * The ceiling on a block's `offset`, for the schema that bounds the column.
@@ -830,15 +1451,39 @@ const VALIGNS: readonly CardBlockValign[] = ["center", "end"];
  *
  * **Description and hours are on the card, not behind the fold.** They used to
  * be in `details` along with the custom fields, which meant the default card
- * showed a photo, a name, a category and a street, and hid everything a visitor
+ * showed a photo, a name, a chip and a street, and hid everything a visitor
  * standing outside the shop actually wants — when it opens, and what it is.
  * That was defensible while it was one of several cards an owner could choose
  * between. It is not defensible as the card. `fields` stays folded, because a
  * map's extra fields are as often an internal reference as they are something
  * to read.
  *
- * The order is the order somebody reads it in: what this is, what kind of thing
- * it is, where, what it's like, when it's open — then how to reach it.
+ * **"More details" is not on it, and is retired.** The fold could only ever
+ * hold the description and the week, and both of those are on the card above —
+ * so `detailsContents` subtracted them both and the block drew nothing at all,
+ * on the card everybody gets. A control that is always empty is not a fold, it
+ * is a row of dead pixels; it is out of this function and out of the palette,
+ * and it still draws wherever a saved layout or a published snapshot names it.
+ *
+ * **Tags are on it, and the Category block is not.** The embed has always let a
+ * visitor *filter* by tag; until the tags block there was nothing letting them
+ * see which tags the pin they clicked actually wears, so "why did this one
+ * match?" was answered nowhere. Categories then merged into tags outright, so
+ * the Category block would be a second chip drawn from the same list — it stays
+ * in `CardBlockType` for layouts that already name it and is `retired` here.
+ *
+ * Below the description rather than under the name, because it is a wrapping row
+ * and a location with six tags would otherwise push the street off the card.
+ *
+ * Note what changing this function does and does not do: every account that has
+ * never opened the designer gets the new arrangement immediately, and an account
+ * with a *saved* layout does not — its design is its own, and quietly editing it
+ * would be this function reaching into a card somebody arranged. Such a layout
+ * keeps drawing its Category block, which is why that block is retired rather
+ * than deleted.
+ *
+ * The order is the order somebody reads it in: what this is, where, what it's
+ * like, what it offers, when it's open — then how to reach it.
  */
 export function defaultCardLayout(): CardLayout {
   return {
@@ -860,11 +1505,10 @@ export function defaultCardLayout(): CardLayout {
       ],
       middle: [
         { id: "name", type: "name" },
-        { id: "category", type: "category" },
         { id: "address", type: "address" },
         { id: "description", type: "description" },
+        { id: "tags", type: "tags" },
         { id: "hours", type: "hours" },
-        { id: "details", type: "details" },
       ],
       bottom: [{ id: "actions", type: "actions" }],
     },
@@ -1181,6 +1825,221 @@ function readBlock(
     if (offset > 0) block.offset = offset;
   }
 
+  /*
+   * The type styling, read only where the block declares it.
+   *
+   * Every one of the four is dropped when it is absent rather than resolved to
+   * the block's own default, and that is the whole reason this could be added
+   * to a live model: a name nobody has styled stores nothing new, so
+   * `defaultCardLayout()` is byte-identical and `isDefaultCardLayout` keeps
+   * omitting the layout from a snapshot (CLAUDE.md §7).
+   *
+   * The font is checked against a closed list rather than a shape, because it
+   * is written into a `font-family` on a stranger's page — see
+   * packages/shared/card-fonts.ts.
+   */
+  if (spec.controls.includes("text")) {
+    if (isCardFont(raw.font)) block.font = raw.font;
+
+    if (isNumber(raw.fontSize)) {
+      block.fontSize = clamp(
+        raw.fontSize,
+        CARD_LIMITS.fontSize,
+        CARD_LIMITS.fontSize[0],
+      );
+    }
+
+    const color = hex(raw.color);
+    if (color) block.color = color;
+
+    // Bold is the presence of the field, so there is one way to say it and
+    // neither renderer has to treat `false` and missing as the same thing.
+    if (raw.bold === true) block.bold = true;
+  }
+
+  /*
+   * The chips' own two, on exactly the terms above: absent stays absent, and
+   * zero padding is the absence of padding rather than a stored nought — so a
+   * card whose owner has never opened the Chips group stores nothing new and
+   * `defaultCardLayout()` stays byte-identical.
+   */
+  if (spec.controls.includes("chips")) {
+    const chipBackground = hex(raw.chipBackground);
+    if (chipBackground) block.chipBackground = chipBackground;
+
+    if (isNumber(raw.chipPadding)) {
+      const padding = clamp(raw.chipPadding, CARD_LIMITS.chipPadding, 0);
+      if (padding > 0) block.chipPadding = padding;
+    }
+
+    /*
+     * The outline is a pair, and the pair is read as a pair: a width with no
+     * colour draws nothing in either renderer, so storing one is storing a fact
+     * about a chip that is not true. A colour with no width takes the default
+     * hairline instead of being dropped — that is the shape the control writes
+     * them in, and a stored row that lost its width should still draw the
+     * outline its owner asked for.
+     */
+    const chipBorder = hex(raw.chipBorder);
+    if (chipBorder) {
+      block.chipBorder = chipBorder;
+
+      const width = isNumber(raw.chipBorderWidth)
+        ? clamp(raw.chipBorderWidth, CARD_LIMITS.chipBorderWidth, 0)
+        : DEFAULT_CHIP_BORDER_WIDTH;
+
+      if (width > 0) block.chipBorderWidth = width;
+      else delete block.chipBorder;
+    }
+  }
+
+  /*
+   * The mark's one non-measurement. `"image"` is the only value there is, so
+   * anything else — including the word "pin" somebody might reasonably write —
+   * leaves the field absent, which is the pin.
+   */
+  if (spec.controls.includes("logo") && raw.logoMode === "image") {
+    block.logoMode = "image";
+  }
+
+  /*
+   * The week's own three, on the same terms. `hoursOpen` absent is collapsed,
+   * which is what the embed has always drawn — see the field's own note.
+   */
+  if (spec.controls.includes("hours")) {
+    if (raw.hoursOpen === true) block.hoursOpen = true;
+    if (raw.hoursLongDays === true) block.hoursLongDays = true;
+
+    if (isNumber(raw.hoursRowGap)) {
+      const gap = clamp(
+        raw.hoursRowGap,
+        CARD_LIMITS.hoursRowGap,
+        DEFAULT_HOURS_ROW_GAP,
+      );
+      // The default is the absence, for the same reason full width is.
+      if (gap !== DEFAULT_HOURS_ROW_GAP) block.hoursRowGap = gap;
+    }
+  }
+
+  // Absent is the whole paragraph, so a card nobody has clipped keeps drawing
+  // all of it — which is what both renderers did before this field existed.
+  if (spec.controls.includes("clamp") && isNumber(raw.clampLines)) {
+    block.clampLines = clamp(
+      raw.clampLines,
+      CARD_LIMITS.clampLines,
+      DEFAULT_CLAMP_LINES,
+    );
+  }
+
+  /*
+   * What a button does, and what it says it with.
+   *
+   * `"link"` is the only value there is — anything else, including the word
+   * "directions" somebody might reasonably write, leaves the field absent,
+   * which *is* directions. Same shape as `logoMode` above.
+   *
+   * The source and the label are only read in link mode and only as far as they
+   * mean anything: a `buttonSource` on a directions button names a field the
+   * button will never read, and carrying it would leave a stale answer waiting
+   * to surprise whoever switches the action back months later.
+   */
+  if (spec.controls.includes("button")) {
+    if (raw.buttonAction === "link") {
+      block.buttonAction = "link";
+
+      const source = text(raw.buttonSource, MAX_BUTTON_SOURCE);
+      if (source) block.buttonSource = source;
+    }
+
+    const label = text(raw.buttonLabel, MAX_BUTTON_LABEL);
+    if (label) block.buttonLabel = label;
+  }
+
+  if (spec.controls.includes("buttonStyle")) {
+    const buttonBackground = hex(raw.buttonBackground);
+    if (buttonBackground) block.buttonBackground = buttonBackground;
+
+    if (isNumber(raw.buttonPadding)) {
+      const padding = clamp(raw.buttonPadding, CARD_LIMITS.buttonPadding, 0);
+      if (padding > 0) block.buttonPadding = padding;
+    }
+
+    /*
+     * **Zero is a value here, not an absence**, and it is the one field on this
+     * block where that is true.
+     *
+     * Every other number is dropped at zero because zero is what the stylesheet
+     * already draws. A radius of zero is not: absent draws the stylesheet's own
+     * `0.5rem`, so a square button is a real choice that has nowhere else to be
+     * written down. Dropping it made the Corners control unable to say the one
+     * thing a corner control exists to say.
+     *
+     * A card published before this parse still carries no radius and still
+     * draws that same `0.5rem`, so nothing live moves — see `buttonStyleOf`,
+     * which asks the same question the same way.
+     */
+    if (isNumber(raw.buttonRadius)) {
+      block.buttonRadius = clamp(raw.buttonRadius, CARD_LIMITS.buttonRadius, 0);
+    }
+
+    /*
+     * The outline, whose two halves are read **separately** — and that is the
+     * one place this deliberately parts company with `chipBorder` above.
+     *
+     * A width with no colour is a complete answer here, because the stylesheets
+     * fall back to the button's own label colour rather than to nothing (see
+     * `CardBlock.buttonBorder`). So a width stands on its own; a colour with no
+     * width still takes the default hairline, because a colour alone genuinely
+     * does draw nothing.
+     *
+     * A card published before this parse carries both halves or neither, so
+     * nothing live moves — the only new shape is one this parse can now keep.
+     */
+    const buttonBorder = hex(raw.buttonBorder);
+    const storedWidth = isNumber(raw.buttonBorderWidth)
+      ? clamp(raw.buttonBorderWidth, CARD_LIMITS.buttonBorderWidth, 0)
+      : undefined;
+    const buttonBorderWidth =
+      storedWidth ?? (buttonBorder ? DEFAULT_BUTTON_BORDER_WIDTH : 0);
+
+    if (buttonBorderWidth > 0) {
+      block.buttonBorderWidth = buttonBorderWidth;
+      if (buttonBorder) block.buttonBorder = buttonBorder;
+    }
+
+    if (raw.buttonFull === true) block.buttonFull = true;
+
+    /*
+     * The treatment and the hover, each read only as one of its own words.
+     *
+     * `includes` on a frozen list rather than a cast: both reach a renderer as
+     * a **class name**, and the embed draws a published snapshot without ever
+     * running this parse (embed/src/map.ts). A string that survived to there
+     * unchecked would be a class name chosen by whatever wrote the file, so the
+     * narrowing has to happen against a list both sides can see rather than
+     * against the type alone, which is gone by runtime.
+     */
+    if (isButtonVariant(raw.buttonVariant)) {
+      block.buttonVariant = raw.buttonVariant;
+    }
+
+    if (isButtonHover(raw.buttonHover)) block.buttonHover = raw.buttonHover;
+  }
+
+  /*
+   * Which ways to reach a place this row leaves out.
+   *
+   * `true` or absent, never `false`, for the reason the field itself gives: the
+   * absence is the row every published card already draws, so a stored `false`
+   * is a longer way of saying nothing and is not kept.
+   */
+  if (spec.controls.includes("links")) {
+    if (raw.hidePhone === true) block.hidePhone = true;
+    if (raw.hideEmail === true) block.hideEmail = true;
+    if (raw.hideWebsite === true) block.hideWebsite = true;
+    if (raw.hideDirections === true) block.hideDirections = true;
+  }
+
   return block;
 }
 
@@ -1227,6 +2086,24 @@ const FLEX_ALIGN: Record<CardBlockAlign, string> = {
   center: "center",
   end: "flex-end",
 };
+
+/**
+ * A block's alignment as a `justify-content`, for the blocks that are a flex
+ * row and so cannot be moved by `text-align`.
+ *
+ * `chipStyleOf` already needed this and kept it to itself, because chips were
+ * the only such row. The Links row is the second — `Actions` in
+ * components/card/card-block.tsx and `buildActions` in embed/src/popup.ts are
+ * both a wrapping flex list — so the mapping is exported rather than copied,
+ * and a third one gets it for free.
+ *
+ * `undefined` for a block with no alignment of its own, so a renderer writes
+ * nothing at all and the row sits where every published card has always drawn
+ * it (CLAUDE.md §7).
+ */
+export function justifyOf(align: CardBlockAlign | undefined): string | undefined {
+  return align ? FLEX_ALIGN[align] : undefined;
+}
 
 /** A block's box, in CSS values. */
 export type CardBlockBox = {
@@ -1327,19 +2204,6 @@ export type CardBlockBox = {
    */
   marginInline?: string;
   /**
-   * The empty space above this block, on top of the card's own gap. Absent
-   * means none.
-   *
-   * A value on its own rather than a finished `margin-top`, because it has to
-   * *compose* with the vertical half of a bleed: a bleeding block at the very
-   * top of the card already carries a negative margin cancelling the card's
-   * padding, and a renderer that wrote this straight onto `margin-top` would
-   * overwrite it. Each renderer adds the two together in its own idiom — see
-   * `blockEdges` in components/card/card-frame.tsx and `--lm-block-offset` in
-   * embed/src/styles.css.
-   */
-  marginTop?: string;
-  /**
    * Whether this block reaches the card's edges, which is a margin of zero.
    *
    * Kept as its own flag rather than left for a caller to derive, because it is
@@ -1348,6 +2212,46 @@ export type CardBlockBox = {
    * too. See `blockEdges` in components/card/card-frame.tsx.
    */
   bleed: boolean;
+  /**
+   * The block's own type styling, as CSS values. Absent for a block nobody has
+   * styled, which is every block on every card published so far.
+   *
+   * Each renderer writes these as **custom properties** on the block's box —
+   * `--card-*` in the dashboard, `--lm-card-*` in the embed — and every leaf
+   * element names its own current value as the fallback. Two reasons, and both
+   * are load-bearing. The fallback is what keeps an unstyled block drawing
+   * exactly the pixels it drew before this field existed. And on the dashboard
+   * side an inherited `font-size` could not work at all: the leaves size their
+   * type with Tailwind's `rem` utilities, which an inherited value does not
+   * move — the same trap `NARROW_CONTENT_SCALE` documents for `zoom`.
+   */
+  text?: CardBlockText;
+  /**
+   * How many lines of a paragraph to keep before clipping it, as a string.
+   * Absent shows the whole thing.
+   *
+   * A count rather than a height, because the point is *lines* and a card's
+   * type size is now its owner's to change — a height in pixels would mean a
+   * different number of lines at every size they picked.
+   */
+  lines?: string;
+  /**
+   * How far apart the rows of a week sit, as a length. Absent is the default
+   * every card has drawn.
+   */
+  rowGap?: string;
+};
+
+/** The four things that can be said about a block's words. All optional. */
+export type CardBlockText = {
+  /** A `font-family` value — the whole stack. See card-fonts.ts. */
+  font?: string;
+  /** A `font-size` length. */
+  size?: string;
+  /** A `color`. */
+  color?: string;
+  /** A `font-weight`. */
+  weight?: string;
 };
 
 /**
@@ -1445,6 +2349,9 @@ export function blockBox(
     : (block.margin ?? defaultMarginOf(block.type, layout.padding));
   const offset = margin - layout.padding;
 
+  /** The block's own type styling, or nothing at all. See `textOf`. */
+  const text = textOf(block);
+
   return {
     // Absent, not "start": an unset alignment has to inherit, or every card
     // drawn before this field existed would have its text re-anchored.
@@ -1511,16 +2418,198 @@ export function blockBox(
     ...(block.padding ? { padding: `${String(block.padding)}px` } : {}),
     ...(offset === 0 ? {} : { marginInline: `${String(offset)}px` }),
     /*
-     * A narrowed block emits no leading space of its own: `cardRowBox` hoists it
-     * to the row as the greater of the pair's two. A `margin-top` on a flex-row
-     * child does not push the row down, it pushes that one block down *within*
-     * the row — so the pair would come apart rather than move together.
+     * No leading space here at all, for any block. It is one number per *line*
+     * — `rowOffsetHolder` says which member holds it — and every renderer draws
+     * it as a box of its own above the line rather than as a margin on a block
+     * inside it. See `leadBox`.
      */
-    ...(block.offset && !narrow && !onRow
-      ? { marginTop: `${String(block.offset)}px` }
-      : {}),
     bleed: margin === 0,
+    /*
+     * The type styling, and the whole group is dropped when none of it is set —
+     * so a renderer writes four custom properties for a block somebody styled
+     * and nothing at all for the other eleven. `700` rather than `bold`, which
+     * is the same weight said in a word a `font-weight` custom property cannot
+     * be arithmetic on.
+     */
+    ...(text ? { text } : {}),
+    ...(block.clampLines ? { lines: String(block.clampLines) } : {}),
+    ...(block.hoursRowGap === undefined
+      ? {}
+      : { rowGap: `${String(block.hoursRowGap)}px` }),
   };
+}
+
+/**
+ * A block's four type styles, or nothing at all.
+ *
+ * Its own function rather than four spreads inline, because "has this block
+ * been styled" is one question three places ask — `blockBox` above, and each
+ * renderer deciding whether to write anything.
+ */
+function textOf(block: CardBlock): CardBlockText | undefined {
+  const text: CardBlockText = {
+    ...(block.font ? { font: block.font } : {}),
+    ...(block.fontSize ? { size: `${String(block.fontSize)}px` } : {}),
+    ...(block.color ? { color: block.color } : {}),
+    ...(block.bold ? { weight: "700" } : {}),
+  };
+
+  return Object.keys(text).length > 0 ? text : undefined;
+}
+
+/** What a block's chips look like. All optional, all absent by default. */
+export type CardChipStyle = {
+  /** A `background-color` for each chip. */
+  background?: string;
+  /** Extra `padding` on each chip, as a length. */
+  padding?: string;
+  /** A `justify-content` for the row they wrap in. */
+  justify?: string;
+  /** A `border-color` for each chip. Never set without `borderWidth`. */
+  border?: string;
+  /** That border's width, as a length. Never set without `border`. */
+  borderWidth?: string;
+};
+
+/**
+ * How a block draws its chips, or nothing at all.
+ *
+ * `textOf`'s sibling, and here for its reason: the studio, the editor's own
+ * popup and the embed all draw these pills, and three copies of "what does a
+ * chip look like" is how the preview panel ends up showing two different chips
+ * beside each other on one screen.
+ *
+ * **`justify` is the fix for an alignment that silently did nothing.** `align`
+ * reaches a block as `textAlign` (see `blockBox`), which is right for everything
+ * made of words and is powerless over a row of chips — `text-align` does not
+ * move flex items, so the three Alignment buttons on the Tags block moved
+ * nothing at all. Its `flex-start`/`flex-end` spelling is `FLEX_ALIGN`'s, for
+ * `FLEX_ALIGN`'s reason: a card is opened on a stranger's site, which is not the
+ * place to find out which browsers take the logical values on this property.
+ *
+ * Padding is a **length to add**, not a box: it lands beside the chip's own
+ * padding in each renderer rather than replacing it, so zero is the pill every
+ * card already draws.
+ */
+export function chipStyleOf(block: CardBlock): CardChipStyle | undefined {
+  const chip: CardChipStyle = {
+    ...(block.chipBackground ? { background: block.chipBackground } : {}),
+    ...(block.chipPadding
+      ? { padding: `${String(block.chipPadding)}px` }
+      : {}),
+    ...(block.align ? { justify: FLEX_ALIGN[block.align] } : {}),
+    /*
+     * Both or neither. A colour with no width draws nothing and a width with no
+     * colour draws a black line nobody picked, so the two travel together and
+     * `readBlock` refuses to store either half on its own.
+     */
+    ...(block.chipBorder && block.chipBorderWidth
+      ? {
+          border: block.chipBorder,
+          borderWidth: `${String(block.chipBorderWidth)}px`,
+        }
+      : {}),
+  };
+
+  return Object.keys(chip).length > 0 ? chip : undefined;
+}
+
+export type CardButtonStyle = {
+  /** A `background-color` for the button. */
+  background?: string;
+  /** Extra `padding` on the button, as a length. */
+  padding?: string;
+  /** A `border-radius`, as a length. */
+  radius?: string;
+  /**
+   * A `border-color`. Never set without `borderWidth`, and optional on it — a
+   * width alone draws in the button's own label colour, which is what the
+   * stylesheets fall back to. Unlike a chip's, where the pair is indivisible.
+   */
+  border?: string;
+  /** That border's width, as a length. Carries the outline on its own. */
+  borderWidth?: string;
+  /** The button fills its block rather than hugging its label. */
+  full?: true;
+};
+
+/**
+ * How a block draws its button, or nothing at all.
+ *
+ * `chipStyleOf`'s twin, here for its reason: the studio, the editor's own popup
+ * and the embed all draw this box, and three copies of "what does a button look
+ * like" is how the preview panel ends up showing two different buttons side by
+ * side on one screen.
+ *
+ * **No `justify`**, where `chipStyleOf` needs one. A row of chips is a flex row
+ * and `text-align` cannot move a flex item; a button is one `inline-flex`
+ * element sitting in the block's normal flow, which `text-align` moves like any
+ * other inline-level box. That is a reason to keep it inline-level rather than
+ * an accident — make it a flex child later and this function owes a `justify`.
+ *
+ * Padding is a **length to add**, as a chip's is, so zero is the button the
+ * stylesheet already draws and a block nobody has styled writes nothing at all.
+ */
+export function buttonStyleOf(block: CardBlock): CardButtonStyle | undefined {
+  const style: CardButtonStyle = {
+    ...(block.buttonBackground ? { background: block.buttonBackground } : {}),
+    ...(block.buttonPadding
+      ? { padding: `${String(block.buttonPadding)}px` }
+      : {}),
+    /*
+     * `!== undefined`, not truthiness: zero is a square button and absent is
+     * the stylesheet's own corner, and those are two different cards. Every
+     * other number here is still dropped at zero, because for every other one
+     * zero *is* what the stylesheet draws. See the same test in `readBlock`.
+     */
+    ...(block.buttonRadius !== undefined
+      ? { radius: `${String(block.buttonRadius)}px` }
+      : {}),
+    ...(block.buttonFull ? { full: true as const } : {}),
+    /*
+     * The width carries the outline and the colour is optional on it, which is
+     * where this parts company with a chip's pair (`chipStyleOf` above). A
+     * colour with no width still draws nothing, so it is dropped; a width with
+     * no colour draws in the button's own label colour, which is the
+     * stylesheets' own fallback and stays right in either theme.
+     */
+    ...(block.buttonBorderWidth
+      ? { borderWidth: `${String(block.buttonBorderWidth)}px` }
+      : {}),
+    ...(block.buttonBorderWidth && block.buttonBorder
+      ? { border: block.buttonBorder }
+      : {}),
+  };
+
+  return Object.keys(style).length > 0 ? style : undefined;
+}
+
+/**
+ * What a Logo block actually draws: an uploaded image, or nothing — meaning the
+ * pin.
+ *
+ * `chipStyleOf`'s sibling, and here for its reason: the studio, the editor's own
+ * popup and the embed all draw this block, and three copies of "is this a logo
+ * or a pin" is how the preview panel ends up showing a pin beside a logo on one
+ * screen.
+ *
+ * **The fallback is the whole function.** A location whose pin carries a glyph
+ * rather than an uploaded image has no logo to draw, and a Logo block that went
+ * blank for it would be a design that works on the location it was made against
+ * and silently empties on the other four hundred. So asking for the image is
+ * asking for it *if there is one*, and the pin is what a card gets otherwise —
+ * which is also what every card drew before this field existed (CLAUDE.md §7).
+ *
+ * Takes the already-resolved image string rather than the pin, so this file
+ * stays free of a `pin-icons` import: the two renderers have both resolved the
+ * pin by the time they ask.
+ */
+export function logoImageOf(
+  block: CardBlock,
+  /** `ResolvedPin.image` — a `data:` URI, or "" for a pin drawn from paths. */
+  image: string,
+): string | null {
+  return block.logoMode === "image" && image ? image : null;
 }
 
 /**
@@ -1688,8 +2777,6 @@ export function lineTakes(
 export type CardRowBox = {
   /** Between the two blocks. The card's own gap, as a length. */
   columnGap: string;
-  /** The empty space above the row. Absent means none. */
-  marginTop?: string;
   /**
    * Which end of its line the row's blocks sit at — and therefore which end the
    * room left over is on. Absent is the start, which is where a line's contents
@@ -1735,15 +2822,9 @@ export function rowOffsetHolder(
 /**
  * How a row of halves is laid out.
  *
- * The leading space is the **greater** of the pair's two offsets, applied once
- * to the row. Each block keeping its own would offset it inside the row and pull
- * the pair apart; taking the maximum rather than the first means a stray offset
- * on the second member still does something rather than being silently dropped,
- * which is the same "degrade, never throw" contract `resolveCardLayout` holds
- * itself to.
- *
- * Which member that is comes from `rowOffsetHolder`, so the one place that reads
- * a line's leading space and the two that write it cannot drift apart.
+ * The row's leading space is not here — it is a box of its own above the line
+ * (`leadBox`), taken from `rowOffsetHolder`, which is what makes a pair move
+ * together rather than one member sliding down inside the row.
  *
  * `justify-content` is the other half of `side`, and it is emitted for a row of
  * **one** only. A pair is two shares summing to the row plus its gap, so there it
@@ -1751,16 +2832,83 @@ export function rowOffsetHolder(
  * nothing on the next is worse than no rule.
  */
 export function cardRowBox(row: CardRow, layout: CardLayout): CardRowBox {
-  const offset = rowOffsetHolder(row.blocks)?.offset ?? 0;
-
   const lone = row.blocks.length === 1 ? row.blocks[0] : undefined;
 
   return {
     columnGap: `${String(layout.gap)}px`,
-    ...(offset > 0 ? { marginTop: `${String(offset)}px` } : {}),
     ...(lone?.side === "end" || leadsWithMark(row)
       ? { justifyContent: "flex-end" }
       : {}),
+  };
+}
+
+/**
+ * How much a lead box gives way, against the `flex: none` every block takes.
+ *
+ * Not `1`. Flex distributes shrinkage in proportion to each item's shrink factor
+ * times its basis, so this only has to be large enough that the lead has taken
+ * every pixel it has before anything else notices — and every block is `0 0 auto`
+ * anyway (see `blockBox`), so in practice nothing else is asked at all. The
+ * number is what makes "the empty space goes first" true with no ordering code
+ * anywhere: it is a fact about the boxes rather than a pass over them.
+ */
+const LEAD_SHRINK = 1000;
+
+/** The box that carries a line's leading space, in CSS values. */
+export type CardLeadBox = {
+  /** The space as a basis, and a shrink factor that dwarfs every block's. */
+  flex: string;
+  /** Always zero — there is no content in here to protect. */
+  minHeight: string;
+  /** Cancels the second zone gap this extra item brings with it. */
+  marginBottom: string;
+};
+
+/**
+ * The empty space above a line, as a box that **gives way**.
+ *
+ * It used to be a `margin-top` on the line itself, and that is the whole of a bug
+ * worth writing down. A margin cannot shrink, so a block growing under a card's
+ * fixed height — a week of opening hours opened, a paragraph resized — pushed
+ * everything below it down and off the bottom, and the only thing that could give
+ * the room back was a pass that measured the card and *rewrote the layout*
+ * (`fitWithin`, deleted with this). That pass took the space away permanently: it
+ * held the lower blocks still while the content grew, and then, when the content
+ * shrank again, there was nothing left to put back and every block below rode up
+ * and stayed there. Opening and closing one disclosure walked the card's own name
+ * up its face.
+ *
+ * Leading space is *slack* — `roomForNew` in lib/card/card-space.ts already says
+ * every other part of this system treats it that way — so here it is slack in the
+ * layout too: it is absorbed as content grows and released as content shrinks, in
+ * the same frame, with nothing measured, nothing saved and nothing to converge.
+ * Past the point where the slack is gone, the middle zone scrolls, which is
+ * exactly what a published card has always done.
+ *
+ * Three numbers, and each is load-bearing:
+ *
+ * - **`LEAD_SHRINK` against every block's `flex: none`** — see above, and see
+ *   `flex` in `blockBox` for why a block may never shrink (one that does cuts its
+ *   own text off mid-word instead of letting its zone scroll).
+ * - **`min-height: 0`**, because a flex item's automatic minimum is its content
+ *   and the browser will not take a box below it. There is no content here, but
+ *   the default is `auto` and `auto` is not `0`.
+ * - **`margin-bottom: -gap`**, because a zone is a flex column with a gap and
+ *   this is one more item in it. At rest the line sits `gap + offset` below its
+ *   neighbour, which is exactly where the margin left it; fully compressed it
+ *   sits at `gap`, which is exactly where an absent offset leaves it. Without the
+ *   cancel both ends would be one gap out.
+ *
+ * The gap is written out as a number rather than as `var(--card-gap)`, the same
+ * call `blockBox` makes for a half's basis: the property is `--card-gap` in the
+ * dashboard and `--lm-card-gap` in the embed, and a string mentioning neither is
+ * one fewer pair of names to keep in step.
+ */
+export function leadBox(offset: number, layout: CardLayout): CardLeadBox {
+  return {
+    flex: `0 ${String(LEAD_SHRINK)} ${String(offset)}px`,
+    minHeight: "0",
+    marginBottom: `-${String(layout.gap)}px`,
   };
 }
 
@@ -1871,6 +3019,44 @@ function clamp(
   if (!isNumber(value)) return fallback;
 
   return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/**
+ * A short line of the owner's own words, trimmed and capped. Empty is "not set".
+ *
+ * The cap is the point. This is the only place a stored layout carries free
+ * text, it is written into the DOM of a stranger's page by both renderers, and
+ * a blob hand-edited in the Appwrite console must not be able to make a card
+ * arbitrarily large. Newlines go too: a button label is a line, and one carrying
+ * a paragraph break would draw a two-storey control nobody designed.
+ */
+function text(value: unknown, max: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+
+  const clean = value.replace(/\s+/g, " ").trim().slice(0, max);
+
+  return clean || undefined;
+}
+
+/**
+ * The words a button's treatment and its hover may be, as lists rather than as
+ * types alone.
+ *
+ * A type is gone by runtime and these two are read out of a stored blob, so
+ * `readBlock` needs something it can actually ask. `satisfies` keeps each list
+ * and its union in step: drop a word from one and the other stops compiling.
+ */
+const BUTTON_VARIANTS = ["outline", "soft", "ghost"] as const satisfies
+  readonly CardButtonVariant[];
+const BUTTON_HOVERS = ["none", "lighten", "lift"] as const satisfies
+  readonly CardButtonHover[];
+
+function isButtonVariant(value: unknown): value is CardButtonVariant {
+  return BUTTON_VARIANTS.includes(value as CardButtonVariant);
+}
+
+function isButtonHover(value: unknown): value is CardButtonHover {
+  return BUTTON_HOVERS.includes(value as CardButtonHover);
 }
 
 /** A `#rgb` or `#rrggbb`, lowercased. Anything else is "not set". */

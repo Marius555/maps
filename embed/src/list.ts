@@ -1,8 +1,9 @@
 import type { MapSnapshot, SnapshotPlace } from "@/packages/shared/snapshot";
+import { tagChipsOf } from "@/packages/shared/tags";
 
 import { el, link } from "./dom";
 import { distanceKm, formatDistance, type Located } from "./geo";
-import { directionsUrl } from "./popup";
+import { directionsUrl } from "@/packages/shared/directions";
 
 /**
  * The results panel beside the map.
@@ -43,8 +44,17 @@ export function createList(
   snapshot: MapSnapshot,
   onPick: (place: SnapshotPlace) => void,
 ): ListHandle {
+  /*
+   * Resolved once for the whole list rather than per row: `createList` redraws
+   * on every keystroke of the search box, and a map §6 allows 3,000 locations in
+   * would otherwise walk sixty tags per row per character.
+   */
+  const tagGroups = snapshot.tagGroups ?? [];
+
   const categories = new Map(
-    snapshot.categories.map((category) => [category.id, category]),
+    // Legacy, read-only: a snapshot published before categories became tags.
+    // Nothing writes this field any more (§7 keeps it readable forever).
+    (snapshot.categories ?? []).map((category) => [category.id, category]),
   );
 
   const root = el("div", "lm-list");
@@ -136,11 +146,31 @@ export function createList(
 
     pick.append(head);
 
-    const category = categories.get(place.category ?? "");
-    if (category) {
-      const chip = el("span", "lm-list__category", category.label);
-      chip.style.setProperty("--lm-category-color", category.color);
-      pick.append(chip);
+    /*
+     * One chip, and it is the one the pin beside it is wearing.
+     *
+     * A row is for choosing between places, not for reading one — the popup is
+     * where the rest of a location's tags live. So the chip worth the width is
+     * the one that explains the pin, which is exactly what the category chip
+     * that used to sit here was.
+     *
+     * **The colour is what picks it, not the position**, and that is the whole
+     * of the §7 back-compatibility here. A snapshot published before categories
+     * became tags carries *both* — colourless `tagGroups` and a `category` — so
+     * taking `tags[0]` would put a grey "Bikes" where a live customer site has
+     * always shown an orange "Shops". The same precedence `colorOf` uses in
+     * map.ts, so the dot on the row and the pin on the map cannot disagree.
+     */
+    const chips = tagChipsOf(tagGroups, place.tags);
+    const legacy = categories.get(place.category ?? "");
+    const chip =
+      chips.find((candidate) => candidate.color) ??
+      (legacy ? { label: legacy.label, color: legacy.color } : chips[0]);
+
+    if (chip) {
+      const node = el("span", "lm-list__tag", chip.label);
+      if (chip.color) node.style.setProperty("--lm-tag-color", chip.color);
+      pick.append(node);
     }
 
     if (place.address) {

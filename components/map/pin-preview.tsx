@@ -26,7 +26,7 @@ import {
  * three levels and the pin's own colour sits in the middle of them. `colorFor` in
  * components/editor/map-editor.tsx is the authority:
  *
- *     group colour  →  the custom pin's own colour  →  category  →  --accent
+ *     group colour  →  the custom pin's own colour  →  first tag  →  --accent
  *
  * So `color` is the override that beats the pin (a group's), `fallbackColor` is
  * what fills in when neither has one (a category's), and passing neither leaves

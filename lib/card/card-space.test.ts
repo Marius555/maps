@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { defaultCardLayout, type CardLayout } from "@/packages/shared/card-layout";
-import { cardLayoutSchema } from "@/lib/validation/card-layout.schema";
 import {
-  fitWithin,
+  contentHeight,
   hasRoomFor,
   newBlockHeight,
-  roomLeft,
+  roomForNew,
   usedHeight,
 } from "./card-space";
 
@@ -78,14 +77,30 @@ describe("usedHeight", () => {
   });
 });
 
-describe("roomLeft", () => {
+describe("roomForNew", () => {
   it("is what the card has not spent, and never negative", () => {
     const layout = cardWith({ top: [{ id: "g", type: "gallery", heightPct: 70 }] });
 
     // 70% of 440 is 308, plus 24 of card padding, out of 440.
-    expect(roomLeft(layout, {})).toBe(440 - 308 - 24);
+    expect(roomForNew(layout, {})).toBe(440 - 308 - 24);
     // A card already overflowing has no room, rather than negative room.
-    expect(roomLeft(layout, { g: 900 })).toBe(0);
+    expect(roomForNew(layout, { g: 900 })).toBe(0);
+  });
+
+  it("does not charge for the empty room holding a block down the card", () => {
+    /*
+     * The same card twice, once with its name at the top and once with the name
+     * pushed to the bottom by 300px of leading space. The same blocks are on it
+     * either way, so the same room is left for a new one — the gap is somewhere
+     * a block can *go*, not something the card has spent.
+     */
+    const stacked = cardWith({ top: [{ id: "n", type: "name" }] });
+    const spread = cardWith({ top: [{ id: "n", type: "name", offset: 300 }] });
+
+    expect(roomForNew(spread, { n: 24 })).toBe(roomForNew(stacked, { n: 24 }));
+    // `usedHeight` still counts it — that is the fitter's question, not this one.
+    expect(usedHeight(spread, { n: 24 })).toBe(usedHeight(stacked, { n: 24 }) + 300);
+    expect(contentHeight(spread, { n: 24 })).toBe(24 + 24);
   });
 });
 
@@ -136,6 +151,38 @@ describe("hasRoomFor", () => {
     const roomy = cardWith({ middle: [{ id: "a", type: "name" }] });
 
     expect(hasRoomFor(roomy, "middle", { kind: "new", type: "name" }, {})).toBe(true);
+  });
+
+  it("opens a zone whose only fullness is the gap somebody left", () => {
+    /*
+     * The card this was reported on: a logo and an address paired at the top,
+     * and a name pushed to the very bottom of the middle. Three hundred pixels
+     * of white space down the centre of it, and every chip dragged over that
+     * space was answered "No room for this on the card."
+     *
+     * `usedHeight` charged the name's leading space as height already spent, so
+     * the card reported 8px free of 440 — and the *larger* the gap, the more
+     * certain the refusal. A drop into it costs the card nothing: `run` in
+     * ./drop-slots.ts lands the block inside the gap and hands the name a
+     * `nextOffset` that keeps its own top edge exactly where it is.
+     */
+    const gap = cardWith({
+      top: [
+        { id: "logo", type: "logo", heightPct: 14, half: true },
+        { id: "address", type: "address", half: true },
+      ],
+      middle: [{ id: "name", type: "name", offset: 326 }],
+    });
+    const measured = { logo: 62, address: 62, name: 20 };
+
+    expect(usedHeight(gap, measured)).toBeGreaterThan(gap.maxHeight - 32);
+
+    for (const type of ["description", "hours", "details"] as const) {
+      expect(hasRoomFor(gap, "middle", { kind: "new", type }, measured)).toBe(true);
+    }
+    expect(hasRoomFor(gap, "bottom", { kind: "new", type: "actions" }, measured)).toBe(
+      true,
+    );
   });
 });
 
@@ -196,201 +243,5 @@ describe("usedHeight with a pair", () => {
     expect(hasRoomFor(paired, "top", { kind: "new", type: "divider" }, {})).toBe(
       true,
     );
-  });
-});
-
-/**
- * A card pulled back inside itself.
- *
- * `hasRoomFor` stops one being built too tall from here on. This is the other
- * half: a card that already is — spread down the middle before the rule existed,
- * or walked past the bottom edge by an older build's arithmetic — with the block
- * at the bottom only reachable by scrolling, which is not something a visitor
- * should ever have to do.
- */
-describe("fitWithin", () => {
-  it("leaves a card that fits exactly as it was", () => {
-    const layout = cardWith({
-      middle: [
-        { id: "a", type: "name", offset: 40 },
-        { id: "b", type: "address" },
-      ],
-    });
-
-    // By reference, so a caller can tell "nothing to do" from "changed" without
-    // comparing, and an untouched card publishes the bytes it always did.
-    expect(fitWithin(layout, { a: 28, b: 28 })).toBe(layout);
-  });
-
-  it("takes the overflow out of the largest gap first", () => {
-    /*
-     * 440px of card holding 24 of its own padding, 3 gaps (24), four 28px
-     * blocks (112) and 108 + 200 + 60 of leading space: 528 in total, so 88
-     * over. All of it comes out of the 200.
-     */
-    const layout = cardWith({
-      middle: [
-        { id: "a", type: "name", offset: 108 },
-        { id: "b", type: "address", offset: 200 },
-        { id: "c", type: "category", offset: 60 },
-        { id: "d", type: "actions" },
-      ],
-    });
-
-    const next = fitWithin(layout, { a: 28, b: 28, c: 28, d: 28 });
-
-    expect(next.zones.middle.map((block) => block.offset)).toEqual([
-      108,
-      112,
-      60,
-      undefined,
-    ]);
-    expect(usedHeight(next, { a: 28, b: 28, c: 28, d: 28 })).toBe(440);
-  });
-
-  it("moves on to the next gap when the largest runs out", () => {
-    const layout = cardWith({
-      middle: [
-        { id: "a", type: "name", offset: 60 },
-        { id: "b", type: "address", offset: 400 },
-      ],
-    });
-
-    // 24 of padding, 8 of gap, 56 of block, 460 of space: 548, which is 108
-    // over. The 400 can pay it alone, so the 60 is untouched.
-    const next = fitWithin(layout, { a: 28, b: 28 });
-    expect(next.zones.middle.map((block) => block.offset)).toEqual([60, 292]);
-
-    // Take it far enough over and the first gap pays the rest: 448 over, of
-    // which the 400 covers all but 48.
-    const tighter = fitWithin({ ...layout, maxHeight: 100 }, { a: 28, b: 28 });
-    expect(tighter.zones.middle.map((block) => block.offset)).toEqual([
-      12,
-      undefined,
-    ]);
-  });
-
-  it("keeps a line's leading space single-valued", () => {
-    /*
-     * A line takes the greatest of its members' offsets, so trimming the holder
-     * while a sibling still carries an older number does nothing at all — the
-     * sibling simply becomes the new maximum. The same rule `withRowOffset` in
-     * ./card-edits.ts writes by.
-     */
-    const layout = cardWith({
-      middle: [
-        { id: "a", type: "name", widthPct: 50, offset: 120 },
-        { id: "b", type: "address", widthPct: 50, offset: 400 },
-        { id: "c", type: "category" },
-      ],
-    });
-
-    const next = fitWithin(layout, { a: 28, b: 28, c: 28 });
-
-    expect(next.zones.middle[0].offset).toBeUndefined();
-    expect(next.zones.middle[1].offset).toBe(352);
-  });
-
-  it("never touches an order, a width or a height", () => {
-    const layout = cardWith({
-      middle: [
-        { id: "a", type: "gallery", heightPct: 60, offset: 300 },
-        { id: "b", type: "name", widthPct: 40 },
-      ],
-    });
-
-    const next = fitWithin(layout, { a: 264, b: 28 });
-
-    expect(next.zones.middle.map((block) => block.id)).toEqual(["a", "b"]);
-    expect(next.zones.middle[0].heightPct).toBe(60);
-    expect(next.zones.middle[1].widthPct).toBe(40);
-  });
-
-  it("gives up rather than loops when the blocks alone are too tall", () => {
-    // No leading space to take, and a card cannot trim a block's own content.
-    const layout = cardWith({
-      middle: [
-        { id: "a", type: "gallery", heightPct: 90 },
-        { id: "b", type: "gallery", heightPct: 90 },
-      ],
-    });
-
-    expect(fitWithin(layout, { a: 396, b: 396 })).toBe(layout);
-  });
-});
-
-/**
- * What `fitWithin` writes has to survive the trip to the server.
- *
- * The pattern lib/import/preflight.ts already uses, and for the same reason: the
- * endpoint can only answer "Check the highlighted fields and try again.", which
- * is a sentence written for a form. There is no form here — there is a card, and
- * a person who moved a block and was told nothing they could act on.
- */
-describe("fitWithin produces something the server's own schema accepts", () => {
-  /*
-   * The real card this was found on, measured off the page. The heights are what
-   * matters: `getBoundingClientRect` reports sub-pixel, so a text block is
-   * 23.98750114440918 and never 24 — and `offset` is `z.number().int()`.
-   *
-   * `over` came out at 28.975…, the description's 225 became 196.024…, and every
-   * save from the moment the page loaded was refused.
-   */
-  const TEXT = 23.98750114440918;
-
-  const measured: CardLayout = {
-    ...cardWith({
-      middle: [
-        { id: "photo", type: "gallery", heightPct: 25 },
-        { id: "logo", type: "logo", heightPct: 14, overlapPct: 50, align: "center" },
-        { id: "address", type: "address", padding: 4 },
-        { id: "description", type: "description", padding: 4, offset: 225 },
-      ],
-    }),
-    // The card's own, which this one had turned off — and 24px of padding is the
-    // difference between a card that fits and one that does not, so a fixture
-    // that quietly kept the default would be testing a different card.
-    padding: 0,
-  };
-
-  const heights = { photo: 110, logo: 62, address: TEXT, description: TEXT };
-
-  it("writes whole pixels from measurements that are not", () => {
-    const next = fitWithin(measured, heights);
-
-    for (const block of next.zones.middle) {
-      if (block.offset === undefined) continue;
-      expect(Number.isInteger(block.offset)).toBe(true);
-    }
-  });
-
-  it("parses under cardLayoutSchema", () => {
-    expect(() => cardLayoutSchema.parse(fitWithin(measured, heights))).not.toThrow();
-  });
-
-  it("still ends up inside the card", () => {
-    const next = fitWithin(measured, heights);
-
-    // Rounded *up*, so a whole pixel too much comes off rather than a fraction
-    // too little: over the edge is the one direction that is not allowed.
-    expect(usedHeight(next, heights)).toBeLessThanOrEqual(next.maxHeight);
-  });
-
-  it("leaves the card alone once the logo is charged what it costs", () => {
-    /*
-     * The same card as the caller now measures it. A logo with `overlapPct: 50`
-     * is drawn 62px tall and hangs 31 of them above the line it is on, so it
-     * spends 31 — and at 31 this card is 437.98 of a 440px card and needs
-     * nothing taken off it at all.
-     *
-     * Charged to its ink instead it came to 468.98, and the description was
-     * trimmed on load on a card that visibly fitted. `useCardFits` is what feeds
-     * these numbers in; see `lineHeights` there.
-     */
-    const flow = { ...heights, logo: 31 };
-
-    expect(usedHeight(measured, flow)).toBeLessThanOrEqual(measured.maxHeight);
-    // By reference, so nothing is written and nothing is saved.
-    expect(fitWithin(measured, flow)).toBe(measured);
   });
 });

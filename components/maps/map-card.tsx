@@ -2,13 +2,12 @@ import { Chip } from "@heroui/react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 
-import { CategoryDot } from "@/components/categories/category-badge";
 import { STYLE_LABELS } from "@/lib/map/style";
 import type { AppMap } from "@/lib/repositories/types";
 import { DeleteMapButton } from "./delete-map-button";
 
 /** Beyond this the dots stop being scannable and become a stripe. */
-const VISIBLE_CATEGORIES = 4;
+const VISIBLE_TAGS = 4;
 
 /**
  * One map in the list.
@@ -19,7 +18,7 @@ const VISIBLE_CATEGORIES = 4;
  *
  * No live map preview: that would mean a MapLibre canvas per card — a WebGL
  * context each — and a real thumbnail would need every map's place coordinates,
- * which is a paginated query per map. The category colours are honest data we
+ * which is a paginated query per map. The tag colours are honest data we
  * already hold.
  */
 export function MapCard({
@@ -29,7 +28,13 @@ export function MapCard({
   map: AppMap;
   placeCount: number;
 }) {
-  const extraCategories = map.categories.length - VISIBLE_CATEGORIES;
+  /*
+   * Flattened across the groups, because a card has room for a stripe of dots
+   * and not for the questions they answer. The order is the map's own, so the
+   * first four are the four the owner arranged first rather than four at random.
+   */
+  const tags = map.tagGroups.flatMap((group) => group.tags);
+  const extraTags = tags.length - VISIBLE_TAGS;
 
   return (
     // The lift is a single pixel on purpose: enough to say the whole card is
@@ -88,24 +93,26 @@ export function MapCard({
       </dl>
 
       <div className="mt-auto flex items-end justify-between gap-2">
-        {map.categories.length > 0 ? (
+        {tags.length > 0 ? (
           <ul className="flex min-w-0 flex-wrap items-center gap-1.5">
-            {map.categories.slice(0, VISIBLE_CATEGORIES).map((category) => (
-              <li key={category.id} className="flex items-center gap-1">
-                <CategoryDot color={category.color} />
+            {tags.slice(0, VISIBLE_TAGS).map((tag) => (
+              <li key={tag.id} className="flex items-center gap-1">
+                <span
+                  aria-hidden="true"
+                  className="size-2.5 shrink-0 rounded-full ring-1 ring-black/10"
+                  style={{ backgroundColor: tag.color }}
+                />
                 <span className="max-w-24 truncate text-xs text-muted">
-                  {category.label}
+                  {tag.label}
                 </span>
               </li>
             ))}
-            {extraCategories > 0 ? (
-              <li className="text-xs tabular-nums text-muted">
-                +{extraCategories}
-              </li>
+            {extraTags > 0 ? (
+              <li className="text-xs tabular-nums text-muted">+{extraTags}</li>
             ) : null}
           </ul>
         ) : (
-          <span className="text-xs text-muted">No categories</span>
+          <span className="text-xs text-muted">No tags</span>
         )}
 
         {/*

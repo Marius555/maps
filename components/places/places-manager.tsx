@@ -10,20 +10,19 @@ import { PageTitle } from "@/components/ui/page-title";
 import {
   countNeedingAttention,
   matchesFilter,
+  matchesTagFilter,
   type PlaceFilter,
 } from "@/lib/places/place-filters";
 import { useMap } from "@/lib/query/maps";
 import { usePlaces } from "@/lib/query/places";
 import type { AppMap, Place } from "@/lib/repositories/types";
+import { tagGroupIndex } from "@/packages/shared/tags";
 import { AttentionBadge } from "./attention-badge";
 import { PlaceCountBadge } from "./place-count-badge";
 import { PlaceEditDialog } from "./place-form/place-edit-dialog";
 import { PlaceList } from "./place-list";
 import { PlaceTable } from "./place-table/place-table";
 import { PlacesToolbar } from "./places-toolbar";
-
-/** Sentinel for "has no category", distinct from "any category". */
-const NO_CATEGORY = "__none";
 
 export function PlacesManager({
   initialMap,
@@ -38,8 +37,8 @@ export function PlacesManager({
   const { data: places = [] } = usePlaces(initialMap.id, initialPlaces);
 
   const [query, setQuery] = useState("");
-  const [categoryId, setCategoryId] = useState("");
   const [filter, setFilter] = useState<PlaceFilter>("");
+  const [tagIds, setTagIds] = useState<ReadonlySet<string>>(() => new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
 
   /*
@@ -58,10 +57,16 @@ export function PlacesManager({
   const { pendingIds, failedIds, resolveAddress, retainOnly } =
     useAddressResolution(map.id);
 
-  const categoriesById = useMemo(
-    () => new Map(map.categories.map((category) => [category.id, category])),
-    [map.categories],
-  );
+  /*
+   * Which group each selected tag answers, built once.
+   *
+   * `matchesTags` needs it per place per keystroke, and it is the *embed's* own
+   * function — imported, never reimplemented. Two copies of "OR within a group,
+   * AND across groups" is how the owner's filtered list and the visitor's
+   * filtered map would come to show different sets of the same locations, which
+   * is the case packages/shared/tags.ts names in its opening paragraph.
+   */
+  const groupOf = useMemo(() => tagGroupIndex(map.tagGroups), [map.tagGroups]);
 
   const placeIds = useMemo(
     () => new Set(places.map((place) => place.id)),
@@ -77,12 +82,8 @@ export function PlacesManager({
     const needle = query.trim().toLowerCase();
 
     return places.filter((place) => {
-      if (categoryId === NO_CATEGORY && place.category) return false;
-      if (categoryId && categoryId !== NO_CATEGORY && place.category !== categoryId) {
-        return false;
-      }
-
       if (!matchesFilter(place, filter)) return false;
+      if (!matchesTagFilter(place, tagIds, groupOf)) return false;
 
       if (!needle) return true;
 
@@ -91,7 +92,7 @@ export function PlacesManager({
         place.address.toLowerCase().includes(needle)
       );
     });
-  }, [places, query, categoryId, filter]);
+  }, [places, query, filter, tagIds, groupOf]);
 
   const attention = useMemo(() => countNeedingAttention(places), [places]);
 
@@ -108,7 +109,7 @@ export function PlacesManager({
   const listProps = {
     mapId: map.id,
     places: visible,
-    categoriesById,
+    tagGroups: map.tagGroups,
     pinIcons: map.pinIcons,
     selectedPlaceId: editingId,
     pendingAddressIds: pendingIds,
@@ -124,9 +125,9 @@ export function PlacesManager({
 
       <PlacesToolbar
         query={query}
-        categoryId={categoryId}
         filter={filter}
-        categories={map.categories}
+        tagGroups={map.tagGroups}
+        tagIds={tagIds}
         hasPlaces={places.length > 0}
         actions={
           <>
@@ -145,8 +146,8 @@ export function PlacesManager({
           </>
         }
         onQueryChange={setQuery}
-        onCategoryChange={setCategoryId}
         onFilterChange={setFilter}
+        onTagsChange={setTagIds}
       />
 
       {isFiltered ? (

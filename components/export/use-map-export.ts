@@ -21,7 +21,7 @@ import type { ExportPlace } from "@/lib/export/place-features";
 import type { Place, Shape } from "@/lib/repositories/types";
 import {
   resolvePin,
-  UNCATEGORISED_PIN_COLOR,
+  UNTAGGED_PIN_COLOR,
   type CustomPinIcon,
 } from "@/packages/shared/pin-icons";
 
@@ -165,6 +165,6 @@ function toExportPlace(
     lng: place.lng,
     lat: place.lat,
     icon: place.icon,
-    color: colorFor(place, pin?.color ?? undefined) ?? UNCATEGORISED_PIN_COLOR,
+    color: colorFor(place, pin?.color ?? undefined) ?? UNTAGGED_PIN_COLOR,
   };
 }

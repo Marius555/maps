@@ -3,8 +3,9 @@
 import { useState } from "react";
 
 import { useDeletePlace } from "@/lib/query/places";
-import type { MapCategory, Place } from "@/lib/repositories/types";
+import type { MapTagGroup, Place } from "@/lib/repositories/types";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
+import { tagChipsOf } from "@/packages/shared/tags";
 import { DeletePlaceDialog } from "../delete-place-dialog";
 import { PlaceListEmpty } from "../place-list-empty";
 import { PlaceTableHead } from "./place-table-head";
@@ -16,11 +17,11 @@ import { PlaceTableRow } from "./place-table-row";
  * `Container` gives every page the full width beside the sidebar, and this page
  * spent it on a single column of 48px rows — a 1600px screen showing a name, an
  * address and a menu with a thousand pixels of nothing beside them. Everything
- * else about a location (its category, whether its pin is trustworthy, whether it
+ * else about a location (its tags, whether its pin is trustworthy, whether it
  * has a phone number) was only visible by opening it one at a time.
  *
  * Columns rather than wider cards because the job here is comparison: which of
- * these 300 need attention, which have no category, which are still missing
+ * these 300 need attention, which are untagged, which are still missing
  * opening hours. Cards answer that one location at a time; a table answers it by
  * letting the eye run down a column.
  *
@@ -31,7 +32,7 @@ import { PlaceTableRow } from "./place-table-row";
 export function PlaceTable({
   mapId,
   places,
-  categoriesById,
+  tagGroups,
   pinIcons,
   selectedPlaceId,
   pendingAddressIds,
@@ -43,7 +44,13 @@ export function PlaceTable({
 }: {
   mapId: string;
   places: Place[];
-  categoriesById: Map<string, MapCategory>;
+  /**
+   * The map's tag vocabulary. The groups rather than a per-place lookup, so the
+   * resolution is `tagChipsOf` — the same function the card and the embed use,
+   * which is also what drops ids the map no longer defines and what keeps the
+   * location's own order, so chip one is the colour its pin is wearing.
+   */
+  tagGroups: MapTagGroup[];
   /** The map's own pins, so a row can draw a `custom:<id>` one. */
   pinIcons: CustomPinIcon[];
   selectedPlaceId: string | null;
@@ -73,7 +80,7 @@ export function PlaceTable({
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <caption className="sr-only">
-            Locations on this map, with their category, how their pin was placed,
+            Locations on this map, with their tags, how their pin was placed,
             and what each is still missing.
           </caption>
 
@@ -84,7 +91,7 @@ export function PlaceTable({
               <PlaceTableRow
                 key={place.id}
                 place={place}
-                category={categoriesById.get(place.category)}
+                tagChips={tagChipsOf(tagGroups, place.tags)}
                 pinIcons={pinIcons}
                 isSelected={place.id === selectedPlaceId}
                 isAddressPending={pendingAddressIds?.has(place.id)}

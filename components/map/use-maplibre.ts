@@ -9,6 +9,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { effectiveAppearance } from "@/lib/map/appearance";
+import { carryRuntimeLayers } from "@/lib/map/carry-style";
 import { resolveStyleUrl, type MapStyleKey } from "@/lib/map/style";
 import { collapseAttribution } from "@/packages/shared/attribution";
 import { loadMapStyle } from "@/packages/shared/load-style";
@@ -404,6 +405,14 @@ export function useMaplibre(
    * (components/map/pin-marker.ts), which are not part of the style and survive
    * the swap. Do not copy this into the embed: that one draws places as a GeoJSON
    * source with cluster/point layers, and `setStyle` drops both.
+   *
+   * Shapes are the editor's one exception to that — they *are* style layers —
+   * and `transformStyle` is what stops the swap dropping them. See
+   * lib/map/carry-style.ts: it puts the runtime source and its layers on both
+   * sides of MapLibre's diff, so the diff emits nothing for them and they are
+   * never taken off the map in the first place. Without it every theme change
+   * and every layer toggle deleted them and use-shape-layers.ts rebuilt them a
+   * few frames later, which is what made them blink.
    */
   useEffect(() => {
     if (!isReady) return;
@@ -429,7 +438,7 @@ export function useMaplibre(
       // in flight. Either way this result is stale.
       if (cancelled) return;
 
-      mapRef.current?.setStyle(next);
+      mapRef.current?.setStyle(next, { transformStyle: carryRuntimeLayers });
     })();
 
     return () => {

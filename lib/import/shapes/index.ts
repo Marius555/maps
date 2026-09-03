@@ -1,6 +1,6 @@
 import { simplifyToFit } from "@/lib/import/simplify";
 import { ImportSourceError } from "@/lib/import/sources/types";
-import { CATEGORY_COLORS } from "@/lib/validation/category.schema";
+import { PALETTE_COLORS } from "@/lib/validation/palette";
 import {
   DEFAULT_SHAPE_OPACITY,
   MAX_POLYGON_POINTS,
@@ -162,7 +162,7 @@ export function parseShapeFile(text: string, options: ParseOptions = {}): ShapeI
         geometry: built.geometry,
         // A colour the file already chose beats the palette: a styled export has
         // an opinion, and replacing it is discarding work someone did.
-        color: properties.color ?? CATEGORY_COLORS[shapes.length % CATEGORY_COLORS.length],
+        color: properties.color ?? PALETTE_COLORS[shapes.length % PALETTE_COLORS.length],
         opacity: properties.opacity ?? DEFAULT_SHAPE_OPACITY,
         ...(properties.description ? { description: properties.description } : {}),
         simplifiedFrom: built.simplifiedFrom,

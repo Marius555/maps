@@ -11,7 +11,7 @@ import { FormSection } from "./form-section";
  * the geocoder put in the wrong country, when the address search has failed and
  * the map is showing empty ocean. Two boxes of digits in the middle of the
  * always-open essentials made that rare case look like a required step, and put
- * it between the address and the category, which are not.
+ * it between the address and the tags, which are not.
  *
  * `CoordinateFields` itself is unchanged and still shared with the import review
  * step, which shows it inline: there the numbers *are* the subject of the row.

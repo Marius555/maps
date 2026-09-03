@@ -105,6 +105,26 @@ export function DesignerBlock({
       {...rowProps}
       {...movingBlockTravel(block.id)}
       /*
+       * **Which renders count as layout changes.**
+       *
+       * `movingBlockTravel` asks for `layout` and `layoutId`, and Motion
+       * re-measures every block on *every* commit unless it is told what to
+       * watch. The layout object is the honest answer: `commit` in
+       * card-designer.tsx builds a new one for each drop, resize and property
+       * change, and nothing else replaces it — so selecting a block, or opening
+       * a disclosure inside one, no longer costs a measure-and-project pass over
+       * the whole card.
+       *
+       * **It is not what makes the card move smoothly when a week of hours
+       * opens**, which is worth writing down because it is the obvious guess.
+       * Measured across sixteen frames with and without this line, the blocks
+       * below a disclosure keep a constant gap between them either way: that
+       * movement belongs to the disclosure animating its own height, and Motion
+       * is not involved in it at all. Removing this line would cost the wasted
+       * measurements and change nothing anyone can see.
+       */
+      layoutDependency={layout}
+      /*
        * What the drop geometry finds this block by.
        *
        * On the block rather than on the `motion.div` wrapping it, because that

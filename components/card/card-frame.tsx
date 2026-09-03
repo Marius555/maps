@@ -7,6 +7,8 @@ import {
   CARD_ZONES,
   blockBox,
   cardRowBox,
+  leadBox,
+  rowOffsetHolder,
   upwardLiftOf,
   type CardBlock,
   type CardLayout,
@@ -135,6 +137,36 @@ export function blockStyle(
     // property as that cancel and the two have to add up rather than replace
     // each other.
     ...(box.marginInline ? { marginInline: box.marginInline } : {}),
+    /*
+     * The owner's own type, as custom properties rather than as declarations.
+     *
+     * Two reasons, and the second is the one that forces it. Each leaf names its
+     * own current value as the fallback (`.card-text--*` in app/globals.css), so
+     * a block nobody has styled draws exactly the pixels it drew before any of
+     * this existed — which is the rule every optional field on a card obeys
+     * (CLAUDE.md §7). And a block's words are several components below this
+     * one: `CardBlockContent` takes a block and a place, not a style, so a
+     * variable it falls through is the only thing that reaches the `h3` without
+     * every component in between learning about typography.
+     *
+     * Nothing at all is emitted for an unstyled block, so the DOM is what it
+     * was. The embed writes the same four under `--lm-card-*`; the two names are
+     * kept in step by hand, as `--card-gap` and `--lm-card-gap` already are.
+     */
+    ...(box.text
+      ? ({
+          ...(box.text.font ? { "--card-font": box.text.font } : {}),
+          ...(box.text.size ? { "--card-font-size": box.text.size } : {}),
+          ...(box.text.color ? { "--card-color": box.text.color } : {}),
+          ...(box.text.weight ? { "--card-font-weight": box.text.weight } : {}),
+        } as CSSProperties)
+      : {}),
+    // The paragraph clamp and the week's row spacing, on the same terms: both
+    // land on an element this function cannot see.
+    ...(box.lines ? ({ "--card-lines": box.lines } as CSSProperties) : {}),
+    ...(box.rowGap
+      ? ({ "--card-hours-gap": box.rowGap } as CSSProperties)
+      : {}),
   };
 }
 
@@ -191,20 +223,50 @@ export function cardRowStyle(row: CardRow, layout: CardLayout): CSSProperties {
     display: "flex",
     minWidth: 0,
     columnGap: box.columnGap,
-    ...(box.marginTop ? { marginTop: box.marginTop } : {}),
     ...(box.justifyContent ? { justifyContent: box.justifyContent } : {}),
   };
 }
 
 /**
- * A block's vertical margins: the empty space above it, how far it is pulled
- * over its neighbour, and — for the first line of the top zone and the last of
- * the bottom zone — the cancel that lets a bleeding block reach the card's edge.
+ * The empty space above a line, as an element of its own.
  *
- * One function because all three write `margin-top` and a card can want more
- * than one at once: a photo flush to the top of a card that its owner has then
- * pushed down, a logo pulled up over that photo *and* nudged down from it. Three
- * spreads in the caller would silently drop whichever came first.
+ * A box rather than a margin because it has to *give way* — see `leadBox` in
+ * packages/shared/card-layout.ts, which holds the whole argument and the three
+ * numbers. All this adds is the element: it is `aria-hidden` and empty, so it is
+ * a gap to everything but the flex algorithm.
+ *
+ * Rendered only when there is space to draw. A card with no offsets on it
+ * produces exactly the DOM it produced before any of this existed, which is
+ * every card published so far.
+ */
+export function CardLead({
+  row,
+  layout,
+}: {
+  row: CardRow;
+  layout: CardLayout;
+}) {
+  const offset = rowOffsetHolder(row.blocks)?.offset ?? 0;
+  if (offset <= 0) return null;
+
+  return <div aria-hidden="true" style={leadBox(offset, layout)} />;
+}
+
+/**
+ * A block's vertical margins: how far it is pulled over its neighbour, and — for
+ * the first line of the top zone and the last of the bottom zone — the cancel
+ * that lets a bleeding block reach the card's edge.
+ *
+ * One function because both write `margin-top` and a card can want both at once:
+ * a logo pulled up over the photo above it, on a photo that is itself flush to
+ * the top of the card. Two spreads in the caller would silently drop the first.
+ *
+ * The line's own leading space used to be composed here as well, and is not any
+ * more: it is a box above the line (`CardLead`) rather than a margin on a block
+ * inside it, because a margin cannot give way and leading space has to. The
+ * arithmetic is unchanged — a bleeding first block still carries its own
+ * `-padding` here, with the lead above it, which sums to what the single
+ * `margin-top` summed to.
  *
  * **The overlap is decided here rather than in `blockBox` because only this
  * knows whether there is anything to overlap**, and what there has to be is a
@@ -245,12 +307,7 @@ export function blockEdges(
 
   const cancel = "calc(var(--card-pad) * -1)";
 
-  let marginTop = box.marginTop;
-  if (above) {
-    marginTop = marginTop
-      ? `calc(${marginTop} - ${above})`
-      : `calc(${above} * -1)`;
-  }
+  let marginTop = above ? `calc(${above} * -1)` : undefined;
   if (cancelTop) {
     marginTop = marginTop
       ? `calc(var(--card-pad) * -1 + ${marginTop})`

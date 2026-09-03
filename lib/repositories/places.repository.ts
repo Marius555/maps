@@ -154,6 +154,40 @@ export async function countPlaces(
   }
 }
 
+/**
+ * Whether `adding` more locations fit under the caller's ceiling.
+ *
+ * Split out of `createPlaces` because the insert is no longer the only thing
+ * that has to ask. Geocoding an import spends a request against a shared,
+ * rate-limited upstream *before* any row is written, so the batch route asks
+ * this first: otherwise a free-plan map with ten slots could walk a 500-row file
+ * through the geocoder and only be refused at the end, having spent all 500.
+ * CLAUDE.md §6 — enforce in the repository, never only in the UI.
+ *
+ * Counts the batch as a whole rather than per row: 8 slots left and a 40-row
+ * import is one refusal up front, not 8 saved rows and a confusing failure
+ * partway down the file.
+ *
+ * Returns the count it had to read anyway, because `createPlaces` needs it a
+ * second time — it is the base every imported row's `sortOrder` counts up from,
+ * and asking Appwrite twice for one number would be two chances to disagree.
+ */
+export async function assertPlaceHeadroom(
+  ctx: RepoContext,
+  mapId: string,
+  adding: number,
+): Promise<number> {
+  const plan = await getUserPlan(ctx.userId);
+  const limit = PLAN_LIMITS[plan].places;
+  const existing = await countPlaces(ctx, mapId);
+
+  if (existing + adding > limit) {
+    throw new PlanLimitError("places", limit, plan);
+  }
+
+  return existing;
+}
+
 export async function createPlace(
   ctx: RepoContext,
   mapId: string,
@@ -179,7 +213,6 @@ export async function createPlace(
         lat: input.lat,
         lng: input.lng,
         address: input.address,
-        category: input.category,
         // An array column, written as an array. `fields` is JSON, and
         // serialiseJson already turns an empty object into null rather than "{}".
         tags: input.tags,
@@ -208,9 +241,8 @@ export async function createPlace(
 /**
  * Bulk insert, for a confirmed CSV import.
  *
- * The plan check counts the batch as a whole rather than per row: 8 free-plan
- * slots left and a 40-row import is one refusal up front, not 8 saved rows and a
- * confusing failure partway down the file.
+ * The plan check is `assertPlaceHeadroom`, shared with the geocode batch route
+ * so an import cannot spend upstream geocoder requests it has no room to save.
  */
 export async function createPlaces(
   ctx: RepoContext,
@@ -220,13 +252,7 @@ export async function createPlaces(
   await getMap(ctx, mapId);
   if (inputs.length === 0) return [];
 
-  const plan = await getUserPlan(ctx.userId);
-  const limit = PLAN_LIMITS[plan].places;
-  const existing = await countPlaces(ctx, mapId);
-
-  if (existing + inputs.length > limit) {
-    throw new PlanLimitError("places", limit, plan);
-  }
+  const existing = await assertPlaceHeadroom(ctx, mapId, inputs.length);
 
   const permissions = ownerPermissions(ctx.userId);
   const created: Place[] = [];
@@ -250,8 +276,7 @@ export async function createPlaces(
           lat: input.lat,
           lng: input.lng,
           address: input.address,
-          category: input.category,
-          tags: input.tags,
+            tags: input.tags,
           fields: serialiseJson(input.fields),
           icon: input.icon,
           description: input.description ?? null,

@@ -97,10 +97,15 @@ export const createPlaceSchema = z.object({
   // Empty until Week 2's geocoding fills it in. Dropping a pin gives us
   // coordinates and nothing else.
   address: z.string().trim().max(512).default(""),
-  category: z.string().trim().max(64).default(""),
-  // Tag ids from the map's own groups, and this place's answers to its extra
-  // fields. Both default to empty the way `category` defaults to "": most
-  // creates — a dropped pin, a bare CSV row — have nothing to say about either.
+  /*
+   * Tag ids from the map's own groups, and this place's answers to its extra
+   * fields. Both default to empty, because most creates — a dropped pin, a bare
+   * CSV row — have nothing to say about either.
+   *
+   * **The order of `tags` is significant**: since categories merged into tags
+   * the first one a location wears is what colours its pin, so nothing between
+   * here and the snapshot may sort them (lib/validation/tag.schema.ts).
+   */
   tags: placeTagsSchema.default([]),
   fields: placeFieldsSchema.default({}),
   icon: pinIconRefSchema.default(""),
@@ -126,7 +131,6 @@ export const updatePlaceSchema = z
     lat: latSchema,
     lng: lngSchema,
     address: z.string().trim().max(512),
-    category: z.string().trim().max(64),
     tags: placeTagsSchema,
     fields: placeFieldsSchema,
     icon: pinIconRefSchema,
@@ -158,7 +162,6 @@ export const placeFormSchema = z.object({
     .min(1, "Give the location a name.")
     .max(255, "Keep the name under 255 characters."),
   address: z.string().trim().max(512),
-  category: z.string().trim().max(64),
   tags: placeTagsSchema,
   fields: placeFieldsSchema,
   icon: pinIconRefSchema,

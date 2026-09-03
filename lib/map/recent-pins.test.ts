@@ -17,7 +17,6 @@ function place(icon: string, updatedAt: string): Place {
     lat: 54.687,
     lng: 25.28,
     address: "",
-    category: "",
     tags: [],
     fields: {},
     icon,

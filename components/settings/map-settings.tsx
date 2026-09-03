@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 
-import { CategoryEditor } from "@/components/categories/category-editor";
 import { CustomFieldEditor } from "@/components/fields/custom-field-editor";
 import { DeleteMapButton } from "@/components/maps/delete-map-button";
 import { TagGroupEditor } from "@/components/tags/tag-group-editor";
@@ -18,7 +17,8 @@ import { MapDetailsForm } from "./map-details-form";
  * Client shell for the settings page.
  *
  * Reads the map from the query cache rather than props alone, so saving a name in
- * one section and editing categories in another never disagree about the map.
+ * one section and editing the tag vocabulary in another never disagree about the
+ * map.
  *
  * Each block is a panel. Before, the sections were separated only by horizontal
  * rules, so the fields floated on the page background with nothing to belong to.
@@ -42,10 +42,11 @@ export function MapSettings({
 
       <MapAppearanceSection map={map} />
 
-      <CategoryEditor map={map} places={places} />
-
-      {/* Under categories, in the order an owner builds a map: what a pin *is*,
-          then how a visitor narrows the set, then what each card carries. */}
+      {/* One vocabulary, where there used to be two. Categories and tags asked
+          the same question under two names on this one page, and the weaker of
+          the two — one value, because it coloured the pin — was the one every
+          owner reached for first. Tags absorbed it: a tag carries a colour now,
+          and a location's first tag is what its pin is drawn in. */}
       <TagGroupEditor map={map} places={places} />
 
       <CustomFieldEditor map={map} places={places} />

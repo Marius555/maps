@@ -54,14 +54,14 @@ export const GLYPH_SOURCE_BOX = 24;
 export const CUSTOM_PIN_PREFIX = "custom:";
 
 /**
- * What a place with no category and no pin colour of its own is drawn in.
+ * What a place with no tags and no pin colour of its own is drawn in.
  *
  * A fixed grey rather than the dashboard's `--accent`, because the two renderers
  * that need it have no theme to read: a published snapshot is looked at by
  * strangers, and an exported image is a file that outlives the tab. Both need a
  * colour that is decided once and written down.
  */
-export const UNCATEGORISED_PIN_COLOR = "#7a828f";
+export const UNTAGGED_PIN_COLOR = "#7a828f";
 
 /** The body outline a pin is drawn as. */
 export type PinShape = "circle" | "square" | "diamond";
@@ -525,10 +525,10 @@ export function resolvePin(
  * The fill takes two arguments rather than one because the map's answer has three
  * levels and the pin's own colour sits in the middle of them:
  *
- *     override (a group's)  →  the pin's own  →  fallback (a category's)
+ *     override (a group's)  →  the pin's own  →  fallback (the first tag's)
  *
- * Collapsing them would put the category ahead of a custom pin's own design, and
- * the list and the canvas would then paint the same pin two colours.
+ * Collapsing them would put a tag ahead of a custom pin's own design, and the
+ * list and the canvas would then paint the same pin two colours.
  */
 export function pinCssVars(
   pin: ResolvedPin | null | undefined,

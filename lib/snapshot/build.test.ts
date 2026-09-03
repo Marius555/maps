@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { AUTO_STYLE, BASEMAP_SOURCES, CONCRETE_MAP_STYLES } from "@/lib/map/style";
-import type { AppMap, MapCategory, Place, Shape } from "@/lib/repositories/types";
+import type { AppMap, Place, Shape } from "@/lib/repositories/types";
 import { defaultCardLayout, type CardLayout } from "@/packages/shared/card-layout";
 import { emptyHours } from "@/packages/shared/hours";
 import { buildSnapshot } from "./build";
@@ -41,7 +41,6 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     lat: 54.687,
     lng: 25.28,
     address: "Gedimino pr. 1, Vilnius",
-    category: "",
     tags: [],
     fields: {},
     icon: "",
@@ -82,12 +81,6 @@ function makeShape(overrides: Partial<Shape> = {}): Shape {
     ...overrides,
   };
 }
-
-const category = (id: string, label: string): MapCategory => ({
-  id,
-  label,
-  color: "#2563eb",
-});
 
 describe("buildSnapshot", () => {
   it("carries the map's identity, centre and attribution", () => {
@@ -565,33 +558,14 @@ describe("buildSnapshot", () => {
     expect(snapshot.places).toHaveLength(1);
   });
 
-  it("includes only categories that some published place uses", () => {
-    const map = makeMap({
-      categories: [category("shops", "Shops"), category("depots", "Depots")],
-    });
+  it("never writes the retired categories field", () => {
+    // It stays *readable* on MapSnapshot because files published before tags
+    // absorbed categories are live on customers' sites and are read forever
+    // (§7). Nothing produces it any more, and an empty array would be bytes
+    // saying nothing.
+    const { snapshot } = buildSnapshot(makeMap(), [makePlace()], [], GENERATED_AT);
 
-    const { snapshot } = buildSnapshot(
-      map,
-      [makePlace({ category: "shops" })],
-      [],
-      GENERATED_AT,
-    );
-
-    // A filter chip that matches nothing is a dead control on a customer's site.
-    expect(snapshot.categories.map((item) => item.id)).toEqual(["shops"]);
-  });
-
-  it("does not keep a category whose only place was dropped", () => {
-    const map = makeMap({ categories: [category("shops", "Shops")] });
-
-    const { snapshot } = buildSnapshot(
-      map,
-      [makePlace({ category: "shops", lat: Number.POSITIVE_INFINITY })],
-      [],
-      GENERATED_AT,
-    );
-
-    expect(snapshot.categories).toEqual([]);
+    expect(snapshot.categories).toBeUndefined();
   });
 
   it("computes bounds across every published place", () => {
@@ -1137,11 +1111,15 @@ describe("buildSnapshot tags and custom fields", () => {
       id: "sells",
       label: "Sells",
       tags: [
-        { id: "bikes", label: "Bikes" },
-        { id: "skis", label: "Skis" },
+        { id: "bikes", label: "Bikes", color: "#e8590c" },
+        { id: "skis", label: "Skis", color: "#1c7ed6" },
       ],
     },
-    { id: "open", label: "Open", tags: [{ id: "sundays", label: "Sundays" }] },
+    {
+      id: "open",
+      label: "Open",
+      tags: [{ id: "sundays", label: "Sundays", color: "#0ca678" }],
+    },
   ];
 
   const fields = [
@@ -1171,7 +1149,13 @@ describe("buildSnapshot tags and custom fields", () => {
     // "Skis" is defined but unworn, so its chip would match nothing; "Open" is
     // left empty by that narrowing and goes whole.
     expect(snapshot.tagGroups).toEqual([
-      { id: "sells", label: "Sells", tags: [{ id: "bikes", label: "Bikes" }] },
+      {
+        id: "sells",
+        label: "Sells",
+        // The colour travels: since categories merged into tags it is what the
+        // embed draws the *pin* from, not only the chip.
+        tags: [{ id: "bikes", label: "Bikes", color: "#e8590c" }],
+      },
     ]);
   });
 
@@ -1186,6 +1170,20 @@ describe("buildSnapshot tags and custom fields", () => {
     );
 
     expect(snapshot.places[0].tags).toEqual(["bikes"]);
+  });
+
+  it("publishes a place's tags in the location's own order", () => {
+    // Load-bearing rather than cosmetic: the first tag is what colours the pin,
+    // so re-sorting these into the map's vocabulary order at publish time would
+    // repaint pins between the dashboard and the customer's site.
+    const { snapshot } = buildSnapshot(
+      makeMap({ tagGroups: groups }),
+      [makePlace({ tags: ["sundays", "skis", "bikes"] })],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.places[0].tags).toEqual(["sundays", "skis", "bikes"]);
   });
 
   it("omits a place's tags when none of them survive", () => {
@@ -1210,7 +1208,9 @@ describe("buildSnapshot tags and custom fields", () => {
       GENERATED_AT,
     );
 
-    expect(snapshot.tagGroups?.[0].tags).toEqual([{ id: "bikes", label: "Bikes" }]);
+    expect(snapshot.tagGroups?.[0].tags).toEqual([
+      { id: "bikes", label: "Bikes", color: "#e8590c" },
+    ]);
   });
 
   it("ships only the custom fields somebody filled in", () => {

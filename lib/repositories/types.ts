@@ -135,11 +135,14 @@ export type Place = {
   lat: number;
   lng: number;
   address: string;
-  category: string;
   /**
-   * Tag ids from the map's own groups. May name a tag the map no longer defines
-   * — deleting a tag does not sweep it off the places wearing it, and the
-   * snapshot narrows to defined tags at publish time.
+   * Tag ids from the map's own groups, **in the order this location was given
+   * them**. The first is what colours its pin, which is what makes the order
+   * load-bearing rather than incidental — nothing may sort this.
+   *
+   * May name a tag the map no longer defines: deleting a tag does not sweep it
+   * off the places wearing it, and the snapshot narrows to defined tags at
+   * publish time.
    */
   tags: string[];
   /** Answers to the map's extra fields, keyed by field id. Same dangling rule. */

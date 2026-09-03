@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Label, Slider } from "@heroui/react";
 import { Controller, useForm } from "react-hook-form";
 
-import { CategoryColorPicker } from "@/components/categories/category-color-picker";
+import { SwatchPicker } from "@/components/ui/swatch-picker";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { FormTextArea, FormTextField } from "@/components/ui/form-field";
 import { shapeSummary } from "@/lib/map/shape-summary";
@@ -96,7 +96,7 @@ export function ShapeForm({
         render={({ field }) => (
           <div className="space-y-2">
             <Label>Colour</Label>
-            <CategoryColorPicker
+            <SwatchPicker
               label="Shape colour"
               value={field.value}
               onChange={field.onChange}

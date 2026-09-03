@@ -116,7 +116,6 @@ export function useCreatePlace(mapId: string) {
         lat: input.lat,
         lng: input.lng,
         address: input.address ?? "",
-        category: input.category ?? "",
         tags: input.tags ?? [],
         fields: input.fields ?? {},
         icon: input.icon ?? "",
@@ -325,6 +324,42 @@ export function useAddTagToPlaces(mapId: string) {
           updatePlaceAsync({
             placeId: place.id,
             input: { tags: [...place.tags, tagId] },
+          }),
+        ),
+      );
+    },
+    [updatePlaceAsync],
+  );
+}
+
+/**
+ * Takes one tag off every selected location.
+ *
+ * The mirror of `useAddTagToPlaces` above, down to the skip: places that do not
+ * wear the tag are left alone rather than rewritten with the array they already
+ * have, because a no-op PATCH still bumps `updatedAt` and that is what the
+ * publish tab reads to decide whether the map has unpublished changes.
+ *
+ * A *separate* operation rather than a toggle on the same menu row, and the
+ * distinction is the whole reason this can exist at all. A marquee selection is
+ * a mixed bag — some of it wears the tag, some does not — so a toggle would have
+ * to pick a meaning for that and would then silently do the opposite of what
+ * half the selection needed. "Add" and "Remove" each have one meaning whatever
+ * the selection started as; "toggle" has none.
+ */
+export function useRemoveTagFromPlaces(mapId: string) {
+  const updatePlace = useUpdatePlace(mapId);
+  const updatePlaceAsync = updatePlace.mutateAsync;
+
+  return useCallback(
+    async (places: Place[], tagId: string) => {
+      const pending = places.filter((place) => place.tags.includes(tagId));
+
+      await Promise.all(
+        pending.map((place) =>
+          updatePlaceAsync({
+            placeId: place.id,
+            input: { tags: place.tags.filter((id) => id !== tagId) },
           }),
         ),
       );

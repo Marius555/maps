@@ -57,6 +57,7 @@ export function MapToolbar({
   style,
   appearance,
   limits,
+  routesNote,
   search,
   onPickIcon,
   onStopAdding,
@@ -112,6 +113,11 @@ export function MapToolbar({
     places: PlanHeadroom;
     shapes: PlanHeadroom;
   };
+  /**
+   * Why the route tool is off, when the plan does not include it. Passed
+   * through to the Draw menu, which is the only thing that renders it.
+   */
+  routesNote?: string;
   search?: ReactNode;
   onPickIcon: (icon: string) => void;
   onStopAdding: () => void;
@@ -190,6 +196,7 @@ export function MapToolbar({
           isRouting={isRouting}
           isBusy={isDrawingBusy}
           headroom={limits?.shapes}
+          routesNote={routesNote}
           onPickTool={onPickTool}
           onPickRoute={onPickRoute}
           onStopDrawing={onStopDrawing}

@@ -38,7 +38,6 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     lat: 54.687,
     lng: 25.28,
     address: "Gedimino pr. 1, Vilnius",
-    category: "",
     tags: [],
     fields: {},
     icon: "",

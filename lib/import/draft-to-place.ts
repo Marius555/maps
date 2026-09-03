@@ -21,9 +21,9 @@ export function draftToPlace(draft: DraftPlace, mapId: string): Place {
     lat: draft.lat ?? 0,
     lng: draft.lng ?? 0,
     address: draft.address,
-    category: "",
-    // A CSV has no tags or custom fields yet — resolveTags stamps them onto the
-    // create input, not onto this preview row.
+    // A CSV's tags are labels until the vocabulary has been reconciled —
+    // `resolveTags` stamps the ids onto the create input, not onto this preview
+    // row, which exists only to put a pin on the review map.
     tags: [],
     fields: {},
     // A CSV has no icon column. Imported locations land as plain pins.
@@ -53,13 +53,13 @@ export function draftToPlace(draft: DraftPlace, mapId: string): Place {
 /**
  * The payload that actually gets saved.
  *
- * `categoryId` and `tagIds` are resolved by the caller from the draft's labels —
- * places store ids, and a CSV only ever has text (see resolve-categories.ts and
- * resolve-tags.ts).
+ * `tagIds` are resolved by the caller from the draft's labels — places store
+ * ids, and a file only ever has text (see resolve-tags.ts). **Their order is the
+ * caller's and is kept**: the main-tag column is stamped first, so an imported
+ * location's pin comes out the colour of the column that used to be Category.
  */
 export function draftToCreateInput(
   draft: DraftPlace,
-  categoryId: string,
   tagIds: string[] = [],
 ): CreatePlaceInput {
   return {
@@ -68,7 +68,6 @@ export function draftToCreateInput(
     lat: draft.lat as number,
     lng: draft.lng as number,
     address: draft.address,
-    category: categoryId,
     tags: tagIds,
     // No custom fields from an import yet — the mapping step has no way to point
     // a column at one. Everything else here is already wired for when it does.

@@ -163,17 +163,6 @@ export async function updateMap(
       data,
     });
 
-    // Places reference a category by id. Dropping a category without clearing
-    // those references would leave locations tagged with something the legend
-    // can no longer explain.
-    if (categories) {
-      const removed = before.categories
-        .map((category) => category.id)
-        .filter((id) => !categories.some((category) => category.id === id));
-
-      await clearFromPlaces(mapId, "category", removed);
-    }
-
     /*
      * The same for pins, though the failure it prevents is quieter: a place
      * naming a deleted pin already renders as a plain one, because resolvePin
@@ -193,13 +182,16 @@ export async function updateMap(
     }
 
     /*
-     * Tags and custom fields get no such sweep, deliberately.
+     * Tags and custom fields get no such sweep, deliberately — and since
+     * categories merged into tags, that means the map's *vocabulary* has none.
      *
      * `clearFromPlaces` sets a scalar column to "" where it equals a value, and
      * neither of these is scalar: `tags` is an array column Appwrite cannot
      * remove a single element from, and `fields` is a JSON object. Clearing
      * either means reading every place that references the deleted id and
      * rewriting it — a read plus N updates on a map §6 allows 3,000 locations in.
+     * A category could be swept precisely because there was only ever one per
+     * place; that convenience is what the merge traded away, knowingly.
      *
      * It also buys nothing a visitor can see: `buildSnapshot` narrows both to
      * what the map still defines, so a dangling id is already invisible off the
@@ -216,12 +208,16 @@ export async function updateMap(
 
 /**
  * One bulk update per removed value. Appwrite has no "set to '' where in (...)"
- * so this is a small loop, and deleting several categories or pins at once is
- * rare enough not to optimise.
+ * so this is a small loop, and deleting several pins at once is rare enough not
+ * to optimise.
+ *
+ * `icon` is the only column left that this can touch. It took `category` too
+ * until categories merged into tags — see the note above on why the vocabulary
+ * that replaced them cannot be swept at all.
  */
 async function clearFromPlaces(
   mapId: string,
-  column: "category" | "icon",
+  column: "icon",
   values: string[],
 ): Promise<void> {
   for (const value of values) {

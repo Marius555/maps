@@ -27,7 +27,7 @@ and OpenFreeMap already costs €0.
 | R2 reads | free to 10M class B ops/month ≈ 300k map loads, then $0.36/M |
 | R2 egress | **$0** — the reason this is R2 and not S3 |
 | Domain + Cloudflare DNS | ~€10/year; DNS is free |
-| Building the tiles | ~€3 of VM rental per build, and only when you want fresher OSM data |
+| Building the tiles | ~€5–8 of VM rental per build, and only when you want fresher OSM data |
 
 For contrast, a competitor on Google Maps pays roughly $7 per 1,000 map loads. A
 customer at 50k views/month costs them ~$350 and costs us about a dollar.

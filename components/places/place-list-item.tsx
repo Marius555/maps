@@ -13,7 +13,7 @@ import { PinPreview } from "@/components/map/pin-preview";
 import { LIST_ROW_CLASS, listRowMotion } from "@/components/ui/list-row-motion";
 import { RowMenu, type RowMenuItem } from "@/components/ui/row-menu";
 import { TreeBranch } from "@/components/ui/tree-branch";
-import type { MapCategory, Place } from "@/lib/repositories/types";
+import type { Place } from "@/lib/repositories/types";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { PlaceRowLabel } from "./place-row-label";
 
@@ -25,7 +25,7 @@ import { PlaceRowLabel } from "./place-row-label";
  * name is what says *which* location this is: its pin and its status flag.
  *
  * The pin is the pin. It was a plain coloured dot, which meant a location with
- * no category and no group drew *nothing at all* — the commonest row on a new
+ * no tags and no group drew *nothing at all* — the commonest row on a new
  * map identified itself with an empty space — and a location whose owner had
  * gone and picked a coffee cup for it showed no sign of that anywhere but the
  * canvas. `PinPreview` draws the same `pinSvg` the marker does, and `pinSvg`
@@ -33,7 +33,7 @@ import { PlaceRowLabel } from "./place-row-label";
  */
 export function PlaceListItem({
   place,
-  category,
+  pinColor,
   pinIcons,
   groupColor,
   isSelected,
@@ -53,7 +53,12 @@ export function PlaceListItem({
   acceptsDrop,
 }: {
   place: Place;
-  category: MapCategory | undefined;
+  /**
+   * What this location's own tags say its pin should be — its first tag's
+   * colour, resolved by the caller holding the map's vocabulary. Beaten by
+   * `groupColor` and by a custom pin's own colour, in that order.
+   */
+  pinColor?: string;
   /** The map's own pins, so `custom:<id>` on a place resolves to a drawing. */
   pinIcons: CustomPinIcon[];
   /** Set for a row in a group: the group's colour, which its pin now wears. */
@@ -207,7 +212,7 @@ export function PlaceListItem({
             icon={place.icon}
             pinIcons={pinIcons}
             color={groupColor}
-            fallbackColor={category?.color}
+            fallbackColor={pinColor}
             size="sm"
             className="shrink-0"
           />

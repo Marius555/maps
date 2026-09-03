@@ -7,9 +7,10 @@ import {
   Link2,
   MapPin,
   Minus,
+  MousePointerClick,
   MoveVertical,
-  Rows3,
   Tag,
+  Tags,
   ChevronsUpDown,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -49,10 +50,21 @@ export const BLOCK_LABELS: Record<
     hint: "What the location is called",
     icon: Heading,
   },
+  // Retired, and only ever seen on a layout saved before categories became
+  // tags — the palette does not offer it (`availableBlocks`). Named for what it
+  // now draws rather than for what it was, so an owner opening such a layout is
+  // not told about a feature that no longer exists.
   category: {
-    label: "Category",
-    hint: "Its coloured category chip",
+    label: "Main tag",
+    hint: "The tag that colours the pin",
     icon: Tag,
+  },
+  tags: {
+    label: "Tags",
+    // Named for what a visitor does with them, not for the column they live in:
+    // the tags are also the filter chips, and the two are the same words.
+    hint: "The filters this location matches",
+    icon: Tags,
   },
   address: {
     label: "Address",
@@ -69,20 +81,26 @@ export const BLOCK_LABELS: Record<
     hint: "The week, opening on today",
     icon: Clock,
   },
-  fields: {
-    label: "Extra fields",
-    hint: "The fields you added to this map",
-    icon: Rows3,
-  },
+  // Retired, and only ever seen on a layout saved before it was — the palette
+  // does not offer it (`availableBlocks`). It could only ever hold the
+  // description and the week, so the hint names those two rather than promising
+  // a fold that holds "whatever you have not placed", which it never did.
   details: {
     label: "More details",
-    hint: "A fold holding whatever you have not placed yourself",
+    hint: "A fold for the description and the week, if you take them off",
     icon: ChevronsUpDown,
   },
   actions: {
     label: "Links",
     hint: "Phone, email, website and directions",
     icon: Link2,
+  },
+  button: {
+    label: "Button",
+    // Named by what it does, not by what it is: "Button" alone says how it is
+    // drawn and nothing about why you would want one (§8).
+    hint: "One call to action — directions, or a link you choose",
+    icon: MousePointerClick,
   },
   divider: {
     label: "Divider",

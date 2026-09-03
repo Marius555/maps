@@ -215,8 +215,13 @@
   gap: 6px;
 }
 
-/* No colour dot: every chip left is a tag, and a tag has no colour. The one
-   that had one was the category chip, which the search box replaced. */
+/* No colour dot, even though a tag now carries one.
+
+   A filter chip is a control — pressed or not is what it has to communicate, and
+   `--lm-foreground` is what says so. A tag's colour answers a different question
+   ("which pin is this?") and is shown where that question is asked: on the card
+   and on the list row, next to the thing wearing it. Putting it here too would
+   have the on/off state competing with eight palette colours for the same edge. */
 .lm-chip--on {
   border-color: var(--lm-foreground);
   box-shadow: var(--lm-shadow), inset 0 0 0 1px var(--lm-foreground);
@@ -281,6 +286,24 @@
   max-height: var(--lm-popup-max, none);
   overflow-y: auto;
   overscroll-behavior: contain;
+  /*
+   * A word with nowhere to break still has to break.
+   *
+   * A block is `overflow: hidden`, so a token longer than the card — a URL, a
+   * hashtag, a German compound, a description pasted with no spaces in it —
+   * drew as *one line* that ran off the side and was clipped, which read as
+   * "the description only gets one line". No clamp could fix it; the clipping
+   * was horizontal. `blockBox` sets `overflow-wrap` only on a *narrowed* block,
+   * where it is doing a different job.
+   *
+   * On the root rather than on each text rule, because it is inherited and a
+   * shape's popup builds its name and description outside any
+   * `.lm-popup__block` (`buildShapePopup`). `break-word` and not `anywhere`:
+   * `anywhere` also shrinks `min-content`, which would move the flex arithmetic
+   * on cards drawing correctly today, and a live customer's card must not move
+   * (CLAUDE.md §7). The dashboard does the same on `.card-text`.
+   */
+  overflow-wrap: break-word;
 }
 
 /*
@@ -380,36 +403,41 @@
 }
 
 /*
- * `--lm-block-offset` is the empty space the owner left above this block, over
- * and above the zone's own gap. A custom property rather than an inline
- * `margin-top`, because the rule below needs to *add* it to the bleed cancel —
- * an inline style would simply beat that rule, and a photo pushed down the card
- * would stop reaching its top edge.
+ * The empty space above a line is **not** here. It is an element of its own
+ * (`buildLead` in popup.ts, `leadBox` in packages/shared/card-layout.ts),
+ * because a margin cannot shrink and that space has to: a card is a fixed box,
+ * and a week of opening hours a visitor opens has to close the gap above the
+ * blocks below it rather than push them off the bottom.
  */
 .lm-popup__block {
   min-width: 0;
   /*
    * `--lm-block-overlap-above` is how far a block is pulled over the one before
-   * it — a logo straddling the bottom edge of a photo. It composes with the
-   * offset here rather than replacing it, which is the whole reason both are
-   * custom properties: a logo can be nudged down from the photo *and* pulled up
-   * over it, and an inline margin could only say one of the two. `wrapBlock`
-   * sets neither on a block at the end of its zone, where there is no sibling to
-   * overlap.
+   * it — a logo straddling the bottom edge of a photo. A custom property rather
+   * than an inline margin because the bleed rules below have to *add* to it, and
+   * an inline style would simply beat them. `wrapBlock` sets neither on a block
+   * at the end of its zone, where there is no sibling to overlap.
    */
-  margin-top: calc(
-    var(--lm-block-offset, 0px) - var(--lm-block-overlap-above, 0px)
-  );
+  margin-top: calc(var(--lm-block-overlap-above, 0px) * -1);
   margin-bottom: calc(var(--lm-block-overlap-below, 0px) * -1);
+}
+
+/*
+ * A line's leading space: an empty box that gives way.
+ *
+ * Every dimension of it is written inline from `leadBox`, so the dashboard and
+ * this build one box from one function. The rule exists only to name it.
+ */
+.lm-popup__lead {
+  pointer-events: none;
 }
 
 /*
  * A line holding one or two blocks side by side.
  *
  * Built only for a shared row (`wrapRow` in popup.ts) — a full-width block stays
- * a direct child of its zone, which is what keeps the three `--bleed` rules
- * below working, two of them being `:first-child`/`:last-child` under a `>`
- * combinator.
+ * a direct child of its zone, which is what keeps the `--bleed` rules below
+ * reachable at all.
  *
  * A row of *one* is not a degenerate case to tidy away: it is a block narrowed
  * with room deliberately left beside it, and the row is what makes that share a
@@ -428,7 +456,6 @@
 .lm-popup__row {
   display: flex;
   min-width: 0;
-  margin-top: var(--lm-block-offset, 0px);
 }
 
 /*
@@ -442,11 +469,20 @@
   margin-inline: calc(var(--lm-card-pad, 10px) * -1);
 }
 
-.lm-popup__zone--top > .lm-popup__block--bleed:first-child {
-  margin-top: calc(var(--lm-card-pad, 10px) * -1 + var(--lm-block-offset, 0px));
+/*
+ * The ends are classes, not `:first-child` / `:last-child`.
+ *
+ * A line can be preceded by its own leading space, so the block at the top of a
+ * zone is not necessarily the first element in it — and a photo that stopped
+ * being `:first-child` would quietly stop reaching the card's top edge.
+ * `wrapBlock` sets these from the line's index, which is the same question
+ * `blockEdges` asks in the dashboard.
+ */
+.lm-popup__zone--top > .lm-popup__block--bleed-start {
+  margin-top: calc(var(--lm-card-pad, 10px) * -1);
 }
 
-.lm-popup__zone--bottom > .lm-popup__block--bleed:last-child {
+.lm-popup__zone--bottom > .lm-popup__block--bleed-end {
   margin-bottom: calc(var(--lm-card-pad, 10px) * -1);
 }
 
@@ -501,6 +537,27 @@
  */
 .lm-popup__logo .pin-svg__image {
   clip-path: circle(50%);
+}
+
+/*
+ * And the same logo with no pin around it, which is the block's other drawing.
+ *
+ * The drop shadow comes off: it is there to lift a pin off the photo it sits
+ * on, and on a bare wordmark it reads as a printing fault. `contain` rather
+ * than `cover` because the block is drawn square (`isSelfSized` in
+ * packages/shared/card-layout.ts) and a wordmark cropped to a square is a
+ * wordmark with its end cut off — the dashboard's own `Logo` makes the same
+ * call.
+ */
+.lm-popup__logo--image {
+  filter: none;
+}
+
+.lm-popup__logo-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .lm-popup__divider {
@@ -582,12 +639,28 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The owner's own type, and why every rule below names its current value twice.
+ *
+ * `wrapBlock` writes `--lm-card-font`, `--lm-card-font-size`, `--lm-card-color`
+ * and `--lm-card-font-weight` onto a block its owner has styled, and writes
+ * nothing at all onto one they have not. The fallback in each `var()` is
+ * therefore the pixel this rule drew before any of it existed — which is what
+ * makes a card published years ago, and read by a site we do not control,
+ * completely untouched by the feature (CLAUDE.md §7).
+ *
+ * The dashboard does exactly this under `--card-*` (see `.card-text` in
+ * app/globals.css). The two prefixes are kept in step by hand, the way
+ * `--lm-card-gap` and `--card-gap` already are.
+ */
 .lm-popup__name {
   /* The zone's gap carries the rhythm now, so blocks own no outer margin —
      otherwise a gap the owner set would be added to one they cannot see. */
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-family: var(--lm-card-font, inherit);
+  font-size: var(--lm-card-font-size, 14px);
+  font-weight: var(--lm-card-font-weight, 600);
+  color: var(--lm-card-color, inherit);
 }
 
 /* A shape's card leads with its colour, because that is what ties the card to the
@@ -601,27 +674,116 @@
   background: var(--lm-shape-color, var(--lm-muted));
 }
 
-.lm-popup__category {
-  display: inline-block;
-  font-size: 12px;
-  color: var(--lm-muted);
+/* A row of pills, and no dot on any of them.
+
+   The first chip used to wear the pin's colour, as the card saying which tag the
+   marker the visitor just clicked had taken it from. It read as a stray bubble
+   inside a pill whose colours are the owner's to set, and the pin it explains is
+   on screen right beside the popup, so it is gone — from here and from the
+   studio's `TagChips` together.
+
+   `justify-content` is unset here on purpose: `buildTags` writes it inline from
+   `chipStyleOf`, and only when the block's Alignment has been touched.
+
+   These declarations are the dashboard's own chip, measured off a live
+   `.chip--sm.chip--soft.chip--default`, because that is the pill an owner
+   designs against in the studio and the preview panel draws the two side by
+   side. This was a transparent outlined pill at 11px; matching is what stops the
+   studio promising a card the customer's site does not draw. */
+.lm-popup__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.lm-popup__category::before {
-  content: "";
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 5px;
-  border-radius: 50%;
-  background: var(--lm-category-color, var(--lm-muted));
+.lm-popup__tag {
+  /* `.chip--sm`'s `px-1` plus `.chip__label`'s `px-0.5`. `--lm-chip-pad` is
+     added rather than substituted, so nought is the pill this always drew. */
+  padding: var(--lm-chip-pad, 0px) calc(6px + var(--lm-chip-pad, 0px));
+  border-radius: 16px;
+  /* `--default-soft` is `color-mix(--default 50%)`; against the embed's own
+     neutrals this is the same weight of grey, and it tracks light and dark where
+     a literal could not. */
+  background: var(
+    --lm-chip-bg,
+    color-mix(in oklab, var(--lm-foreground) 8%, transparent)
+  );
+  /* Nothing by default — a zero-width transparent border is the pill every
+     published card is already wearing, so this line changes no chip until its
+     block is given a colour. `chipStyleOf` in packages/shared refuses to hand
+     over one of the two properties without the other. */
+  border: var(--lm-chip-border-width, 0px) solid
+    var(--lm-chip-border, transparent);
+  font-family: var(--lm-card-font, inherit);
+  font-size: var(--lm-card-font-size, 12px);
+  line-height: 20px;
+  font-weight: var(--lm-card-font-weight, 500);
+  color: var(--lm-card-color, inherit);
 }
 
 .lm-popup__address,
 .lm-popup__description {
   margin: 0;
-  font-size: 13px;
-  color: var(--lm-muted);
+  font-family: var(--lm-card-font, inherit);
+  font-size: var(--lm-card-font-size, 13px);
+  font-weight: var(--lm-card-font-weight, inherit);
+  color: var(--lm-card-color, var(--lm-muted));
+}
+
+/* A paragraph keeps the line breaks its author typed. The dashboard's card has
+   always done this (`whitespace-pre-line`); the embed dropped them, so the same
+   description read as one run-on block on the customer's own site. */
+.lm-popup__description {
+  white-space: pre-line;
+}
+
+/*
+ * A description clipped to a few lines, when its owner asked for that.
+ *
+ * The class is only added when there is a count to apply — `display:
+ * -webkit-box` is a different box from the `<p>` this has always been, so a
+ * paragraph nobody has clipped must not wear it. `-webkit-line-clamp` rather
+ * than the unprefixed property because it is the one every browser a visitor
+ * might be using actually implements.
+ */
+.lm-popup__block--clamp .lm-popup__description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--lm-card-lines, 2);
+  overflow: hidden;
+}
+
+/*
+ * And the fold that opens it, which a clipped description always gets — see
+ * `buildDescription`. The clamp comes off here rather than a second copy of the
+ * paragraph appearing under the summary: one node, two shapes.
+ */
+/* `flex-start` and not `flex-end`: the chevron sits on the paragraph's first
+   line and stays there. The last line is the one that moves — opening the fold
+   grows the paragraph and would walk the control down the card, away from the
+   pointer that just pressed it. The dashboard's own `Description` in
+   components/card/card-block.tsx makes the same call. */
+.lm-popup__description-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.lm-popup__description-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The chevron is `flex: none`; the paragraph takes the rest. `min-width: 0` is
+   what lets a long word wrap inside a flex item rather than widening it. */
+.lm-popup__description-summary .lm-popup__description {
+  min-width: 0;
+  flex: 1;
+}
+
+.lm-popup__description-fold[open] .lm-popup__description {
+  -webkit-line-clamp: none;
 }
 
 /* A line's length.
@@ -649,9 +811,20 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
-  font-size: 13px;
+  font-family: var(--lm-card-font, inherit);
+  font-size: var(--lm-card-font-size, 13px);
   cursor: pointer;
   list-style: none;
+}
+
+/* The chevron is the week's own, at the end of the summary line. `auto` on the
+   inline margin holds it at the card's edge however wide the times are, and
+   `center` overrides the row's baseline for it alone — a chevron sitting on a
+   text baseline reads as having slipped. Everything else about it is shared
+   with "More details" below, because it says the same thing. */
+.lm-popup__hours-summary svg {
+  margin-inline-start: auto;
+  align-self: center;
 }
 
 .lm-popup__hours-summary::-webkit-details-marker {
@@ -659,8 +832,8 @@
 }
 
 .lm-popup__hours-state {
-  font-weight: 600;
-  color: var(--lm-muted);
+  font-weight: var(--lm-card-font-weight, 600);
+  color: var(--lm-card-color, var(--lm-muted));
 }
 
 .lm-popup__hours-state--open {
@@ -668,16 +841,20 @@
 }
 
 .lm-popup__hours-today {
-  color: var(--lm-muted);
+  color: var(--lm-card-color, var(--lm-muted));
 }
 
 .lm-popup__hours-list {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 1px 10px;
+  /* Row spacing is the owner's; the column gap is not, because two columns of a
+     week are a table rather than a design. The fallback is the one pixel this
+     has always drawn — see DEFAULT_HOURS_ROW_GAP. */
+  gap: var(--lm-hours-gap, 1px) 10px;
   margin: 6px 0 0;
-  font-size: 12px;
-  color: var(--lm-muted);
+  font-family: var(--lm-card-font, inherit);
+  font-size: var(--lm-card-font-size, 12px);
+  color: var(--lm-card-color, var(--lm-muted));
 }
 
 .lm-popup__hours-day {
@@ -690,10 +867,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Today is the foreground against six muted siblings, which is what makes it
+   today — so once the block's colour is the owner's to pick, this has to follow
+   it or exactly one row of every recoloured week would be wrong. */
 .lm-popup__hours-day--today,
 .lm-popup__hours-time--today {
-  font-weight: 600;
-  color: var(--lm-foreground, inherit);
+  font-weight: var(--lm-card-font-weight, 600);
+  color: var(--lm-card-color, var(--lm-foreground, inherit));
 }
 
 /*
@@ -715,21 +895,29 @@
   gap: 4px;
   list-style: none;
   cursor: pointer;
-  color: var(--lm-muted);
-  font-size: 12px;
+  font-family: var(--lm-card-font, inherit);
+  color: var(--lm-card-color, var(--lm-muted));
+  font-size: var(--lm-card-font-size, 12px);
 }
 
 .lm-popup__more-summary::-webkit-details-marker {
   display: none;
 }
 
-.lm-popup__more-summary svg {
+/* One rule for all three folds. A chevron that turns is what "there is more of
+   this here" looks like, and drawing it three times is three places for it to
+   drift. */
+.lm-popup__more-summary svg,
+.lm-popup__hours-summary svg,
+.lm-popup__description-summary svg {
   width: 14px;
   height: 14px;
   transition: transform 150ms ease;
 }
 
-.lm-popup__more[open] .lm-popup__more-summary svg {
+.lm-popup__more[open] .lm-popup__more-summary svg,
+.lm-popup__hours[open] .lm-popup__hours-summary svg,
+.lm-popup__description-fold[open] .lm-popup__description-summary svg {
   transform: rotate(180deg);
 }
 
@@ -744,13 +932,120 @@
 }
 
 .lm-popup__link {
-  font-size: 13px;
-  color: #1c7ed6;
+  font-family: var(--lm-card-font, inherit);
+  font-size: var(--lm-card-font-size, 13px);
+  font-weight: var(--lm-card-font-weight, inherit);
+  /* Link blue until the owner says otherwise, and *not* link blue regardless —
+     which is what this was. The Links block offers a Colour like every other
+     text block, the studio draws it, and a colour that lands on one renderer
+     and not the other is two different cards for one design. The fallback is
+     the blue this has always drawn, so nothing published moves. */
+  color: var(--lm-card-color, #1c7ed6);
   text-decoration: none;
 }
 
 .lm-popup__link:hover {
   text-decoration: underline;
+}
+
+/*
+ * One press, drawn as a button — the twin of `.card-button` in app/globals.css.
+ *
+ * Every value is a `var(--lm-button-*, …)` whose fallback is what it draws
+ * unstyled, so `buttonStyleOf` returning nothing costs a visitor zero inline
+ * bytes and a card published before this block existed is untouched.
+ *
+ * `inline-flex`, which is what makes the block's Alignment control work on it:
+ * `align` arrives as `text-align` (see `wrapBlock`), and `text-align` moves an
+ * inline-level box. A row of chips needs `justify-content` instead, because it
+ * is a flex container — see `chipStyleOf`.
+ *
+ * Colour and type come from `--lm-card-*`, the same properties every text block
+ * reads, so the Text group's four controls move this button's label. The ground
+ * has no theme token to fall back to out here, so it is the link blue the rest
+ * of the card already uses — the one colour a visitor's eye already reads as
+ * "press this" on a card they have never seen.
+ */
+.lm-popup__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  padding: calc(6px + var(--lm-button-pad, 0px))
+    calc(12px + var(--lm-button-pad, 0px));
+  /* `currentColor`, not `transparent` — the twin of `.card-button` in
+     app/globals.css, and for its reason: a width with no colour draws in the
+     button's own label colour rather than nothing. */
+  border: var(--lm-button-border-width, 0px) solid
+    var(--lm-button-border, currentColor);
+  border-radius: var(--lm-button-radius, 8px);
+  /* One named ground, so a treatment sets it and a hover mixes it without
+     either having to know what the other chose. See app/globals.css, the twin
+     this file is kept in step with by hand. */
+  --lm-button-ground: var(--lm-button-bg, #1c7ed6);
+  background: var(--lm-button-ground);
+  color: var(--lm-card-color, #fff);
+  font-family: var(--lm-card-font, inherit);
+  font-size: var(--lm-card-font-size, 13px);
+  font-weight: var(--lm-card-font-weight, 500);
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* The three treatments that are not the filled box. Absent is that box, which
+   is what every card published before these existed draws. Each takes its line
+   and its label from the one colour the owner picked. */
+.lm-popup__button--outline {
+  --lm-button-ground: transparent;
+  border-width: var(--lm-button-border-width, 1.5px);
+  border-color: var(--lm-button-border, var(--lm-button-bg, #1c7ed6));
+  color: var(--lm-card-color, var(--lm-button-bg, #1c7ed6));
+}
+
+.lm-popup__button--soft {
+  --lm-button-ground: color-mix(
+    in oklab,
+    var(--lm-button-bg, #1c7ed6) 16%,
+    transparent
+  );
+  color: var(--lm-card-color, var(--lm-button-bg, #1c7ed6));
+}
+
+.lm-popup__button--ghost {
+  --lm-button-ground: transparent;
+  color: var(--lm-card-color, var(--lm-button-bg, #1c7ed6));
+}
+
+.lm-popup__button:hover {
+  text-decoration: none;
+  /* A wash of the label's own colour, so a recoloured button darkens rather
+     than reverting to a palette its owner did not pick. Over a transparent
+     ground it lands as a faint tint of the label, which is the right hover for
+     an outline or a ghost and costs no rule of its own. */
+  background: color-mix(in oklab, var(--lm-button-ground) 88%, currentcolor);
+}
+
+/* The three departures from it. Each names only the ground, so each is correct
+   for all four treatments. */
+.lm-popup__button--hover-none:hover {
+  background: var(--lm-button-ground);
+}
+
+.lm-popup__button--hover-lighten:hover {
+  background: color-mix(in oklab, var(--lm-button-ground) 88%, #fff);
+}
+
+.lm-popup__button--hover-lift:hover {
+  background: var(--lm-button-ground);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
+}
+
+/* Full width is asked for, never inherited — see `CardBlock.buttonFull`. */
+.lm-popup__button--full {
+  display: flex;
+  width: 100%;
 }
 
 
@@ -888,19 +1183,22 @@
   white-space: nowrap;
 }
 
-.lm-list__category {
+/* One chip per row: the location's first tag, which is the one its pin is drawn
+   in. The rest of a location's tags are the popup's — a row is for choosing
+   between places, not for reading one. */
+.lm-list__tag {
   color: var(--lm-muted);
   font-size: 12px;
 }
 
-.lm-list__category::before {
+.lm-list__tag::before {
   content: "";
   display: inline-block;
   width: 8px;
   height: 8px;
   margin-right: 5px;
   border-radius: 50%;
-  background: var(--lm-category-color, var(--lm-muted));
+  background: var(--lm-tag-color, var(--lm-muted));
   vertical-align: -1px;
 }
 
@@ -928,7 +1226,9 @@
 
 .lm-root--dark .lm-list__link,
 .lm-root--dark .lm-popup__link {
-  color: var(--lm-focus);
+  /* The owner's colour first here too — this rule is more specific than the one
+     above, so without the var it would take the choice back on a dark map. */
+  color: var(--lm-card-color, var(--lm-focus));
 }
 
 .lm-list__empty,
@@ -1022,50 +1322,6 @@
 }
 
 /* Custom fields ---------------------------------------------------------- */
-
-.lm-popup__fields {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 6px;
-}
-
-.lm-popup__field {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 13px;
-}
-
-.lm-popup__field-label {
-  flex: none;
-  color: var(--lm-muted);
-}
-
-/* A linked value carries the same colour as the links in the actions row. Left
-   to the browser it is the default navy, which on a dark card is unreadable —
-   these are anchors with only this class on them, so nothing else colours
-   them. */
-a.lm-popup__field-value {
-  color: #1c7ed6;
-  text-decoration: none;
-}
-
-a.lm-popup__field-value:hover {
-  text-decoration: underline;
-}
-
-.lm-root--dark a.lm-popup__field-value {
-  color: var(--lm-focus);
-}
-
-.lm-popup__field-value {
-  text-align: right;
-  /* A booking URL has no spaces to break at, and one would otherwise push the
-     card past its 280px and out over the map. */
-  overflow-wrap: anywhere;
-}
 
 /* The owner's own call to action — the reason custom fields exist — so it reads
    as a button rather than as one more link in the row. */

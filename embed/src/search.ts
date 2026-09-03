@@ -27,13 +27,13 @@ const LOOKUP_DELAY_MS = 180;
 /**
  * Search and find-nearest, both entirely client-side.
  *
- * Search matches the places already in the snapshot — name, address, category
- * label and tag labels, composed once into an index by
- * @/packages/shared/search-text.ts — and, when the map ships one, a static
- * gazetteer of place names and postcodes (./gazetteer.ts). The labels are in
- * there because the category chips are not: with the row of chips gone, typing
- * the word a visitor read off a pin's own card is how they narrow the map, and
- * the search is the only control left that can answer.
+ * Search matches the places already in the snapshot — name, address and tag
+ * labels, composed once into an index by @/packages/shared/search-text.ts — and,
+ * when the map ships one, a static gazetteer of place names and postcodes
+ * (./gazetteer.ts). The tag labels are in there because the chips alone cannot
+ * carry them: a filter row long enough to scroll hides tags a visitor would have
+ * found by typing, and typing the word they read off a pin's own card is the
+ * one control that always answers.
  *
  * Neither half geocodes what the visitor typed: that
  * would be a metered call in the visitor's path, which CLAUDE.md §2 rules out.

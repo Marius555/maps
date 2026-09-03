@@ -25,7 +25,8 @@ import { isOptimisticPlaceId, useDeletePlace } from "@/lib/query/places";
 import { isOptimisticShapeId, useDeleteShape } from "@/lib/query/shapes";
 import { toastError } from "@/lib/query/toast-error";
 import { formatCount } from "@/lib/format/number";
-import type { Group, MapCategory, Place, Shape } from "@/lib/repositories/types";
+import type { Group, MapTagGroup, Place, Shape } from "@/lib/repositories/types";
+import { pinColorOfTags } from "@/packages/shared/tags";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 
 /**
@@ -53,7 +54,7 @@ export function LocationsList({
   groups,
   places,
   shapes,
-  categoriesById,
+  tagGroups,
   pinIcons,
   selectedPlaceId,
   selectedShapeId,
@@ -79,7 +80,8 @@ export function LocationsList({
   groups: Group[];
   places: Place[];
   shapes: Shape[];
-  categoriesById: Map<string, MapCategory>;
+  /** The map's tag vocabulary — a location's first tag colours its pin. */
+  tagGroups: MapTagGroup[];
   /** The map's own pins, so a row can draw a `custom:<id>` one. */
   pinIcons: CustomPinIcon[];
   selectedPlaceId: string | null;
@@ -312,7 +314,7 @@ export function LocationsList({
                 <PlaceListItem
                   key={row.key}
                   place={place}
-                  category={categoriesById.get(place.category)}
+                  pinColor={pinColorOfTags(tagGroups, place.tags)}
                   pinIcons={pinIcons}
                   groupColor={row.groupColor}
                   isSelected={

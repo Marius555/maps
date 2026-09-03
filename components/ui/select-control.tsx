@@ -33,6 +33,7 @@ export function SelectControl({
   placeholder,
   error,
   isDisabled,
+  variant,
   onChange,
 }: {
   label: string;
@@ -41,6 +42,19 @@ export function SelectControl({
   placeholder?: string;
   error?: string;
   isDisabled?: boolean;
+  /**
+   * `"secondary"` for a select sitting on a `SectionPanel` or any other raised
+   * surface, which is what HeroUI documents the variant for.
+   *
+   * It is not cosmetic here. `.select--secondary` paints the trigger
+   * `var(--default)` where the default variant uses `var(--field)` — and in this
+   * theme `--field-background` is *the same colour as* `--surface`, with
+   * `--field-border: transparent` (app/globals.css). On a page background that
+   * reads as a field; on a panel it reads as nothing at all, which is how the
+   * card designer's selects ended up invisible. Fixed per-caller rather than on
+   * the token, since `--field-border` is every input in the app.
+   */
+  variant?: "primary" | "secondary";
   onChange: (value: string) => void;
 }) {
   return (
@@ -50,6 +64,7 @@ export function SelectControl({
       isInvalid={Boolean(error)}
       placeholder={placeholder}
       value={value}
+      variant={variant}
       onChange={(key) => onChange(String(key ?? ""))}
     >
       <Label>{label}</Label>

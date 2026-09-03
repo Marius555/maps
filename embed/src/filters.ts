@@ -14,29 +14,27 @@ import { button, el } from "./dom";
 export { matchesTags, tagGroupIndex };
 
 /*
- * There are no category chips here any more, and that is deliberate.
+ * There were category chips here once, and they are gone twice over.
  *
  * They were a row of toggles that doubled as the colour legend, and they cost a
  * line of a panel that is now a proportion of the embed rather than a fixed
- * 320px. The question they answered — "show me the retail ones" — is answered by
- * typing the word instead: category labels are part of the search index
+ * 320px. Their question — "show me the retail ones" — is answered by typing the
+ * word instead, because tag labels are part of the search index
  * (@/packages/shared/search-text.ts), so the word a visitor reads off a pin's
- * own card is the word that filters the map. The legend is not lost either;
- * every card and every list row still carries the label with its colour dot.
+ * own card is the word that filters the map. Categories then merged into tags
+ * outright, so there is no second vocabulary left to draw either way.
  *
- * The tag chips below stay, because search cannot replace them: the embed reads
- * tags as AND across groups and OR within one, and a text box has no way to say
- * "sells bikes OR skis, AND opens on Sundays".
+ * The legend is not lost: every card and every list row carries the label of the
+ * tag its pin is coloured by, with the colour beside it.
  */
 
 /**
  * The tag chips, one labelled row per group.
  *
- * Separate from the category chips above rather than merged into them, because
- * they answer different questions and combine differently: categories are one
- * flat OR, and tags are OR within a group and AND across groups. Rendering them
- * as one undifferentiated row of chips would make that impossible to see, and a
- * visitor who cannot see it reads a narrowing filter as a broken one.
+ * Grouped rather than one undifferentiated row, because the groups are how the
+ * matching works: OR within a group, AND across groups. A flat row would make
+ * that impossible to see, and a visitor who cannot see it reads a narrowing
+ * filter as a broken one.
  *
  * Selection is a single flat set of tag ids for every group. Tag ids are unique
  * across the whole map (lib/validation/tag.schema.ts), so which group a chip

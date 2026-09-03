@@ -11,7 +11,11 @@ import { NotFoundError } from "@/lib/repositories/errors";
 import { listAllGroups } from "@/lib/repositories/groups.repository";
 import { loadMap } from "@/lib/repositories/load-map";
 import { listAllPlaces } from "@/lib/repositories/places.repository";
-import { PLAN_LIMITS, getUserPlan } from "@/lib/repositories/plan-limits";
+import {
+  PLAN_FEATURES,
+  PLAN_LIMITS,
+  getUserPlan,
+} from "@/lib/repositories/plan-limits";
 import { listAllShapes } from "@/lib/repositories/shapes.repository";
 
 export async function generateMetadata(
@@ -66,6 +70,7 @@ export default async function MapEditorPage(props: PageProps<"/maps/[id]">) {
         plan={data.plan}
         placeLimit={data.placeLimit}
         shapeLimit={data.shapeLimit}
+        canDrawRoutes={data.canDrawRoutes}
       />
     </Container>
   );
@@ -116,6 +121,12 @@ async function loadEditor(
      * already refused.
      */
     shapeLimit: PLAN_LIMITS[plan].shapes,
+    /*
+     * Routes are a paid feature, and this is the half of that the browser is
+     * allowed to know. The enforcing half is on the two endpoints that reach
+     * the engine — a greyed menu row is a courtesy, not the rule (§6).
+     */
+    canDrawRoutes: PLAN_FEATURES[plan].routes,
     // No group limit: a group cannot outnumber the places and shapes in it, and
     // those are limited already. See §6's table, which has no row for groups.
   };

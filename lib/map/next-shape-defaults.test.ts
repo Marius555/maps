@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { nextShapeDefaults } from "./next-shape-defaults";
-import { CATEGORY_COLORS } from "@/lib/validation/category.schema";
+import { PALETTE_COLORS } from "@/lib/validation/palette";
 
 describe("nextShapeDefaults", () => {
   it("cycles the palette when the gesture supplied no colour", () => {
-    expect(nextShapeDefaults([], "circle").color).toBe(CATEGORY_COLORS[0]);
+    expect(nextShapeDefaults([], "circle").color).toBe(PALETTE_COLORS[0]);
     expect(
       nextShapeDefaults([{ name: "Circle 1", sortOrder: 0 }], "circle").color,
-    ).toBe(CATEGORY_COLORS[1]);
+    ).toBe(PALETTE_COLORS[1]);
   });
 
   /*

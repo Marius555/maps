@@ -17,7 +17,6 @@ function place(overrides: Partial<Place> = {}): Place {
     lat: 54.69,
     lng: 25.278,
     address: "A. Goštauto g. 1, Vilnius",
-    category: "",
     tags: [],
     fields: {},
     icon: "",

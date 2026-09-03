@@ -20,7 +20,7 @@ export function PlaceTableHead() {
           Address
         </th>
         <th scope="col" className="pb-2 pr-3">
-          Category
+          Tags
         </th>
         <th scope="col" className="pb-2 pr-3">
           Status

@@ -24,14 +24,15 @@ import { effectiveCardLayout } from "@/lib/card/designer-status";
 import type { MapStyleKey } from "@/lib/map/style";
 import { configureMaplibreWorker } from "@/lib/map/worker";
 import type {
-  MapCategory,
   MapField,
+  MapTagGroup,
   Place,
   Shape,
 } from "@/lib/repositories/types";
 import type { Selection, Viewport } from "@/lib/stores/editor-store";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { shapeBounds, type ShapeBounds } from "@/packages/shared/shapes";
+import { tagChipsOf } from "@/packages/shared/tags";
 import { useAddModeGhost } from "./add-location/use-add-mode-ghost";
 import { PlaceCard } from "./place-card/place-card";
 import { SelectBox, type SelectBoxHandle } from "./select-box/select-box";
@@ -178,9 +179,21 @@ export type MapCanvasProps = {
   /** The map's extra field definitions, for the card's own rows and buttons. */
   fields?: MapField[];
   /**
-   * A pin's colour, decided in full by the caller — category, group, or the
-   * custom pin's own, which is handed in as the second argument rather than
-   * applied behind the resolver's back. See `paint` in use-place-markers.ts.
+   * The map's tag vocabulary, for the card's Tags block and its colours.
+   *
+   * The groups rather than a per-place lookup: `tagChipsOf` is one walk of the
+   * map's whole vocabulary and this canvas already holds it, so a second prop
+   * asking the caller to resolve each place would be a second copy of a rule
+   * that decides what colour the pin under the card is. Optional, like `fields`:
+   * the import review step reuses this canvas for drafts on a map it has not
+   * loaded.
+   */
+  tagGroups?: MapTagGroup[];
+  /**
+   * A pin's colour, decided in full by the caller — a group's, the custom pin's
+   * own, or the location's first tag. The pin's own colour is handed in as the
+   * second argument rather than applied behind the resolver's back. See `paint`
+   * in use-place-markers.ts.
    */
   colorFor?: (place: Place, pinColor?: string) => string | undefined;
   /**
@@ -191,8 +204,6 @@ export type MapCanvasProps = {
    * drafts are all plain pins anyway.
    */
   pinIcons?: CustomPinIcon[];
-  /** The card needs the whole category, not just the colour the pins take. */
-  categoryFor?: (place: Place) => MapCategory | undefined;
   /** `null` clears the selection — a click on the basemap, closing the card. */
   onSelectPlace: (placeId: string | null) => void;
   /** Adds an Edit action to the card. Omit and the card is read-only. */
@@ -245,9 +256,9 @@ export default function MapCanvasImpl({
   showPlaceCard,
   cardLayout: storedCardLayout,
   fields,
+  tagGroups,
   colorFor,
   pinIcons,
-  categoryFor,
   shapes,
   selection,
   onSelectPlace,
@@ -812,9 +823,11 @@ export default function MapCanvasImpl({
            * to fire.
            */
           place={isAdding || isDrawing ? null : selectedPlace}
-          category={selectedPlace ? categoryFor?.(selectedPlace) : undefined}
           layout={cardLayout}
           fields={fields ?? []}
+          tagChips={
+            selectedPlace ? tagChipsOf(tagGroups ?? [], selectedPlace.tags) : []
+          }
           // The same pins the markers are drawn from, so a card holding a Logo
           // block shows the pin its own location wears.
           pinIcons={pinIcons ?? []}

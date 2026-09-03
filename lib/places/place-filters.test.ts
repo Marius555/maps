@@ -5,7 +5,9 @@ import { describeMissing, isIncomplete, missingFields } from "./completeness";
 import {
   countNeedingAttention,
   matchesFilter,
+  matchesTagFilter,
   needsAttention,
+  UNTAGGED_FILTER_ID,
 } from "./place-filters";
 
 /** A location with nothing wrong with it and nothing missing. */
@@ -17,8 +19,7 @@ function place(overrides: Partial<Place> = {}): Place {
     lat: 54.687,
     lng: 25.28,
     address: "Gedimino pr. 9, Vilnius",
-    category: "cat-1",
-    tags: [],
+    tags: ["tag-1"],
     fields: {},
     icon: "",
     description: "A shop on a corner.",
@@ -158,5 +159,53 @@ describe("completeness", () => {
 
   it("says nothing when there is nothing to say", () => {
     expect(describeMissing([])).toBe("");
+  });
+});
+
+describe("matchesTagFilter", () => {
+  /** "Bikes" and "Sundays" answer different questions; "Skis" shares Bikes'. */
+  const groupOf = new Map([
+    ["tag-1", "grp-sells"],
+    ["tag-skis", "grp-sells"],
+    ["tag-sun", "grp-open"],
+  ]);
+
+  it("is no filter when nothing is selected", () => {
+    expect(matchesTagFilter(place(), new Set(), groupOf)).toBe(true);
+    expect(matchesTagFilter(place({ tags: [] }), new Set(), groupOf)).toBe(true);
+  });
+
+  it("keeps the embed's rule: OR inside a group, AND across them", () => {
+    const worn = place({ tags: ["tag-1", "tag-sun"] });
+
+    // Same group: a second answer widens.
+    expect(matchesTagFilter(worn, new Set(["tag-1", "tag-skis"]), groupOf)).toBe(
+      true,
+    );
+    // Different groups: both have to be answered.
+    expect(matchesTagFilter(worn, new Set(["tag-1", "tag-sun"]), groupOf)).toBe(
+      true,
+    );
+    expect(
+      matchesTagFilter(place({ tags: ["tag-1"] }), new Set(["tag-sun"]), groupOf),
+    ).toBe(false);
+  });
+
+  it("finds the locations nothing landed on", () => {
+    const selected = new Set([UNTAGGED_FILTER_ID]);
+
+    expect(matchesTagFilter(place({ tags: [] }), selected, groupOf)).toBe(true);
+    expect(matchesTagFilter(place({ tags: ["tag-1"] }), selected, groupOf)).toBe(
+      false,
+    );
+  });
+
+  it("lets Untagged win over a real tag rather than returning nothing", () => {
+    // The menu keeps the two apart, and this is what happens if anything ever
+    // gets past it: a location cannot be untagged *and* wear Bikes, so the
+    // combination would otherwise be a filter with no possible answer.
+    const selected = new Set([UNTAGGED_FILTER_ID, "tag-1"]);
+
+    expect(matchesTagFilter(place({ tags: [] }), selected, groupOf)).toBe(true);
   });
 });

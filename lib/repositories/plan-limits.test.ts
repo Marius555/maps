@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { planLimitMessage, planLimitUsage } from "./errors";
+import {
+  planFeatureMessage,
+  planFeatureNote,
+  planLimitMessage,
+  planLimitUsage,
+} from "./errors";
 import { PLAN_LIMITS } from "./plan-limits";
 
 /**
@@ -95,6 +100,10 @@ beforeEach(() => {
 
 async function repository() {
   return import("./places.repository");
+}
+
+async function planLimits() {
+  return import("./plan-limits");
 }
 
 const placeInput = (name: string) => ({
@@ -414,6 +423,118 @@ describe("planLimitMessage", () => {
     // The free plan's map allowance is the only limit that is ever 1.
     expect(planLimitUsage("maps", 1, "free")).toBe(
       "You've used 1 map included on the free plan.",
+    );
+  });
+});
+
+/*
+ * The guard the geocode batch route leans on, which is why it is tested apart
+ * from the inserts that also use it.
+ *
+ * It matters more at the geocoder than at the insert: geocoding spends requests
+ * against a shared upstream whose policy bans extensive use, and until this was
+ * hoisted out of `createPlaces` the only ceiling was reached *after* all of them
+ * had been spent. A regression here is not a wrong number on a screen, it is a
+ * free account walking a 500-row CSV through somebody else's rate limit.
+ */
+describe("assertPlaceHeadroom", () => {
+  it("allows a batch that fits, and reports the count it read", async () => {
+    existingPlaceCount = PLAN_LIMITS.free.places - 4;
+    const { assertPlaceHeadroom } = await repository();
+
+    await expect(assertPlaceHeadroom(ctx, MAP_ID, 4)).resolves.toBe(
+      PLAN_LIMITS.free.places - 4,
+    );
+  });
+
+  it("refuses a batch that would overflow", async () => {
+    existingPlaceCount = PLAN_LIMITS.free.places - 4;
+    const { assertPlaceHeadroom } = await repository();
+
+    await expect(assertPlaceHeadroom(ctx, MAP_ID, 5)).rejects.toMatchObject({
+      code: "plan_limit_reached",
+      status: 403,
+    });
+  });
+
+  it("refuses a single row once the map is already full", async () => {
+    existingPlaceCount = PLAN_LIMITS.free.places;
+    const { assertPlaceHeadroom } = await repository();
+
+    await expect(assertPlaceHeadroom(ctx, MAP_ID, 1)).rejects.toMatchObject({
+      code: "plan_limit_reached",
+    });
+  });
+
+  it("uses the paid ceiling for an active subscription", async () => {
+    subscriptionRows = [{ plan: "pro", status: "active" }];
+    existingPlaceCount = PLAN_LIMITS.starter.places;
+    const { assertPlaceHeadroom } = await repository();
+
+    await expect(assertPlaceHeadroom(ctx, MAP_ID, 100)).resolves.toBe(
+      PLAN_LIMITS.starter.places,
+    );
+  });
+});
+
+/*
+ * Routes are the one feature whose cost has no quantity ceiling in front of it:
+ * a map with three pins can be rerouted all afternoon, and arming the tool
+ * probes every pin besides. If this regresses, a free account spends requests
+ * on a routing engine we pay for.
+ */
+describe("assertPlanFeature", () => {
+  it("refuses routes on the free plan", async () => {
+    const { assertPlanFeature } = await planLimits();
+
+    await expect(assertPlanFeature(USER_ID, "routes")).rejects.toMatchObject({
+      code: "plan_feature_required",
+      status: 403,
+    });
+  });
+
+  it("allows routes on an active paid plan", async () => {
+    subscriptionRows = [{ plan: "starter", status: "active" }];
+    const { assertPlanFeature } = await planLimits();
+
+    await expect(assertPlanFeature(USER_ID, "routes")).resolves.toBeUndefined();
+  });
+
+  it("falls back to free when the subscription has lapsed", async () => {
+    subscriptionRows = [{ plan: "pro", status: "past_due" }];
+    const { assertPlanFeature } = await planLimits();
+
+    await expect(assertPlanFeature(USER_ID, "routes")).rejects.toMatchObject({
+      code: "plan_feature_required",
+    });
+  });
+
+  it("has a row for every plan the limits table knows", async () => {
+    // The `satisfies` on PLAN_FEATURES makes a missing plan a type error, but
+    // only while both tables are edited in the same commit. Said out loud here
+    // because the failure it prevents is silent: a new plan defaulting to false
+    // is a paid feature switched off for the people paying for it.
+    const { PLAN_FEATURES } = await planLimits();
+
+    expect(Object.keys(PLAN_FEATURES).sort()).toEqual(
+      Object.keys(PLAN_LIMITS).sort(),
+    );
+  });
+});
+
+describe("planFeatureMessage", () => {
+  /* The same split `planLimitMessage` is held to above: the menu shows the
+     first half, the 403 carries the whole thing, and one composer builds both
+     so a greyed row and the refusal behind it cannot word the gate two ways. */
+  it("opens with the note the Draw menu shows", () => {
+    const full = planFeatureMessage("routes", "free");
+
+    expect(full.startsWith(planFeatureNote("routes", "free"))).toBe(true);
+  });
+
+  it("names the one way out, which is the plan and not a delete", () => {
+    expect(planFeatureMessage("routes", "free")).toBe(
+      "Routes aren't included on the free plan. Upgrade to draw them.",
     );
   });
 });

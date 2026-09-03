@@ -32,7 +32,16 @@ export type DraftPlace = {
   name: string;
   /** Address parts joined; this is what gets geocoded and stored. */
   address: string;
-  /** The raw category text from the file. Resolved to a category id on save. */
+  /**
+   * The raw text of the file's **main tag** column — the one that used to be
+   * Category. One value per row, resolved to a tag id on save and stamped
+   * *first*, so it is the tag that colours the pin (lib/import/resolve-tags.ts).
+   *
+   * Still called `categoryLabel` because the import field is still keyed
+   * `category`: the detector's synonyms and its value-signal are keyed on that
+   * name, and renaming it would be a rename across `detect/` for a string no
+   * user ever sees. What the user sees is `FIELD_LABELS.category`, "Main tag".
+   */
   categoryLabel: string;
   /**
    * The raw tag text from the file, already split on , ; and |. Resolved to tag

@@ -3,7 +3,8 @@
 import { AnimatePresence } from "motion/react";
 import { useState } from "react";
 
-import type { MapCategory, Place } from "@/lib/repositories/types";
+import type { MapTagGroup, Place } from "@/lib/repositories/types";
+import { pinColorOfTags } from "@/packages/shared/tags";
 import { useDeletePlace } from "@/lib/query/places";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { DeletePlaceDialog } from "./delete-place-dialog";
@@ -27,7 +28,7 @@ import { PlaceListItem } from "./place-list-item";
 export function PlaceList({
   mapId,
   places,
-  categoriesById,
+  tagGroups,
   pinIcons,
   selectedPlaceId,
   pendingAddressIds,
@@ -38,7 +39,8 @@ export function PlaceList({
 }: {
   mapId: string;
   places: Place[];
-  categoriesById: Map<string, MapCategory>;
+  /** The map's tag vocabulary — a location's first tag colours its pin. */
+  tagGroups: MapTagGroup[];
   /** The map's own pins, so a row can draw a `custom:<id>` one. */
   pinIcons: CustomPinIcon[];
   selectedPlaceId: string | null;
@@ -80,7 +82,7 @@ export function PlaceList({
             <PlaceListItem
               key={place.id}
               place={place}
-              category={categoriesById.get(place.category)}
+              pinColor={pinColorOfTags(tagGroups, place.tags)}
               pinIcons={pinIcons}
               isSelected={place.id === selectedPlaceId}
               isAddressPending={pendingAddressIds?.has(place.id) ?? false}

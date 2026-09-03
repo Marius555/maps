@@ -67,6 +67,15 @@ export const TABLES = [
       float("defaultLat", { required: true, min: -90, max: 90 }),
       float("defaultLng", { required: true, min: -180, max: 180 }),
       float("defaultZoom", { required: true, min: 0, max: 24 }),
+      /*
+       * Retired. Categories merged into `tagGroups` — a tag carries a colour and
+       * a location wears as many as apply, with the first one colouring its pin.
+       *
+       * Left in place, and left holding whatever it holds, because dropping a
+       * column with data in it is not a migration anyone can undo.
+       * `scripts/migrate-categories-to-tags.mjs` empties it per map once its
+       * categories have become tags; nothing writes it after that.
+       */
       text("categories"),
       // The pins the customer built: name, colour, and either a built-in glyph
       // or their own logo inlined as a data URI. Capped in code at 8 pins of 6KB
@@ -79,14 +88,16 @@ export const TABLES = [
       // whole — two forms writing one blob is a lost update.
       text("appearance"),
       /*
-       * The map's own filter vocabulary: groups of tags a location can wear.
-       * `[{ id, label, tags: [{ id, label }] }]`.
+       * The map's whole filter vocabulary: groups of tags a location can wear.
+       * `[{ id, label, tags: [{ id, label, color }] }]`.
        *
-       * A second axis beside `categories`, not a replacement for it. A category
-       * is what colours a pin, so a place has exactly one; a tag says something
-       * else about it — what it stocks, what it offers — and a place has as many
-       * as apply. Merging them would mean a stockist that sells three product
-       * lines needed three pins in three colours at one address.
+       * This began as a second axis beside `categories` and absorbed it. The
+       * argument for keeping the two apart was that a category colours the pin
+       * and a tag does not — but that made the *less* capable control the one
+       * every owner reached for first, and a stockist carrying three product
+       * lines still needed three pins at one address. A tag carries a colour
+       * now, a location wears as many as apply, and the first one it was given
+       * is what its pin is drawn in.
        */
       text("tagGroups"),
       /*
@@ -118,6 +129,10 @@ export const TABLES = [
       float("lat", { required: true, min: -90, max: 90 }),
       float("lng", { required: true, min: -180, max: 180 }),
       varchar("address", 512, { xdefault: "" }),
+      // Retired, along with `maps.categories` above. A migrated category is
+      // folded into `tags` keeping its own `cat-` id, so no place needed
+      // remapping; the column is kept rather than dropped because it may still
+      // hold data on an instance that has not run the migration.
       varchar("category", 64, { xdefault: "" }),
       /*
        * Tag ids from the map's own `tagGroups`. A real array column rather than

@@ -42,6 +42,7 @@ import { readMapAppearance } from "@/lib/validation/map-appearance.schema";
 import { isPlanLimit, toastPlanLimit } from "@/lib/query/plan-limit-toast";
 import {
   useAddTagToPlaces,
+  useRemoveTagFromPlaces,
   useCreatePlace,
   usePlaces,
   usePlacesSnapshot,
@@ -56,6 +57,7 @@ import {
 } from "@/lib/query/shapes";
 import { nextShapeDefaults } from "@/lib/map/next-shape-defaults";
 import { shapeSeedColor } from "@/lib/map/shape-seed-color";
+import { planFeatureNote } from "@/lib/repositories/errors";
 import type { PlanId } from "@/lib/repositories/plan-limits";
 import type { AppMap, Group, Place, Shape } from "@/lib/repositories/types";
 import {
@@ -66,6 +68,7 @@ import {
 } from "@/lib/stores/editor-store";
 import { placeIndex, resolveGeometry } from "@/lib/map/line-endpoints";
 import { resolvePin } from "@/packages/shared/pin-icons";
+import { pinColorOfTags } from "@/packages/shared/tags";
 import {
   routeOf,
   shapeBounds,
@@ -94,6 +97,7 @@ export function MapEditor({
   plan,
   placeLimit,
   shapeLimit,
+  canDrawRoutes,
 }: {
   map: AppMap;
   initialPlaces: Place[];
@@ -109,6 +113,12 @@ export function MapEditor({
    * by the Draw menu, which greys its tools at the ceiling.
    */
   shapeLimit: number;
+  /**
+   * Whether this plan includes routes. Resolved on the server from
+   * `PLAN_FEATURES`, which is `server-only` — the client is not the place to
+   * keep a second copy of who is allowed what.
+   */
+  canDrawRoutes: boolean;
 }) {
   /*
    * Read through the cache rather than straight off the prop, the same way the
@@ -167,6 +177,18 @@ export function MapEditor({
     [plan, placeLimit, places.length, shapeLimit, shapes.length],
   );
 
+  /*
+   * Why the Draw menu's Route row is off, or undefined when it is not.
+   *
+   * The sentence is composed here rather than sent from the server because
+   * `planFeatureNote` is the same composer the 403 uses, so the greyed row and
+   * the refusal behind it cannot word one gate two ways. Only the *decision*
+   * crosses the boundary.
+   */
+  const routesNote = canDrawRoutes
+    ? undefined
+    : planFeatureNote("routes", plan);
+
   const createPlace = useCreatePlace(map.id);
   const updatePlace = useUpdatePlace(map.id);
   const createShape = useCreateShape(map.id);
@@ -174,8 +196,22 @@ export function MapEditor({
   const createGroup = useCreateGroup(map.id);
   const assignToGroup = useAssignToGroup(map.id);
   const addTagToPlaces = useAddTagToPlaces(map.id);
+  const removeTagFromPlaces = useRemoveTagFromPlaces(map.id);
   const [isTagging, setIsTagging] = useState(false);
   const updateMap = useUpdateMap(map.id);
+  /*
+   * A second instance of the same mutation, for one reason: a pending state has
+   * to name what is pending.
+   *
+   * `updateMap` writes the map row for everything the editor can change —
+   * the theme, the appearance switches, the basemap — so hanging the toolbar's
+   * Save-view spinner on its `isPending` made the bookmark button spin every
+   * time somebody flipped a layer toggle, claiming to be saving a view nobody
+   * had asked it to save. Two instances hit the same endpoint and run the same
+   * optimistic cache write (lib/query/maps.ts), so nothing can diverge; only
+   * the pending flags are told apart.
+   */
+  const saveView = useUpdateMap(map.id);
   const readPlaces = usePlacesSnapshot(map.id);
   const readShapes = useShapesSnapshot(map.id);
   const readGroups = useGroupsSnapshot(map.id);
@@ -255,22 +291,18 @@ export function MapEditor({
   // Leaving the editor with mode: 'add' still set would arm the next map.
   useEffect(() => reset, [reset]);
 
-  const categoriesById = useMemo(
-    () => new Map(map.categories.map((category) => [category.id, category])),
-    [map.categories],
-  );
 
   /**
    * A group's colour, for everything in it.
    *
    * Membership is the one thing the editor could not show on the map. The
    * sidebar knows which locations are in a group; the map — where the user is
-   * actually looking — drew them in their category colours like everything else,
-   * so a group was a fact you could only read indoors.
+   * actually looking — drew them in their tag colours like everything else, so a
+   * group was a fact you could only read indoors.
    *
-   * It wins over the category and over a custom pin's own colour, because a
-   * group whose members are three different colours communicates nothing. Taking
-   * an object out gives its own colour straight back.
+   * It wins over the tags and over a custom pin's own colour, because a group
+   * whose members are three different colours communicates nothing. Taking an
+   * object out gives its own colour straight back.
    */
   const groupColorById = useMemo(
     () => new Map(groups.map((group) => [group.id, group.color])),
@@ -284,8 +316,14 @@ export function MapEditor({
     (place: Place, pinColor?: string) =>
       groupColorById.get(place.groupId) ??
       pinColor ??
-      categoriesById.get(place.category)?.color,
-    [groupColorById, categoriesById],
+      /*
+       * The location's **first** tag, which is what replaced its category when
+       * the two merged. Walked rather than read off `tags[0]` — `pinColorOfTags`
+       * skips ids the map no longer defines, so a pin does not lose its colour
+       * because of a tag deleted in Settings months ago.
+       */
+      pinColorOfTags(map.tagGroups, place.tags),
+    [groupColorById, map.tagGroups],
   );
 
   /** The same rule for shapes, whose own colour is the one being overridden. */
@@ -300,18 +338,12 @@ export function MapEditor({
    * `colorFor` takes the custom pin's own colour as an argument because the
    * marker layer has already resolved the pin by the time it paints one. Nothing
    * has, at the moment a route is drawn, so this resolves it and asks the same
-   * question — group, then the pin's own, then the category.
+   * question — group, then the pin's own, then the first tag.
    */
   const placeColorFor = useCallback(
     (place: Place) =>
       colorFor(place, resolvePin(place.icon, map.pinIcons)?.color ?? undefined),
     [colorFor, map.pinIcons],
-  );
-
-  // The card needs the label too, not just the colour the pins take.
-  const categoryFor = useCallback(
-    (place: Place) => categoriesById.get(place.category),
-    [categoriesById],
   );
 
   /*
@@ -498,7 +530,6 @@ export function MapEditor({
           lat,
           lng,
           address: known?.title ?? "",
-          category: "",
           tags: [],
           fields: {},
           icon,
@@ -816,27 +847,36 @@ export function MapEditor({
   );
 
   /**
-   * The Tag button under a marquee.
+   * The Tag button under a marquee, in both directions.
    *
    * Only locations: a shape wears a colour and a geometry, and tags are a filter
    * over the pins. A mixed selection tags the locations in it and leaves the
    * shapes alone rather than refusing — the user asked for something reasonable,
    * and the shapes were never candidates.
+   *
+   * One function taking the writer rather than two nearly identical ones: what
+   * differs between adding and removing is a single call, and the part worth not
+   * duplicating is everything around it — narrowing the selection to places,
+   * declining an empty one, and holding the pending flag across the await so the
+   * button spins for the whole run rather than for the first PATCH.
    */
-  const tagSelection = useCallback(
-    async (tagId: string) => {
+  const applyTagToSelection = useCallback(
+    async (
+      tagId: string,
+      write: (places: Place[], tagId: string) => Promise<void>,
+    ) => {
       const selected = places.filter((place) => selectedPlaceIds.has(place.id));
       if (selected.length === 0) return;
 
       setIsTagging(true);
 
       try {
-        await addTagToPlaces(selected, tagId);
+        await write(selected, tagId);
       } finally {
         setIsTagging(false);
       }
     },
-    [addTagToPlaces, places, selectedPlaceIds],
+    [places, selectedPlaceIds],
   );
 
   /** The Group/Merge button under a marquee. */
@@ -1055,7 +1095,7 @@ export function MapEditor({
     const viewport = mapHandle.current?.getViewport();
     if (!viewport) return;
 
-    await updateMap.mutateAsync({
+    await saveView.mutateAsync({
       defaultLat: roundCoord(viewport.lat),
       defaultLng: roundCoord(viewport.lng),
       // Appwrite's column is bounded 0–24 and MapLibre reports fractional zoom.
@@ -1115,11 +1155,12 @@ export function MapEditor({
           drawMode={drawMode}
           isRouting={isRouting}
           isSelecting={isSelecting}
-          isSavingView={updateMap.isPending}
+          isSavingView={saveView.isPending}
           hasSavedView={savedViewAt !== null}
           style={map.style}
           appearance={appearance}
           limits={limits}
+          routesNote={routesNote}
           search={
             <MapSearch
               mapId={map.id}
@@ -1194,7 +1235,10 @@ export function MapEditor({
               <BulkTagMenu
                 groups={map.tagGroups}
                 isBusy={isTagging}
-                onPick={(tagId) => void tagSelection(tagId)}
+                onAdd={(tagId) => void applyTagToSelection(tagId, addTagToPlaces)}
+                onRemove={(tagId) =>
+                  void applyTagToSelection(tagId, removeTagFromPlaces)
+                }
               />
             ) : null
           }
@@ -1210,6 +1254,7 @@ export function MapEditor({
           appearance={map.appearance}
           cardLayout={cardDesign}
           fields={map.fields}
+          tagGroups={map.tagGroups}
           places={places}
           selectedPlaceId={selectedPlaceId}
           isAdding={isAdding}
@@ -1218,7 +1263,6 @@ export function MapEditor({
           addIcon={addIcon}
           colorFor={colorFor}
           pinIcons={map.pinIcons}
-          categoryFor={categoryFor}
           showPlaceCard
           onSelectPlace={selectPlace}
           onEditPlace={setEditingId}
@@ -1278,7 +1322,7 @@ export function MapEditor({
         places={places}
         shapes={shapes}
         groups={groups}
-        categoriesById={categoriesById}
+        tagGroups={map.tagGroups}
         pinIcons={map.pinIcons}
         placeLimit={placeLimit}
         selectedPlaceId={selectedPlaceId}
@@ -1287,10 +1331,17 @@ export function MapEditor({
         selectedShapeIds={selectedShapeIds}
         isGrouping={isGrouping}
         onSelectShape={focusShape}
-        onEditShape={(shapeId) => {
-          focusShape(shapeId);
-          setEditingShapeId(shapeId);
-        }}
+        /*
+         * Edit opens the dialog and nothing else.
+         *
+         * It used to focus first, so choosing Edit from a row's own menu also
+         * selected the shape — which drew its card on the canvas behind the
+         * dialog and flew the camera to something the user was about to stop
+         * looking at. Selecting is what clicking the *row* means (`onSelectShape`
+         * above); the menu item means only what it says. The dialog carries its
+         * own view of the geometry, so it needs neither.
+         */
+        onEditShape={setEditingShapeId}
         onFocusGroup={focusGroup}
         onEditGroup={setEditingGroupId}
         onGroupObjects={groupObjects}
@@ -1307,10 +1358,10 @@ export function MapEditor({
            declines to do. Every other create failure still lands in the panel. */
         error={isPlanLimit(createPlace.error) ? null : createPlace.error}
         onSelect={focusPlace}
-        onEdit={(placeId) => {
-          focusPlace(placeId);
-          setEditingId(placeId);
-        }}
+        /* Same as `onEditShape` above: the dialog alone, no card and no camera.
+           `PlaceEditDialog` has its own map of the pin, which is the thing the
+           fly-to was standing in for. */
+        onEdit={setEditingId}
       />
 
       <PlaceEditDialog

@@ -11,10 +11,10 @@ import { importableDrafts } from "@/lib/import/draft-places";
 import { draftToCreateInput } from "@/lib/import/draft-to-place";
 import { preflightProblem } from "@/lib/import/preflight";
 import {
+  MAIN_TAG_GROUP_LABEL,
   normalizeLabel,
-  resolveCategories,
-} from "@/lib/import/resolve-categories";
-import { resolveTags } from "@/lib/import/resolve-tags";
+  resolveTags,
+} from "@/lib/import/resolve-tags";
 import { useBulkCreatePlaces } from "@/lib/query/import";
 import { useUpdateMap } from "@/lib/query/maps";
 import type { AppMap } from "@/lib/repositories/types";
@@ -70,8 +70,8 @@ export function ImportWizard({
   // A stale wizard from a previous visit would otherwise reopen mid-flow.
   useEffect(() => reset, [reset]);
 
-  const finish = (saved: number, total: number, addedCategories: number) => {
-    const description = describeImport({ saved, total, addedCategories });
+  const finish = (saved: number, total: number, addedTags: number) => {
+    const description = describeImport({ saved, total, addedTags });
 
     // The action keeps its name the whole way through (CLAUDE.md §8): the button
     // says Import and this says Imported. A run that stopped short says so in a
@@ -91,20 +91,31 @@ export function ImportWizard({
 
     setPreflightError(null);
 
-    const resolved = resolveCategories(
+    /*
+     * The file's labels, reconciled against the map's vocabulary before the
+     * first chunk goes out: a place stores tag ids, and the ids only exist once
+     * every label has been matched to an existing tag or minted as a new one.
+     *
+     * Two passes, and the second is fed the first's output rather than the map's
+     * own groups — they each add to the same vocabulary, and running both
+     * against `map.tagGroups` would let the second overrun a ceiling the first
+     * had already spent, or mint a second group with the same name.
+     *
+     * The main-tag column goes into a group of its own (`MAIN_TAG_GROUP_LABEL`).
+     * It is the column that used to be Category: one value per row, nearly
+     * always what kind of place it is, and a different question from what the
+     * place offers. `flatMap` on the second because a tags column carries
+     * several per row.
+     */
+    const mainTags = resolveTags(
       drafts.map((draft) => draft.categoryLabel),
-      map.categories,
+      map.tagGroups,
+      MAIN_TAG_GROUP_LABEL,
     );
 
-    /*
-     * The same reconciliation for tags, and it has to happen before the first
-     * chunk for the same reason: a place stores ids, and the ids only exist once
-     * the labels in the file have been matched to the map's vocabulary or added
-     * to it. `flatMap` because a row carries several.
-     */
     const tags = resolveTags(
       drafts.flatMap((draft) => draft.tagLabels),
-      map.tagGroups,
+      mainTags.tagGroups,
     );
 
     // Built up front so every row can be checked before the first request goes
@@ -114,13 +125,25 @@ export function ImportWizard({
       rowNumber: draft.rowNumber,
       input: draftToCreateInput(
         draft,
-        resolved.idByLabel.get(normalizeLabel(draft.categoryLabel)) ?? "",
-        // A label the resolver dropped — because the map is at its ceiling —
-        // resolves to nothing and is simply left off the row, which is what the
-        // dropped list is reported for.
-        draft.tagLabels
-          .map((label) => tags.idByLabel.get(normalizeLabel(label)))
-          .filter((id): id is string => Boolean(id)),
+        /*
+         * The main tag first, because the first tag a location wears is what
+         * colours its pin — which is exactly what the Category column did.
+         *
+         * A label the resolver dropped — because the map is at a ceiling —
+         * resolves to nothing and is simply left off the row, which is what the
+         * dropped list is reported for. `Set` because a file may name the same
+         * label in both columns, and a place wearing one tag twice is one chip.
+         */
+        [
+          ...new Set(
+            [
+              mainTags.idByLabel.get(normalizeLabel(draft.categoryLabel)),
+              ...draft.tagLabels.map((label) =>
+                tags.idByLabel.get(normalizeLabel(label)),
+              ),
+            ].filter((id): id is string => Boolean(id)),
+          ),
+        ],
       ),
     }));
 
@@ -131,7 +154,7 @@ export function ImportWizard({
     }
 
     let saved = 0;
-    let addedCategories = 0;
+    let addedTags = 0;
 
     try {
       // Chunked to stay inside the endpoint's per-request cap. Each chunk
@@ -146,19 +169,19 @@ export function ImportWizard({
 
         saved += result.count;
 
-        // Categories are written once the first chunk has actually landed.
-        // Writing them up front — as this used to — left a map full of new
-        // categories and no locations whenever the plan limit rejected the very
-        // first chunk, and the user had to delete them by hand.
-        if (start === 0 && (resolved.added.length > 0 || tags.addedCount > 0)) {
-          // One PATCH for both. `updateMap` writes each JSON column it is given
-          // and leaves the rest alone, but two calls would be two round trips
-          // and two chances to half-apply the vocabulary this import needs.
-          await updateMap.mutateAsync({
-            ...(resolved.added.length > 0 ? { categories: resolved.categories } : {}),
-            ...(tags.addedCount > 0 ? { tagGroups: tags.tagGroups } : {}),
-          });
-          addedCategories = resolved.added.length;
+        // The vocabulary is written once the first chunk has actually landed.
+        // Writing it up front — as this used to — left a map full of new tags
+        // and no locations whenever the plan limit rejected the very first
+        // chunk, and the user had to delete them by hand.
+        //
+        // `tags.tagGroups` already contains everything `mainTags` added: the
+        // second pass was fed the first's output, which is what makes one PATCH
+        // enough and what stops the two halves being half-applied.
+        const added = mainTags.addedCount + tags.addedCount;
+
+        if (start === 0 && added > 0) {
+          await updateMap.mutateAsync({ tagGroups: tags.tagGroups });
+          addedTags = added;
         }
       }
     } catch {
@@ -166,11 +189,11 @@ export function ImportWizard({
       // quiet about it would leave the user thinking nothing was imported and
       // re-running the whole file on top of itself. With nothing saved there is
       // nowhere to send them, and the mutation's own error is already on screen.
-      if (saved > 0) finish(saved, drafts.length, addedCategories);
+      if (saved > 0) finish(saved, drafts.length, addedTags);
       return;
     }
 
-    finish(saved, drafts.length, addedCategories);
+    finish(saved, drafts.length, addedTags);
   };
 
   /**
@@ -257,11 +280,11 @@ export function ImportWizard({
 function describeImport({
   saved,
   total,
-  addedCategories,
+  addedTags,
 }: {
   saved: number;
   total: number;
-  addedCategories: number;
+  addedTags: number;
 }): string {
   const parts = [
     saved < total
@@ -269,10 +292,10 @@ function describeImport({
       : `${formatCount(saved)} ${saved === 1 ? "location is" : "locations are"} on your map.`,
   ];
 
-  if (addedCategories > 0) {
+  if (addedTags > 0) {
     parts.push(
-      `${formatCount(addedCategories)} new ${
-        addedCategories === 1 ? "category" : "categories"
+      `${formatCount(addedTags)} new ${
+        addedTags === 1 ? "tag" : "tags"
       } came from your file.`,
     );
   }

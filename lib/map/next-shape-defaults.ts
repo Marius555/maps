@@ -1,5 +1,5 @@
 import type { Shape } from "@/lib/repositories/types";
-import { CATEGORY_COLORS } from "@/lib/validation/category.schema";
+import { PALETTE_COLORS } from "@/lib/validation/palette";
 import type { ShapeKind } from "@/packages/shared/shapes";
 
 /** Matches the placeholder names this module hands out, and only those. */
@@ -91,7 +91,7 @@ export function nextShapeDefaults(
      * the same colour, and that is the point of the rule rather than a cost of
      * it: they are both that depot's.
      */
-    color: preferredColor ?? CATEGORY_COLORS[shapes.length % CATEGORY_COLORS.length],
+    color: preferredColor ?? PALETTE_COLORS[shapes.length % PALETTE_COLORS.length],
     sortOrder: highestSortOrder + 1,
   };
 }

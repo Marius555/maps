@@ -8,6 +8,7 @@ import {
   type GeocodeStatus,
 } from "@/lib/validation/place.schema";
 import { DEFAULT_GROUP_COLOR } from "@/lib/validation/group.schema";
+import { PALETTE_COLORS } from "@/lib/validation/palette";
 import { toShapeGeometry } from "./shape-geometry";
 import {
   SHAPE_STROKE_STYLES,
@@ -46,6 +47,34 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
   }
 }
 
+/**
+ * A colour for every tag, including the ones written before tags had one.
+ *
+ * `tagSchema.color` is `.default(...)` precisely so a pre-merge row keeps
+ * parsing — but a default only applies where something *parses*, and this column
+ * is cast rather than parsed. Running the whole array through `tagGroupsSchema`
+ * on read would fix the colour and introduce a much worse failure: its
+ * refinements are about the set (unique labels, three ceilings), so one stored
+ * label a character too long would drop a customer's entire vocabulary on load.
+ * So only the field the merge added is filled in, and nothing can be lost.
+ *
+ * Cycled by position rather than all defaulted to one colour: a location's first
+ * tag colours its pin, so a map whose tags all read back orange is a map with
+ * nothing to tell its pins apart by. These are real values on the object from
+ * here on, so the first save in Settings makes them permanent.
+ */
+function withTagColors(groups: MapTagGroup[]): MapTagGroup[] {
+  let seen = 0;
+
+  return groups.map((group) => ({
+    ...group,
+    tags: (group.tags ?? []).map((tag) => ({
+      ...tag,
+      color: tag.color || PALETTE_COLORS[seen++ % PALETTE_COLORS.length],
+    })),
+  }));
+}
+
 function toGeocodeStatus(value: string | null | undefined): GeocodeStatus {
   return (GEOCODE_STATUSES as readonly string[]).includes(value ?? "")
     ? (value as GeocodeStatus)
@@ -63,7 +92,7 @@ export function toAppMap(row: MapRow): AppMap {
     defaultLng: row.defaultLng,
     defaultZoom: row.defaultZoom,
     categories: parseJson<MapCategory[]>(row.categories, []),
-    tagGroups: parseJson<MapTagGroup[]>(row.tagGroups, []),
+    tagGroups: withTagColors(parseJson<MapTagGroup[]>(row.tagGroups, [])),
     fields: parseJson<MapField[]>(row.fields, []),
     pinIcons: parseJson<CustomPinIcon[]>(row.pinIcons, []),
     settings: parseJson<Record<string, unknown>>(row.settings, {}),
@@ -151,7 +180,6 @@ export function toPlace(row: PlaceRow): Place {
     lat: row.lat,
     lng: row.lng,
     address: row.address ?? "",
-    category: row.category ?? "",
     // An array column, so no parsing — but still `?? []`, because a row written
     // before the column existed comes back with it absent rather than empty.
     tags: row.tags ?? [],

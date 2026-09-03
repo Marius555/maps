@@ -114,13 +114,20 @@ export function useShapeLayers({
   }, []);
 
   /*
-   * Source and layers, added once — and again after every style swap.
+   * Source and layers, added once — and again if a style swap ever takes them.
    *
-   * `setStyle` (use-maplibre.ts, on a basemap or theme change) discards every
-   * source and layer on the map. Pins survive it because they are DOM elements
-   * the style knows nothing about; these do not. `styledata` fires once the new
-   * style is in, and `addShapeLayers` is idempotent, so re-adding costs nothing
-   * on the events that are not style swaps at all.
+   * `setStyle` (use-maplibre.ts, on a basemap or theme change) used to discard
+   * every source and layer on the map. Pins survive that because they are DOM
+   * elements the style knows nothing about; these do not, and rebuilding them
+   * afterwards is a few frames of a GeoJSON source re-tiling in the worker —
+   * the blink. So the swap now carries them across instead
+   * (lib/map/carry-style.ts), and on an ordinary style change the guard below
+   * short-circuits because the source was never removed.
+   *
+   * This stays as the fallback, and it still earns its place: MapLibre abandons
+   * the diff and rebuilds the style from scratch whenever the diff throws, and
+   * that path really does drop everything. `styledata` fires once the new style
+   * is in, and `addShapeLayers` is idempotent.
    */
   useEffect(() => {
     const instance = map.current;

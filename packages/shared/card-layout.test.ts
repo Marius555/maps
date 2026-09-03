@@ -1,27 +1,46 @@
 import { describe, expect, it } from "vitest";
 
+import { CARD_FONTS } from "./card-fonts";
 import {
   CARD_BLOCKS,
   CARD_ZONES,
+  DEFAULT_HOURS_ROW_GAP,
   NARROW_CONTENT_SCALE,
+  MAX_BLOCK_FONT_SIZE,
   MAX_BLOCK_MARGIN,
   MAX_BLOCK_PADDING,
+  DEFAULT_BUTTON_BORDER_WIDTH,
+  DEFAULT_CHIP_BORDER_WIDTH,
+  MAX_BUTTON_BORDER_WIDTH,
+  MAX_BUTTON_PADDING,
+  MAX_BUTTON_RADIUS,
+  MAX_CHIP_BORDER_WIDTH,
+  MAX_CHIP_PADDING,
+  MAX_CLAMP_LINES,
+  MAX_HOURS_ROW_GAP,
+  MIN_BLOCK_FONT_SIZE,
   acceptsBlock,
   bleedsByDefault,
   blockBox,
+  buttonStyleOf,
   cardRowBox,
   cardRows,
+  chipStyleOf,
   defaultMarginOf,
   defaultCardLayout,
   detailsContents,
   emptyCardLayout,
   findBlock,
+  justifyOf,
   hasControl,
   isSavedCardLayout,
   isSelfSized,
+  logoImageOf,
+  leadBox,
   lineTakes,
   overlapOf,
   resolveCardLayout,
+  rowOffsetHolder,
   selfShareOf,
   upwardLiftOf,
 
@@ -53,17 +72,22 @@ describe("defaultCardLayout", () => {
      * unfinished this is not one card among several an owner could pick, it is
      * the only one, and a card that hides when a shop opens has hidden the
      * answer.
+     *
+     * And the reason the fold itself is gone. It could only ever hold those
+     * same two, `detailsContents` subtracted both, so on this card it drew
+     * nothing at all — a control that is always empty is not a fold. It is
+     * `retired` rather than deleted, so a layout somebody saved with the
+     * description dragged off still folds it.
      */
     const layout = defaultCardLayout();
 
     expect(layout.zones.top.map((block) => block.type)).toEqual(["gallery"]);
     expect(layout.zones.middle.map((block) => block.type)).toEqual([
       "name",
-      "category",
       "address",
       "description",
+      "tags",
       "hours",
-      "details",
     ]);
     expect(layout.zones.bottom.map((block) => block.type)).toEqual(["actions"]);
   });
@@ -81,14 +105,18 @@ describe("defaultCardLayout", () => {
      * the line: the default card carries none of them, so the bytes stay short
      * and the dashboard and the embed can each build this card from nothing.
      *
-     * The string is not sacred — the blocks on the default card changed once,
-     * deliberately, and this is where that is noticed. What is sacred is that
-     * *this* file and embed/src/popup.ts produce the same card from the same
-     * function, so a snapshot with no `cardLayout` draws the same popup on a
-     * customer's site as the owner sees in the editor.
+     * The string is not sacred — the blocks on the default card have changed
+     * three times, deliberately, and this is where that is noticed. The second
+     * was the Category block coming off it: categories merged into tags, so it
+     * would have been a second chip drawn from the same list. The third was the
+     * "More details" fold, which held only the description and the week and so
+     * drew nothing on a card carrying both. What is sacred is that *this* file
+     * and embed/src/popup.ts produce the same card from the same function, so a
+     * snapshot with no `cardLayout` draws the same popup on a customer's site as
+     * the owner sees in the editor.
      */
     expect(JSON.stringify(defaultCardLayout())).toBe(
-      '{"v":1,"width":320,"maxHeight":440,"radius":12,"padding":12,"gap":8,"borderWidth":0,"shadow":"soft","zones":{"top":[{"id":"gallery","type":"gallery","heightPct":25}],"middle":[{"id":"name","type":"name"},{"id":"category","type":"category"},{"id":"address","type":"address"},{"id":"description","type":"description"},{"id":"hours","type":"hours"},{"id":"details","type":"details"}],"bottom":[{"id":"actions","type":"actions"}]}}',
+      '{"v":1,"width":320,"maxHeight":440,"radius":12,"padding":12,"gap":8,"borderWidth":0,"shadow":"soft","zones":{"top":[{"id":"gallery","type":"gallery","heightPct":25}],"middle":[{"id":"name","type":"name"},{"id":"address","type":"address"},{"id":"description","type":"description"},{"id":"tags","type":"tags"},{"id":"hours","type":"hours"}],"bottom":[{"id":"actions","type":"actions"}]}}',
     );
   });
 
@@ -462,11 +490,11 @@ describe("resolveCardLayout", () => {
 });
 
 describe("detailsContents", () => {
-  it("holds everything nobody pulled out onto the card", () => {
-    // The default card carries the description and the hours itself, so the
-    // fold is down to the map's own extra fields — which are as often an
-    // internal reference as they are something a visitor wants to read.
-    expect(detailsContents(defaultCardLayout())).toEqual(["fields"]);
+  it("holds nothing on the default card, because it carries both itself", () => {
+    // Not a gap: the default puts the description and the week on the card,
+    // which is where someone standing outside the shop needs them. The fold is
+    // there for the owner who drags one of them *off* again.
+    expect(detailsContents(defaultCardLayout())).toEqual([]);
   });
 
   it("holds a block the card does not carry", () => {
@@ -474,7 +502,7 @@ describe("detailsContents", () => {
       layoutWith({ middle: [{ id: "a", type: "details" }] }),
     );
 
-    expect(detailsContents(layout)).toEqual(["description", "hours", "fields"]);
+    expect(detailsContents(layout)).toEqual(["description", "hours"]);
   });
 
   it("stops holding a block that was placed on the card itself", () => {
@@ -490,7 +518,7 @@ describe("detailsContents", () => {
       }),
     );
 
-    expect(detailsContents(layout)).toEqual(["hours", "fields"]);
+    expect(detailsContents(layout)).toEqual(["hours"]);
   });
 });
 
@@ -498,10 +526,11 @@ describe("acceptsBlock", () => {
   const layout = defaultCardLayout();
 
   it("refuses a zone the block is not allowed in", () => {
-    // `fields` is the one block the default card does not carry, so it is the
-    // one that asks about the zone rule alone, with uniqueness out of the way.
-    expect(acceptsBlock(layout, "fields", "middle")).toBe(true);
-    expect(acceptsBlock(layout, "fields", "top")).toBe(false);
+    // `divider` is not unique, so it is the one that asks about the zone rule
+    // alone with uniqueness out of the way — and it is allowed everywhere,
+    // which is why the refusals below are asked of blocks that are not.
+    expect(acceptsBlock(layout, "divider", "middle")).toBe(true);
+    expect(acceptsBlock(layout, "divider", "top")).toBe(true);
     expect(acceptsBlock(layout, "actions", "middle")).toBe(false);
     expect(acceptsBlock(layout, "description", "top")).toBe(false);
   });
@@ -609,13 +638,12 @@ describe("blockBox", () => {
     expect(blockBox({ id: "a", type: "name" }, layout).padding).toBeUndefined();
   });
 
-  it("hands back the leading space raw, for each renderer to compose", () => {
-    // Not folded into a `margin-top`, because the one place it lands is already
-    // spoken for by the vertical bleed cancel — see `blockEdges`.
-    expect(blockBox({ id: "a", type: "name", offset: 40 }, layout).marginTop).toBe(
-      "40px",
-    );
-    expect(blockBox({ id: "a", type: "name" }, layout).marginTop).toBeUndefined();
+  it("keeps a block's leading space out of the block's own box", () => {
+    // It belongs to the *line*, and every renderer draws it as a box of its own
+    // above that line — see `leadBox`. A margin here could not give way.
+    expect(
+      Object.keys(blockBox({ id: "a", type: "name", offset: 40 }, layout)),
+    ).not.toContain("marginTop");
   });
 
   it("never bleeds a narrowed block, whatever its margin says", () => {
@@ -687,6 +715,293 @@ describe("the fit control", () => {
     };
 
     expect(resolveCardLayout(stored).zones.top[0].fit).toBeUndefined();
+  });
+});
+
+/**
+ * The chip controls: what a block's pills are drawn on, and how roomy they are.
+ *
+ * Held here rather than in either renderer for the reason the fit control is:
+ * `TagChips` in the dashboard and `buildTags` in the embed both read
+ * `chipStyleOf` and neither has tests of its own, so this is the only thing
+ * standing between a mistake and a wrong card on a customer's site.
+ */
+describe("the chip controls", () => {
+  it("are offered by the two block types that draw chips and no others", () => {
+    for (const type of ["tags", "category"] as const) {
+      expect(hasControl(type, "chips")).toBe(true);
+    }
+
+    for (const type of ["name", "address", "hours", "divider"] as const) {
+      expect(hasControl(type, "chips")).toBe(false);
+    }
+  });
+
+  it("say nothing at all when the owner has not chosen", () => {
+    // The whole reason these could be added to a live model: a Tags block
+    // nobody has styled draws the pill it always drew, on every card already
+    // published (CLAUDE.md §7).
+    expect(chipStyleOf({ id: "a", type: "tags" })).toBeUndefined();
+  });
+
+  it("carry the ground and the extra room as CSS values", () => {
+    const chip = chipStyleOf({
+      id: "a",
+      type: "tags",
+      chipBackground: "#ff8800",
+      chipPadding: 6,
+    });
+
+    expect(chip?.background).toBe("#ff8800");
+    expect(chip?.padding).toBe("6px");
+  });
+
+  /*
+   * The bug this whole group exists for. `align` reaches a block as
+   * `text-align`, which cannot move a flex item — so the three Alignment buttons
+   * on the Tags block moved nothing at all until the chip row started reading
+   * this instead.
+   */
+  it("turn the block's own alignment into one a row of chips can use", () => {
+    expect(chipStyleOf({ id: "a", type: "tags", align: "end" })?.justify).toBe(
+      "flex-end",
+    );
+    expect(
+      chipStyleOf({ id: "a", type: "tags", align: "center" })?.justify,
+    ).toBe("center");
+    // Not the logical `start`/`end` spelling, for `FLEX_ALIGN`'s reason: a card
+    // is opened on a stranger's site.
+    expect(chipStyleOf({ id: "a", type: "tags", align: "start" })?.justify).toBe(
+      "flex-start",
+    );
+  });
+
+  /*
+   * The same fix, now shared. The Links row is the second flex row on a card, so
+   * the mapping came out of `chipStyleOf` and became `justifyOf` — one answer
+   * read by both renderers rather than a second copy that agrees today.
+   */
+  it("hand the same alignment to any row that is a flex row", () => {
+    expect(justifyOf("start")).toBe("flex-start");
+    expect(justifyOf("center")).toBe("center");
+    expect(justifyOf("end")).toBe("flex-end");
+    // Absent writes nothing, so a row nobody has aligned sits exactly where
+    // every published card has always drawn it.
+    expect(justifyOf(undefined)).toBeUndefined();
+  });
+
+  it("offer that alignment on the Links row at all", () => {
+    // It had no `align` control until this change, which is why the row could
+    // only ever be left-aligned.
+    expect(hasControl("actions", "align")).toBe(true);
+  });
+
+  it("still says nothing for a block that is only aligned", () => {
+    // `textAlign` is what an aligned block of *words* gets, and every block has
+    // one — so `blockBox` keeps emitting it and this stays about the chips.
+    expect(
+      blockBox({ id: "a", type: "name", align: "center" }, defaultCardLayout())
+        .textAlign,
+    ).toBe("center");
+  });
+
+  it("are dropped from a block whose type does not draw chips", () => {
+    const stored = {
+      zones: {
+        middle: [
+          { id: "a", type: "name", chipBackground: "#ff8800", chipPadding: 6 },
+        ],
+      },
+    };
+
+    const block = resolveCardLayout(stored).zones.middle[0];
+
+    expect(block.chipBackground).toBeUndefined();
+    expect(block.chipPadding).toBeUndefined();
+  });
+
+  it("survive a round trip on a block that does", () => {
+    const stored = {
+      zones: {
+        middle: [
+          { id: "a", type: "tags", chipBackground: "#ff8800", chipPadding: 6 },
+        ],
+      },
+    };
+
+    const block = resolveCardLayout(stored).zones.middle[0];
+
+    expect(block.chipBackground).toBe("#ff8800");
+    expect(block.chipPadding).toBe(6);
+  });
+
+  it("read zero padding as no padding, and clamp what is over the ceiling", () => {
+    const stored = {
+      zones: {
+        middle: [
+          { id: "a", type: "tags", chipPadding: 0 },
+          { id: "b", type: "category", chipPadding: 999 },
+        ],
+      },
+    };
+
+    const [none, huge] = resolveCardLayout(stored).zones.middle;
+
+    // Zero is the absence of padding, on the same argument full width is the
+    // absence of a width — so a card nobody has touched stores nothing new.
+    expect(none.chipPadding).toBeUndefined();
+    expect(huge.chipPadding).toBe(MAX_CHIP_PADDING);
+  });
+
+  it("refuse a ground that is not a hex colour", () => {
+    const stored = {
+      zones: { middle: [{ id: "a", type: "tags", chipBackground: "red" }] },
+    };
+
+    expect(
+      resolveCardLayout(stored).zones.middle[0].chipBackground,
+    ).toBeUndefined();
+  });
+
+  it("carry the outline as a colour and a width together", () => {
+    const chip = chipStyleOf({
+      id: "a",
+      type: "tags",
+      chipBorder: "#c8ced6",
+      chipBorderWidth: 2,
+    });
+
+    expect(chip?.border).toBe("#c8ced6");
+    expect(chip?.borderWidth).toBe("2px");
+  });
+
+  /*
+   * Both halves or neither, and this is the assertion that says why: a colour
+   * with no width draws nothing, and a width with no colour draws a line nobody
+   * picked. `.card-chip` and `.lm-popup__tag` both default to a transparent
+   * 0px, so a half that got through would be a visible chip nobody designed.
+   */
+  it("say nothing about an outline that is only half described", () => {
+    expect(
+      chipStyleOf({ id: "a", type: "tags", chipBorder: "#c8ced6" })?.border,
+    ).toBeUndefined();
+    expect(
+      chipStyleOf({ id: "a", type: "tags", chipBorderWidth: 2 })?.borderWidth,
+    ).toBeUndefined();
+  });
+
+  it("give a stored outline colour the default width when it has none", () => {
+    const stored = {
+      zones: { middle: [{ id: "a", type: "tags", chipBorder: "#c8ced6" }] },
+    };
+
+    const block = resolveCardLayout(stored).zones.middle[0];
+
+    expect(block.chipBorder).toBe("#c8ced6");
+    expect(block.chipBorderWidth).toBe(DEFAULT_CHIP_BORDER_WIDTH);
+  });
+
+  it("drop an outline stored at no width at all, colour included", () => {
+    const stored = {
+      zones: {
+        middle: [
+          { id: "a", type: "tags", chipBorder: "#c8ced6", chipBorderWidth: 0 },
+          // And a width with nothing to be a width of. `category` rather than a
+          // second `tags`, which is `unique` and would be dropped whole.
+          { id: "b", type: "category", chipBorderWidth: 3 },
+        ],
+      },
+    };
+
+    const [none, orphan] = resolveCardLayout(stored).zones.middle;
+
+    expect(none.chipBorder).toBeUndefined();
+    expect(none.chipBorderWidth).toBeUndefined();
+    expect(orphan.chipBorder).toBeUndefined();
+    expect(orphan.chipBorderWidth).toBeUndefined();
+  });
+
+  it("clamp an outline thicker than the ceiling", () => {
+    const stored = {
+      zones: {
+        middle: [
+          { id: "a", type: "tags", chipBorder: "#c8ced6", chipBorderWidth: 99 },
+        ],
+      },
+    };
+
+    expect(resolveCardLayout(stored).zones.middle[0].chipBorderWidth).toBe(
+      MAX_CHIP_BORDER_WIDTH,
+    );
+  });
+
+  it("drop the outline from a block whose type does not draw chips", () => {
+    const stored = {
+      zones: {
+        middle: [
+          { id: "a", type: "name", chipBorder: "#c8ced6", chipBorderWidth: 2 },
+        ],
+      },
+    };
+
+    const block = resolveCardLayout(stored).zones.middle[0];
+
+    expect(block.chipBorder).toBeUndefined();
+    expect(block.chipBorderWidth).toBeUndefined();
+  });
+});
+
+/*
+ * The mark's one non-measurement, and the fallback that makes it safe on a map
+ * of four hundred locations.
+ */
+describe("a logo block's drawing", () => {
+  it("is the pin until somebody says otherwise", () => {
+    // The whole reason this could be added to a live model: a Logo block on a
+    // card published before the field existed draws exactly what it drew.
+    expect(logoImageOf({ id: "a", type: "logo" }, "data:image/png;base64,x")).toBe(
+      null,
+    );
+  });
+
+  it("is the uploaded image once it is asked for", () => {
+    expect(
+      logoImageOf({ id: "a", type: "logo", logoMode: "image" }, "data:image/png;base64,x"),
+    ).toBe("data:image/png;base64,x");
+  });
+
+  /*
+   * The assertion the feature rests on. A design is saved for the whole account
+   * and drawn against every location in it — so "draw the logo" has to mean
+   * "draw the logo *if this pin has one*", or a card arranged against the one
+   * location with a brand mark goes blank on the rest.
+   */
+  it("falls back to the pin for a location whose pin has no image", () => {
+    expect(logoImageOf({ id: "a", type: "logo", logoMode: "image" }, "")).toBe(
+      null,
+    );
+  });
+
+  it("survives a round trip, and is dropped from a type that is not a mark", () => {
+    const stored = {
+      zones: {
+        top: [
+          { id: "a", type: "logo", logoMode: "image" },
+          { id: "b", type: "name", logoMode: "image" },
+        ],
+      },
+    };
+
+    const [logo, name] = resolveCardLayout(stored).zones.top;
+
+    expect(logo.logoMode).toBe("image");
+    expect(name.logoMode).toBeUndefined();
+  });
+
+  it("reads anything that is not the one word as the pin", () => {
+    const stored = { zones: { top: [{ id: "a", type: "logo", logoMode: "pin" }] } };
+
+    expect(resolveCardLayout(stored).zones.top[0].logoMode).toBeUndefined();
   });
 });
 
@@ -846,6 +1161,58 @@ describe("cardRows", () => {
   });
 });
 
+/**
+ * The empty space above a line, as a box that gives way.
+ *
+ * The reason it is a box at all is a bug: as a `margin-top` it could not shrink,
+ * so a block growing under a card's fixed height pushed everything below it off
+ * the bottom, and the only thing that could give the room back was a pass that
+ * rewrote the layout — permanently, so the blocks never came back down when the
+ * content shrank again. What is checked here is that the arithmetic comes out
+ * the same at both ends of the stretch.
+ */
+describe("leadBox", () => {
+  const layout = defaultCardLayout();
+
+  it("asks for the space as its basis, and gives all of it back under pressure", () => {
+    const box = leadBox(120, layout);
+
+    // `0` grow, so it never takes room the blocks could have had.
+    expect(box.flex).toBe(`0 1000 120px`);
+    // And nothing holds it open: a flex item's automatic minimum is its content,
+    // and there is no content in here to keep.
+    expect(box.minHeight).toBe("0");
+  });
+
+  it("cancels the second gap it brings with it, at both ends of the stretch", () => {
+    // A zone is a flex column with a gap between every pair of items, so an
+    // extra item between two lines adds a second one. At rest the line has to
+    // sit `gap + offset` below its neighbour, which is exactly where the old
+    // margin left it; fully compressed it has to sit at `gap`, which is exactly
+    // where an absent offset leaves it. One negative margin does both.
+    const box = leadBox(120, layout);
+    expect(box.marginBottom).toBe(`-${String(layout.gap)}px`);
+
+    const atRest = layout.gap + 120 + layout.gap - layout.gap;
+    expect(atRest).toBe(layout.gap + 120);
+
+    const compressed = layout.gap + 0 + layout.gap - layout.gap;
+    expect(compressed).toBe(layout.gap);
+  });
+
+  it("shrinks far harder than any block, which is the whole ordering rule", () => {
+    // Flex shares the shortfall out by shrink factor times basis, and every
+    // block is `flex: none` — so the empty space goes first with no pass over
+    // the card deciding that it should.
+    const shrink = Number(leadBox(120, layout).flex.split(" ")[1]);
+
+    expect(shrink).toBeGreaterThan(1);
+    for (const type of Object.keys(CARD_BLOCKS) as CardBlockType[]) {
+      expect(blockBox({ id: "a", type }, layout).flex).toBe("none");
+    }
+  });
+});
+
 describe("cardRowBox", () => {
   const layout = defaultCardLayout();
 
@@ -869,13 +1236,13 @@ describe("cardRowBox", () => {
       { id: "b", type: "address", half: true, offset: 30 },
     ], defaultCardLayout())[0];
 
-    expect(cardRowBox(row, layout).marginTop).toBe("30px");
+    expect(rowOffsetHolder(row.blocks)?.offset).toBe(30);
   });
 
   it("emits no leading space when nobody asked for any", () => {
     const row = cardRows([{ id: "a", type: "name", half: true }], defaultCardLayout())[0];
 
-    expect(cardRowBox(row, layout).marginTop).toBeUndefined();
+    expect(rowOffsetHolder(row.blocks)?.offset).toBeUndefined();
   });
 
   it("puts a lone half at its line's end when it says so", () => {
@@ -981,7 +1348,9 @@ describe("the width control", () => {
       "gallery",
       "name",
       "category",
+      "tags",
       "address",
+      "button",
       "divider",
     ]);
     // No block declares a control the panel no longer renders.
@@ -996,7 +1365,15 @@ describe("the width control", () => {
     // A quarter is the narrowest a block goes, so the most that can ever be
     // reserved is three quarters — still wide enough for another block's own
     // floor, which is what keeps the reserved column droppable.
-    for (const type of ["gallery", "name", "category", "address", "divider"] as const) {
+    for (const type of [
+      "gallery",
+      "name",
+      "category",
+      "tags",
+      "button",
+      "address",
+      "divider",
+    ] as const) {
       expect(CARD_BLOCKS[type].minWidthPct).toBe(25);
     }
   });
@@ -1125,15 +1502,15 @@ describe("blockBox for a narrowed block", () => {
     expect(box.width).toBeUndefined();
   });
 
-  it("leaves its leading space to the row", () => {
-    expect(
-      blockBox({ id: "a", type: "name", half: true, offset: 24 }, layout)
-        .marginTop,
-    ).toBeUndefined();
-    // And a full-width block still carries its own, exactly as before.
-    expect(blockBox({ id: "a", type: "name", offset: 24 }, layout).marginTop).toBe(
-      "24px",
-    );
+  it("leaves its leading space to the line", () => {
+    // Narrowed or not: it is one number per line, drawn as a box above it.
+    for (const onRow of [true, false]) {
+      expect(
+        Object.keys(
+          blockBox({ id: "a", type: "name", half: true, offset: 24 }, layout, onRow),
+        ),
+      ).not.toContain("marginTop");
+    }
   });
 });
 
@@ -1607,19 +1984,641 @@ describe("a self-sized mark on a line", () => {
     expect(blockBox(mark, layout, true).height).toBe("62px");
   });
 
-  it("hands its leading space to the row once it shares a line", () => {
+  it("hands its leading space to the line, shared or not", () => {
     // A `margin-top` on a flex-row child pushes that one block down *within* the
-    // row rather than moving the row, so the line would come apart. The row
-    // takes it instead — the rule a narrowed block has always followed.
+    // row rather than moving the row, so the line would come apart. The line's
+    // own lead box takes it instead — see `leadBox`.
     const mark: CardBlock = { ...logo(), offset: 20 };
 
-    expect(blockBox(mark, layout).marginTop).toBe("20px");
-    expect(blockBox(mark, layout, true).marginTop).toBeUndefined();
+    expect(Object.keys(blockBox(mark, layout))).not.toContain("marginTop");
+    expect(Object.keys(blockBox(mark, layout, true))).not.toContain("marginTop");
   });
 
   it("names the logo, and only the logo", () => {
     for (const type of Object.keys(CARD_BLOCKS) as CardBlockType[]) {
       expect(isSelfSized(type)).toBe(type === "logo");
     }
+  });
+});
+
+describe("the type controls", () => {
+  const withBlock = (block: unknown): CardBlock =>
+    resolveCardLayout({
+      ...defaultCardLayout(),
+      zones: { top: [], middle: [block], bottom: [] },
+    }).zones.middle[0];
+
+  it("is offered by exactly the blocks made of words", () => {
+    /*
+     * Not a coincidence in the table but a rule about it, in the shape the
+     * valign/width correspondence above already takes: a photo, a mark, a rule
+     * and a gap have no words, so a font picker on any of them would be a
+     * control that does nothing — which is the one thing CARD_BLOCKS forbids.
+     */
+    const wordy = (Object.keys(CARD_BLOCKS) as CardBlockType[]).filter((type) =>
+      hasControl(type, "text"),
+    );
+
+    expect(wordy).toEqual([
+      "name",
+      "category",
+      "tags",
+      "address",
+      "description",
+      "hours",
+      "details",
+      "actions",
+      "button",
+    ]);
+  });
+
+  it("keeps a font from the catalogue and refuses anything else", () => {
+    // The refusal is the security half: this string is written into a
+    // font-family inline on a stranger's page. See packages/shared/card-fonts.
+    expect(
+      withBlock({ id: "a", type: "name", font: CARD_FONTS[1].stack }).font,
+    ).toBe(CARD_FONTS[1].stack);
+    expect(
+      withBlock({ id: "a", type: "name", font: "Comic Sans MS, cursive" }).font,
+    ).toBeUndefined();
+  });
+
+  it("clamps a size and drops one that was never set", () => {
+    expect(withBlock({ id: "a", type: "name", fontSize: 400 }).fontSize).toBe(
+      MAX_BLOCK_FONT_SIZE,
+    );
+    expect(withBlock({ id: "a", type: "name", fontSize: 1 }).fontSize).toBe(
+      MIN_BLOCK_FONT_SIZE,
+    );
+    expect(withBlock({ id: "a", type: "name" }).fontSize).toBeUndefined();
+  });
+
+  it("reads a colour the way every other hex in this file is read", () => {
+    expect(withBlock({ id: "a", type: "name", color: "#ABC" }).color).toBe(
+      "#abc",
+    );
+    expect(
+      withBlock({ id: "a", type: "name", color: "red" }).color,
+    ).toBeUndefined();
+  });
+
+  it("stores bold only when it is true", () => {
+    // Not bold is the absence, so there is one way to say it and neither
+    // renderer has to treat false and missing as the same thing.
+    expect(withBlock({ id: "a", type: "name", bold: true }).bold).toBe(true);
+    expect(
+      withBlock({ id: "a", type: "name", bold: false }).bold,
+    ).toBeUndefined();
+  });
+
+  it("drops every one of them on a block that has no words", () => {
+    const block = withBlock({
+      id: "a",
+      type: "spacer",
+      font: CARD_FONTS[0].stack,
+      fontSize: 20,
+      color: "#123456",
+      bold: true,
+    });
+
+    expect(block.font).toBeUndefined();
+    expect(block.fontSize).toBeUndefined();
+    expect(block.color).toBeUndefined();
+    expect(block.bold).toBeUndefined();
+  });
+
+  it("emits nothing at all for a block nobody has styled", () => {
+    // The whole reason this could be added to a live model: an untouched block
+    // produces the box it produced before the fields existed, so no renderer
+    // writes a single custom property for it.
+    const box = blockBox({ id: "a", type: "name" }, defaultCardLayout());
+
+    expect(box.text).toBeUndefined();
+    expect(box.lines).toBeUndefined();
+    expect(box.rowGap).toBeUndefined();
+  });
+
+  it("hands each renderer the same four CSS values", () => {
+    const box = blockBox(
+      {
+        id: "a",
+        type: "name",
+        font: CARD_FONTS[1].stack,
+        fontSize: 18,
+        color: "#112233",
+        bold: true,
+      },
+      defaultCardLayout(),
+    );
+
+    expect(box.text).toEqual({
+      font: CARD_FONTS[1].stack,
+      size: "18px",
+      color: "#112233",
+      // A number rather than the word, because a custom property holding
+      // "bold" is one no arithmetic can ever be done on.
+      weight: "700",
+    });
+  });
+});
+
+describe("the opening-hours controls", () => {
+  const withHours = (block: unknown): CardBlock =>
+    resolveCardLayout({
+      ...defaultCardLayout(),
+      zones: { top: [], middle: [block], bottom: [] },
+    }).zones.middle[0];
+
+  it("treats a collapsed week as the absence, because that is what is published", () => {
+    /*
+     * The embed has always drawn this as a closed <details>, and the embed is
+     * what a customer publishes. If absence meant "open", every card already
+     * live on a customer's site would unfold its hours the day this shipped.
+     */
+    expect(withHours({ id: "h", type: "hours" }).hoursOpen).toBeUndefined();
+    expect(
+      withHours({ id: "h", type: "hours", hoursOpen: true }).hoursOpen,
+    ).toBe(true);
+  });
+
+  it("keeps long day names only when they were asked for", () => {
+    expect(withHours({ id: "h", type: "hours" }).hoursLongDays).toBeUndefined();
+    expect(
+      withHours({ id: "h", type: "hours", hoursLongDays: true }).hoursLongDays,
+    ).toBe(true);
+  });
+
+  it("drops a row gap that is back at the default", () => {
+    // Back at the default is back to inheriting it, on the same argument full
+    // width is the absence of a width.
+    expect(
+      withHours({ id: "h", type: "hours", hoursRowGap: DEFAULT_HOURS_ROW_GAP })
+        .hoursRowGap,
+    ).toBeUndefined();
+    expect(
+      withHours({ id: "h", type: "hours", hoursRowGap: 99 }).hoursRowGap,
+    ).toBe(MAX_HOURS_ROW_GAP);
+    expect(
+      blockBox(
+        withHours({ id: "h", type: "hours", hoursRowGap: 6 }),
+        defaultCardLayout(),
+      ).rowGap,
+    ).toBe("6px");
+  });
+
+  it("drops all three on a block that is not a week", () => {
+    const block = withHours({
+      id: "a",
+      type: "description",
+      hoursOpen: true,
+      hoursLongDays: true,
+      hoursRowGap: 8,
+    });
+
+    expect(block.hoursOpen).toBeUndefined();
+    expect(block.hoursLongDays).toBeUndefined();
+    expect(block.hoursRowGap).toBeUndefined();
+  });
+});
+
+describe("the description clamp", () => {
+  const withDescription = (block: unknown): CardBlock =>
+    resolveCardLayout({
+      ...defaultCardLayout(),
+      zones: { top: [], middle: [block], bottom: [] },
+    }).zones.middle[0];
+
+  it("shows the whole paragraph when nobody has said otherwise", () => {
+    // Which is what both renderers have always done, so the control reads as
+    // "show the whole description", ticked.
+    expect(
+      withDescription({ id: "d", type: "description" }).clampLines,
+    ).toBeUndefined();
+  });
+
+  it("clamps a stored count into the range a card can hold", () => {
+    expect(
+      withDescription({ id: "d", type: "description", clampLines: 40 })
+        .clampLines,
+    ).toBe(MAX_CLAMP_LINES);
+    expect(
+      withDescription({ id: "d", type: "description", clampLines: 3 })
+        .clampLines,
+    ).toBe(3);
+    expect(
+      blockBox(
+        withDescription({ id: "d", type: "description", clampLines: 3 }),
+        defaultCardLayout(),
+      ).lines,
+    ).toBe("3");
+  });
+
+  it("is offered by the description and nothing else", () => {
+    const clamped = (Object.keys(CARD_BLOCKS) as CardBlockType[]).filter(
+      (type) => hasControl(type, "clamp"),
+    );
+
+    expect(clamped).toEqual(["description"]);
+    expect(
+      withDescription({ id: "a", type: "address", clampLines: 2 }).clampLines,
+    ).toBeUndefined();
+  });
+});
+
+/**
+ * The button controls: what a call to action is drawn on, and how it is shaped.
+ *
+ * Held here for the chip controls' reason — `CardButton` in the dashboard and
+ * `buildButton` in the embed both read `buttonStyleOf` and neither has tests of
+ * its own, so this is the only thing standing between a mistake and a wrong
+ * button on a customer's site. Where the button *points* is `card-button.ts`'s
+ * own file, and has its own test beside it.
+ */
+describe("the button controls", () => {
+  it("are offered by the button block and no other", () => {
+    expect(hasControl("button", "button")).toBe(true);
+    expect(hasControl("button", "buttonStyle")).toBe(true);
+
+    for (const type of ["name", "actions", "tags", "divider"] as const) {
+      expect(hasControl(type, "button")).toBe(false);
+      expect(hasControl(type, "buttonStyle")).toBe(false);
+    }
+  });
+
+  it("say nothing at all when the owner has not styled it", () => {
+    // The same §7 promise the chips carry: a Button nobody has touched writes
+    // nothing, and the stylesheet's own fallbacks stay in charge of every edge
+    // of it — which is what keeps an unstyled button theme-aware where a stored
+    // `#ffffff` could not be.
+    expect(buttonStyleOf({ id: "a", type: "button" })).toBeUndefined();
+  });
+
+  it("carry the ground, the room and the corner as CSS values", () => {
+    const style = buttonStyleOf({
+      id: "a",
+      type: "button",
+      buttonBackground: "#1c7ed6",
+      buttonPadding: 6,
+      buttonRadius: 12,
+      buttonFull: true,
+    });
+
+    expect(style?.background).toBe("#1c7ed6");
+    expect(style?.padding).toBe("6px");
+    expect(style?.radius).toBe("12px");
+    expect(style?.full).toBe(true);
+  });
+
+  /*
+   * The corner is the one number on this block where zero is a value.
+   *
+   * Absent draws the stylesheet's own `0.5rem`, so square has nowhere else to be
+   * written down — and it was dropped in three separate places as "not set",
+   * which made the Corners control unable to say the one thing it exists for.
+   * Both halves are asserted, because the bug is only visible as the pair: a
+   * stored zero that survives, and an absent one that still says nothing.
+   */
+  it("tell a square corner from no corner at all", () => {
+    expect(
+      buttonStyleOf({ id: "a", type: "button", buttonRadius: 0 })?.radius,
+    ).toBe("0px");
+    expect(buttonStyleOf({ id: "a", type: "button" })?.radius).toBeUndefined();
+  });
+
+  it("keep a square corner through a round trip", () => {
+    const layout = resolveCardLayout({
+      v: 1,
+      zones: { middle: [{ id: "a", type: "button", buttonRadius: 0 }] },
+    });
+
+    expect(findBlock(layout, "a")?.block.buttonRadius).toBe(0);
+  });
+
+  /*
+   * The treatment and the hover reach a renderer as **class names**, and the
+   * embed draws a published snapshot without ever re-running this parse — so a
+   * word that survived unchecked would be a class chosen by whatever wrote the
+   * file. `buildButton` looks both up in a table for that reason; this is the
+   * other half of the guarantee.
+   */
+  it("keep only the treatments and hovers they know", () => {
+    const layout = resolveCardLayout({
+      v: 1,
+      zones: {
+        middle: [
+          {
+            id: "a",
+            type: "button",
+            buttonVariant: "outline",
+            buttonHover: "lift",
+          },
+          {
+            id: "b",
+            type: "button",
+            buttonVariant: "card-button--x",
+            buttonHover: "explode",
+          },
+        ],
+      },
+    });
+
+    expect(findBlock(layout, "a")?.block.buttonVariant).toBe("outline");
+    expect(findBlock(layout, "a")?.block.buttonHover).toBe("lift");
+    expect(findBlock(layout, "b")?.block.buttonVariant).toBeUndefined();
+    expect(findBlock(layout, "b")?.block.buttonHover).toBeUndefined();
+  });
+
+  it("carry the outline as a colour and a width together", () => {
+    const style = buttonStyleOf({
+      id: "a",
+      type: "button",
+      buttonBorder: "#c8ced6",
+      buttonBorderWidth: 2,
+    });
+
+    expect(style?.border).toBe("#c8ced6");
+    expect(style?.borderWidth).toBe("2px");
+  });
+
+  /*
+   * A chip's outline is indivisible and a button's is not, which is the one
+   * place these two deliberately part company.
+   *
+   * A chip has nothing under its edge to fall back to, so a width with no colour
+   * there would be a black line nobody picked. Both stylesheets give a button
+   * `currentColor` instead — its own label colour, which the owner picked and
+   * which follows the theme — so the width carries the outline on its own. What
+   * it bought is a Border width control that writes *only* a width; the version
+   * that enforced the pair did it by stamping a hard-coded blue into a colour
+   * field nobody had opened.
+   */
+  it("carry an outline that is a width and no colour", () => {
+    const style = buttonStyleOf({
+      id: "a",
+      type: "button",
+      buttonBorderWidth: 2,
+    });
+
+    expect(style?.borderWidth).toBe("2px");
+    expect(style?.border).toBeUndefined();
+  });
+
+  it("say nothing about a colour with no width behind it", () => {
+    // Still nothing: a colour alone genuinely does draw nothing, since the width
+    // both stylesheets fall back to is zero.
+    expect(
+      buttonStyleOf({ id: "a", type: "button", buttonBorder: "#c8ced6" })
+        ?.border,
+    ).toBeUndefined();
+  });
+
+  it("survive a round trip on a button block", () => {
+    const stored = {
+      zones: {
+        bottom: [
+          {
+            id: "a",
+            type: "button",
+            buttonAction: "link",
+            buttonSource: "booking",
+            buttonLabel: "Book a fitting",
+            buttonBackground: "#1c7ed6",
+            buttonRadius: 12,
+            buttonFull: true,
+          },
+        ],
+      },
+    };
+
+    const block = resolveCardLayout(stored).zones.bottom[0];
+
+    expect(block.buttonAction).toBe("link");
+    expect(block.buttonSource).toBe("booking");
+    expect(block.buttonLabel).toBe("Book a fitting");
+    expect(block.buttonBackground).toBe("#1c7ed6");
+    expect(block.buttonRadius).toBe(12);
+    expect(block.buttonFull).toBe(true);
+  });
+
+  it("are dropped from a block whose type does not offer them", () => {
+    // The per-control gate, which is what keeps the properties panel and the
+    // edit path from ever disagreeing about which controls a block has.
+    const stored = {
+      zones: {
+        middle: [
+          {
+            id: "a",
+            type: "description",
+            buttonAction: "link",
+            buttonLabel: "Press me",
+            buttonRadius: 12,
+            buttonFull: true,
+          },
+        ],
+      },
+    };
+
+    const block = resolveCardLayout(stored).zones.middle[0];
+
+    expect(block.buttonAction).toBeUndefined();
+    expect(block.buttonLabel).toBeUndefined();
+    expect(block.buttonRadius).toBeUndefined();
+    expect(block.buttonFull).toBeUndefined();
+  });
+
+  it("clamp a corner, a roominess and an outline past the ceiling", () => {
+    const stored = {
+      zones: {
+        bottom: [
+          {
+            id: "a",
+            type: "button",
+            buttonRadius: 999,
+            buttonPadding: 999,
+            buttonBorder: "#c8ced6",
+            buttonBorderWidth: 99,
+          },
+        ],
+      },
+    };
+
+    const block = resolveCardLayout(stored).zones.bottom[0];
+
+    expect(block.buttonRadius).toBe(MAX_BUTTON_RADIUS);
+    expect(block.buttonPadding).toBe(MAX_BUTTON_PADDING);
+    expect(block.buttonBorderWidth).toBe(MAX_BUTTON_BORDER_WIDTH);
+  });
+
+  /*
+   * Zero means "not set" for the room and the outline, and **not** for the
+   * corner.
+   *
+   * The asymmetry is the point rather than an oversight. Zero extra room and a
+   * zero-width border are exactly what the stylesheet already draws, so storing
+   * them would be a longer way of saying nothing. A zero *radius* is not: absent
+   * draws `0.5rem`, so square is a real choice, and it is asserted just above in
+   * "tell a square corner from no corner at all".
+   */
+  it("read zero as the absence of a border and extra room", () => {
+    const stored = {
+      zones: {
+        bottom: [
+          {
+            id: "a",
+            type: "button",
+            buttonPadding: 0,
+            buttonBorder: "#c8ced6",
+            buttonBorderWidth: 0,
+          },
+        ],
+      },
+    };
+
+    const block = resolveCardLayout(stored).zones.bottom[0];
+
+    expect(block.buttonPadding).toBeUndefined();
+    // The colour goes with it: a zero-width outline is not an outline, and a
+    // colour left behind would draw one the moment anything read a default.
+    expect(block.buttonBorderWidth).toBeUndefined();
+    expect(block.buttonBorder).toBeUndefined();
+  });
+
+  it("give a stored outline colour the default width when it has none", () => {
+    const stored = {
+      zones: { bottom: [{ id: "a", type: "button", buttonBorder: "#c8ced6" }] },
+    };
+
+    const block = resolveCardLayout(stored).zones.bottom[0];
+
+    expect(block.buttonBorder).toBe("#c8ced6");
+    expect(block.buttonBorderWidth).toBe(DEFAULT_BUTTON_BORDER_WIDTH);
+  });
+
+  it("keep a stored width that has no colour with it", () => {
+    // Where a chip's would be dropped. The button's outline falls back to its
+    // own label colour, so this is a whole answer rather than half of one — see
+    // `CardBlock.buttonBorder`.
+    const stored = {
+      zones: { bottom: [{ id: "a", type: "button", buttonBorderWidth: 3 }] },
+    };
+
+    const block = resolveCardLayout(stored).zones.bottom[0];
+
+    expect(block.buttonBorderWidth).toBe(3);
+    expect(block.buttonBorder).toBeUndefined();
+  });
+
+  it("refuse a ground that is not a hex colour", () => {
+    const stored = {
+      zones: { bottom: [{ id: "a", type: "button", buttonBackground: "red" }] },
+    };
+
+    expect(
+      resolveCardLayout(stored).zones.bottom[0].buttonBackground,
+    ).toBeUndefined();
+  });
+
+  /*
+   * Directions is the absence, and this is the assertion that pins it: a Button
+   * dropped on the card has to work before it is configured, and every location
+   * has coordinates while not every one has a URL. It follows that a stored
+   * `"directions"` is a longer way of saying nothing and is not kept — the same
+   * treatment `hidePhone: false` gets below.
+   */
+  it("keep only the action that is not the default, and its source with it", () => {
+    const stored = {
+      zones: {
+        bottom: [
+          { id: "a", type: "button", buttonAction: "directions" },
+          {
+            id: "b",
+            type: "button",
+            buttonAction: "directions",
+            buttonSource: "booking",
+          },
+        ],
+      },
+    };
+
+    const [plain, sourced] = resolveCardLayout(stored).zones.bottom;
+
+    expect(plain.buttonAction).toBeUndefined();
+    // A source is only an answer to link mode's question, so it does not travel
+    // on a block that is not asking it.
+    expect(sourced.buttonSource).toBeUndefined();
+  });
+
+  it("can be dropped more than once, and never above the name", () => {
+    // Directions and "Book now" are two buttons, not one with two jobs — which
+    // is why this is the second block after the divider that is not unique.
+    expect(CARD_BLOCKS.button.unique).toBe(false);
+    // Same argument the Links row's `zones: ["bottom"]` carries: a card that
+    // puts its call to action above the name has buried the answer.
+    expect(CARD_BLOCKS.button.zones).toEqual(["middle", "bottom"]);
+  });
+});
+
+/**
+ * The Links checkboxes: which ways to reach a place the row leaves out.
+ *
+ * Spelled as the hidden state so that absent means shown, which is what let them
+ * reach a live model: every card already on a customer's site draws all four and
+ * says nothing about any of them (CLAUDE.md §7).
+ */
+describe("the links controls", () => {
+  it("are offered by the links row and no other block", () => {
+    expect(hasControl("actions", "links")).toBe(true);
+
+    for (const type of ["button", "name", "tags", "address"] as const) {
+      expect(hasControl(type, "links")).toBe(false);
+    }
+  });
+
+  it("survive a round trip on the links row", () => {
+    const stored = {
+      zones: {
+        bottom: [
+          {
+            id: "a",
+            type: "actions",
+            hidePhone: true,
+            hideEmail: true,
+            hideWebsite: true,
+            hideDirections: true,
+          },
+        ],
+      },
+    };
+
+    const block = resolveCardLayout(stored).zones.bottom[0];
+
+    expect(block.hidePhone).toBe(true);
+    expect(block.hideEmail).toBe(true);
+    expect(block.hideWebsite).toBe(true);
+    expect(block.hideDirections).toBe(true);
+  });
+
+  it("say nothing about a row nobody has changed", () => {
+    const stored = { zones: { bottom: [{ id: "a", type: "actions" }] } };
+    const block = resolveCardLayout(stored).zones.bottom[0];
+
+    expect(block.hidePhone).toBeUndefined();
+    expect(block.hideDirections).toBeUndefined();
+  });
+
+  it("drop a stored false, which is a longer way of saying nothing", () => {
+    const stored = {
+      zones: { bottom: [{ id: "a", type: "actions", hidePhone: false }] },
+    };
+
+    expect(resolveCardLayout(stored).zones.bottom[0].hidePhone).toBeUndefined();
+  });
+
+  it("are dropped from a block that has no links to hide", () => {
+    const stored = {
+      zones: { middle: [{ id: "a", type: "name", hidePhone: true }] },
+    };
+
+    expect(resolveCardLayout(stored).zones.middle[0].hidePhone).toBeUndefined();
   });
 });

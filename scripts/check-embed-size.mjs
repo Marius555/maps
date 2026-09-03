@@ -30,8 +30,24 @@ import { join } from "node:path";
 
 const OUT_DIR = join(process.cwd(), "public", "embed");
 
-/** Everything in the bundle that is ours: map.js plus the CSS inlined into it. */
-const OWN_BUDGET_BYTES = 40 * 1024;
+/**
+ * Everything in the bundle that is ours: map.js plus the CSS inlined into it.
+ *
+ * Raised from 40KB when the card designer landed, deliberately and with the
+ * number written down here rather than shaved out of something else: per-block
+ * typography, the week's own options and a description clamp cost 1.0KB
+ * gzipped, and the budget had 1.2KB of room. The rule §4 is protecting is the
+ * *total* a visitor downloads, which is the ceiling below and is at 313.0KB of
+ * 320KB — 1KB against that is 0.3%, for a feature that is most of what the card
+ * designer is. The alternative was leaving 300 bytes of headroom, which is a
+ * budget that fails on the next comment somebody writes.
+ *
+ * The floor to hold the line at is roughly a kilobyte of slack. If a change
+ * eats it, measure before raising this again: `ours` growing by tens of
+ * kilobytes is a React or a date library that has found its way in (§4), and
+ * that is exactly what this number exists to catch.
+ */
+const OWN_BUDGET_BYTES = 42 * 1024;
 /** Ours plus MapLibre. Above the 273.2KB floor with room for a minor upgrade. */
 const TOTAL_CEILING_BYTES = 320 * 1024;
 
@@ -41,8 +57,13 @@ const isVendor = (name) => name.startsWith("maplibre-gl");
  * The manual harness (embed/dev/, copied in by Vite's publicDir) shares the
  * output directory but is never deployed, so counting it would inflate the
  * number that matters.
+ *
+ * A pattern rather than the two names it used to list: adding a second fixture —
+ * `dev-legacy.json`, the pre-merge snapshot the §7 read path is checked against —
+ * failed this budget by 2.2KB of a file no visitor will ever fetch, and the
+ * obvious reading of that failure is "cut something from the embed".
  */
-const isHarness = (name) => name === "dev.html" || name === "dev.json";
+const isHarness = (name) => /^dev[.-]/.test(name);
 
 const kb = (bytes) => `${(bytes / 1024).toFixed(1)}KB`;
 

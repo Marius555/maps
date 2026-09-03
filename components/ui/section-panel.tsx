@@ -15,6 +15,7 @@ export function SectionPanel({
   title,
   description,
   action,
+  toolbar,
   footer,
   children,
   className = "",
@@ -24,6 +25,13 @@ export function SectionPanel({
   description?: string;
   /** Sits opposite the title — for a secondary control the section owns. */
   action?: React.ReactNode;
+  /**
+   * A full-width row under the title and still above the rule, for a control
+   * that governs the whole body rather than sitting beside the heading — the
+   * card designer's Elements/Modify strip. Inside the header block, so it is
+   * part of the chrome; a body that scrolls would carry it away.
+   */
+  toolbar?: React.ReactNode;
   /** Right-aligned action row below a rule. Omit when there's nothing to submit. */
   footer?: React.ReactNode;
   children?: React.ReactNode;
@@ -52,6 +60,11 @@ export function SectionPanel({
             </div>
             {action ? <div className="shrink-0">{action}</div> : null}
           </header>
+          {/* `pb-4` and no `pt`: the header's own `py-4` is already the space
+              above this, so a padding of its own would double it. */}
+          {toolbar ? (
+            <div className="shrink-0 px-5 pb-4 sm:px-6">{toolbar}</div>
+          ) : null}
           <Separator />
         </>
       ) : null}
@@ -67,7 +80,10 @@ export function SectionPanel({
           {/* Only when there's a body to separate from — a header immediately
               followed by a footer would draw two rules against each other. */}
           {children ? <Separator /> : null}
-          <div className="flex flex-wrap items-center justify-end gap-2 px-5 py-4 sm:px-6">
+          {/* `shrink-0` because a panel whose body is a flex-1 scroller (the
+              card designer's sidebar) would otherwise let this row be squeezed
+              by the content above it — and this row is where Save is. */}
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 px-5 py-4 sm:px-6">
             {footer}
           </div>
         </>

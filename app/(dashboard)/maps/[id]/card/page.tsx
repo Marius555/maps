@@ -1,10 +1,8 @@
-import { Alert } from "@heroui/react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { CardDesigner } from "@/components/card/designer/card-designer";
 import { Container } from "@/components/ui/container";
-import { CARD_DESIGNER_ENABLED } from "@/lib/card/designer-status";
 import { requireUser } from "@/lib/auth/current-user";
 import { getCardDesign } from "@/lib/repositories/card-design.repository";
 import { repoContext } from "@/lib/repositories/context";
@@ -39,26 +37,6 @@ export default async function MapCardPage(props: PageProps<"/maps/[id]/card">) {
     // so it can also be squeezed rather than growing the page. Same pair as the
     // map editor's page, for the same reason.
     <Container className="flex min-h-0 flex-col">
-      {/*
-        Said once, at the top, rather than on every control. The page still opens
-        and the card can still be pushed around, because seeing what the blocks
-        do is most of what this screen is for — but nothing survives leaving it,
-        and a tool that quietly discards work without saying so is worse than one
-        that is missing. See lib/card/designer-status.ts.
-      */}
-      {CARD_DESIGNER_ENABLED ? null : (
-        <Alert status="warning" className="mb-4 shrink-0">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>The card designer isn&apos;t finished yet</Alert.Title>
-            <Alert.Description>
-              Every map uses the default card for now. Have a look around — but
-              changes made here aren&apos;t saved and won&apos;t reach your maps.
-            </Alert.Description>
-          </Alert.Content>
-        </Alert>
-      )}
-
       <CardDesigner
         map={data.map}
         initialPlaces={data.places}

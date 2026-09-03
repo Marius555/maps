@@ -2,8 +2,8 @@
 
 import { Controller, type Control } from "react-hook-form";
 
+import { TagPicker } from "@/components/tags/tag-picker";
 import { FormTextField } from "@/components/ui/form-field";
-import { SelectControl } from "@/components/ui/select-control";
 import { roundCoord } from "@/lib/map/geo";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import type { PlaceFormValues } from "@/lib/validation/place.schema";
@@ -41,7 +41,7 @@ export function EssentialsSection({
   map: AppMap;
   place: Place;
   control: Control<PlaceFormValues>;
-  errors: { address?: { message?: string }; category?: { message?: string } };
+  errors: { address?: { message?: string } };
   lat: number;
   lng: number;
   /**
@@ -56,14 +56,6 @@ export function EssentialsSection({
    */
   onMove: (coords: { lat: number; lng: number }) => void;
 }) {
-  const categoryOptions = [
-    { id: "", label: "No category" },
-    ...map.categories.map((category) => ({
-      id: category.id,
-      label: category.label,
-    })),
-  ];
-
   return (
     <div className="space-y-4">
       <PinMapField
@@ -111,15 +103,27 @@ export function EssentialsSection({
         />
       </div>
 
+      {/*
+        Tags, where the Category select used to be.
+
+        Up here rather than in a fold of its own because this is what says what
+        kind of place this is — the question the Category select was asking, now
+        answered by a control that lets a stockist carrying three product lines
+        say so without needing three pins at one address. The fold it replaces is
+        gone: two controls asking one question, with the better one hidden, is
+        what made the dialog incoherent in the first place.
+
+        Creating a tag is the picker's own first row, so there is no button here.
+        Renaming, recolouring and removing stay in Settings, where the usage
+        counts are and where removal's consequences belong.
+      */}
       <Controller
         control={control}
-        name="category"
+        name="tags"
         render={({ field }) => (
-          <SelectControl
-            label="Category"
-            options={categoryOptions}
-            value={field.value}
-            error={errors.category?.message}
+          <TagPicker
+            map={map}
+            value={field.value ?? []}
             onChange={field.onChange}
           />
         )}
@@ -128,11 +132,11 @@ export function EssentialsSection({
       {/*
         A row of its own, full width.
 
-        It used to share a two-column row with the category, which gave a
+        It used to share a two-column row with the Category select, which gave a
         horizontally scrolling strip of pins half the dialog — so with eight
         custom pins on top of six built-in ones, most of the map's own pins were
         off the end of a scroller nothing announced. A picture picker needs the
-        width; a select does not.
+        width; the picker above it does not.
       */}
       <Controller
         control={control}

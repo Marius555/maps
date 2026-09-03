@@ -1,0 +1,296 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-08T10:00:00.000Z",
+  "mapId": "dev-fixture",
+  "name": "Dev fixture",
+  "slug": "dev-fixture",
+  "styleUrl": "https://tiles.openfreemap.org/styles/liberty",
+  "autoDark": true,
+  "appearance": {
+    "labels": "some",
+    "layers": {
+      "poi": false,
+      "transit": true,
+      "buildings": true,
+      "buildings3d": true,
+      "paths": true,
+      "cycling": true
+    }
+  },
+  "attribution": "© <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noreferrer\">OpenStreetMap</a> contributors · tiles by <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noreferrer\">OpenFreeMap</a>",
+  "center": {
+    "lat": 54.687,
+    "lng": 25.28,
+    "zoom": 11
+  },
+  "bounds": {
+    "west": 25.24,
+    "south": 54.66,
+    "east": 25.32,
+    "north": 54.71
+  },
+  "categories": [
+    {
+      "id": "shops",
+      "label": "Shops",
+      "color": "#e8590c"
+    },
+    {
+      "id": "depots",
+      "label": "Depots",
+      "color": "#1c7ed6"
+    }
+  ],
+  "pinIcons": [
+    {
+      "id": "logo",
+      "color": "#7048e8",
+      "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAB1UlEQVR42u2dWY7FMAgEc/9Le47wpJGhF1ckfwe6sgKG75zzsXQLEQAAABYAfq7/HgBYFjwOSLvg9kBeFd4GxOvCy0EgvBgEwotBILwYBOKLISC+GALCi0EgvhgC4oshIL4YQpr46XZdBZD0srO19cWQcQWAhkCYhQ8OhreFxEcBtGaoZH6pDG1PhY4AaBdf4ue2Ye1VGGMAXhJ/1ectY1ILpywAvCr+iv8AMAfwuvjjOkyeuK2Qdh0AV/+CHolXv/O5qwEk2iABEPctrtyr4H71O8afrtrhDKAxvTkO4JUdMtUAEhL9owAOAPYeQ24AIoqpXAF8DwH4GgFsHwAAAAAAAAAAAAAAAAAAAPgRiwdAKKIAAME4wtHkA0jIFKT+XO0iKZ8CgLIUcVkKhVlUxlGaeIwhPFGcS3m6uDydu8BggwYQhv0HQAAAtqkO+s1G7ZCN2rQqGPKVZh1BzTpoVzPgHw2bwho20bLssj807RP7QNtKsd00bg0GQOviCxcKzbvFdynt68WPSAY4iN9PjDARf6kxxEf8icwYK/H/CYPcxD+HjDIUh0cY5imOSzHOVhyZZaCzOCTemhCJSQi1pwbtU6HtVQr2vrUV0MYtRAAAAFjC9QfgCbP/Ds0RnQAAAABJRU5ErkJggg=="
+    },
+    {
+      "id": "trade",
+      "color": "#0ca678",
+      "glyph": "landmark"
+    }
+  ],
+  "places": [
+    {
+      "id": "p1",
+      "name": "Gedimino flagship",
+      "lat": 54.6872,
+      "lng": 25.2797,
+      "address": "Gedimino pr. 9, Vilnius",
+      "category": "shops",
+      "icon": "store",
+      "description": "Open late on Thursdays.",
+      "phone": "+370 600 00001",
+      "url": "https://example.com/gedimino",
+      "tags": [
+        "bikes",
+        "sundays"
+      ],
+      "fields": {
+        "booking": "https://example.com/book",
+        "code": "GB-14",
+        "workshop": "+370 600 00002"
+      },
+      "photoUrl": "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27400%27%20height%3D%27240%27%3E%3Crect%20width%3D%27400%27%20height%3D%27240%27%20fill%3D%27%23e8590c%27/%3E%3Ctext%20x%3D%27200%27%20y%3D%27135%27%20font-family%3D%27sans-serif%27%20font-size%3D%2748%27%20fill%3D%27white%27%20text-anchor%3D%27middle%27%3E1%3C/text%3E%3C/svg%3E",
+      "photoUrls": [
+        "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27400%27%20height%3D%27240%27%3E%3Crect%20width%3D%27400%27%20height%3D%27240%27%20fill%3D%27%23e8590c%27/%3E%3Ctext%20x%3D%27200%27%20y%3D%27135%27%20font-family%3D%27sans-serif%27%20font-size%3D%2748%27%20fill%3D%27white%27%20text-anchor%3D%27middle%27%3E1%3C/text%3E%3C/svg%3E",
+        "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27400%27%20height%3D%27240%27%3E%3Crect%20width%3D%27400%27%20height%3D%27240%27%20fill%3D%27%231c7ed6%27/%3E%3Ctext%20x%3D%27200%27%20y%3D%27135%27%20font-family%3D%27sans-serif%27%20font-size%3D%2748%27%20fill%3D%27white%27%20text-anchor%3D%27middle%27%3E2%3C/text%3E%3C/svg%3E",
+        "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27400%27%20height%3D%27240%27%3E%3Crect%20width%3D%27400%27%20height%3D%27240%27%20fill%3D%27%230ca678%27/%3E%3Ctext%20x%3D%27200%27%20y%3D%27135%27%20font-family%3D%27sans-serif%27%20font-size%3D%2748%27%20fill%3D%27white%27%20text-anchor%3D%27middle%27%3E3%3C/text%3E%3C/svg%3E"
+      ]
+    },
+    {
+      "id": "p2",
+      "name": "Old town corner",
+      "lat": 54.6795,
+      "lng": 25.2891,
+      "address": "Pilies g. 22, Vilnius",
+      "category": "shops",
+      "icon": "coffee",
+      "email": "oldtown@example.com",
+      "tags": [
+        "skis"
+      ],
+      "fields": {
+        "code": "GB-22"
+      }
+    },
+    {
+      "id": "p3",
+      "name": "Užupis kiosk",
+      "lat": 54.6809,
+      "lng": 25.2963,
+      "address": "Užupio g. 3, Vilnius",
+      "category": "shops",
+      "icon": "custom:logo",
+      "description": "Custom image pin — decoded from the snapshot, no request of its own.",
+      "tags": [
+        "bikes"
+      ]
+    },
+    {
+      "id": "p9",
+      "name": "Pin that outlived its icon",
+      "lat": 54.6748,
+      "lng": 25.2701,
+      "address": "Naugarduko g. 1, Vilnius",
+      "icon": "custom:deleted",
+      "description": "Names a pin the map no longer has. Must fall back to a dot."
+    },
+    {
+      "id": "p4",
+      "name": "Naujamiestis depot",
+      "lat": 54.6701,
+      "lng": 25.2545,
+      "address": "Savanorių pr. 1, Vilnius",
+      "category": "depots",
+      "icon": "custom:trade",
+      "description": "Trade counter only. Custom glyph pin — keeps its own green, not the depots blue.",
+      "tags": [
+        "skis",
+        "sundays"
+      ],
+      "photoUrl": "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27400%27%20height%3D%27240%27%3E%3Crect%20width%3D%27400%27%20height%3D%27240%27%20fill%3D%27%237048e8%27/%3E%3Ctext%20x%3D%27200%27%20y%3D%27135%27%20font-family%3D%27sans-serif%27%20font-size%3D%2748%27%20fill%3D%27white%27%20text-anchor%3D%27middle%27%3Esolo%3C/text%3E%3C/svg%3E"
+    },
+    {
+      "id": "p5",
+      "name": "Šnipiškės depot",
+      "lat": 54.7011,
+      "lng": 25.2731,
+      "address": "Konstitucijos pr. 20, Vilnius",
+      "category": "depots"
+    },
+    {
+      "id": "p6",
+      "name": "Antakalnis pickup",
+      "lat": 54.7042,
+      "lng": 25.3129,
+      "address": "Antakalnio g. 40, Vilnius",
+      "icon": "bed"
+    },
+    {
+      "id": "p7",
+      "name": "Cluster test A",
+      "lat": 54.6875,
+      "lng": 25.28,
+      "address": "Beside the flagship",
+      "category": "shops"
+    },
+    {
+      "id": "p8",
+      "name": "Cluster test B",
+      "lat": 54.6878,
+      "lng": 25.2804,
+      "address": "Also beside the flagship",
+      "category": "shops"
+    }
+  ],
+  "shapes": [
+    {
+      "id": "s1",
+      "kind": "circle",
+      "name": "Same-day delivery",
+      "color": "#1c7ed6",
+      "opacity": 0.18,
+      "description": "Orders placed before 2pm arrive the same day inside this area.",
+      "lat": 54.687,
+      "lng": 25.28,
+      "radius": 2400
+    },
+    {
+      "id": "s3",
+      "kind": "line",
+      "name": "Courier route",
+      "color": "#0ca678",
+      "opacity": 0.2,
+      "description": "The morning run between the flagship and the kiosk.",
+      "points": [
+        [
+          25.2797,
+          54.6872
+        ],
+        [
+          25.2891,
+          54.6795
+        ],
+        [
+          25.2963,
+          54.6809
+        ]
+      ],
+      "durationS": 1140
+    },
+    {
+      "id": "s2",
+      "kind": "polygon",
+      "name": "Old town zone",
+      "color": "#e8590c",
+      "opacity": 0.22,
+      "description": "Pedestrian only. Deliveries by handcart.",
+      "points": [
+        [
+          25.2842,
+          54.6754
+        ],
+        [
+          25.2951,
+          54.6773
+        ],
+        [
+          25.2978,
+          54.6836
+        ],
+        [
+          25.2889,
+          54.6862
+        ],
+        [
+          25.2807,
+          54.6812
+        ]
+      ]
+    }
+  ],
+  "settings": {
+    "clustering": true,
+    "search": true,
+    "filters": true,
+    "nearest": true,
+    "list": true
+  },
+  "allowedDomains": [],
+  "tagGroups": [
+    {
+      "id": "sells",
+      "label": "Sells",
+      "tags": [
+        {
+          "id": "bikes",
+          "label": "Bikes"
+        },
+        {
+          "id": "skis",
+          "label": "Skis"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "label": "Open",
+      "tags": [
+        {
+          "id": "sundays",
+          "label": "Sundays"
+        }
+      ]
+    }
+  ],
+  "fields": [
+    {
+      "id": "booking",
+      "label": "Book a fitting",
+      "type": "url",
+      "showAs": "button"
+    },
+    {
+      "id": "code",
+      "label": "Dealer code",
+      "type": "text",
+      "showAs": "row"
+    },
+    {
+      "id": "workshop",
+      "label": "Workshop",
+      "type": "tel",
+      "showAs": "row"
+    }
+  ],
+  "gazetteer": {
+    "base": "http://localhost:3000/gazetteer",
+    "countries": [
+      "LT"
+    ]
+  }
+}

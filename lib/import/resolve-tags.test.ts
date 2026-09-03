@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { PALETTE_COLORS } from "@/lib/validation/palette";
 import { MAX_TAGS_TOTAL, MAX_TAG_GROUPS } from "@/lib/validation/tag.schema";
 import { IMPORTED_TAG_GROUP_LABEL, resolveTags, splitTagCell } from "./resolve-tags";
 
@@ -29,7 +30,7 @@ describe("resolveTags", () => {
     {
       id: "grp-1",
       label: "Sells",
-      tags: [{ id: "tag-bikes", label: "Bikes" }],
+      tags: [{ id: "tag-bikes", label: "Bikes", color: PALETTE_COLORS[0] }],
     },
   ];
 
@@ -66,6 +67,26 @@ describe("resolveTags", () => {
     expect(resolved.tagGroups[1].tags.map((tag) => tag.label)).toEqual(["Skis"]);
   });
 
+  it("gives new tags colours the group is not already wearing", () => {
+    // A location's first tag colours its pin, so a column of product lines that
+    // imported as six of the same colour is a map with nothing to read.
+    const resolved = resolveTags(["Skis", "Repairs", "Hire"], []);
+
+    const colors = resolved.tagGroups[0].tags.map((tag) => tag.color);
+
+    expect(new Set(colors).size).toBe(3);
+    const palette: readonly string[] = PALETTE_COLORS;
+    expect(colors.every((color) => palette.includes(color))).toBe(true);
+  });
+
+  it("does not reuse a colour the target group already has", () => {
+    const resolved = resolveTags(["Skis"], existing);
+
+    expect(resolved.tagGroups[1].tags[0].color).not.toBe(
+      existing[0].tags[0].color,
+    );
+  });
+
   it("never reuses an id", () => {
     // The whole reason these are random rather than slugs: nothing sweeps a
     // deleted tag off the places wearing it, so "Bikes" deleted and re-imported
@@ -84,6 +105,7 @@ describe("resolveTags", () => {
         tags: Array.from({ length: MAX_TAGS_TOTAL }, (_, index) => ({
           id: `tag-${index}`,
           label: `Tag ${index}`,
+          color: PALETTE_COLORS[index % PALETTE_COLORS.length],
         })),
       },
     ];

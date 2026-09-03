@@ -1,18 +1,37 @@
 "use client";
 
 import { Chip, Disclosure, Separator } from "@heroui/react";
-import { Globe, ImageOff, ImagePlus, Mail, Phone } from "lucide-react";
+import {
+  ChevronDown,
+  Globe,
+  ImageOff,
+  ImagePlus,
+  Mail,
+  Navigation,
+  Phone,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useState, type CSSProperties } from "react";
 
 
 import { NO_DRAG_PROPS } from "@/components/groups/use-row-drag";
 import { PinPreview } from "@/components/map/pin-preview";
 import { PlaceCardHours } from "@/components/map/place-card/place-card-hours";
 import { isEmptyHours } from "@/packages/shared/hours";
-import type { MapCategory, MapField, Place } from "@/lib/repositories/types";
-import type { CustomPinIcon } from "@/packages/shared/pin-icons";
-import type { CardBlockType } from "@/packages/shared/card-layout";
+import type { MapField, Place } from "@/lib/repositories/types";
+import { resolvePin, type CustomPinIcon } from "@/packages/shared/pin-icons";
+import { pinColorOfChips, type TagChip } from "@/packages/shared/tags";
+import {
+  buttonStyleOf,
+  chipStyleOf,
+  justifyOf,
+  logoImageOf,
+  type CardBlock,
+  type CardBlockType,
+  type CardButtonStyle,
+} from "@/packages/shared/card-layout";
+import { buttonTargetOf } from "@/packages/shared/card-button";
+import { directionsUrl } from "@/packages/shared/directions";
 
 /**
  * One block of a location card, in React.
@@ -23,8 +42,8 @@ import type { CardBlockType } from "@/packages/shared/card-layout";
  * this uses the dashboard's own components because it should. What has to match
  * is *what a block is*, not how it is made.
  *
- * That licence is spent here, deliberately and in three places: the category is
- * a HeroUI `Chip`, the fold is a HeroUI `Disclosure` where the embed keeps a
+ * That licence is spent here, deliberately and in three places: a tag is a
+ * HeroUI `Chip`, the fold is a HeroUI `Disclosure` where the embed keeps a
  * bare `<details>`, and the ways to reach a place are buttons rather than lines
  * of text. None of them changes what the block *is*, and the embed cannot have
  * any of them — HeroUI is React, and §4 closes the whole library to it.
@@ -36,7 +55,6 @@ import type { CardBlockType } from "@/packages/shared/card-layout";
 
 export type CardBlockData = {
   place: Place;
-  category: MapCategory | undefined;
   fields: MapField[];
   /**
    * The map's own pins, which is where the Logo block's picture comes from.
@@ -47,6 +65,23 @@ export type CardBlockData = {
    * already there, images inlined, because the map draws them.
    */
   pinIcons: CustomPinIcon[];
+  /**
+   * The tags this location wears, resolved and **in the location's own order**.
+   *
+   * Resolved rather than ids plus the map's vocabulary, so this and the embed's
+   * `BUILDERS.tags` take the same input and cannot disagree about which tags a
+   * pin has — one lookup per map, done where the map is, not once per card in
+   * two renderers (`tagChipsOf` in packages/shared/tags.ts does it). Ids the map
+   * no longer defines are dropped on the way in: nothing sweeps a deleted tag
+   * off the places wearing it, so a dangling id is the normal state
+   * (lib/validation/tag.schema.ts).
+   *
+   * The order is load-bearing rather than cosmetic. Since categories merged into
+   * tags, the first of these is what colours the pin the visitor just clicked —
+   * which is what the retired Category block draws, and what the Logo block
+   * falls back to when a location has no pin of its own.
+   */
+  tagChips: readonly TagChip[];
   /** What "More details" holds — see `detailsContents`. */
   folded: CardBlockType[];
   /**
@@ -77,16 +112,29 @@ export type CardBlockData = {
   onSampleImage?: (file: File) => void;
 };
 
+/**
+ * The whole block, not just its type.
+ *
+ * Three of these read a field of their own — the week reads whether it starts
+ * open and how its days are named, and the description reads whether it is
+ * clipped, which is also what decides whether it folds — and a type alone
+ * cannot answer any of it.
+ * The fold passes a bare `{ id, type }` for a block that is not on the card
+ * (see `Details`), which is the same nothing the embed's `buildMore` passes.
+ */
 export function CardBlockContent({
-  type,
+  block,
   data,
 }: {
-  type: CardBlockType;
+  block: CardBlock;
   data: CardBlockData;
 }) {
-  const { place, category, fields } = data;
+  const { place, tagChips } = data;
 
-  switch (type) {
+  /** What the pin outside this card is wearing — see `CardBlockData.tagChips`. */
+  const pinColor = pinColorOfChips(tagChips);
+
+  switch (block.type) {
     case "gallery":
       return (
         <Gallery
@@ -98,7 +146,8 @@ export function CardBlockContent({
 
     case "logo":
       /*
-       * The location's own pin, drawn at the size its block was given.
+       * The location's own pin, drawn at the size its block was given — or the
+       * logo inside it, on its own, when the owner asked for that.
        *
        * `PinPreview` and not a new drawing: the pin a customer designed, the
        * marker on the map, the tile they pressed to design it and this are one
@@ -107,74 +156,123 @@ export function CardBlockContent({
        * place. Both are the right answer to "what is this location's badge",
        * which is why there is no empty state here.
        *
+       * `logoImageOf` is the one place the choice is made — the embed's own
+       * `buildLogo` asks the same function — and it is what makes the bare-logo
+       * mode safe on a map of four hundred locations: asking for the image is
+       * asking for it *if this pin has one*, and the pin is what the rest get.
+       *
        * No `color` prop — that override belongs to a group, and a card is not
-       * looking at one. The category is the fallback, exactly as it is on the
-       * map: the pin's own colour first, the category's if it has none.
+       * looking at one. The first tag is the fallback, exactly as it is on the
+       * map: the pin's own colour first, its first tag's if it has none.
        */
-      return (
-        <PinPreview
-          icon={place.icon}
-          pinIcons={data.pinIcons}
-          fallbackColor={category?.color}
-          size="fill"
-        />
-      );
+      return <Logo block={block} data={data} fallbackColor={pinColor} />;
 
     case "name":
       return (
-        <h3 className="line-clamp-2 text-sm font-semibold text-foreground">
-          {place.name}
-        </h3>
+        <h3 className="card-text card-text--name line-clamp-2">{place.name}</h3>
       );
 
     case "category":
       /*
-       * A chip rather than the `CategoryBadge` the lists use, and the swap is
-       * only here: a badge in a table row is a label beside forty other labels,
-       * while on a card it is the one thing saying what kind of place this is,
-       * and it should read as a thing rather than as a line of small print.
+       * The location's **first** tag, alone.
        *
-       * The colour dot stays. It is the same colour as the pin the visitor just
-       * clicked, which is the whole point of it — and colour still never carries
-       * the meaning alone, because the label is always beside it.
+       * This block is the retired Category one. It is kept because a layout
+       * saved while categories existed still parses and still names it, and a
+       * block that renders nothing would silently drop a row out of somebody's
+       * design. What it draws is the nearest true thing: since the merge, the
+       * first tag is what a category was — the one that colours the pin.
+       *
+       * Nothing puts it in a new layout (`defaultCardLayout` and the designer's
+       * palette both offer Tags instead), so on every card designed from here on
+       * this case never runs.
        */
-      return category ? (
-        <Chip size="sm" variant="soft" className="max-w-full">
-          <span
-            aria-hidden="true"
-            className="size-2 shrink-0 rounded-full ring-1 ring-black/10"
-            style={{ backgroundColor: category.color }}
-          />
-          <Chip.Label className="truncate">{category.label}</Chip.Label>
-        </Chip>
-      ) : null;
+      if (tagChips.length > 0) {
+        return <TagChips block={block} chips={tagChips.slice(0, 1)} />;
+      }
+
+      if (!data.isDesigner) return null;
+
+      return <EmptyTagChip block={block} />;
+
+    case "tags":
+      /*
+       * A wrapping row of chips, and the only text block whose height varies
+       * with the location rather than with its words.
+       *
+       * **No chip carries a colour dot.** The first one used to, as the card
+       * answering "which of these is the pin I just clicked?" — but on a card it
+       * read as a bubble of a colour nobody had chosen, sitting inside a pill
+       * whose whole colour scheme is now the owner's to set. The pin is on
+       * screen beside the card it opened from, which is the answer that needed
+       * no legend. `pinColor` is still worked out above, because the Logo block
+       * falls back to it.
+       *
+       * A sample location with no tags still draws a chip in the designer, for
+       * the reason `Details` draws its placeholder: a block that returns null on
+       * the canvas has no height, no words and nothing to aim at, so someone
+       * drops Tags, sees a two-pixel gap and concludes the block is broken. A
+       * real card renders nothing at all, because there an untagged location is
+       * a fact about the location rather than about the sample.
+       */
+      if (tagChips.length > 0) {
+        return <TagChips block={block} chips={tagChips} />;
+      }
+
+      if (!data.isDesigner) return null;
+
+      return <EmptyTagChip block={block} />;
 
     case "address":
       return place.address ? (
         // Two lines, then an ellipsis. A full address is what this line is for,
         // and truncating after one hid the half that says which town.
-        <p className="line-clamp-2 text-xs text-muted">{place.address}</p>
+        <p className="card-text card-text--body line-clamp-2">{place.address}</p>
       ) : null;
 
     case "description":
-      return place.description ? (
-        <p className="text-xs whitespace-pre-line text-foreground">
+      if (!place.description) return null;
+
+      /* Clipped means folded — see `clampLines`. A paragraph nobody has clipped
+         is the plain `<p>` it has always been, which is every card published so
+         far. */
+      return block.clampLines ? (
+        <Description text={place.description} />
+      ) : (
+        <p className="card-text card-text--strong whitespace-pre-line">
           {place.description}
         </p>
-      ) : null;
+      );
 
     case "hours":
-      return <PlaceCardHours hours={place.hours} />;
-
-    case "fields":
-      return <FieldRows place={place} fields={fields} />;
+      return (
+        <PlaceCardHours
+          hours={place.hours}
+          isOpen={block.hoursOpen}
+          longDays={block.hoursLongDays}
+        />
+      );
 
     case "details":
       return <Details data={data} />;
 
     case "actions":
       return (
-        <Actions place={place} fields={fields} isDesigner={data.isDesigner} />
+        <Actions
+          block={block}
+          place={place}
+          fields={data.fields}
+          isDesigner={data.isDesigner}
+        />
+      );
+
+    case "button":
+      return (
+        <CardButton
+          block={block}
+          place={place}
+          fields={data.fields}
+          isDesigner={data.isDesigner}
+        />
       );
 
     case "divider":
@@ -197,6 +295,124 @@ export function CardBlockContent({
     default:
       return null;
   }
+}
+
+/**
+ * A clipped description, and the chevron that opens the rest of it.
+ *
+ * Clipping without this is a paragraph with its last sentence deleted: the
+ * owner asked for a short card, not for half a sentence to be unreachable. So
+ * `clampLines` carries both halves — the summary is the clipped lines, and the
+ * control beside them is the week's own chevron, one press away from the whole
+ * thing.
+ *
+ * **One paragraph node, in both states.** The clamp is a class the button turns
+ * on and off, not a second copy of the text under a fold — a screen reader
+ * should not be read a location's description twice.
+ *
+ * A plain `<button>` rather than a HeroUI `Disclosure`, which is what the week
+ * and the "More details" fold use. Those have a summary *and* a body, which is
+ * what a `Disclosure` is; this has one element that changes shape, and there is
+ * no body to put in `Disclosure.Content`. `aria-expanded` on the button says the
+ * same thing the disclosure would, and the embed says it with `<details>`.
+ *
+ * Uncontrolled, like both of them, and for the same reason: which state it is in
+ * is a fact about this reading, not about the design. Nothing here is ever
+ * written to the layout.
+ */
+function Description({ text }: { text: string }) {
+  const [isOpen, setOpen] = useState(false);
+
+  return (
+    <button
+      type="button"
+      aria-expanded={isOpen}
+      onClick={() => {
+        setOpen(!isOpen);
+      }}
+      // `items-start` so the chevron sits on the paragraph's *first* line and
+      // stays there. It was `items-end`, on the argument that the last line is
+      // where the reader runs out — but the last line is the one that moves:
+      // opening the fold grows the paragraph, and the control walked down the
+      // card away from the pointer that had just pressed it. A control has to be
+      // in the same place after it is used as it was before.
+      className="flex w-full cursor-pointer items-start gap-1 text-left"
+    >
+      {/*
+        A span rather than the `<p>` this is when it is not folded: a `<p>` is
+        flow content and a `<button>` may only hold phrasing content, so the
+        paragraph would be pulled out of the button by the parser and the
+        control would end up empty. The class list is otherwise the same, and
+        `--card-lines` still comes from `blockStyle` on the block's own box.
+      */}
+      <span
+        className={`card-text card-text--strong min-w-0 flex-1 whitespace-pre-line${
+          isOpen ? "" : " card-clamp"
+        }`}
+      >
+        {text}
+      </span>
+      <ChevronDown
+        aria-hidden="true"
+        className={`size-3.5 shrink-0 transition-transform${
+          isOpen ? " rotate-180" : ""
+        }`}
+      />
+    </button>
+  );
+}
+
+/**
+ * The location's badge: its pin, or the logo inside its pin.
+ *
+ * The twin of `buildLogo` in embed/src/popup.ts, and the pair is held together
+ * by `logoImageOf` rather than by the two functions resembling each other — the
+ * embed builds DOM by hand because it must not ship React (§4). What has to
+ * match is *which of the two drawings this block is*.
+ *
+ * The bare logo is a plain `img` and not `next/image`, for `Gallery`'s reason
+ * one step further: this is a `data:` URI already inlined in the map row, so
+ * there is nothing for a per-request transform to fetch. `draggable={false}` for
+ * `Gallery`'s reason exactly — a native image drag would race the designer's own
+ * pointer-drag for the block.
+ *
+ * `object-contain` and not `cover`: a Logo block is drawn square (`isSelfSized`
+ * in packages/shared/card-layout.ts), and a wordmark cropped to a square is a
+ * wordmark with its end cut off. Letterboxing inside the size its owner dragged
+ * is the predictable answer, and it leaves `blockBox`'s squaring alone.
+ */
+function Logo({
+  block,
+  data,
+  fallbackColor,
+}: {
+  block: CardBlock;
+  data: CardBlockData;
+  fallbackColor: string | undefined;
+}) {
+  const pin = resolvePin(data.place.icon, data.pinIcons);
+  const image = logoImageOf(block, pin?.image ?? "");
+
+  if (image) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={image}
+        alt=""
+        draggable={false}
+        className="h-full w-full object-contain"
+      />
+    );
+  }
+
+  return (
+    <PinPreview
+      icon={data.place.icon}
+      pinIcons={data.pinIcons}
+      fallbackColor={fallbackColor}
+      size="fill"
+    />
+  );
 }
 
 /**
@@ -324,7 +540,13 @@ function GallerySampleDropzone({
 function Details({ data }: { data: CardBlockData }) {
   const inner = data.folded
     .map((type) => (
-      <CardBlockContent key={type} type={type} data={data} />
+      /*
+       * A bare block, because a folded type is by definition *not* on the card
+       * and so has no stored options of its own — a week in here starts
+       * collapsed with short day names, which is what the embed's own fold
+       * builds and what this drew before any of those options existed.
+       */
+      <CardBlockContent key={type} block={{ id: type, type }} data={data} />
     ))
     .filter((node) => node !== null);
 
@@ -363,6 +585,109 @@ function Details({ data }: { data: CardBlockData }) {
 }
 
 /**
+ * A row of tags.
+ *
+ * `card-text` sits on the label rather than on the chip: every one of its
+ * fallbacks is `inherit`, so an unstyled chip resolves to exactly the size,
+ * weight and colour the chip itself sets — and a styled one moves its words
+ * without touching the ground they sit on.
+ *
+ * **The block's own chip styling arrives inline**, from `chipStyleOf` — which is
+ * shared with the embed, so the studio and a customer's site cannot come to
+ * different conclusions about a pill. The ground is written as `--chip-bg` and
+ * not as a `background-color`: `.chip` paints itself *through* that variable
+ * (`@heroui/styles/dist/components/chip.css`), so setting it leaves HeroUI's own
+ * variant rules to resolve the foreground, and an inline custom property beats
+ * every selector that could have an opinion. Padding is added to what a chip
+ * already has, so zero is the pill this always drew.
+ *
+ * `justifyContent` is what makes the block's Alignment control work at all: it
+ * reaches a block as `text-align`, which cannot move a flex item — so the three
+ * buttons moved nothing until this row started reading the same answer.
+ */
+function TagChips({
+  block,
+  chips,
+}: {
+  block: CardBlock;
+  chips: readonly TagChip[];
+}) {
+  const chip = chipStyleOf(block);
+
+  return (
+    <div
+      className="flex flex-wrap gap-1"
+      style={chip?.justify ? { justifyContent: chip.justify } : undefined}
+    >
+      {chips.map((tag) => (
+        <Chip
+          key={tag.id}
+          size="sm"
+          variant="soft"
+          className="card-chip max-w-full"
+          style={chipBox(chip)}
+        >
+          <Chip.Label className="card-text truncate">{tag.label}</Chip.Label>
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The block at the size it will really be, saying why it is empty.
+ *
+ * Designer-only, and it wears the owner's own chip styling for the reason it
+ * exists at all: it is a preview of the block, and a placeholder that ignored
+ * the colour and the padding just set would make both controls look broken on
+ * the one card where there is nothing else to try them on.
+ */
+function EmptyTagChip({ block }: { block: CardBlock }) {
+  const chip = chipStyleOf(block);
+
+  return (
+    <div
+      className="flex flex-wrap gap-1"
+      style={chip?.justify ? { justifyContent: chip.justify } : undefined}
+    >
+      <Chip
+        size="sm"
+        variant="soft"
+        className="card-chip max-w-full"
+        style={chipBox(chip)}
+      >
+        <Chip.Label className="card-text truncate text-muted">
+          No tags yet
+        </Chip.Label>
+      </Chip>
+    </div>
+  );
+}
+
+/**
+ * One chip's own box, as custom properties. Absent fields are simply not
+ * written, so an unstyled chip is the chip HeroUI draws.
+ *
+ * All four are properties rather than declarations, for the reason the type
+ * styles above are: `--chip-bg` is what `.chip` already paints itself through,
+ * so setting it leaves HeroUI's variant rules to resolve the foreground;
+ * `--card-chip-pad` is *added* to the chip's own padding by `.card-chip` in
+ * app/globals.css, so nought is the pill this always drew; and the outline's
+ * two default to a transparent hairline of no width in that same rule, which is
+ * the chip every published card is wearing.
+ */
+function chipBox(chip: ReturnType<typeof chipStyleOf>): CSSProperties {
+  return {
+    ...(chip?.background ? { "--chip-bg": chip.background } : {}),
+    ...(chip?.padding ? { "--card-chip-pad": chip.padding } : {}),
+    ...(chip?.border ? { "--card-chip-border": chip.border } : {}),
+    ...(chip?.borderWidth
+      ? { "--card-chip-border-width": chip.borderWidth }
+      : {}),
+  } as CSSProperties;
+}
+
+/**
  * Whether a block would render anything for this location.
  *
  * Asked in two places, and both need it for the same reason: a `<details>` with
@@ -379,8 +704,14 @@ function Details({ data }: { data: CardBlockData }) {
 export function hasBlockContent(
   type: CardBlockType,
   data: CardBlockData,
+  /**
+   * The block itself, for the two types whose emptiness depends on how they
+   * were configured rather than only on the location. Optional because the
+   * fold asks about a type with no block behind it — see `Details`.
+   */
+  block?: CardBlock,
 ): boolean {
-  const { place, category, fields } = data;
+  const { place, fields } = data;
 
   switch (type) {
     case "gallery":
@@ -392,8 +723,11 @@ export function hasBlockContent(
       return true;
     case "name":
       return Boolean(place.name);
+    // The retired Category block, drawing this location's first tag — see the
+    // case of the same name above. Same content, so the same test.
     case "category":
-      return Boolean(category);
+    case "tags":
+      return data.tagChips.length > 0;
     case "address":
       return Boolean(place.address);
     case "description":
@@ -402,20 +736,33 @@ export function hasBlockContent(
       // The same test `PlaceCardHours` returns null on — a week of seven closed
       // days is a week nobody filled in.
       return !isEmptyHours(place.hours);
-    case "fields":
-      return fields.some(
-        (field) => field.showAs === "row" && place.fields[field.id],
-      );
     case "details":
       // The fold is only as real as what is left in it.
       return data.folded.some((folded) => hasBlockContent(folded, data));
+    /*
+     * The row is as real as what it is allowed to draw, which is why the block
+     * is read here and not just the location: a Links row with all four ticked
+     * off is an empty box wearing its own padding and a gap after it, on every
+     * card, forever.
+     *
+     * `block` is optional on this function because the fold builds a type with
+     * no block behind it (see `Details`), and a folded Links row is one nobody
+     * has configured — so absent reads as all four shown, which is the absence
+     * everywhere else too.
+     */
     case "actions":
       return (
-        Boolean(place.phone) ||
-        Boolean(place.email) ||
-        Boolean(safeHttpUrl(place.url)) ||
+        (!block?.hidePhone && Boolean(place.phone)) ||
+        (!block?.hideEmail && Boolean(place.email)) ||
+        (!block?.hideWebsite && Boolean(safeHttpUrl(place.url))) ||
+        !block?.hideDirections ||
         fields.some((field) => field.showAs === "button" && place.fields[field.id])
       );
+    // A button is as real as somewhere to go. Directions always resolves, so
+    // this is only ever false for a link with nothing behind it — which is the
+    // case the whole `null` return exists for.
+    case "button":
+      return block ? buttonTargetOf(block, place, fields) !== null : true;
     // A rule and a gap are shapes, not content — they are exactly as present on
     // an empty location as on a full one.
     case "divider":
@@ -424,28 +771,6 @@ export function hasBlockContent(
     default:
       return true;
   }
-}
-
-/** The map's extra fields, in the order their owner defined them. */
-function FieldRows({ place, fields }: { place: Place; fields: MapField[] }) {
-  const rows = fields.filter(
-    (field) => field.showAs === "row" && place.fields[field.id],
-  );
-
-  if (rows.length === 0) return null;
-
-  return (
-    <dl className="space-y-1">
-      {rows.map((field) => (
-        <div key={field.id} className="flex gap-2 text-xs">
-          <dt className="shrink-0 text-muted">{field.label}</dt>
-          <dd className="min-w-0 truncate text-foreground">
-            {place.fields[field.id]}
-          </dd>
-        </div>
-      ))}
-    </dl>
-  );
 }
 
 /**
@@ -478,39 +803,61 @@ function FieldRows({ place, fields }: { place: Place; fields: MapField[] }) {
  * the rows render as what they look like and nothing more.
  */
 function Actions({
+  block,
   place,
   fields,
   isDesigner,
 }: {
+  /**
+   * Optional, because the fold builds this type with no block behind it (see
+   * `Details`) — and a Links row nobody has configured shows all four, which is
+   * what an absent `hide*` means everywhere else too.
+   */
+  block?: CardBlock;
   place: Place;
   fields: MapField[];
   isDesigner?: boolean;
 }) {
-  const website = safeHttpUrl(place.url);
+  const phone = !block?.hidePhone ? place.phone : "";
+  const email = !block?.hideEmail ? place.email : "";
+  const website = !block?.hideWebsite ? safeHttpUrl(place.url) : null;
+  const directions = !block?.hideDirections;
   const buttons = fields.filter(
     (field) => field.showAs === "button" && place.fields[field.id],
   );
 
-  if (!place.phone && !place.email && !website && buttons.length === 0) {
+  if (!phone && !email && !website && !directions && buttons.length === 0) {
     return null;
   }
 
   return (
-    <ul className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-      {place.phone ? (
+    /*
+     * `justify-content`, and it is the whole of the Alignment control working on
+     * this block: `align` arrives as `text-align` (see `blockBox`), which cannot
+     * move a flex item, so the three buttons moved nothing at all until this
+     * line existed. `justifyOf` is the same mapping the chips row reads, which
+     * is why it lives in packages/shared rather than here — the embed's own
+     * `buildActions` asks it too, and two copies would be two different rows on
+     * one screen in the preview panel.
+     */
+    <ul
+      className="flex flex-wrap items-center gap-x-3 gap-y-0.5"
+      style={{ justifyContent: justifyOf(block?.align) }}
+    >
+      {phone ? (
         <ContactRow
           icon={Phone}
-          label={place.phone}
-          href={`tel:${place.phone}`}
+          label={phone}
+          href={`tel:${phone}`}
           isDesigner={isDesigner}
         />
       ) : null}
 
-      {place.email ? (
+      {email ? (
         <ContactRow
           icon={Mail}
-          label={place.email}
-          href={`mailto:${place.email}`}
+          label={email}
+          href={`mailto:${email}`}
           isDesigner={isDesigner}
         />
       ) : null}
@@ -520,6 +867,23 @@ function Actions({
           icon={Globe}
           label={website.host + website.pathname.replace(/\/$/, "")}
           href={website.href}
+          isDesigner={isDesigner}
+        />
+      ) : null}
+
+      {/*
+       * After the ways to *reach* the place and before the owner's own calls to
+       * action, which is where the embed has always drawn it. It was drawn
+       * *only* there: the dashboard's copy of this row never had a Directions
+       * link at all, so the studio and the customer's site showed two different
+       * rows, and `BLOCK_LABELS` described a block neither of them quite was.
+       * The checkbox above is what makes moving it onto a Button possible.
+       */}
+      {directions ? (
+        <ContactRow
+          icon={Navigation}
+          label="Directions"
+          href={directionsUrl(place)}
           isDesigner={isDesigner}
         />
       ) : null}
@@ -544,6 +908,135 @@ function Actions({
   );
 }
 
+/**
+ * One press, drawn as a button.
+ *
+ * The twin of `buildButton` in embed/src/popup.ts, and — as with every block —
+ * what has to match is *what a button is*, not how the DOM is made. Both read
+ * `buttonTargetOf` for where it goes and `buttonStyleOf` for how it looks, so
+ * the studio cannot promise a button the customer's site does not draw.
+ *
+ * **`card-text`, not a Tailwind size utility.** Every one of `.card-text`'s
+ * values is a `var(--card-*, fallback)`, and a hardcoded `text-sm` on the leaf
+ * would beat them — which is exactly how the Links row's Font, Size, Colour and
+ * Bold controls came to do nothing at all for a while (see `ContactRow`). The
+ * box's own four values arrive the same way, as `--card-button-*` custom
+ * properties, so a button nobody has styled is drawn entirely by the stylesheet
+ * and stays theme-aware.
+ *
+ * `inline-flex`, which is what makes the block's Alignment control work on it:
+ * `align` reaches a block as `text-align`, and `text-align` moves an
+ * inline-level box. A chip row needs `justify-content` instead precisely
+ * because it is a flex container — see `chipStyleOf`.
+ *
+ * **A `<span>` on the designer canvas**, for `ContactRow`'s two reasons: an
+ * anchor is natively draggable and races the block's own drag threshold, and a
+ * card you are arranging should not be able to send you to a customer's site.
+ */
+function CardButton({
+  block,
+  place,
+  fields,
+  isDesigner,
+}: {
+  block: CardBlock;
+  place: Place;
+  fields: MapField[];
+  isDesigner?: boolean;
+}) {
+  const target = buttonTargetOf(block, place, fields);
+
+  /*
+   * Nothing to point at is nothing to draw — the rule every block follows, and
+   * the reason a Button set to a booking link is safe on a map where only some
+   * locations have one.
+   *
+   * On the canvas it stands in instead: a block that collapses to zero height
+   * cannot be selected, moved or given the link it is missing, which makes the
+   * fix for an unconfigured button "delete it and start again".
+   */
+  if (!target) {
+    if (!isDesigner) return null;
+
+    return (
+      <span className="card-button card-text card-button--empty">
+        {block.buttonLabel ?? "No link yet"}
+      </span>
+    );
+  }
+
+  const style = buttonBox(buttonStyleOf(block));
+  const className = `card-button card-text${buttonModifiers(block)}`;
+
+  if (isDesigner) {
+    return (
+      <span className={className} style={style}>
+        {target.label}
+      </span>
+    );
+  }
+
+  return (
+    <a
+      className={className}
+      style={style}
+      href={target.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      {...NO_DRAG_PROPS}
+    >
+      {target.label}
+    </a>
+  );
+}
+
+/**
+ * The button's treatment and hover as class names, appended to `.card-button`.
+ *
+ * Classes rather than custom properties, because neither is a *value*: an
+ * outline is a ground, a border and a label colour moving together, and a hover
+ * is a rule that only exists under the pointer. Both are read straight off the
+ * block, the way `buttonFull` already is, rather than through `buttonStyleOf` —
+ * that function's job is CSS values, and putting a class name in it would make
+ * `CardButtonStyle` two kinds of thing.
+ *
+ * The embed's twin (`buildButton` in embed/src/popup.ts) says the same thing in
+ * its own namespace and, unlike this, has to look each word up in a table: it
+ * draws a published snapshot without ever re-parsing it, so the string it holds
+ * is whatever wrote the file. Here the block has already been through
+ * `readCardLayout`, which narrows both to their own vocabulary.
+ */
+function buttonModifiers(block: CardBlock): string {
+  return [
+    block.buttonFull ? " card-button--full" : "",
+    block.buttonVariant ? ` card-button--${block.buttonVariant}` : "",
+    block.buttonHover ? ` card-button--hover-${block.buttonHover}` : "",
+  ].join("");
+}
+
+/**
+ * A button's own four values as custom properties.
+ *
+ * `chipBox`'s twin, and written the same way for its reason: nothing is set for
+ * a value nobody chose, so the stylesheet's own fallback stays in charge and a
+ * card published before any of this existed draws exactly what it drew. A
+ * stored `#ffffff` background would be a button that vanishes on a dark card;
+ * an absent one is a button the theme colours.
+ */
+function buttonBox(style: CardButtonStyle | undefined): CSSProperties {
+  if (!style) return {};
+
+  return {
+    ...(style.background ? { "--card-button-bg": style.background } : {}),
+    ...(style.padding ? { "--card-button-pad": style.padding } : {}),
+    ...(style.radius ? { "--card-button-radius": style.radius } : {}),
+    ...(style.border ? { "--card-button-border": style.border } : {}),
+    ...(style.borderWidth
+      ? { "--card-button-border-width": style.borderWidth }
+      : {}),
+  } as CSSProperties;
+}
+
 function ContactRow({
   icon: Icon,
   label,
@@ -557,16 +1050,35 @@ function ContactRow({
 }) {
   const inner = (
     <>
-      <Icon aria-hidden="true" className="size-3 shrink-0 text-muted" />
+      {/* `opacity-60` rather than `text-muted`: the glyph is a quieter shade of
+          whatever colour the row is, so it follows a colour the owner picked
+          instead of staying grey beside their brand blue. */}
+      <Icon aria-hidden="true" className="size-3 shrink-0 opacity-60" />
       <span className="truncate">{label}</span>
     </>
   );
 
-  // No `fullWidth`, no fill, and the same 11px as the card's other small print
-  // — see `Actions`. `py-0.5` keeps the target tall enough to hit on a phone
-  // now that there is no button padding doing it.
+  /*
+   * No `fullWidth`, no fill, and the same 11px as the card's other small print
+   * — see `Actions`. `py-0.5` keeps the target tall enough to hit on a phone
+   * now that there is no button padding doing it.
+   *
+   * `card-text card-text--small` and **not** `text-[11px] text-foreground`,
+   * which is what this was and is why the Links block was the one text block
+   * whose Font, Size, Colour and Bold controls all visibly did nothing: the
+   * block's own `--card-*` properties were written onto its box exactly as they
+   * are for every other block, and a hard-coded utility on the row simply won
+   * over them. The class was already written for this row — see the comment on
+   * `.card-text--small` in app/globals.css — and its fallbacks are the same
+   * 11px foreground, so an unstyled card is untouched.
+   *
+   * The hover is an underline rather than `hover:text-accent` for the same
+   * cascade reason, in the other direction: `.card-text` is unlayered and beats
+   * Tailwind's `@layer utilities`, so a hover colour there would never have
+   * applied. An underline is also what the embed's own links do on hover.
+   */
   const className =
-    "inline-flex min-w-0 max-w-full items-center gap-1 py-0.5 text-[11px] text-foreground transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
+    "card-text card-text--small inline-flex min-w-0 max-w-full items-center gap-1 py-0.5 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
   return (
     <li className="min-w-0">

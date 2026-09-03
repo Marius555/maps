@@ -5,9 +5,10 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect } from "react";
 
 import { CardView } from "@/components/card/card-view";
-import type { MapCategory, MapField, Place } from "@/lib/repositories/types";
+import type { MapField, Place } from "@/lib/repositories/types";
 import type { CardLayout } from "@/packages/shared/card-layout";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
+import type { TagChip } from "@/packages/shared/tags";
 import { useMapAnchor } from "../use-map-anchor";
 import { PlaceCardChrome } from "./place-card-chrome";
 
@@ -52,9 +53,9 @@ export function PlaceCard({
   map,
   isReady,
   place,
-  category,
   layout,
   fields,
+  tagChips,
   pinIcons,
   onClose,
   onEdit,
@@ -62,7 +63,6 @@ export function PlaceCard({
   map: React.RefObject<MapLibreMap | null>;
   isReady: boolean;
   place: Place | null;
-  category: MapCategory | undefined;
   /**
    * The card the owner designed, which the embed's popup draws from too.
    *
@@ -71,6 +71,11 @@ export function PlaceCard({
    */
   layout: CardLayout;
   fields: MapField[];
+  /**
+   * This location's tags, resolved by the caller holding the map's vocabulary
+   * and in the location's own order — the first is what colours its pin.
+   */
+  tagChips: TagChip[];
   /** The map's pins, for a card whose layout holds a Logo block. */
   pinIcons: CustomPinIcon[];
   onClose: () => void;
@@ -155,8 +160,8 @@ export function PlaceCard({
               <CardView
                 layout={layout}
                 place={place}
-                category={category}
                 fields={fields}
+                tagChips={tagChips}
                 pinIcons={pinIcons}
                 className="map-card relative border border-border"
                 renderEmptyState={renderEmptyState}

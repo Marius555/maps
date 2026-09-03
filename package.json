@@ -22,7 +22,8 @@
     "setup:appwrite": "node --env-file=.env scripts/setup-appwrite.mjs",
     "migrate:auto-style": "node --env-file=.env scripts/migrate-auto-style.mjs",
     "migrate:shape-kinds": "node --env-file=.env scripts/migrate-shape-kinds.mjs",
-    "migrate:style-host": "node --env-file=.env scripts/migrate-style-host.mjs"
+    "migrate:style-host": "node --env-file=.env scripts/migrate-style-host.mjs",
+    "migrate:tags": "node --env-file=.env scripts/migrate-categories-to-tags.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.4",

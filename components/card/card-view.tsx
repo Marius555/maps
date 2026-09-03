@@ -9,11 +9,13 @@ import {
   type CardRow,
   type CardZone,
 } from "@/packages/shared/card-layout";
-import type { MapCategory, MapField, Place } from "@/lib/repositories/types";
+import type { MapField, Place } from "@/lib/repositories/types";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
+import type { TagChip } from "@/packages/shared/tags";
 import { CardBlockContent, hasBlockContent, type CardBlockData } from "./card-block";
 import {
   CardFrame,
+  CardLead,
   CardZoneBox,
   blockContentStyle,
   blockEdges,
@@ -32,8 +34,8 @@ import {
 export function CardView({
   layout,
   place,
-  category,
   fields,
+  tagChips,
   pinIcons,
   className,
   renderEmptyState,
@@ -41,8 +43,14 @@ export function CardView({
 }: {
   layout: CardLayout;
   place: Place;
-  category: MapCategory | undefined;
   fields: MapField[];
+  /**
+   * This location's tags, already resolved by whoever holds the map's vocabulary
+   * and **in the location's own order** — see `CardBlockData`. Defaulted,
+   * because a caller drawing a card on a map with no tags has nothing to
+   * resolve.
+   */
+  tagChips?: readonly TagChip[];
   /** The map's pins — where a Logo block's picture comes from. */
   pinIcons: CustomPinIcon[];
   className?: string;
@@ -59,8 +67,8 @@ export function CardView({
 }) {
   const data: CardBlockData = {
     place,
-    category,
     fields,
+    tagChips: tagChips ?? [],
     pinIcons,
     folded: detailsContents(layout),
   };
@@ -74,7 +82,7 @@ export function CardView({
    * `zoneClass` in card-frame.tsx for the bug that came of confusing the two.
    */
   const filled = CARD_ZONES.filter((zone) =>
-    layout.zones[zone].some((block) => hasBlockContent(block.type, data)),
+    layout.zones[zone].some((block) => hasBlockContent(block.type, data, block)),
   );
 
   const renderZone = (zone: CardZone) => {
@@ -93,7 +101,7 @@ export function CardView({
      * would vanish the moment it landed.
      */
     const blocks = layout.zones[zone].filter((block) =>
-      hasBlockContent(block.type, data),
+      hasBlockContent(block.type, data, block),
     );
 
     // An empty zone is not an empty box — it would still pay its own padding,
@@ -146,7 +154,7 @@ export function CardView({
             for every other block, so the extra div costs nothing anyone can
             see. */}
         <div style={blockContentStyle(block, layout)}>
-          <CardBlockContent type={block.type} data={data} />
+          <CardBlockContent block={block} data={data} />
         </div>
       </div>
     );
@@ -158,12 +166,18 @@ export function CardView({
         padTop={zone === filled[0]}
         padBottom={zone === filled[filled.length - 1]}
       >
-        {rows.map((row) =>
+        {rows.flatMap((row) => [
+          /*
+           * The line's leading space, as a box of its own above it — see
+           * `CardLead`. Null when there is none, which is every card published
+           * so far, so the DOM below is untouched for all of them.
+           */
+          <CardLead key={`${row.blocks[0].id}:lead`} row={row} layout={layout} />,
           /*
            * A full-width block stays a *direct* child of the zone, drawing the
            * div it has always drawn. That is not tidiness: `blockEdges`'s
-           * first/last edge cancel, and the embed's matching `:first-child` /
-           * `:last-child` rules, both depend on it — so a card with nothing
+           * first/last edge cancel and the embed's matching `--bleed-start` /
+           * `--bleed-end` rules both need it there — so a card with nothing
            * narrowed on it produces the DOM it produced before any of this
            * existed.
            */
@@ -174,7 +188,7 @@ export function CardView({
           ) : (
             blockView(row.blocks[0], row, false)
           ),
-        )}
+        ])}
       </CardZoneBox>
     );
   };
@@ -182,19 +196,24 @@ export function CardView({
   /*
    * A location whose owner has filled in nothing but its name.
    *
-   * `name` and `category` are exactly the two blocks that say what a location
-   * *is* rather than anything about it, and a card holding only those has
-   * nothing on it anyone came to read. It used to render as the seventy pixels
-   * that fact deserves, which reads as a broken card rather than as an empty
-   * one — so the card says which it is, and the Edit button underneath is what
-   * to do about it.
+   * `name` and the two tag blocks are exactly what says what a location *is*
+   * rather than anything about it, and a card holding only those has nothing on
+   * it anyone came to read. It used to render as the seventy pixels that fact
+   * deserves, which reads as a broken card rather than as an empty one — so the
+   * card says which it is, and the Edit button underneath is what to do about it.
+   *
+   * Both tag blocks, not just the retired `category` one. They draw the same
+   * thing now, so counting one as content and not the other would give the same
+   * half-filled location two different answers depending on which block its
+   * owner's layout happens to name.
    */
   const isBare = !CARD_ZONES.some((zone) =>
     layout.zones[zone].some(
       (block) =>
         block.type !== "name" &&
         block.type !== "category" &&
-        hasBlockContent(block.type, data),
+        block.type !== "tags" &&
+        hasBlockContent(block.type, data, block),
     ),
   );
 

@@ -4,6 +4,7 @@ import { parseBody, withAuth } from "@/lib/api/route";
 import { getGeocoder, statusFor } from "@/lib/geocoding";
 import type { BatchGeocodeResult } from "@/lib/geocoding/types";
 import { getMap } from "@/lib/repositories/maps.repository";
+import { assertPlaceHeadroom } from "@/lib/repositories/places.repository";
 import { geocodeBatchSchema } from "@/lib/validation/geocode.schema";
 
 type Params = { id: string };
@@ -17,11 +18,28 @@ type Params = { id: string };
  *
  * One row failing must not fail the chunk: a single unresolvable address in a
  * 500-row CSV would otherwise block the whole import.
+ *
+ * **The plan check happens before the geocoder runs, not after.** This endpoint
+ * spends requests against a shared, rate-limited upstream whose policy throttles
+ * or bans extensive use, and until this guard existed the only ceiling was at
+ * insert time in `createPlaces` — so a free-plan map with ten slots could walk a
+ * 500-row file through the geocoder and be refused at the end, having spent all
+ * 500. §6 is explicit that a limit lives in the repository and not only in the
+ * UI; the wizard's own headroom banner is the courtesy, this is the rule.
+ *
+ * What it does *not* close: geocoding writes nothing, so the server cannot see
+ * how far an import has already got, and a scripted caller can re-send chunk
+ * after chunk that each fit the headroom on their own. Bounding that needs a
+ * per-user counter with somewhere durable to live, which is a bigger change than
+ * this one and is worth making before signup is open to strangers.
  */
 export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   await getMap(ctx, params.id);
 
   const input = await parseBody(request, geocodeBatchSchema);
+
+  await assertPlaceHeadroom(ctx, params.id, input.rows.length);
+
   const geocoder = getGeocoder();
 
   try {

@@ -29,18 +29,6 @@
     "east": 25.32,
     "north": 54.71
   },
-  "categories": [
-    {
-      "id": "shops",
-      "label": "Shops",
-      "color": "#e8590c"
-    },
-    {
-      "id": "depots",
-      "label": "Depots",
-      "color": "#1c7ed6"
-    }
-  ],
   "pinIcons": [
     {
       "id": "logo",
@@ -60,12 +48,12 @@
       "lat": 54.6872,
       "lng": 25.2797,
       "address": "Gedimino pr. 9, Vilnius",
-      "category": "shops",
       "icon": "store",
       "description": "Open late on Thursdays.",
       "phone": "+370 600 00001",
       "url": "https://example.com/gedimino",
       "tags": [
+        "shops",
         "bikes",
         "sundays"
       ],
@@ -87,10 +75,10 @@
       "lat": 54.6795,
       "lng": 25.2891,
       "address": "Pilies g. 22, Vilnius",
-      "category": "shops",
       "icon": "coffee",
       "email": "oldtown@example.com",
       "tags": [
+        "shops",
         "skis"
       ],
       "fields": {
@@ -103,10 +91,10 @@
       "lat": 54.6809,
       "lng": 25.2963,
       "address": "Užupio g. 3, Vilnius",
-      "category": "shops",
       "icon": "custom:logo",
       "description": "Custom image pin — decoded from the snapshot, no request of its own.",
       "tags": [
+        "shops",
         "bikes"
       ]
     },
@@ -125,10 +113,10 @@
       "lat": 54.6701,
       "lng": 25.2545,
       "address": "Savanorių pr. 1, Vilnius",
-      "category": "depots",
       "icon": "custom:trade",
       "description": "Trade counter only. Custom glyph pin — keeps its own green, not the depots blue.",
       "tags": [
+        "depots",
         "skis",
         "sundays"
       ],
@@ -140,7 +128,9 @@
       "lat": 54.7011,
       "lng": 25.2731,
       "address": "Konstitucijos pr. 20, Vilnius",
-      "category": "depots"
+      "tags": [
+        "depots"
+      ]
     },
     {
       "id": "p6",
@@ -156,7 +146,9 @@
       "lat": 54.6875,
       "lng": 25.28,
       "address": "Beside the flagship",
-      "category": "shops"
+      "tags": [
+        "shops"
+      ]
     },
     {
       "id": "p8",
@@ -164,7 +156,9 @@
       "lat": 54.6878,
       "lng": 25.2804,
       "address": "Also beside the flagship",
-      "category": "shops"
+      "tags": [
+        "shops"
+      ]
     }
   ],
   "shapes": [
@@ -248,11 +242,13 @@
       "tags": [
         {
           "id": "bikes",
-          "label": "Bikes"
+          "label": "Bikes",
+          "color": "#d6336c"
         },
         {
           "id": "skis",
-          "label": "Skis"
+          "label": "Skis",
+          "color": "#7048e8"
         }
       ]
     },
@@ -262,7 +258,24 @@
       "tags": [
         {
           "id": "sundays",
-          "label": "Sundays"
+          "label": "Sundays",
+          "color": "#0ca678"
+        }
+      ]
+    },
+    {
+      "id": "categories",
+      "label": "Categories",
+      "tags": [
+        {
+          "id": "shops",
+          "label": "Shops",
+          "color": "#e8590c"
+        },
+        {
+          "id": "depots",
+          "label": "Depots",
+          "color": "#1c7ed6"
         }
       ]
     }
@@ -287,6 +300,77 @@
       "showAs": "row"
     }
   ],
+  "cardLayout": {
+    "v": 1,
+    "width": 320,
+    "maxHeight": 440,
+    "radius": 12,
+    "padding": 12,
+    "gap": 8,
+    "borderWidth": 0,
+    "shadow": "soft",
+    "zones": {
+      "top": [
+        {
+          "id": "gallery",
+          "type": "gallery",
+          "heightPct": 25
+        }
+      ],
+      "middle": [
+        {
+          "id": "name",
+          "type": "name"
+        },
+        {
+          "id": "address",
+          "type": "address"
+        },
+        {
+          "id": "description",
+          "type": "description"
+        },
+        {
+          "id": "tags",
+          "type": "tags"
+        },
+        {
+          "id": "hours",
+          "type": "hours"
+        }
+      ],
+      "bottom": [
+        {
+          "id": "btn-book",
+          "type": "button",
+          "widthPct": 50,
+          "buttonAction": "link",
+          "buttonSource": "booking",
+          "buttonBackground": "#1c7ed6",
+          "buttonRadius": 20,
+          "buttonPadding": 2,
+          "buttonFull": true,
+          "bold": true
+        },
+        {
+          "id": "btn-dir",
+          "type": "button",
+          "widthPct": 50,
+          "buttonLabel": "Take me there",
+          "buttonBorder": "#c8ced6",
+          "buttonBorderWidth": 1,
+          "buttonRadius": 20,
+          "buttonPadding": 2,
+          "buttonFull": true
+        },
+        {
+          "id": "actions",
+          "type": "actions",
+          "hideDirections": true
+        }
+      ]
+    }
+  },
   "gazetteer": {
     "base": "http://localhost:3000/gazetteer",
     "countries": [

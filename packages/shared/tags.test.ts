@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SnapshotTagGroup } from "./snapshot";
-import { matchesTags, tagGroupIndex } from "./tags";
+import { matchesTags, tagGroupIndex, tagLabelsOf } from "./tags";
 
 /**
  * Two questions, because one group can never show the difference between AND
@@ -94,5 +94,42 @@ describe("matchesTags", () => {
     // index cannot explain shows as "nothing matches" rather than "everything".
     expect(matchesTags(["bikes"], new Set(["ghost"]), groupOf)).toBe(false);
     expect(matchesTags(["ghost"], new Set(["ghost"]), groupOf)).toBe(true);
+  });
+});
+
+describe("tagLabelsOf", () => {
+  it("turns the ids a place wears into the map's own labels", () => {
+    expect(tagLabelsOf(GROUPS, ["bikes", "sundays"])).toEqual([
+      "Bikes",
+      "Sundays",
+    ]);
+  });
+
+  it("drops an id the map no longer defines", () => {
+    /*
+     * The case that makes this a shared function rather than a `map` at each
+     * call site. Nothing sweeps a deleted tag off the places wearing it, so a
+     * dangling id is the normal state — and rendering one as itself would put
+     * `tag-3f9a1c04` on a card on a customer's site.
+     */
+    expect(tagLabelsOf(GROUPS, ["bikes", "tag-3f9a1c04"])).toEqual(["Bikes"]);
+    expect(tagLabelsOf(GROUPS, ["tag-3f9a1c04"])).toEqual([]);
+  });
+
+  it("answers in the map's order, not the row's", () => {
+    // The ids come off an Appwrite array column in whatever order they were
+    // written. The chips should read in the order the owner arranged the
+    // filters, so two locations wearing the same tags list them the same way.
+    expect(tagLabelsOf(GROUPS, ["sundays", "skis", "bikes"])).toEqual([
+      "Bikes",
+      "Skis",
+      "Sundays",
+    ]);
+  });
+
+  it("says nothing for a location with no tags", () => {
+    expect(tagLabelsOf(GROUPS, [])).toEqual([]);
+    expect(tagLabelsOf(GROUPS, undefined)).toEqual([]);
+    expect(tagLabelsOf([], ["bikes"])).toEqual([]);
   });
 });

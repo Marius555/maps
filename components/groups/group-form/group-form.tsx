@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Label } from "@heroui/react";
 import { Controller, useForm } from "react-hook-form";
 
-import { CategoryColorPicker } from "@/components/categories/category-color-picker";
+import { SwatchPicker } from "@/components/ui/swatch-picker";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { FormTextField } from "@/components/ui/form-field";
 import { applyFieldErrors } from "@/lib/query/form-errors";
@@ -79,7 +79,7 @@ export function GroupForm({
         render={({ field }) => (
           <div className="space-y-2">
             <Label>Colour</Label>
-            <CategoryColorPicker
+            <SwatchPicker
               label="Group colour"
               value={field.value}
               onChange={field.onChange}

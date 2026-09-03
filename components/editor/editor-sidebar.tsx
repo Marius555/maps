@@ -10,7 +10,7 @@ import { PlaceListEmpty } from "@/components/places/place-list-empty";
 import { ErrorMessage } from "@/components/ui/error-message";
 import type {
   Group,
-  MapCategory,
+  MapTagGroup,
   Place,
   Shape,
 } from "@/lib/repositories/types";
@@ -51,7 +51,7 @@ export function EditorSidebar({
   places,
   shapes,
   groups,
-  categoriesById,
+  tagGroups,
   pinIcons,
   placeLimit,
   selectedPlaceId,
@@ -78,7 +78,8 @@ export function EditorSidebar({
   places: Place[];
   shapes: Shape[];
   groups: Group[];
-  categoriesById: Map<string, MapCategory>;
+  /** The map's tag vocabulary — a location's first tag colours its pin. */
+  tagGroups: MapTagGroup[];
   /** The map's own pins, so a row can draw a `custom:<id>` one. */
   pinIcons: CustomPinIcon[];
   placeLimit: number;
@@ -172,7 +173,7 @@ export function EditorSidebar({
             groups={groups}
             places={places}
             shapes={shapes}
-            categoriesById={categoriesById}
+            tagGroups={tagGroups}
             pinIcons={pinIcons}
             selectedPlaceId={selectedPlaceId}
             selectedShapeId={selectedShapeId}

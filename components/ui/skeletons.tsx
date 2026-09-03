@@ -88,13 +88,13 @@ export function PlaceRowsSkeleton({ rows = 6 }: { rows?: number }) {
  * The two are rendered under the same `hidden lg:block` / `lg:hidden` pair the
  * page uses, so each breakpoint sees the shape it is going to get.
  *
- * The widths are the real columns' proportions: pin, name, address, category,
+ * The widths are the real columns' proportions: pin, name, address, tags,
  * status, missing, actions.
  */
 const TABLE_COLUMNS = [
   { name: "name", width: "w-2/12" },
   { name: "address", width: "w-3/12" },
-  { name: "category", width: "w-2/12" },
+  { name: "tags", width: "w-2/12" },
   { name: "status", width: "w-2/12" },
   { name: "missing", width: "w-2/12" },
 ];

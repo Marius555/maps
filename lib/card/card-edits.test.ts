@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 
+import { CARD_FONTS } from "@/packages/shared/card-fonts";
 import {
   CARD_BLOCKS,
+  DEFAULT_HOURS_ROW_GAP,
+  MAX_BLOCK_FONT_SIZE,
   MAX_BLOCK_MARGIN,
   MAX_BLOCK_PADDING,
+  DEFAULT_CHIP_BORDER_WIDTH,
+  MAX_CHIP_BORDER_WIDTH,
+  MAX_CLAMP_LINES,
   cardRows,
   defaultCardLayout,
   findBlock,
+  type CardBlock,
   type CardLayout,
 } from "@/packages/shared/card-layout";
 import {
@@ -37,21 +44,38 @@ const types = (layout: CardLayout, zone: "top" | "middle" | "bottom") =>
  * adding a block to the card everyone sees broke thirteen tests about
  * dragging, none of which had an opinion about it.
  *
- * So the fixture is pinned here instead: the shipped card with `description`
- * and `hours` taken back out, which is the arrangement these expectations were
- * written against. Anything that genuinely is about the default belongs in
- * packages/shared/card-layout.test.ts, where changing it is supposed to fail.
+ * So the fixture is pinned here instead. It was pinned by *filtering* the
+ * default at first, which is not pinning at all — the day Category came off the
+ * shipped card (categories merged into tags), the middle zone lost a block and
+ * nine drop-position assertions shifted by one. The zones are written out in
+ * full now, so the only thing that can move them is editing them here.
+ *
+ * It keeps a `category` block deliberately. That type is retired and the palette
+ * no longer offers it (`CARD_BLOCKS.category.retired`), which makes it a useful
+ * fourth block: it exercises the drop machinery without pretending anything
+ * about what a new card contains. Anything that genuinely is about the default
+ * belongs in packages/shared/card-layout.test.ts, where changing it must fail.
  */
 function sampleCardLayout(): CardLayout {
-  const layout = defaultCardLayout();
-
   return {
-    ...layout,
+    ...defaultCardLayout(),
     zones: {
-      ...layout.zones,
-      middle: layout.zones.middle.filter(
-        (block) => block.type !== "description" && block.type !== "hours",
-      ),
+      top: [
+        {
+          id: "gallery",
+          type: "gallery",
+          heightPct: CARD_BLOCKS.gallery.defaultHeightPct,
+        },
+      ],
+      // The four blocks these tests index against by hand. Adding one here
+      // shifts every drop-position assertion below.
+      middle: [
+        { id: "name", type: "name" },
+        { id: "category", type: "category" },
+        { id: "address", type: "address" },
+        { id: "details", type: "details" },
+      ],
+      bottom: [{ id: "actions", type: "actions" }],
     },
   };
 }
@@ -90,6 +114,19 @@ describe("makeCardBlock", () => {
     // and a spacer with padding is a number with no pixel behind it.
     expect(makeCardBlock("gallery").padding).toBeUndefined();
     expect(makeCardBlock("spacer").padding).toBeUndefined();
+  });
+
+  it("gives a fresh button the whole width of its block", () => {
+    // A call to action across the foot of a card is what almost everyone means
+    // by one, so a hugging button was every owner's first thing to fix. It is a
+    // property of a *new* block only — `buttonFull` still means what it always
+    // meant, so nothing already published moves.
+    expect(makeCardBlock("button").buttonFull).toBe(true);
+  });
+
+  it("gives it to nothing else", () => {
+    expect(makeCardBlock("name").buttonFull).toBeUndefined();
+    expect(makeCardBlock("actions").buttonFull).toBeUndefined();
   });
 
   it("mints an id per block, so two of the same type never collide", () => {
@@ -783,6 +820,103 @@ describe("removeCardBlock", () => {
     expect(removeCardBlock(layout, "ghost")).toBe(layout);
   });
 
+  it("hands the space it frees to the line below it", () => {
+    /*
+     * The deletion's half of the promise the drop has always kept: a block
+     * stores the empty space *above* it, so the hole a departure leaves is
+     * inherited by whatever is under it and the rest of the card rides up.
+     * `vacatedSpace` is measured by the gesture doing the deleting and says what
+     * the line below has to become to stay exactly where it is.
+     */
+    const layout = cardWith({
+      middle: [
+        { id: "name", type: "name" },
+        { id: "addr", type: "address" },
+        { id: "hours", type: "hours" },
+      ],
+    });
+
+    const next = removeCardBlock(layout, "addr", { id: "hours", offset: 46 });
+
+    expect(findBlock(next, "hours")?.block.offset).toBe(46);
+  });
+
+  it("gives it to the line rather than to a block, and clears the rest", () => {
+    /*
+     * The same rule `settle` and `vacate` both write by: a line takes its
+     * leading space as the *greatest* of its members' (`rowOffsetHolder`), so a
+     * number written to any other member is a number the card ignores. The
+     * measurement names a member; the write lands on the line's holder, whoever
+     * that is, and empties the others.
+     */
+    const layout = cardWith({
+      middle: [
+        { id: "name", type: "name" },
+        { id: "addr", type: "address", widthPct: 50, offset: 12 },
+        { id: "logo", type: "logo", heightPct: 14, widthPct: 50, offset: 30 },
+      ],
+    });
+
+    const next = removeCardBlock(layout, "name", { id: "addr", offset: 60 });
+
+    expect(findBlock(next, "logo")?.block.offset).toBe(60);
+    expect(findBlock(next, "addr")?.block.offset).toBeUndefined();
+  });
+
+  it("leaves the card alone when the gesture measured nothing", () => {
+    // A removal with no measurement in hand — there is no such path in the
+    // designer, but the argument is the same one `vacate` makes on the drop
+    // side: no answer is not the same as an answer of zero.
+    const layout = cardWith({
+      middle: [
+        { id: "name", type: "name" },
+        { id: "addr", type: "address", offset: 40 },
+      ],
+    });
+
+    expect(findBlock(removeCardBlock(layout, "name"), "addr")?.block.offset).toBe(
+      40,
+    );
+  });
+
+  it("survives a block dropped into a gap and taken straight back out", () => {
+    /*
+     * The reported card, and the whole reason the refund exists.
+     *
+     * Dropping into the room above a block makes `settle` shrink that block's
+     * leading space to pay for the arrival, so nothing on the card moves. Take
+     * the newcomer away again with no refund and the shrunken space stands: the
+     * rest of the card ends up 38px higher than it was before anything was
+     * dropped, which is a delete moving four blocks.
+     */
+    const start = cardWith({
+      middle: [
+        { id: "name", type: "name" },
+        { id: "addr", type: "address", offset: 40 },
+      ],
+      bottom: [{ id: "actions", type: "actions" }],
+    });
+
+    const dropped = dropCardBlock(start, { kind: "new", type: "divider" }, {
+      zone: "middle",
+      index: 1,
+      offset: 0,
+      // What the address has to become for its own top edge not to move, once a
+      // divider and a gap are sitting in the space above it.
+      nextOffset: 2,
+    });
+
+    const landed = dropped as CardLayout;
+    const divider = landed.zones.middle[1];
+
+    expect(findBlock(landed, "addr")?.block.offset).toBe(2);
+
+    // And out again, refunding what the arrival was charged for.
+    const back = removeCardBlock(landed, divider.id, { id: "addr", offset: 40 });
+
+    expect(back.zones).toEqual(start.zones);
+  });
+
   it("allows the card to be emptied", () => {
     // An owner who clears their card gets an empty card. Snapping the default
     // back would be the designer undoing their work in front of them.
@@ -884,10 +1018,21 @@ describe("resizeCardBlock", () => {
       findBlock(resizeCardBlock(layout, "address", { heightPct: 30 }), "address")
         ?.block.heightPct,
     ).toBeUndefined();
-    expect(
-      findBlock(resizeCardBlock(layout, "actions", { align: "center" }), "actions")
-        ?.block.align,
-    ).toBeUndefined();
+    /*
+     * The gallery and not the Links row, which gained `align` when that row
+     * learned to read a `justify-content`. A photo fills its box or is centred
+     * in it, so there has never been an alignment to write.
+     *
+     * The block has to actually *be* in the sample layout, which is the trap
+     * this assertion walked into once already: name one that is not and
+     * `resizeCardBlock` returns the layout untouched, `findBlock` finds nothing,
+     * and `?.block.align` is undefined for a reason that has nothing to do with
+     * `controls`. So the block is asserted present first.
+     */
+    const gallery = resizeCardBlock(layout, "gallery", { align: "center" });
+
+    expect(findBlock(gallery, "gallery")).toBeDefined();
+    expect(findBlock(gallery, "gallery")?.block.align).toBeUndefined();
   });
 
   it("leaves a layout alone when it holds no such block", () => {
@@ -2041,5 +2186,189 @@ describe("taking a block off a logo's line and putting it back", () => {
     })!;
 
     expect(back).toEqual(start);
+  });
+});
+
+describe("resizeCardBlock and the type controls", () => {
+  /*
+   * Every one of these fields is an override with an "off", and the off has to
+   * be a *value* the panel can press rather than the absence of one — because
+   * `undefined` already means "don't touch this" everywhere in this patch. So
+   * the empty string clears a font and a colour, zero clears a size and a
+   * clamp, and `false` clears bold. These are the tests that hold that pair
+   * together, since a control that can only ever set something is a control
+   * whose first press is permanent.
+   */
+  const card = (block: CardBlock): CardLayout => ({
+    ...defaultCardLayout(),
+    zones: { top: [], middle: [block], bottom: [] },
+  });
+
+  const patched = (block: CardBlock, patch: Parameters<typeof resizeCardBlock>[2]) =>
+    resizeCardBlock(card(block), block.id, patch).zones.middle[0];
+
+  const name: CardBlock = { id: "n", type: "name" };
+
+  it("sets a font from the catalogue and clears it with the empty string", () => {
+    const set = patched(name, { font: CARD_FONTS[2].stack });
+    expect(set.font).toBe(CARD_FONTS[2].stack);
+    expect(patched(set, { font: "" }).font).toBeUndefined();
+  });
+
+  it("refuses a font that is not one of ours", () => {
+    // Belt and braces with `readBlock`: a value that reaches an inline
+    // `font-family` on a stranger's page is checked wherever it can be written.
+    expect(patched(name, { font: "Papyrus, fantasy" }).font).toBeUndefined();
+  });
+
+  it("clamps a size, and reads zero as putting it back", () => {
+    expect(patched(name, { fontSize: 999 }).fontSize).toBe(MAX_BLOCK_FONT_SIZE);
+
+    const sized = patched(name, { fontSize: 20 });
+    expect(sized.fontSize).toBe(20);
+    expect(patched(sized, { fontSize: 0 }).fontSize).toBeUndefined();
+  });
+
+  it("lowercases a colour and clears it with an empty one", () => {
+    const coloured = patched(name, { color: "#AABBCC" });
+    expect(coloured.color).toBe("#aabbcc");
+    expect(patched(coloured, { color: "" }).color).toBeUndefined();
+  });
+
+  it("turns bold off by deleting it rather than by storing false", () => {
+    const bold = patched(name, { bold: true });
+    expect(bold.bold).toBe(true);
+    expect(patched(bold, { bold: false }).bold).toBeUndefined();
+  });
+
+  it("ignores all four on a block that has no words", () => {
+    const spacer: CardBlock = { id: "s", type: "spacer", heightPct: 6 };
+    const next = patched(spacer, {
+      font: CARD_FONTS[0].stack,
+      fontSize: 18,
+      color: "#123456",
+      bold: true,
+    });
+
+    expect(next.font).toBeUndefined();
+    expect(next.fontSize).toBeUndefined();
+    expect(next.color).toBeUndefined();
+    expect(next.bold).toBeUndefined();
+  });
+});
+
+describe("resizeCardBlock and the block's own options", () => {
+  const card = (block: CardBlock): CardLayout => ({
+    ...defaultCardLayout(),
+    zones: { top: [], middle: [block], bottom: [] },
+  });
+
+  const patched = (block: CardBlock, patch: Parameters<typeof resizeCardBlock>[2]) =>
+    resizeCardBlock(card(block), block.id, patch).zones.middle[0];
+
+  const hours: CardBlock = { id: "h", type: "hours" };
+
+  it("stores an opened week and clears it again", () => {
+    // Collapsed is the absence, because that is what every published card
+    // already draws — see packages/shared/card-layout.ts.
+    const open = patched(hours, { hoursOpen: true });
+    expect(open.hoursOpen).toBe(true);
+    expect(patched(open, { hoursOpen: false }).hoursOpen).toBeUndefined();
+  });
+
+  it("drops a row gap that is back at the default", () => {
+    const spaced = patched(hours, { hoursRowGap: 8 });
+    expect(spaced.hoursRowGap).toBe(8);
+    expect(
+      patched(spaced, { hoursRowGap: DEFAULT_HOURS_ROW_GAP }).hoursRowGap,
+    ).toBeUndefined();
+  });
+
+  it("ignores the week's options on anything that is not one", () => {
+    const address: CardBlock = { id: "a", type: "address" };
+    const next = patched(address, { hoursOpen: true, hoursRowGap: 8 });
+
+    expect(next.hoursOpen).toBeUndefined();
+    expect(next.hoursRowGap).toBeUndefined();
+  });
+
+  it("clamps a description to a real number of lines, and zero shows them all", () => {
+    const description: CardBlock = { id: "d", type: "description" };
+
+    const clamped = patched(description, { clampLines: 99 });
+    expect(clamped.clampLines).toBe(MAX_CLAMP_LINES);
+    expect(patched(clamped, { clampLines: 0 }).clampLines).toBeUndefined();
+    expect(
+      patched({ id: "a", type: "address" }, { clampLines: 2 }).clampLines,
+    ).toBeUndefined();
+  });
+
+  const tags: CardBlock = { id: "t", type: "tags" };
+
+  /*
+   * The chips' outline is stored as a pair, and these three are why the edit
+   * path has to know that rather than leaving it to the resolver: the panel
+   * offers one control per half, and either half alone is a chip that draws
+   * something nobody designed.
+   */
+  it("seeds a hairline the first time an outline colour is picked", () => {
+    // Otherwise the picker is a control that visibly does nothing: the width
+    // defaults to zero and a zero-width border draws no pixels.
+    const outlined = patched(tags, { chipBorder: "#C8CED6" });
+
+    // Lowercased at the boundary, as every stored colour in this codebase is.
+    expect(outlined.chipBorder).toBe("#c8ced6");
+    expect(outlined.chipBorderWidth).toBe(DEFAULT_CHIP_BORDER_WIDTH);
+  });
+
+  it("takes the width away with the colour", () => {
+    const outlined = patched(tags, { chipBorder: "#c8ced6" });
+    const cleared = patched(outlined, { chipBorder: "" });
+
+    expect(cleared.chipBorder).toBeUndefined();
+    expect(cleared.chipBorderWidth).toBeUndefined();
+  });
+
+  it("takes the colour away with the width", () => {
+    const outlined = patched(tags, { chipBorder: "#c8ced6" });
+    const flattened = patched(outlined, { chipBorderWidth: 0 });
+
+    expect(flattened.chipBorderWidth).toBeUndefined();
+    expect(flattened.chipBorder).toBeUndefined();
+  });
+
+  it("clamps an outline thicker than the ceiling", () => {
+    const outlined = patched(tags, { chipBorder: "#c8ced6" });
+
+    expect(patched(outlined, { chipBorderWidth: 99 }).chipBorderWidth).toBe(
+      MAX_CHIP_BORDER_WIDTH,
+    );
+  });
+
+  it("ignores an outline on a block that draws no chips", () => {
+    const next = patched(
+      { id: "a", type: "address" },
+      { chipBorder: "#c8ced6", chipBorderWidth: 2 },
+    );
+
+    expect(next.chipBorder).toBeUndefined();
+    expect(next.chipBorderWidth).toBeUndefined();
+  });
+
+  it("stores a mark drawn as its logo, and clears it back to the pin", () => {
+    const logo: CardBlock = { id: "l", type: "logo" };
+
+    const asLogo = patched(logo, { logoMode: "image" });
+    expect(asLogo.logoMode).toBe("image");
+
+    // The pin is the absence of the field, so there is one way to say it and no
+    // card published before this existed changes.
+    expect(patched(asLogo, { logoMode: "pin" }).logoMode).toBeUndefined();
+  });
+
+  it("ignores the mark's drawing on anything that is not one", () => {
+    expect(
+      patched({ id: "g", type: "gallery" }, { logoMode: "image" }).logoMode,
+    ).toBeUndefined();
   });
 });

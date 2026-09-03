@@ -8,6 +8,7 @@ export const API_ERROR_CODES = [
   "not_found",
   "validation_failed",
   "plan_limit_reached",
+  "plan_feature_required",
   "conflict",
   "rate_limited",
   "internal_error",

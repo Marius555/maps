@@ -40,7 +40,6 @@ import {
 import type {
   MapSnapshot,
   SnapshotBounds,
-  SnapshotCategory,
   SnapshotField,
   SnapshotPinIcon,
   SnapshotPlace,
@@ -107,19 +106,15 @@ export function buildSnapshot(
     (isValidLngLat(place.lng, place.lat) ? usable : skipped).push(place);
   }
 
-  // Only categories in use. A legend offering a filter that matches nothing is
-  // a dead control on someone else's website.
-  const used = new Set(usable.map((place) => place.category).filter(Boolean));
-
   const pinIcons = usedPinIcons(map, usable);
 
   /*
    * The filter vocabulary and the extra fields, narrowed to what the published
-   * places actually use — the same filter categories get above, for the same
-   * reason. Both also decide what a *place* may carry: a location can be storing
-   * a tag id or a field value the map no longer defines (nothing sweeps those up
-   * on delete, see maps.repository.ts), and those must not reach a visitor who
-   * has nothing to resolve them against.
+   * places actually use: a chip that matches nothing is a dead control on
+   * someone else's website. Both also decide what a *place* may carry — a
+   * location can be storing a tag id or a field value the map no longer defines
+   * (nothing sweeps those up on delete, see maps.repository.ts), and those must
+   * not reach a visitor who has nothing to resolve them against.
    */
   const tagGroups = usedTagGroups(map.tagGroups, usable);
   const definedTags = new Set(
@@ -171,9 +166,15 @@ export function buildSnapshot(
       // radius has no places to frame, and used to open on `center` at whatever
       // zoom happened to be saved — often nowhere near the thing it is about.
       bounds: boundsOf(usable, drawable),
-      categories: map.categories
-        .filter((category) => used.has(category.id))
-        .map(toSnapshotCategory),
+      /*
+       * `categories` is not written any more, and its absence is the point.
+       *
+       * The field stays *readable* on `MapSnapshot` because a file published
+       * before tags absorbed categories is live on somebody's site and is read
+       * forever (§7) — but a map republished from here on carries its whole
+       * vocabulary in `tagGroups`, so writing an empty array would only be bytes
+       * saying nothing.
+       */
       // Dropped entirely when empty, like every other optional field: on a map
       // with no custom pins this would be a bare `[]` on every visitor's
       // download, and an unused logo is measured in kilobytes, not bytes.
@@ -297,16 +298,12 @@ function gazetteerField(
   return { gazetteer: { base: base.replace(/\/+$/, ""), countries } };
 }
 
-function toSnapshotCategory(category: SnapshotCategory): SnapshotCategory {
-  return { id: category.id, label: category.label, color: category.color };
-}
-
 /**
  * The map's own pins, narrowed to the ones a published place actually wears.
  *
- * The same filter categories get, and for a sharper reason: an unused category
- * is a dead chip in the legend, but an unused custom pin is a whole logo — a few
- * kilobytes of base64 — downloaded by every visitor to draw nothing.
+ * The same filter the tag vocabulary gets, and for a sharper reason: an unused
+ * tag is a dead chip in the filter row, but an unused custom pin is a whole logo
+ * — a few kilobytes of base64 — downloaded by every visitor to draw nothing.
  */
 function usedPinIcons(map: AppMap, places: Place[]): SnapshotPinIcon[] {
   const worn = new Set(
@@ -366,7 +363,9 @@ function usedTagGroups(
       label: group.label,
       tags: group.tags
         .filter((tag) => worn.has(tag.id))
-        .map((tag) => ({ id: tag.id, label: tag.label })),
+        // The colour travels, because since categories merged into tags it is
+        // what the embed draws the *pin* from, not only the chip.
+        .map((tag) => ({ id: tag.id, label: tag.label, color: tag.color })),
     }))
     .filter((group) => group.tags.length > 0);
 }
@@ -412,7 +411,6 @@ function toSnapshotPlace(
   };
 
   if (place.address) snapshot.address = place.address;
-  if (place.category) snapshot.category = place.category;
   if (place.icon) snapshot.icon = place.icon;
   if (place.description) snapshot.description = place.description;
   if (place.phone) snapshot.phone = place.phone;
@@ -431,9 +429,15 @@ function toSnapshotPlace(
   if (place.photoUrl) snapshot.photoUrl = place.photoUrl;
   if (place.photoUrls.length > 1) snapshot.photoUrls = place.photoUrls;
 
-  // Narrowed, not copied: a place can be wearing a tag the map deleted, and the
-  // embed has nothing to resolve that id against. Omitted entirely when nothing
-  // survives, like every other optional field here.
+  /*
+   * Narrowed, not copied: a place can be wearing a tag the map deleted, and the
+   * embed has nothing to resolve that id against. Omitted entirely when nothing
+   * survives, like every other optional field here.
+   *
+   * `filter` and not a re-sort, and that is load-bearing rather than incidental:
+   * the location's own order decides which tag colours its pin, so publishing
+   * these in the map's vocabulary order would repaint pins at publish time.
+   */
   const tags = place.tags.filter((id) => definedTags.has(id));
   if (tags.length > 0) snapshot.tags = tags;
 

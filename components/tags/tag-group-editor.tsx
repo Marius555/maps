@@ -19,14 +19,16 @@ import { TagGroupRow } from "./tag-group-row";
 /**
  * The map's filter vocabulary, edited as a list and saved in one go.
  *
- * Same shape as the category editor next to it, and for the same reasons: the
- * whole thing is one JSON column, so there is nothing finer to save, and saving
- * per keystroke would mean a PATCH for every letter of a rename.
+ * Edited as a draft and saved in one go, because the whole thing is one JSON
+ * column: there is nothing finer to save, and saving per keystroke would mean a
+ * PATCH for every letter of a rename.
  *
- * What it is *not* is a second category list. A category colours the pin and a
- * location has exactly one; a tag says what a location stocks or offers and it
- * wears as many as apply. That distinction is the panel's description, because
- * an owner who reads this as "categories, but more" will build the wrong map.
+ * This is the map's **only** vocabulary now. It used to sit next to a Categories
+ * panel asking the same question under another name — one category per location
+ * because it coloured the pin, any number of colourless tags for everything else
+ * — and an owner meeting both on one settings page had no way to tell which one
+ * to reach for. Categories merged in: a tag carries a colour, a location wears
+ * as many as apply, and the first one it was given is what colours its pin.
  */
 export function TagGroupEditor({ map, places }: { map: AppMap; places: Place[] }) {
   const updateMap = useUpdateMap(map.id);
@@ -41,6 +43,16 @@ export function TagGroupEditor({ map, places }: { map: AppMap; places: Place[] }
     }
     return counts;
   }, [places]);
+
+  /*
+   * Across every group, not per group: a pin shows a colour and a visitor reads
+   * one legend, so two tags matching across two questions is the collision worth
+   * avoiding. Read off the draft rather than the map so two tags added before a
+   * save do not come out the same.
+   */
+  const takenColors = draft.flatMap((group) =>
+    group.tags.map((tag) => tag.color),
+  );
 
   const isDirty = JSON.stringify(draft) !== JSON.stringify(map.tagGroups);
 
@@ -115,6 +127,7 @@ export function TagGroupEditor({ map, places }: { map: AppMap; places: Place[] }
               key={group.id}
               group={group}
               usageByTag={usageByTag}
+              takenColors={takenColors}
               onChange={(next) =>
                 setDraft((current) =>
                   current.map((existing, position) =>

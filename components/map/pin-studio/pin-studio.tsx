@@ -9,7 +9,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { useUpdateMap } from "@/lib/query/maps";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { SM_BREAKPOINT, useMediaQuery } from "@/lib/ui/use-media-query";
-import { CATEGORY_COLORS } from "@/lib/validation/category.schema";
+import { PALETTE_COLORS } from "@/lib/validation/palette";
 import { MAX_PIN_ICONS, pinIconsSchema } from "@/lib/validation/pin-icon.schema";
 import { CUSTOM_PIN_PREFIX, type CustomPinIcon } from "@/packages/shared/pin-icons";
 import { PinActions } from "./pin-actions";
@@ -338,7 +338,7 @@ function blankPin(existing: CustomPinIcon[]): CustomPinIcon {
   return {
     id: crypto.randomUUID().slice(0, 8),
     label: "",
-    color: CATEGORY_COLORS[existing.length % CATEGORY_COLORS.length],
+    color: PALETTE_COLORS[existing.length % PALETTE_COLORS.length],
     glyph: "store",
     image: "",
   };

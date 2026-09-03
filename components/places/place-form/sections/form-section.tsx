@@ -7,7 +7,7 @@ import { useState } from "react";
  * A part of the form you can put away.
  *
  * The edit dialog was eleven controls in one flat stack — name, address,
- * category, pin, photo, description, phone, email, website and seven rows of
+ * tags, pin, photo, description, phone, email, website and seven rows of
  * opening hours — with nothing saying which of them mattered, which were
  * optional, or which this location had already been given. Opening it to fix a
  * typo meant reading all of it to find the one field.

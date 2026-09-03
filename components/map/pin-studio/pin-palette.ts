@@ -1,4 +1,4 @@
-import { CATEGORY_COLORS, CATEGORY_COLOR_NAMES } from "@/lib/validation/category.schema";
+import { PALETTE_COLORS, PALETTE_COLOR_NAMES } from "@/lib/validation/palette";
 
 /**
  * The colours offered for a pin's ring and its icon.
@@ -18,10 +18,10 @@ import { CATEGORY_COLORS, CATEGORY_COLOR_NAMES } from "@/lib/validation/category
  * and dark themes, and white in the embed. A stored `#ffffff` cannot do that, so
  * "Auto" is a distinct choice from "White" rather than a nicer name for it.
  */
-export const PIN_TRIM_COLORS = ["#ffffff", "#111827", ...CATEGORY_COLORS] as const;
+export const PIN_TRIM_COLORS = ["#ffffff", "#111827", ...PALETTE_COLORS] as const;
 
 export const PIN_TRIM_COLOR_NAMES: Record<string, string> = {
   "#ffffff": "White",
   "#111827": "Ink",
-  ...CATEGORY_COLOR_NAMES,
+  ...PALETTE_COLOR_NAMES,
 };

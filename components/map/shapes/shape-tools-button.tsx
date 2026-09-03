@@ -4,7 +4,7 @@ import { Button, Popover, Separator } from "@heroui/react";
 import { Circle, Pentagon, Route, Shapes, Slash, Upload } from "lucide-react";
 import { useId, useState } from "react";
 
-import { PlanLimitNote } from "@/components/map/plan-limit-note";
+import { PlanLimitNote, PlanNote } from "@/components/map/plan-limit-note";
 import { isAtLimit, type PlanHeadroom } from "@/lib/map/plan-headroom";
 import type { ShapeKind } from "@/packages/shared/shapes";
 
@@ -35,12 +35,18 @@ import type { ShapeKind } from "@/packages/shared/shapes";
  * *disappear* when their callback is absent, which says "not a thing here"; a
  * tool stopped by the limit is a thing here that works again after a delete, and
  * a row that vanished would be one the user goes looking for.
+ *
+ * `routesNote` is the third state that distinction earns: Route is a thing here
+ * that works again after an *upgrade*, so it greys with its own sentence rather
+ * than vanishing. Hiding a paid feature from the plan below it is how nobody
+ * finds out it exists.
  */
 export function ShapeToolsButton({
   drawMode,
   isRouting,
   isBusy,
   headroom,
+  routesNote,
   onPickTool,
   onPickRoute,
   onStopDrawing,
@@ -60,6 +66,12 @@ export function ShapeToolsButton({
    * nothing greys, which is what every caller got before this existed.
    */
   headroom?: PlanHeadroom;
+  /**
+   * Why the route tool is off, when the plan does not include it. Absent means
+   * it is included — this is the sentence, not a flag, because the component
+   * that renders it should not also be deciding how to word it.
+   */
+  routesNote?: string;
   onPickTool: (kind: ShapeKind) => void;
   /** Arms the route tool. Omitted where there is no map to route on. */
   onPickRoute?: () => void;
@@ -81,6 +93,14 @@ export function ShapeToolsButton({
    */
   const isFull = headroom ? isAtLimit(headroom) : false;
   const noteId = useId();
+  const routeNoteId = useId();
+
+  /*
+   * The limit wins when both apply. Two amber lines under one short menu is more
+   * reading than the situation deserves, and the shape ceiling is the one that
+   * stops every row rather than only this one.
+   */
+  const isRouteLocked = Boolean(routesNote) && !isFull;
 
   return (
     <Popover.Root
@@ -168,8 +188,8 @@ export function ShapeToolsButton({
                 label="Route"
                 hint="Click each location, Enter to follow the roads"
                 isArmed={Boolean(isRouting)}
-                isDisabled={isFull}
-                describedBy={noteId}
+                isDisabled={isFull || isRouteLocked}
+                describedBy={isRouteLocked ? routeNoteId : noteId}
                 onPress={() => {
                   setIsMenuOpen(false);
                   onPickRoute();
@@ -205,6 +225,12 @@ export function ShapeToolsButton({
             {isFull && headroom ? (
               <div className="max-w-64 px-2 pt-1.5">
                 <PlanLimitNote id={noteId} resource="shapes" headroom={headroom} />
+              </div>
+            ) : null}
+
+            {isRouteLocked && routesNote ? (
+              <div className="max-w-64 px-2 pt-1.5">
+                <PlanNote id={routeNoteId}>{routesNote}</PlanNote>
               </div>
             ) : null}
           </div>

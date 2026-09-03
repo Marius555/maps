@@ -291,7 +291,7 @@ describe("a spreadsheet with placeholder column names above the real ones", () =
       preflightProblem(
         drafts.map((draft) => ({
           rowNumber: draft.rowNumber,
-          input: draftToCreateInput(draft, ""),
+          input: draftToCreateInput(draft),
         })),
       ),
     ).toBeNull();

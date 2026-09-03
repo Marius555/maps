@@ -2,6 +2,7 @@ import { ok } from "@/lib/api/responses";
 import { parseBody, withAuth } from "@/lib/api/route";
 import { routerFailure } from "@/lib/api/router-errors";
 import { getMap } from "@/lib/repositories/maps.repository";
+import { assertPlanFeature } from "@/lib/repositories/plan-limits";
 import { getRouter } from "@/lib/routing";
 import { directionsSchema } from "@/lib/validation/directions.schema";
 
@@ -29,6 +30,7 @@ type Params = { id: string };
  */
 export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   await getMap(ctx, params.id);
+  await assertPlanFeature(ctx.userId, "routes");
 
   const input = await parseBody(request, directionsSchema);
 

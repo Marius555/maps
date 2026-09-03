@@ -22,7 +22,6 @@ import { EssentialsSection } from "./sections/essentials-section";
 import { FieldsSection } from "./sections/fields-section";
 import { HoursSection } from "./sections/hours-section";
 import { MediaSection } from "./sections/media-section";
-import { TagsSection } from "./sections/tags-section";
 
 /**
  * Edits one location.
@@ -77,7 +76,6 @@ export function PlaceForm({
     defaultValues: {
       name: place.name,
       address: place.address,
-      category: place.category,
       tags: place.tags,
       fields: place.fields,
       icon: place.icon,
@@ -179,9 +177,9 @@ export function PlaceForm({
           control={control}
           hasError={Boolean(errors.phone || errors.email || errors.url)}
         />
-        {/* Both render nothing when the map defines none, so a map that never
-            set either up sees the form it always saw. */}
-        <TagsSection control={control} groups={map.tagGroups} />
+        {/* Tags are not here any more: they moved up into Essentials, where the
+            Category select used to be. They are what says what kind of place
+            this is, and a fold is not where that question belongs. */}
         <FieldsSection control={control} fields={map.fields} />
         <HoursSection control={control} hasError={Boolean(errors.hours)} />
         <MediaSection

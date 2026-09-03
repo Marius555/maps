@@ -55,9 +55,9 @@ const CONTROLS = [
   },
   {
     name: "filters",
-    label: "Show category filters",
+    label: "Show tag filters",
     description:
-      "A chip per category, which doubles as the legend. Categories with nothing in them are left out.",
+      "A row of chips per filter group. Picking two in one group widens the results; picking one in each narrows them. Tags nothing on the map wears are left out.",
   },
   {
     name: "nearest",

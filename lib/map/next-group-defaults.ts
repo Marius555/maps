@@ -1,5 +1,5 @@
 import type { Group } from "@/lib/repositories/types";
-import { CATEGORY_COLORS } from "@/lib/validation/category.schema";
+import { PALETTE_COLORS } from "@/lib/validation/palette";
 
 /** Matches the placeholder names this module hands out, and only those. */
 const PLACEHOLDER_NAME = /^Group (\d+)$/;
@@ -56,7 +56,7 @@ export function nextGroupDefaults(
 /**
  * The first colour in the palette no other group is already wearing.
  *
- * It used to be `CATEGORY_COLORS[groups.length % 8]`, which is enough when the
+ * It used to be `PALETTE_COLORS[groups.length % 8]`, which is enough when the
  * colour is decoration — two groups made in a row get different ones. It is not
  * enough now that a group's colour is painted onto its members (see
  * map-editor.tsx): the whole point is that one colour means one group, and two
@@ -71,9 +71,9 @@ export function nextGroupDefaults(
  */
 function unusedColor(
   groups: readonly { color?: string }[],
-): (typeof CATEGORY_COLORS)[number] {
+): (typeof PALETTE_COLORS)[number] {
   const taken = new Set(groups.map((group) => group.color));
-  const free = CATEGORY_COLORS.find((color) => !taken.has(color));
+  const free = PALETTE_COLORS.find((color) => !taken.has(color));
 
-  return free ?? CATEGORY_COLORS[groups.length % CATEGORY_COLORS.length];
+  return free ?? PALETTE_COLORS[groups.length % PALETTE_COLORS.length];
 }

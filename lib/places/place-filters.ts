@@ -1,5 +1,6 @@
 import { isApproximate, needsReview } from "@/lib/geocoding/confidence";
 import type { Place } from "@/lib/repositories/types";
+import { matchesTags } from "@/packages/shared/tags";
 import { isIncomplete } from "./completeness";
 
 /**
@@ -70,4 +71,41 @@ export function matchesFilter(place: Place, filter: PlaceFilter): boolean {
 
 export function countNeedingAttention(places: Place[]): number {
   return places.filter(needsAttention).length;
+}
+
+/**
+ * "Untagged", carried inside the tag selection rather than beside it.
+ *
+ * The Category picker had a "No category" option and losing it with the merge
+ * would lose the one question an owner actually asks after an import: which
+ * locations did nothing land on. A sentinel in the same set as the real tag ids
+ * keeps that a single piece of state, and one control, instead of a boolean the
+ * toolbar has to thread separately.
+ *
+ * Not a real tag id, and it can never collide with one — `newTagId` mints
+ * `tag-…` and a migrated category is `cat-…`.
+ */
+export const UNTAGGED_FILTER_ID = "__untagged";
+
+/**
+ * The tag half of the list filter.
+ *
+ * Untagged is **exclusive**: a location wearing nothing cannot also wear Bikes,
+ * so combining the two can only ever return an empty list, and a filter that can
+ * be put into a state with no possible answer is a filter that reads as broken.
+ * `TagFilterMenu` enforces that at the control; this answers the same way if
+ * anything ever gets past it.
+ *
+ * Everything else is `matchesTags` — the embed's own function, imported and not
+ * reimplemented, so the owner's filtered list and the visitor's filtered map
+ * cannot come to disagree about what "sells bikes and opens Sundays" means.
+ */
+export function matchesTagFilter(
+  place: Place,
+  selected: ReadonlySet<string>,
+  groupOf: ReadonlyMap<string, string>,
+): boolean {
+  if (selected.has(UNTAGGED_FILTER_ID)) return place.tags.length === 0;
+
+  return matchesTags(place.tags, selected, groupOf);
 }

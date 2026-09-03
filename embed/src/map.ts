@@ -19,7 +19,7 @@ import {
 } from "@/packages/shared/attribution";
 import {
   resolvePin,
-  UNCATEGORISED_PIN_COLOR,
+  UNTAGGED_PIN_COLOR,
   type CustomPinIcon,
 } from "@/packages/shared/pin-icons";
 import {
@@ -37,7 +37,9 @@ import type {
   MapSnapshot,
   SnapshotPlace,
   SnapshotShape,
+  SnapshotTagGroup,
 } from "@/packages/shared/snapshot";
+import { pinColorOfTags, tagChipsOf } from "@/packages/shared/tags";
 
 import { buildPopup, buildShapePopup } from "./popup";
 import {
@@ -111,9 +113,9 @@ const FOCUS_ZOOM = 15;
 const AREA_ZOOM = 11;
 
 /**
- * Pins with no category. Deliberately a neutral grey rather than the palette's
- * first colour — reusing that made an uncategorised place indistinguishable
- * from the first category, and the legend then explained a pin it didn't cover.
+ * Pins with no tags. Deliberately a neutral grey rather than the palette's first
+ * colour — reusing that made an untagged place indistinguishable from the first
+ * tag, and the filter row then explained a pin it did not cover.
  */
 
 
@@ -249,7 +251,9 @@ export function createMap(
   });
 
   const categories = new Map(
-    snapshot.categories.map((category) => [category.id, category]),
+    // Legacy, read-only: a snapshot published before categories became tags.
+    // Nothing writes this field any more (§7 keeps it readable forever).
+    (snapshot.categories ?? []).map((category) => [category.id, category]),
   );
   const colors = colorsOf(snapshot);
   /*
@@ -268,6 +272,16 @@ export function createMap(
    * one map of the same rows.
    */
   const cardPins = pinsOf(snapshot);
+  /*
+   * The map's tag vocabulary, for a card's Tags block.
+   *
+   * Out here beside `categories` and `cardPins` for the same reason: `showPopup`
+   * runs on every pin click, and resolving a place's ids against sixty tags
+   * inside it would walk the whole vocabulary each time. `tagChipsOf` returns
+   * them in the *location's* own order, which is what makes the first chip the
+   * colour the pin the visitor just clicked is wearing.
+   */
+  const cardTagGroups = snapshot.tagGroups ?? [];
   const popup = new Popup({
     closeButton: true,
     // The owner's width, not a constant. MapLibre caps the popup itself, so a
@@ -413,6 +427,7 @@ export function createMap(
           snapshot.fields ?? [],
           cardLayout,
           cardPins,
+          tagChipsOf(cardTagGroups, place.tags),
         ),
       )
       .addTo(map);
@@ -1169,11 +1184,30 @@ function wireInteractions(
   }
 }
 
-/** Category id → hex, with the neutral grey standing in for "uncategorised". */
-function colorsOf(snapshot: MapSnapshot): Map<string, string> {
-  return new Map(
-    snapshot.categories.map((category) => [category.id, category.color]),
-  );
+/**
+ * Everything a pin's colour can come from, resolved once per render pass.
+ *
+ * Two vocabularies, because a published snapshot is read forever (§7). Tags are
+ * what a map published today carries; `categories` is what one published before
+ * they merged carries, and it is read here and nowhere else in the embed. A file
+ * has one or the other, never both, so the order below never has to arbitrate.
+ */
+type PinColors = {
+  tagGroups: SnapshotTagGroup[];
+  /** Legacy, read-only: category id → hex, for pre-merge snapshots. */
+  categories: Map<string, string>;
+};
+
+function colorsOf(snapshot: MapSnapshot): PinColors {
+  return {
+    tagGroups: snapshot.tagGroups ?? [],
+    categories: new Map(
+      (snapshot.categories ?? []).map((category) => [
+        category.id,
+        category.color,
+      ]),
+    ),
+  };
 }
 
 /**
@@ -1203,23 +1237,30 @@ function pinsOf(snapshot: MapSnapshot): CustomPinIcon[] {
 }
 
 /**
- * A place's colour: its custom pin's own, or failing that its category's.
+ * A place's colour: its custom pin's own, or failing that its first tag's.
  *
  * A custom pin is a finished design and brings its colour with it, which is the
- * one case where the category does not decide. The same `??` runs in the editor
+ * one case where a tag does not decide. The same `??` runs in the editor
  * (components/map/use-place-markers.ts) — a map that coloured its pins one way in
  * the dashboard and another on the customer's site would be the worst kind of bug
  * to be told about.
+ *
+ * The category lookup underneath is the whole of the embed's back-compatibility
+ * with pre-merge snapshots, and it is deliberately *below* the tags rather than
+ * beside them: a file carries one vocabulary or the other, so on an old snapshot
+ * `pinColorOfTags` finds nothing and this answers, and on a new one it never
+ * runs. Deleting it would turn every already-published map grey.
  */
 function colorOf(
   place: SnapshotPlace,
-  colors: Map<string, string>,
+  colors: PinColors,
   pins?: readonly CustomPinIcon[],
 ): string {
   return (
     resolvePin(place.icon, pins)?.color ??
-    colors.get(place.category ?? "") ??
-    UNCATEGORISED_PIN_COLOR
+    pinColorOfTags(colors.tagGroups, place.tags) ??
+    colors.categories.get(place.category ?? "") ??
+    UNTAGGED_PIN_COLOR
   );
 }
 
@@ -1252,7 +1293,7 @@ function pinPairs(snapshot: MapSnapshot): { icon: string; color: string }[] {
  */
 function pinIdFor(
   place: SnapshotPlace,
-  colors: Map<string, string>,
+  colors: PinColors,
   images: Set<string>,
   pins?: readonly CustomPinIcon[],
 ): string | null {

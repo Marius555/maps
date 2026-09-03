@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Embed harness — legacy snapshot</title>
+    <style>
+      body {
+        margin: 0 auto;
+        padding: 32px 16px 64px;
+        max-width: 900px;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        color: #1b1d21;
+      }
+      code {
+        background: #f1f3f5;
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+      .note {
+        color: #656b76;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Embed harness &mdash; pre-merge snapshot</h1>
+    <p class="note">
+      Renders the built embed against <code>dev-legacy.json</code>: a snapshot in
+      the shape published <em>before</em> categories became tags. It carries
+      <code>categories</code> and a <code>category</code> per place, and its
+      <code>tagGroups</code> have no colours &mdash; exactly what is sitting on
+      customers&rsquo; sites right now. Nothing produces this shape any more, and
+      §7 says a published file is read forever, so this page is the only thing
+      standing between that promise and a silent regression.
+    </p>
+    <p class="note">
+      Run <code>npm run build:embed</code>, start the dev server, then open
+      <code>/embed/dev-legacy.html</code>. It must look the way it always did:
+    </p>
+    <p class="note">
+      <strong>Pins keep their category colours.</strong> The shops are orange and
+      the depots blue, and a place with neither a category nor a custom pin is
+      the neutral grey. If every pin is grey, the fallback in
+      <code>colorOf</code> (embed/src/map.ts) has been dropped and every already
+      published map has lost its colours.
+    </p>
+    <p class="note">
+      <strong>Cards still draw the chip.</strong> The card&rsquo;s tag row shows
+      this location&rsquo;s tags, and the retired Category block &mdash; on any
+      layout still naming it &mdash; draws the category with its own dot.
+    </p>
+    <p class="note">
+      <strong>The list rows still carry a coloured chip</strong>, and search
+      still finds a location by its category&rsquo;s label &mdash; type
+      <code>depots</code> and the map should narrow to those two.
+    </p>
+    <p class="note">
+      <strong>The tag filters still work</strong> even with no colours on the
+      tags: two groups, OR within one and AND across them.
+    </p>
+
+    <p class="note">Text below the script, to prove the map is inserted in place:</p>
+
+    <script
+      type="module"
+      src="/embed/map.js"
+      data-snapshot="/embed/dev-legacy.json"
+      data-height="520"
+    ></script>
+
+    <p class="note">&hellip;and this paragraph should sit under the map.</p>
+  </body>
+</html>

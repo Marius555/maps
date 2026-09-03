@@ -22,6 +22,9 @@ import type { MapAppearance } from "./map-appearance";
 import type { PinRingWidth, PinShape, PinSize } from "./pin-icons";
 import type { ShapeStrokeStyle } from "./shapes";
 
+/**
+ * **Legacy, read-only.** See `MapSnapshot.categories`.
+ */
 export type SnapshotCategory = {
   id: string;
   label: string;
@@ -79,6 +82,15 @@ export type SnapshotPinIcon = {
 export type SnapshotTag = {
   id: string;
   label: string;
+  /**
+   * Hex, already resolved. The embed colours the chip from this, and the pin
+   * from whichever tag the place wears first.
+   *
+   * Optional, and it has to be: a snapshot published while tags were colourless
+   * and categories carried the colour is still live on a customer's site (§7).
+   * Absent means the embed falls back the way it always has.
+   */
+  color?: string;
 };
 
 export type SnapshotTagGroup = {
@@ -113,7 +125,11 @@ export type SnapshotPlace = {
   lat: number;
   lng: number;
   address?: string;
-  /** Category id, matching SnapshotCategory.id. Absent when uncategorised. */
+  /**
+   * **Legacy, read-only.** Category id, matching `SnapshotCategory.id`. Nothing
+   * writes this since categories merged into tags; the embed reads it only to
+   * keep colouring maps published before the merge (§7).
+   */
   category?: string;
   /**
    * Icon id: a built-in from ./pin-icons.ts, or `custom:<id>` matching a
@@ -328,7 +344,14 @@ export type MapSnapshot = {
   center: SnapshotCenter;
   /** Extent of the places, or null when the map has none. */
   bounds: SnapshotBounds | null;
-  categories: SnapshotCategory[];
+  /**
+   * **Legacy, read-only.** Categories were merged into tags: a tag now carries
+   * its own colour and a location wears as many as apply. Nothing writes this
+   * any more, and it is optional so a snapshot published today says nothing at
+   * all about it — but every file published before the merge still has it, and
+   * the embed still reads it to colour those maps (§7).
+   */
+  categories?: SnapshotCategory[];
   /**
    * The map's own pins, and only the ones a published place actually wears.
    *

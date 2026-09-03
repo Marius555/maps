@@ -1,8 +1,22 @@
+import { isCardFont } from "@/packages/shared/card-fonts";
 import {
   CARD_BLOCKS,
   CARD_ZONES,
+  DEFAULT_BUTTON_BORDER_WIDTH,
+  DEFAULT_CHIP_BORDER_WIDTH,
+  DEFAULT_HOURS_ROW_GAP,
+  MAX_BLOCK_FONT_SIZE,
   MAX_BLOCK_MARGIN,
   MAX_BLOCK_PADDING,
+  MAX_BUTTON_BORDER_WIDTH,
+  MAX_BUTTON_LABEL,
+  MAX_BUTTON_PADDING,
+  MAX_BUTTON_RADIUS,
+  MAX_CHIP_BORDER_WIDTH,
+  MAX_CHIP_PADDING,
+  MAX_CLAMP_LINES,
+  MAX_HOURS_ROW_GAP,
+  MIN_BLOCK_FONT_SIZE,
   acceptsBlock,
   cardRows,
   defaultMarginOf,
@@ -17,10 +31,13 @@ import {
   type CardBlock,
   type CardBlockAlign,
   type CardBlockType,
+  type CardButtonHover,
+  type CardButtonVariant,
   type CardLayout,
   type CardZone,
 } from "@/packages/shared/card-layout";
 import { newCardBlockId } from "@/lib/validation/card-layout.schema";
+import type { VacatedSpace } from "./drop-slots";
 
 /**
  * Every change the designer can make to a layout, as pure functions.
@@ -201,6 +218,12 @@ export function makeCardBlock(type: CardBlockType): CardBlock {
       : {}),
     ...(spec.defaultOverlapPct && hasControl(type, "overlap")
       ? { overlapPct: spec.defaultOverlapPct }
+      : {}),
+    // And, for the one type that is a call to action, the full width of its
+    // block — which is what a button on a card is almost always meant to be, and
+    // was the first thing everybody changed about a fresh one.
+    ...(spec.defaultButtonFull && hasControl(type, "buttonStyle")
+      ? { buttonFull: true as const }
       : {}),
   };
 }
@@ -403,7 +426,7 @@ export function dropCardBlock(
    */
   const lifted = staysOnItsLine
     ? remove(layout, dragged.id)
-    : vacate(remove(layout, dragged.id), target);
+    : vacateFromTarget(remove(layout, dragged.id), target);
   const index =
     found.zone === target.zone && target.index > found.index
       ? target.index - 1
@@ -425,16 +448,42 @@ export function dropCardBlock(
 }
 
 /**
- * The layout without this block, and with the lines around it left as they were.
+ * The layout without this block, and with everything around it left as it was.
  *
- * The second half is not a nicety. Lines are paired by adjacency, so taking one
- * block out of a pair frees its partner to grab whatever narrowed block comes
- * next — delete the second of `[1,2] [3]` and 3 jumps up beside 1. `remove`
- * records which blocks started a line first, so the ones that survive keep
- * their own.
+ * "Around it" is two separate promises, and both are load-bearing.
+ *
+ * **Sideways.** Lines are paired by adjacency, so taking one block out of a pair
+ * frees its partner to grab whatever narrowed block comes next — delete the
+ * second of `[1,2] [3]` and 3 jumps up beside 1. `remove` records which blocks
+ * started a line first, so the ones that survive keep their own.
+ *
+ * **Downwards**, which is `freed`, and which this used to leave out. A block
+ * stores the empty space above it as `offset`, so the space a departure opens up
+ * is inherited by the line below and everything under it rides up into it — the
+ * same hole `vacate` fills on the move path (`dropCardBlock`), and the reason
+ * that one exists. Skipping it here was a deliberate call once, on the argument
+ * that a delete and a move make different promises; what it actually made was a
+ * card that **does not survive a round trip**. Drop a block into the room above
+ * another and `settle` shrinks that other block's leading space to pay for the
+ * arrival, so nothing moves; delete the block again with no refund and the
+ * shrunken space stays, leaving the rest of the card higher than it started.
+ *
+ * `freed` is `vacatedSpace`, measured by the gesture that is doing the removing
+ * (see the removal wall in components/card/designer). It cannot be derived here
+ * — most blocks have no height of their own — so a caller with no measurement
+ * omits it and gets the old behaviour, which is what every removal that is not a
+ * drag still is.
  */
-export function removeCardBlock(layout: CardLayout, id: string): CardLayout {
-  return findBlock(layout, id) ? remove(layout, id) : layout;
+export function removeCardBlock(
+  layout: CardLayout,
+  id: string,
+  freed?: VacatedSpace,
+): CardLayout {
+  if (!findBlock(layout, id)) return layout;
+
+  const next = remove(layout, id);
+
+  return freed ? vacate(next, freed) : next;
 }
 
 /**
@@ -458,6 +507,16 @@ export function resizeCardBlock(
       | "margin"
       | "offset"
       | "overlapPct"
+      | "font"
+      | "fontSize"
+      | "color"
+      | "hoursRowGap"
+      | "clampLines"
+      | "chipPadding"
+      | "chipBorderWidth"
+      | "buttonPadding"
+      | "buttonRadius"
+      | "buttonBorderWidth"
     >
   > & {
     /*
@@ -474,6 +533,84 @@ export function resizeCardBlock(
      * what every other field in this patch means by it.
      */
     fit?: "cover" | "contain";
+    /*
+     * The three booleans, all spelled out as `boolean` rather than picked off
+     * `CardBlock` where each is `true | undefined` — for the reason `fit` above
+     * is spelled out with `"cover"` in it. `undefined` already means "don't
+     * touch this" in this patch, so a checkbox being *unticked* needs a word of
+     * its own, and `false` is that word.
+     */
+    bold?: boolean;
+    hoursOpen?: boolean;
+    hoursLongDays?: boolean;
+    /*
+     * What the button does. Spelled out with `"directions"` in it rather than
+     * picked off `CardBlock`, where it is `"link" | undefined`: picking it would
+     * leave the panel no way to say "directions", since `undefined` already
+     * means "don't touch this" — which is what every other field in this patch
+     * means by it. Same reason `fit` carries `"cover"`.
+     */
+    buttonAction?: "link" | "directions";
+    /*
+     * Where its link comes from, and what it says. Both spelled out as plain
+     * strings with the empty string carrying the absence, on `chipBackground`'s
+     * terms: `""` is the picker saying "the location's own website" and the
+     * label box saying "back to the action's own word", and `undefined` is
+     * already taken by "leave it alone".
+     */
+    buttonSource?: string;
+    buttonLabel?: string;
+    buttonBackground?: string;
+    buttonBorder?: string;
+    /* Full width is the state that has to be asked for — see `buttonFull`. */
+    buttonFull?: boolean;
+    /*
+     * The treatment and the hover, each carrying its own default as a word.
+     *
+     * `"solid"` and `"darken"` are not values `CardBlock` has — they are the
+     * states those two fields say by not being there — and they are spelled out
+     * here for the reason `fit` carries `"cover"` and `buttonAction` carries
+     * `"directions"`: `undefined` already means "leave it alone" in this patch,
+     * so a control pressing its way *back* to the default needs a word for it.
+     * The handler is what turns that word into the field's absence again.
+     */
+    buttonVariant?: "solid" | CardButtonVariant;
+    buttonHover?: "darken" | CardButtonHover;
+    /*
+     * The four ways to reach a place a Links row leaves out. `boolean` rather
+     * than `true | undefined`, for `bold`'s reason: a checkbox being *ticked
+     * back on* needs a word of its own, and `false` is that word.
+     */
+    hidePhone?: boolean;
+    hideEmail?: boolean;
+    hideWebsite?: boolean;
+    hideDirections?: boolean;
+    /*
+     * Spelled out rather than picked off `CardBlock`, for `color`'s reason: an
+     * empty string is how the Reset beside the picker says "back to the ground
+     * this theme draws", and `undefined` is already taken by "leave it alone".
+     */
+    chipBackground?: string;
+    /*
+     * The chips' outline colour, on `chipBackground`'s terms — an empty string
+     * is the Reset saying "no outline", and `undefined` is "leave it alone".
+     * Clearing it takes the width with it: half an outline is not a thing a
+     * chip can draw (packages/shared/card-layout.ts).
+     */
+    chipBorder?: string;
+    /*
+     * Which of the mark's two drawings this block is. Spelled out with `"pin"`
+     * in it rather than picked off `CardBlock`, where it is `"image" |
+     * undefined`: `undefined` already means "don't touch this" in this patch,
+     * so the control needs a word for the state the field says by not being
+     * there — exactly `fit`'s problem above.
+     */
+    logoMode?: "pin" | "image";
+    /*
+     * "Show the whole thing", which is the absence of a line count. Zero rather
+     * than `undefined` for the same reason: the checkbox has to be able to say
+     * it.
+     */
   },
 ): CardLayout {
   const found = findBlock(layout, id);
@@ -606,6 +743,258 @@ export function resizeCardBlock(
     else next.padding = padding;
   }
 
+  /*
+   * The type styling. Four fields, one control, and every one of them says
+   * "leave this alone" by being absent from the patch and "put it back to the
+   * block's own default" by being empty — an unset font, a size of zero, an
+   * empty colour, a `false` bold. That pair is what lets one panel offer a
+   * picker and a Reset without needing a second verb for the second one.
+   */
+  if (patch.font !== undefined && hasControl(type, "text")) {
+    if (isCardFont(patch.font)) next.font = patch.font;
+    else delete next.font;
+  }
+
+  if (patch.fontSize !== undefined && hasControl(type, "text")) {
+    const size = clamp(patch.fontSize, MIN_BLOCK_FONT_SIZE, MAX_BLOCK_FONT_SIZE);
+    if (patch.fontSize <= 0) delete next.fontSize;
+    else next.fontSize = size;
+  }
+
+  if (patch.color !== undefined && hasControl(type, "text")) {
+    if (patch.color) next.color = patch.color.toLowerCase();
+    else delete next.color;
+  }
+
+  /*
+   * The chips' own two, on exactly the terms above: an empty colour is the
+   * theme's own ground back, and zero padding is the pill the card already drew.
+   */
+  if (patch.chipBackground !== undefined && hasControl(type, "chips")) {
+    if (patch.chipBackground) {
+      next.chipBackground = patch.chipBackground.toLowerCase();
+    } else delete next.chipBackground;
+  }
+
+  if (patch.chipPadding !== undefined && hasControl(type, "chips")) {
+    const padding = clamp(patch.chipPadding, 0, MAX_CHIP_PADDING);
+    if (padding <= 0) delete next.chipPadding;
+    else next.chipPadding = padding;
+  }
+
+  /*
+   * And their outline, which is stored as a pair or not at all.
+   *
+   * Picking a colour seeds the hairline the first time, because a colour on its
+   * own draws nothing and the picker would look broken; clearing it takes the
+   * width away, because a width on its own would sit in the row saying a chip
+   * has an outline it does not have. Both renderers read `chipStyleOf`, which
+   * refuses the halves for the same reason.
+   */
+  if (patch.chipBorder !== undefined && hasControl(type, "chips")) {
+    if (patch.chipBorder) {
+      next.chipBorder = patch.chipBorder.toLowerCase();
+      next.chipBorderWidth ??= DEFAULT_CHIP_BORDER_WIDTH;
+    } else {
+      delete next.chipBorder;
+      delete next.chipBorderWidth;
+    }
+  }
+
+  if (patch.chipBorderWidth !== undefined && hasControl(type, "chips")) {
+    const width = clamp(patch.chipBorderWidth, 0, MAX_CHIP_BORDER_WIDTH);
+    if (width <= 0) {
+      delete next.chipBorderWidth;
+      delete next.chipBorder;
+    } else next.chipBorderWidth = width;
+  }
+
+  /*
+   * The mark's own drawing. The pin is the absence of the field, so there is
+   * one way to say it and no card published before this existed changes.
+   */
+  if (patch.logoMode !== undefined && hasControl(type, "logo")) {
+    if (patch.logoMode === "image") next.logoMode = "image";
+    else delete next.logoMode;
+  }
+
+  if (patch.bold !== undefined && hasControl(type, "text")) {
+    // Not bold is the absence of the field, so there is one way to say it.
+    if (patch.bold) next.bold = true;
+    else delete next.bold;
+  }
+
+  /*
+   * The week's three. `hoursOpen` absent is *collapsed*, which is what the
+   * embed has always drawn — so ticking "show only today" is what clears the
+   * field rather than what sets one (packages/shared/card-layout.ts).
+   */
+  if (patch.hoursOpen !== undefined && hasControl(type, "hours")) {
+    if (patch.hoursOpen) next.hoursOpen = true;
+    else delete next.hoursOpen;
+  }
+
+  if (patch.hoursLongDays !== undefined && hasControl(type, "hours")) {
+    if (patch.hoursLongDays) next.hoursLongDays = true;
+    else delete next.hoursLongDays;
+  }
+
+  /*
+   * What the button does — and, when it stops being a link, the source it was
+   * reading goes with it.
+   *
+   * Cleared rather than kept for `overlapEdge`'s reason one field over: a
+   * source on a directions button describes something the button will never
+   * read, and leaving it there is a stale answer waiting to surprise whoever
+   * switches the action back weeks later. The *label* survives, because it is
+   * the owner's own words about their own button and both actions have one.
+   */
+  if (patch.buttonAction !== undefined && hasControl(type, "button")) {
+    if (patch.buttonAction === "link") next.buttonAction = "link";
+    else {
+      delete next.buttonAction;
+      delete next.buttonSource;
+    }
+  }
+
+  if (patch.buttonSource !== undefined && hasControl(type, "button")) {
+    // The location's own website is the absence, so there is one way to say it
+    // and no sentinel a field id could ever collide with.
+    if (patch.buttonSource) next.buttonSource = patch.buttonSource;
+    else delete next.buttonSource;
+  }
+
+  if (patch.buttonLabel !== undefined && hasControl(type, "button")) {
+    /*
+     * Trimmed here as well as in `readBlock`, and the reason is the panel
+     * rather than the store: a label of spaces is a button with no words on it,
+     * and it should read as *unset* — the action's own word back — the moment
+     * the box is emptied, not on the next reload.
+     */
+    const label = patch.buttonLabel.replace(/\s+/g, " ").trim();
+    if (label) next.buttonLabel = label.slice(0, MAX_BUTTON_LABEL);
+    else delete next.buttonLabel;
+  }
+
+  /*
+   * The button's own box, on exactly the chips' terms above: an empty colour is
+   * the theme's own ground back, and zero is the button the stylesheet already
+   * draws.
+   */
+  if (patch.buttonBackground !== undefined && hasControl(type, "buttonStyle")) {
+    if (patch.buttonBackground) {
+      next.buttonBackground = patch.buttonBackground.toLowerCase();
+    } else delete next.buttonBackground;
+  }
+
+  if (patch.buttonPadding !== undefined && hasControl(type, "buttonStyle")) {
+    const padding = clamp(patch.buttonPadding, 0, MAX_BUTTON_PADDING);
+    if (padding <= 0) delete next.buttonPadding;
+    else next.buttonPadding = padding;
+  }
+
+  /*
+   * The corner, where **zero is stored** rather than dropped.
+   *
+   * Every other number in this function is deleted at zero because zero is what
+   * the stylesheet already draws. A radius of zero is not: absent draws the
+   * stylesheet's own `0.5rem`, so square is a real choice with nowhere else to
+   * be written down, and deleting it made the Corners control unable to say the
+   * one thing it exists for. `readBlock` and `buttonStyleOf` ask the same
+   * question the same way.
+   */
+  if (patch.buttonRadius !== undefined && hasControl(type, "buttonStyle")) {
+    next.buttonRadius = clamp(patch.buttonRadius, 0, MAX_BUTTON_RADIUS);
+  }
+
+  // The outline, stored as a pair or not at all — `chipBorder`'s rule, for its
+  // reasons, so the two controls cannot behave differently.
+  if (patch.buttonBorder !== undefined && hasControl(type, "buttonStyle")) {
+    if (patch.buttonBorder) {
+      next.buttonBorder = patch.buttonBorder.toLowerCase();
+      next.buttonBorderWidth ??= DEFAULT_BUTTON_BORDER_WIDTH;
+    } else {
+      delete next.buttonBorder;
+      delete next.buttonBorderWidth;
+    }
+  }
+
+  if (patch.buttonBorderWidth !== undefined && hasControl(type, "buttonStyle")) {
+    const width = clamp(patch.buttonBorderWidth, 0, MAX_BUTTON_BORDER_WIDTH);
+    if (width <= 0) {
+      delete next.buttonBorderWidth;
+      delete next.buttonBorder;
+    } else next.buttonBorderWidth = width;
+  }
+
+  if (patch.buttonFull !== undefined && hasControl(type, "buttonStyle")) {
+    // Hugging its label is the absence of the field, so there is one way to say
+    // it and a button nobody has stretched stores nothing.
+    if (patch.buttonFull) next.buttonFull = true;
+    else delete next.buttonFull;
+  }
+
+  /*
+   * The treatment and the hover, each pressed back to its default by deleting
+   * the field rather than by storing a word for it.
+   *
+   * That is the whole of why the patch spells `"solid"` and `"darken"` and
+   * `CardBlock` does not: a filled button and a darkening wash are what every
+   * card published so far says with silence, and storing a synonym for silence
+   * would put a field into a design that draws exactly what it drew before.
+   */
+  if (patch.buttonVariant !== undefined && hasControl(type, "buttonStyle")) {
+    if (patch.buttonVariant === "solid") delete next.buttonVariant;
+    else next.buttonVariant = patch.buttonVariant;
+  }
+
+  if (patch.buttonHover !== undefined && hasControl(type, "buttonStyle")) {
+    if (patch.buttonHover === "darken") delete next.buttonHover;
+    else next.buttonHover = patch.buttonHover;
+  }
+
+  /*
+   * The four ways to reach a place a Links row leaves out.
+   *
+   * Ticked is the *absence* here, which is the one place in this file that
+   * reads backwards — and deliberately: every card already live on a customer's
+   * site draws all four, so shown has to be what a card with none of these
+   * fields says (packages/shared/card-layout.ts).
+   */
+  if (hasControl(type, "links")) {
+    if (patch.hidePhone !== undefined) {
+      if (patch.hidePhone) next.hidePhone = true;
+      else delete next.hidePhone;
+    }
+    if (patch.hideEmail !== undefined) {
+      if (patch.hideEmail) next.hideEmail = true;
+      else delete next.hideEmail;
+    }
+    if (patch.hideWebsite !== undefined) {
+      if (patch.hideWebsite) next.hideWebsite = true;
+      else delete next.hideWebsite;
+    }
+    if (patch.hideDirections !== undefined) {
+      if (patch.hideDirections) next.hideDirections = true;
+      else delete next.hideDirections;
+    }
+  }
+
+  if (patch.hoursRowGap !== undefined && hasControl(type, "hours")) {
+    const gap = clamp(patch.hoursRowGap, 0, MAX_HOURS_ROW_GAP);
+    // Back at the default is back to inheriting it, on the same argument the
+    // margin above makes.
+    if (gap === DEFAULT_HOURS_ROW_GAP) delete next.hoursRowGap;
+    else next.hoursRowGap = gap;
+  }
+
+  // Zero lines is "all of them", which is the absence of a clamp — see the
+  // patch type above.
+  if (patch.clampLines !== undefined && hasControl(type, "clamp")) {
+    if (patch.clampLines <= 0) delete next.clampLines;
+    else next.clampLines = clamp(patch.clampLines, 1, MAX_CLAMP_LINES);
+  }
+
   return replace(layout, found.zone, found.index, next);
 }
 
@@ -632,8 +1021,12 @@ export function resizeCard(
 
 /** Which blocks the palette can still offer, given what is already on the card. */
 export function availableBlocks(layout: CardLayout): CardBlockType[] {
-  return (Object.keys(CARD_BLOCKS) as CardBlockType[]).filter((type) =>
-    CARD_ZONES.some((zone) => acceptsBlock(layout, type, zone)),
+  return (Object.keys(CARD_BLOCKS) as CardBlockType[]).filter(
+    (type) =>
+      // A retired block still draws wherever a saved layout names it; it is just
+      // not something new cards can pick up. See `CardBlockSpec.retired`.
+      !CARD_BLOCKS[type].retired &&
+      CARD_ZONES.some((zone) => acceptsBlock(layout, type, zone)),
   );
 }
 
@@ -952,20 +1345,27 @@ function withShare(
  * of their own: `vacatedSpace` in ./drop-slots.ts works it out from the same rects
  * the drop marks were drawn from.
  *
- * Deliberately not applied by `removeCardBlock`. Deleting a block and moving one
- * are different promises — a move says "only this block moves", while closing the
- * gap left by something that is gone is at least arguable — and nobody has asked
- * for the second one.
+ * `removeCardBlock` applies it too, and used not to. See there for why the
+ * distinction between deleting a block and moving one turned out not to be one
+ * the card could afford.
  */
-function vacate(layout: CardLayout, target: CardDropTarget): CardLayout {
+function vacate(layout: CardLayout, freed: VacatedSpace): CardLayout {
+  const found = findBlock(layout, freed.id);
+  if (!found) return layout;
+
+  return withRowOffset(layout, found.zone, found.block.id, freed.offset);
+}
+
+/** The same, from a drop target that may or may not be carrying one. */
+function vacateFromTarget(
+  layout: CardLayout,
+  target: CardDropTarget,
+): CardLayout {
   if (target.vacateId === undefined || target.vacateOffset === undefined) {
     return layout;
   }
 
-  const found = findBlock(layout, target.vacateId);
-  if (!found) return layout;
-
-  return withRowOffset(layout, found.zone, found.block.id, target.vacateOffset);
+  return vacate(layout, { id: target.vacateId, offset: target.vacateOffset });
 }
 
 /**

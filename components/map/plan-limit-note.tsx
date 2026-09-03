@@ -1,4 +1,5 @@
 import { TriangleAlert } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { headroomMessage, type PlanHeadroom } from "@/lib/map/plan-headroom";
 import type { LimitedResource } from "@/lib/repositories/errors";
@@ -36,6 +37,25 @@ export function PlanLimitNote({
   resource: LimitedResource;
   headroom: PlanHeadroom;
 }) {
+  return <PlanNote id={id}>{headroomMessage(resource, headroom)}</PlanNote>;
+}
+
+/**
+ * The same line, for a plan that does not include a feature at all.
+ *
+ * Split out rather than given a second set of props because the two differ only
+ * in where the sentence comes from: a limit composes one from a count and a
+ * ceiling, a gate has nothing to count and its sentence arrives whole from
+ * `planFeatureNote`. What must not differ is how it looks or how it is
+ * announced — a second amber line built by hand would drift from this one.
+ */
+export function PlanNote({
+  id,
+  children,
+}: {
+  id: string;
+  children: ReactNode;
+}) {
   return (
     <p
       id={id}
@@ -43,7 +63,7 @@ export function PlanLimitNote({
       className="flex items-start gap-1.5 text-xs text-warning-ink"
     >
       <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
-      <span>{headroomMessage(resource, headroom)}</span>
+      <span>{children}</span>
     </p>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { CATEGORY_COLORS, CATEGORY_COLOR_NAMES } from "@/lib/validation/category.schema";
+import { PALETTE_COLORS, PALETTE_COLOR_NAMES } from "@/lib/validation/palette";
 import { PIN_ICONS, type CustomPinIcon } from "@/packages/shared/pin-icons";
 import { PinDesignRow } from "./pin-design-row";
 import { PIN_TRIM_COLORS, PIN_TRIM_COLOR_NAMES } from "./pin-palette";
@@ -58,8 +58,8 @@ export function PinFields({
       <PinSwatchRow
         label="Fill"
         value={draft.color}
-        colors={CATEGORY_COLORS}
-        names={CATEGORY_COLOR_NAMES}
+        colors={PALETTE_COLORS}
+        names={PALETTE_COLOR_NAMES}
         onChange={(color) => onChange({ ...draft, color })}
       />
 

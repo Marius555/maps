@@ -75,10 +75,15 @@ export function newBlockHeight(
  * Every block on the card, plus the gaps, the leading space anyone has put
  * above a block, and the card's own padding.
  *
- * `offset` counts here for the same reason a gap does: it is height the card
- * has already spent. Leave it out and a card whose blocks have been spread down
- * the middle still reports the room it had when they were stacked at the top,
- * which is a top zone that offers a landing spot the card then clips.
+ * The total **including** the slack, in other words — what the card comes to
+ * when every block gets all the room it asked for. `contentHeight` is the same
+ * sum without it, and that is the one the drop question is answered from, since
+ * leading space gives way (`leadBox` in packages/shared/card-layout.ts) and so
+ * is never in a newcomer's way.
+ *
+ * Kept as its own export because it is the honest answer to "how tall would this
+ * card like to be", which is what the tests are written against and what tells a
+ * card that merely *prefers* more room from one that genuinely cannot fit.
  */
 export function usedHeight(
   layout: CardLayout,
@@ -118,9 +123,64 @@ export function usedHeight(
   return used;
 }
 
-/** How much of the card is still unspoken for, in px. Never below zero. */
-export function roomLeft(layout: CardLayout, heights: BlockHeights): number {
-  return Math.max(0, layout.maxHeight - usedHeight(layout, heights));
+/**
+ * The leading space on the card — every row's, summed.
+ *
+ * `rowOffsetHolder` and not a second `Math.max`, deliberately. A row's space is
+ * one number held by one member, and this has to name the same pixels
+ * `usedHeight` added and the same ones `leadBox` actually gives back on the
+ * card; three readings of "the row's leading space" that agree today are three
+ * that can drift tomorrow.
+ */
+export function reclaimableSpace(layout: CardLayout): number {
+  let space = 0;
+
+  for (const zone of CARD_ZONES) {
+    for (const row of cardRows(layout.zones[zone], layout)) {
+      space += rowOffsetHolder(row.blocks)?.offset ?? 0;
+    }
+  }
+
+  return space;
+}
+
+/**
+ * What the card has spent on things that are actually *there* — everything
+ * `usedHeight` counts, less the empty room holding blocks apart.
+ */
+export function contentHeight(
+  layout: CardLayout,
+  heights: BlockHeights,
+): number {
+  return usedHeight(layout, heights) - reclaimableSpace(layout);
+}
+
+/**
+ * How much of the card a **new** block may have, in px.
+ *
+ * Not `maxHeight - usedHeight`, and the difference is the whole of the bug this
+ * replaced. A block sitting near the bottom of the card is held there by a
+ * leading `offset`, and `usedHeight` charges that offset as height already
+ * spent — correctly, for its own purpose. So a card with a logo and an address
+ * at the top and a name at the bottom reported about eight pixels free while
+ * showing three hundred pixels of white space down the middle, and every
+ * palette chip dragged over that space was answered "No room for this on the
+ * card." The larger the gap, the more certain the refusal: exactly backwards.
+ *
+ * A drop into that space does not grow the card. `run` in ./drop-slots.ts lays
+ * its landing marks *inside* the free runs and hands the block below a
+ * `nextOffset` — what its leading space has to become for its own top edge not
+ * to move — so the newcomer is paid for out of the gap it landed in. Where the
+ * gap is in one zone and the drop in another, the gap simply compresses: every
+ * renderer draws leading space as a box that gives way under exactly this
+ * pressure (`leadBox` in packages/shared/card-layout.ts). Leading space is slack,
+ * and every part of this system treats it as slack.
+ *
+ * `usedHeight` goes on counting it, because it answers the opposite question:
+ * not "what may still be added" but "how tall would this card like to be".
+ */
+export function roomForNew(layout: CardLayout, heights: BlockHeights): number {
+  return Math.max(0, layout.maxHeight - contentHeight(layout, heights));
 }
 
 /**
@@ -161,106 +221,5 @@ export function hasRoomFor(
     newBlockHeight(layout, drag.type) +
     (layout.zones[zone].length > 0 ? layout.gap : 0);
 
-  return roomLeft(layout, heights) >= needed;
-}
-
-/**
- * The same card, with its leading spaces trimmed until it fits inside itself.
- *
- * The other half of "a card is never designed into a scroll". `hasRoomFor` stops
- * one being built too tall from here on; this is what pulls back one that already
- * is — a card whose blocks were spread down the middle before the rule existed,
- * or one an older build's arithmetic walked past the bottom edge.
- *
- * **Leading space only, largest first.** It never touches an order, a width or a
- * height, so nothing anyone put on the card disappears or changes shape; the
- * only thing it takes away is the empty room that was pushing a block out of
- * sight, and it takes it from the biggest gap first because that is the one
- * somebody is least likely to have meant to the pixel.
- *
- * A row's space is one number held by one member (`rowOffsetHolder`), so it is
- * trimmed per row and the row's other members are cleared with it — the same
- * single-valued rule `withRowOffset` in ./card-edits.ts writes by. Otherwise a
- * sibling's older number becomes the new maximum and the trim does nothing.
- *
- * Returns the layout **by reference** when it already fits, so a caller can tell
- * "nothing to do" from "changed" by identity, and a card nobody has overfilled
- * publishes the bytes it always did (CLAUDE.md §7).
- */
-export function fitWithin(
-  layout: CardLayout,
-  heights: BlockHeights,
-): CardLayout {
-  /*
-   * Whole pixels, because an `offset` is one: `cardLayoutSchema` declares it
-   * `z.number().int()` and the endpoint refuses anything else.
-   *
-   * This is the only writer that could hand it a fraction, and the reason is
-   * structural rather than careless — every other one rounds a measurement into
-   * a number (`vacatedSpace`, `run`'s `settles`, `settlesBelow`), while this one
-   * subtracts a *measured total* from a stored integer. `getBoundingClientRect`
-   * reports sub-pixel, so a card of two text blocks is 468.975 tall and the
-   * offset that comes out the far side is 196.0249…
-   *
-   * That was not a rounding error anyone would see. It was a 422 on every save
-   * from the moment the page loaded, so no edit persisted at all and the card
-   * came back unchanged on the next reload.
-   *
-   * `ceil` rather than `round`: a whole pixel too much comes off the leading
-   * space and the card is inside itself, where a fraction too little leaves it
-   * over the edge — which is the one thing this function exists to prevent.
-   */
-  let over = Math.ceil(usedHeight(layout, heights) - layout.maxHeight);
-  if (over <= 0) return layout;
-
-  const spaced: { zone: CardZone; holder: string; members: string[]; offset: number }[] =
-    [];
-
-  for (const zone of CARD_ZONES) {
-    for (const row of cardRows(layout.zones[zone], layout)) {
-      const holder = rowOffsetHolder(row.blocks);
-      if (!holder?.offset) continue;
-
-      spaced.push({
-        zone,
-        holder: holder.id,
-        members: row.blocks.map((block) => block.id),
-        offset: holder.offset,
-      });
-    }
-  }
-
-  spaced.sort((a, b) => b.offset - a.offset);
-
-  /** What each block's offset becomes. Absent means leave it alone. */
-  const trimmed = new Map<string, number>();
-
-  for (const row of spaced) {
-    if (over <= 0) break;
-
-    const take = Math.min(over, row.offset);
-    over -= take;
-
-    for (const id of row.members) {
-      trimmed.set(id, id === row.holder ? row.offset - take : 0);
-    }
-  }
-
-  if (trimmed.size === 0) return layout;
-
-  const zones = { ...layout.zones };
-  for (const zone of CARD_ZONES) {
-    zones[zone] = layout.zones[zone].map((block) => {
-      const next = trimmed.get(block.id);
-      if (next === undefined || (block.offset ?? 0) === next) return block;
-
-      const copy = { ...block };
-      if (next > 0) copy.offset = next;
-      else delete copy.offset;
-
-      return copy;
-    });
-  }
-
-  return { ...layout, zones };
+  return roomForNew(layout, heights) >= needed;
 }

@@ -59,6 +59,52 @@ export class PlanLimitError extends RepositoryError {
   }
 }
 
+/**
+ * Thrown when a plan does not include a feature at all, as opposed to having
+ * used up an allowance of it.
+ *
+ * Its own error rather than a `PlanLimitError` with a different noun, because
+ * the two sentences are not the same shape. A limit says "you've used all ten,
+ * delete one or upgrade" — it offers a way out that costs nothing. There is
+ * nothing to delete here: the only way out is the plan, so the copy carries one
+ * remedy rather than two, and its own code lets the client offer an upgrade
+ * where a limit would have pointed at a list.
+ */
+export type GatedFeature = "routes";
+
+const FEATURES: Record<GatedFeature, { noun: string; verb: string }> = {
+  routes: { noun: "Routes", verb: "draw them" },
+};
+
+export class PlanFeatureError extends RepositoryError {
+  constructor(
+    readonly feature: GatedFeature,
+    readonly plan: PlanId,
+  ) {
+    super("plan_feature_required", planFeatureMessage(feature, plan), 403);
+  }
+}
+
+/**
+ * The fact on its own, for the menu that switches the tool off.
+ *
+ * Split from the full message for the reason `planLimitUsage` is: an inline note
+ * sits beside the control it explains and earns its space by being short, while
+ * a refusal that interrupts a gesture owes the way out as well. Client-safe on
+ * the same terms as everything else here — this module's only imports are
+ * `import type`, so no `server-only` module follows it into a browser bundle.
+ */
+export function planFeatureNote(feature: GatedFeature, plan: PlanId): string {
+  return `${FEATURES[feature].noun} aren't included on the ${plan} plan.`;
+}
+
+export function planFeatureMessage(
+  feature: GatedFeature,
+  plan: PlanId,
+): string {
+  return `${planFeatureNote(feature, plan)} Upgrade to ${FEATURES[feature].verb}.`;
+}
+
 /** What each resource is called in a sentence, singular and plural. */
 const NOUNS: Record<LimitedResource, [string, string]> = {
   maps: ["map", "maps"],

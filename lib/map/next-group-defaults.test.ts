@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CATEGORY_COLORS } from "@/lib/validation/category.schema";
+import { PALETTE_COLORS } from "@/lib/validation/palette";
 import { nextGroupDefaults } from "./next-group-defaults";
 
 describe("nextGroupDefaults", () => {
@@ -65,12 +65,12 @@ describe("nextGroupDefaults", () => {
   });
 
   it("still returns a colour once the palette is used up", () => {
-    const groups = CATEGORY_COLORS.map((color, index) => ({
+    const groups = PALETTE_COLORS.map((color, index) => ({
       name: `Group ${index + 1}`,
       sortOrder: index,
       color,
     }));
 
-    expect(CATEGORY_COLORS).toContain(nextGroupDefaults(groups).color);
+    expect(PALETTE_COLORS).toContain(nextGroupDefaults(groups).color);
   });
 });

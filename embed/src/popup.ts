@@ -1,4 +1,5 @@
 import {
+  DAY_LABELS,
   DAY_LABELS_SHORT,
   dayIndex,
   formatDay,
@@ -6,13 +7,21 @@ import {
   isOpenNow,
 } from "@/packages/shared/hours";
 import { formatDistance, formatDuration, pathLengthM } from "@/packages/shared/geo";
+import { directionsUrl } from "@/packages/shared/directions";
+import { buttonTargetOf } from "@/packages/shared/card-button";
 import {
   CARD_ZONES,
   blockBox,
+  buttonStyleOf,
   cardRowBox,
   cardRows,
+  chipStyleOf,
+  justifyOf,
   defaultCardLayout,
+  logoImageOf,
   detailsContents,
+  leadBox,
+  rowOffsetHolder,
   upwardLiftOf,
   type CardBlock,
   type CardBlockType,
@@ -31,6 +40,7 @@ import type {
   SnapshotPlace,
   SnapshotShape,
 } from "@/packages/shared/snapshot";
+import { pinColorOfChips, type TagChip } from "@/packages/shared/tags";
 
 import { button, el, icon, link } from "./dom";
 
@@ -63,6 +73,12 @@ import { button, el, icon, link } from "./dom";
  */
 export function buildPopup(
   place: SnapshotPlace,
+  /**
+   * Legacy, read-only: the category this place wore on a snapshot published
+   * before categories became tags. Undefined on every file published since, and
+   * read by exactly one builder — the retired `category` block, which such a
+   * file's own `cardLayout` may still name (§7 keeps it drawing).
+   */
   category: SnapshotCategory | undefined,
   fields: SnapshotField[] = [],
   /**
@@ -79,6 +95,15 @@ export function buildPopup(
    * never asks.
    */
   pins: readonly CustomPinIcon[] = [],
+  /**
+   * This location's tags, resolved once per map by the caller and **in the
+   * location's own order** — the first is what colours its pin.
+   *
+   * Defaulted like `layout` and `pins` above and for the same reason: every
+   * snapshot published before this block existed carries no `tagGroups`, and
+   * must keep rendering exactly the card it always did (CLAUDE.md §7).
+   */
+  tagChips: readonly TagChip[] = [],
 ): HTMLElement {
   // `--place`, because the floor that class carries belongs to a location card
   // alone: a shape holds a name and a sentence and is meant to be smaller
@@ -86,10 +111,39 @@ export function buildPopup(
   const root = el("div", "lm-popup lm-popup--place");
   root.style.maxWidth = `${String(layout.width)}px`;
 
+  /*
+   * The legacy category, folded in as the first chip.
+   *
+   * A snapshot published before categories became tags carries *both*: colourless
+   * `tagGroups` and a `category`. Drawing `tagChips` alone would silently drop the
+   * one chip such a card has always shown — the coloured one that explains the
+   * pin — from every map already live on a customer's site (§7). Folded in here
+   * rather than branched on inside each builder, so the dot, the logo's fallback
+   * colour and the retired Category block all get the same answer.
+   *
+   * Skipped when the layout names a Category block of its own, which would then
+   * draw the same chip a second time. Unreachable while the card designer is off
+   * (nothing publishes a `cardLayout` at all), and one boolean is cheaper than
+   * finding out it was reachable after all.
+   */
+  const hasCategoryBlock = CARD_ZONES.some((zone) =>
+    layout.zones[zone].some((block) => block.type === "category"),
+  );
+
+  const chips: TagChip[] =
+    category && !hasCategoryBlock && !pinColorOfChips(tagChips)
+      ? [
+          { id: category.id, label: category.label, color: category.color },
+          ...tagChips,
+        ]
+      : [...tagChips];
+
   const context: BlockContext = {
     place,
     category,
     fields,
+    tagChips: chips,
+    pinColor: pinColorOfChips(chips),
     pins,
     folded: detailsContents(layout),
   };
@@ -102,15 +156,29 @@ export function buildPopup(
      *
      * A builder returning null is this renderer's version of `CardView`'s
      * content filter, and pairing has to happen *after* it for the same reason:
-     * on a location with no category, the Name and the Address either side of it
-     * should share a line rather than leave a hole where the category would have
+     * on an untagged location, the Name and the Address either side of the tags
+     * should share a line rather than leave a hole where the chips would have
      * been. So the blocks that drew something are collected, and `cardRows`
      * pairs those.
      */
     const built: { block: CardBlock; node: HTMLElement }[] = [];
 
     for (const block of layout.zones[zone]) {
-      const node = BUILDERS[block.type](context);
+      /*
+       * A type this build does not have a builder for.
+       *
+       * The embed draws `snapshot.cardLayout` **as it was published**, without
+       * running it back through `resolveCardLayout` (embed/src/map.ts) — which
+       * is what keeps a card live on a customer's site drawing what it drew.
+       * The other half of that bargain is this line: a block kind we have since
+       * retired is still in those bytes, and indexing a table that no longer
+       * has the key would throw on a stranger's page rather than skip one
+       * block. `fields` is the one that has gone so far.
+       */
+      const build = BUILDERS[block.type] as BlockBuilder | undefined;
+      if (!build) continue;
+
+      const node = build(context, block);
       if (node) built.push({ block, node });
     }
 
@@ -135,6 +203,16 @@ export function buildPopup(
           row.shared,
         ),
       );
+
+      /*
+       * The line's leading space, as a box of its own that gives way — see
+       * `leadBox` in packages/shared/card-layout.ts. It used to be a
+       * `margin-top` on the line, which cannot shrink: a week of opening hours
+       * a visitor opened pushed everything under it off the bottom of the card
+       * rather than closing up the gap above it.
+       */
+      const lead = rowOffsetHolder(row.blocks)?.offset ?? 0;
+      if (lead > 0) section.append(buildLead(lead, layout));
 
       section.append(row.shared ? wrapRow(row, layout, wrapped) : wrapped[0]);
     }
@@ -170,8 +248,26 @@ export function buildPopup(
 /** Everything a block builder is allowed to know about. */
 type BlockContext = {
   place: SnapshotPlace;
+  /** Legacy, read-only — see `buildPopup`. */
   category: SnapshotCategory | undefined;
   fields: SnapshotField[];
+  /**
+   * This location's tags, already resolved, in the location's own order — with a
+   * pre-merge snapshot's category folded in at the front (see `buildPopup`).
+   *
+   * Resolved rather than ids plus the map's vocabulary, because the resolution
+   * is one lookup for the whole map and `map.ts` already builds one there —
+   * doing it per popup would walk sixty tags every time somebody clicks a pin.
+   * It is also what keeps this and the dashboard's `CardBlockData` taking the
+   * same input, which is what stops the preview panel showing two different sets
+   * of chips beside each other.
+   */
+  tagChips: readonly TagChip[];
+  /**
+   * The colour this location's pin took, so exactly one chip can be marked as
+   * its source. Worked out once per popup rather than per chip.
+   */
+  pinColor: string | undefined;
   /** The map's pins — what a Logo block draws. */
   pins: readonly CustomPinIcon[];
   /** What "More details" holds — whatever was not pulled onto the card itself. */
@@ -186,36 +282,120 @@ type BlockContext = {
  * holds the same blocks the card does, so both are built by the same code and
  * cannot drift into two versions of a description.
  */
-const BUILDERS: Record<
-  CardBlockType,
-  (context: BlockContext) => HTMLElement | null
-> = {
+type BlockBuilder = (
+  context: BlockContext,
+  /**
+   * The block itself, for the two builders with options of their own. Optional
+   * because the fold builds a type with no block behind it — see `buildMore`,
+   * and `Details` in components/card/card-block.tsx, which passes the same
+   * nothing.
+   */
+  block?: CardBlock,
+) => HTMLElement | null;
+
+const BUILDERS: Record<CardBlockType, BlockBuilder> = {
   gallery: (context) => buildGallery(photosOf(context.place)),
-  logo: (context) => buildLogo(context.place, context.category, context.pins),
+  logo: (context, block) =>
+    buildLogo(
+      context.place,
+      // The first tag's colour, falling back to the legacy category's for a
+      // snapshot published before the two merged.
+      context.pinColor ?? context.category?.color,
+      context.pins,
+      block,
+    ),
   name: (context) => el("h3", "lm-popup__name", context.place.name),
-  category: (context) => {
-    if (!context.category) return null;
+  /*
+   * The retired Category block, on a snapshot old enough to name it.
+   *
+   * Two files can reach here and they carry different things. One published
+   * before categories became tags has a `category` and no `tagGroups`, so the
+   * legacy branch answers; one published after has tags and its layout only
+   * names this block if its owner arranged the card back then, in which case the
+   * nearest true thing is the tag that now colours the pin — which is what a
+   * category was. Either way it is one chip, which is what the block is.
+   */
+  category: (context, block) => {
+    if (context.category) {
+      return buildTags([context.category], block);
+    }
 
-    const chip = el("span", "lm-popup__category", context.category.label);
-    chip.style.setProperty("--lm-category-color", context.category.color);
-
-    return chip;
+    return context.tagChips.length > 0
+      ? buildTags(context.tagChips.slice(0, 1), block)
+      : null;
   },
+  tags: (context, block) =>
+    context.tagChips.length > 0 ? buildTags(context.tagChips, block) : null,
   address: (context) =>
     context.place.address
       ? el("p", "lm-popup__address", context.place.address)
       : null,
-  description: (context) =>
+  description: (context, block) =>
     context.place.description
-      ? el("p", "lm-popup__description", context.place.description)
+      ? buildDescription(context.place.description, block)
       : null,
-  hours: (context) => buildHours(context.place),
-  fields: (context) => buildFieldRows(context.place, context.fields),
+  hours: (context, block) => buildHours(context.place, block),
   details: (context) => buildMore(context),
-  actions: (context) => buildActions(context.place, context.fields),
+  actions: (context, block) =>
+    buildActions(context.place, context.fields, block),
+  button: (context, block) =>
+    block ? buildButton(context.place, context.fields, block) : null,
   divider: () => el("div", "lm-popup__divider"),
   spacer: () => el("div", "lm-popup__spacer"),
 };
+
+/**
+ * A row of pills, wearing whatever the owner made of them.
+ *
+ * The twin of `TagChips` in components/card/card-block.tsx, built by hand
+ * because the embed must not ship React (§4). What has to match is *what a chip
+ * is*, not how the DOM is made — which is why the three values come from
+ * `chipStyleOf` in packages/shared rather than being read off the block here.
+ * Nothing is written for a block nobody has styled, so `.lm-popup__tag`'s own
+ * rule stays in charge and a card published years ago draws what it drew.
+ *
+ * No chip carries a colour dot. The first one used to, saying which tag the pin
+ * outside the popup had taken its colour from; it read as a stray bubble inside
+ * a pill whose colours are now the owner's to choose, and the pin it explains is
+ * on screen right beside the card.
+ */
+function buildTags(
+  chips: readonly TagChip[],
+  /**
+   * Absent inside the fold, which builds a type with no block behind it to have
+   * been styled — see `BlockBuilder`. Unstyled is the right answer there.
+   */
+  block?: CardBlock,
+): HTMLElement {
+  const row = el("div", "lm-popup__tags");
+  const chip = block ? chipStyleOf(block) : undefined;
+
+  // `justify-content`, and it is the whole of the Alignment control working on
+  // this block: `align` arrives as `text-align`, which cannot move a flex item.
+  if (chip?.justify) row.style.justifyContent = chip.justify;
+
+  for (const tag of chips) {
+    const pill = el("span", "lm-popup__tag", tag.label);
+
+    // A custom property rather than `background`, so the stylesheet keeps its
+    // own default in the `var()` fallback — the pattern every other optional
+    // field on a card follows.
+    if (chip?.background) pill.style.setProperty("--lm-chip-bg", chip.background);
+    if (chip?.padding) pill.style.setProperty("--lm-chip-pad", chip.padding);
+
+    // The outline, which `chipStyleOf` hands over as a pair or not at all — a
+    // colour with no width draws nothing and a width with no colour draws a
+    // line nobody picked.
+    if (chip?.border) pill.style.setProperty("--lm-chip-border", chip.border);
+    if (chip?.borderWidth) {
+      pill.style.setProperty("--lm-chip-border-width", chip.borderWidth);
+    }
+
+    row.append(pill);
+  }
+
+  return row;
+}
 
 /**
  * A block in its box, sized as the owner sized it.
@@ -247,8 +427,15 @@ function wrapBlock(
    */
   onRow: boolean,
 ): HTMLElement {
-  const wrap = el("div", `lm-popup__block lm-popup__block--${block.type}`);
   const box = blockBox(block, layout, onRow);
+  // The clamp is a class rather than a bare custom property, because the rule it
+  // switches on changes the paragraph's `display` — see `--clamp` in styles.css.
+  const wrap = el(
+    "div",
+    `lm-popup__block lm-popup__block--${block.type}${
+      box.lines ? " lm-popup__block--clamp" : ""
+    }`,
+  );
 
   // Neither is emitted any more — a narrowed block is a flex item of its own
   // row, so its share is the `flex` basis below and where it sits on the line is
@@ -263,13 +450,20 @@ function wrapBlock(
   // The class is what cancels the card's vertical padding at the very top and
   // bottom (see `--bleed` in styles.css); the inline margin is the horizontal
   // half, which is a number rather than the two states that class can express.
-  if (box.bleed) wrap.classList.add("lm-popup__block--bleed");
+  //
+  // The two *ends* are their own classes rather than `:first-child` /
+  // `:last-child`, which is what the stylesheet used to match on. A line can now
+  // be preceded by its own leading space (`buildLead`), so the block at the top
+  // of a zone is not necessarily the first element in it — and a photo that
+  // stopped being `:first-child` would silently stop reaching the card's top
+  // edge. This is also what `blockEdges` in components/card/card-frame.tsx has
+  // always asked: the line's index, not the DOM's.
+  if (box.bleed) {
+    wrap.classList.add("lm-popup__block--bleed");
+    if (isFirstLine) wrap.classList.add("lm-popup__block--bleed-start");
+    if (isLastLine) wrap.classList.add("lm-popup__block--bleed-end");
+  }
   if (box.marginInline) wrap.style.marginInline = box.marginInline;
-
-  // The empty space above the block, as a custom property rather than as
-  // `margin-top` — the stylesheet adds it to the bleed cancel, which an inline
-  // margin would simply overwrite. See `--lm-block-offset` in styles.css.
-  if (box.marginTop) wrap.style.setProperty("--lm-block-offset", box.marginTop);
 
   // How far it is pulled over its neighbour, on the same terms and for the same
   // reason: the stylesheet composes it with the offset above, and an inline
@@ -295,6 +489,28 @@ function wrapBlock(
   // the two names are kept in step by hand, as `--lm-card-gap` and `--card-gap`
   // already are.
   if (box.objectFit) wrap.style.setProperty("--lm-card-fit", box.objectFit);
+
+  /*
+   * The owner's own type, and the two block options that are lengths.
+   *
+   * Custom properties rather than declarations, for the reason the dashboard's
+   * `blockStyle` gives at length: each rule in styles.css names its own current
+   * value as the fallback, so a block nobody has styled resolves to exactly the
+   * pixels it has always drawn — which is what lets this land without moving a
+   * single card already live on a customer's site (CLAUDE.md §7). Nothing is
+   * written for such a block, so its DOM is byte-for-byte what it was.
+   */
+  if (box.text) {
+    const { font, size, color, weight } = box.text;
+
+    if (font) wrap.style.setProperty("--lm-card-font", font);
+    if (size) wrap.style.setProperty("--lm-card-font-size", size);
+    if (color) wrap.style.setProperty("--lm-card-color", color);
+    if (weight) wrap.style.setProperty("--lm-card-font-weight", weight);
+  }
+
+  if (box.lines) wrap.style.setProperty("--lm-card-lines", box.lines);
+  if (box.rowGap) wrap.style.setProperty("--lm-hours-gap", box.rowGap);
 
   if (box.height) wrap.style.height = box.height;
 
@@ -347,22 +563,52 @@ function wrapBlock(
  * pin-icon.schema.ts). The dashboard's own marker and preview take the same
  * string the same way.
  *
- * The colour falls back to the category's, never to a theme's: a snapshot is
+ * The colour falls back to the first tag's, never to a theme's: a snapshot is
  * looked at by strangers, and `resolvePin` already answers the fixed grey for a
  * location with neither.
  */
 function buildLogo(
   place: SnapshotPlace,
-  category: SnapshotCategory | undefined,
+  fallbackColor: string | undefined,
   pins: readonly CustomPinIcon[],
+  /**
+   * Absent for a snapshot published before the block could be asked which of
+   * its two drawings it is — which is the pin, exactly as `logoImageOf` reads
+   * an absent `logoMode`.
+   */
+  block?: CardBlock,
 ): HTMLElement {
-  const node = el("div", "lm-popup__logo");
   const pin = resolvePin(place.icon ?? "", pins);
+
+  /*
+   * The uploaded logo on its own, when the owner asked for that and this
+   * location has one.
+   *
+   * `logoImageOf` and not a comparison here, because the dashboard's own `Logo`
+   * asks the same function: the preview panel draws the two side by side, and a
+   * card showing a logo in the studio and a pin on the customer's site is
+   * exactly the drift `packages/shared` exists to stop. An `img` `src` rather
+   * than `innerHTML`, so the `data:` URI never goes near markup at all.
+   */
+  const image = block ? logoImageOf(block, pin?.image ?? "") : null;
+  if (image) {
+    const node = el("div", "lm-popup__logo lm-popup__logo--image");
+    const picture = el("img", "lm-popup__logo-image");
+
+    picture.src = image;
+    picture.alt = "";
+    picture.draggable = false;
+    node.append(picture);
+
+    return node;
+  }
+
+  const node = el("div", "lm-popup__logo");
 
   // Ring, thickness, glyph colour and size, through the one helper the markers
   // and the dashboard's own preview also use.
   for (const [name, value] of Object.entries(
-    pinCssVars(pin, undefined, category?.color),
+    pinCssVars(pin, undefined, fallbackColor),
   )) {
     node.style.setProperty(name, value);
   }
@@ -381,6 +627,26 @@ function buildLogo(
  * not reach into a wrapper. A card with nothing narrowed on it therefore builds
  * the DOM it has always built.
  */
+/**
+ * The empty space above a line, as an element rather than a margin.
+ *
+ * `leadBox` holds the argument and the three numbers; all this does is put them
+ * on a div. Only ever appended when there is space to draw, so a card with no
+ * offsets on it — which is every card published so far — builds exactly the DOM
+ * it always built.
+ */
+function buildLead(offset: number, layout: CardLayout): HTMLElement {
+  const lead = el("div", "lm-popup__lead");
+  const box = leadBox(offset, layout);
+
+  lead.style.flex = box.flex;
+  lead.style.minHeight = box.minHeight;
+  lead.style.marginBottom = box.marginBottom;
+  lead.setAttribute("aria-hidden", "true");
+
+  return lead;
+}
+
 function wrapRow(
   row: CardRow,
   layout: CardLayout,
@@ -393,11 +659,6 @@ function wrapRow(
   // Which end the line's unspent share sits at — a lone narrowed block moved to
   // the end of its line, or a mark leading a line it shares. See `cardRowBox`.
   if (box.justifyContent) wrap.style.justifyContent = box.justifyContent;
-  // The row's leading space, as the custom property the stylesheet reads — the
-  // same idiom `.lm-popup__block` uses one level down. It is the greater of the
-  // pair's two offsets; see `cardRowBox`.
-  if (box.marginTop) wrap.style.setProperty("--lm-block-offset", box.marginTop);
-
   wrap.append(...children);
 
   return wrap;
@@ -506,6 +767,7 @@ function buildMore(context: BlockContext): HTMLElement | null {
     if (node) inner.append(node);
   }
 
+
   if (inner.childElementCount === 0) return null;
 
   const root = el("details", "lm-popup__more");
@@ -566,21 +828,58 @@ export function buildShapePopup(shape: SnapshotShape): HTMLElement {
 }
 
 /**
+ * The description, folded when its owner clipped it.
+ *
+ * A clipped paragraph is one whose last sentence a visitor cannot read, so
+ * `clampLines` carries a chevron with it — see the field's own note in
+ * packages/shared/card-layout.ts. A `<details>`, which is what the week and the
+ * fold below already are: it opens from the keyboard with no code, and the
+ * chevron is the same path `buildHours` and `buildMore` draw.
+ *
+ * **One paragraph, in both states.** The clamp comes off in CSS when the
+ * `<details>` opens (`.lm-popup__description-fold[open]` in styles.css) rather
+ * than a second copy of the text appearing below the summary, so a screen reader
+ * is never read a location's description twice.
+ *
+ * Unclipped is the plain `<p>` it has always been — no fold, no chevron, no
+ * extra element — which is every card published so far.
+ */
+function buildDescription(text: string, block?: CardBlock): HTMLElement {
+  const paragraph = el("p", "lm-popup__description", text);
+  if (!block?.clampLines) return paragraph;
+
+  const root = el("details", "lm-popup__description-fold");
+  const summary = el("summary", "lm-popup__description-summary");
+
+  summary.append(paragraph, icon(["m6 9 6 6 6-6"]));
+  root.append(summary);
+
+  return root;
+}
+
+/**
  * The week, as a `<details>` that opens on today.
  *
- * Collapsed by default because the answer a visitor actually wants is "can I go
- * now" — that is the summary line. Seven rows of times unprompted would push the
- * address and the directions link out of a 280px popup.
+ * Collapsed unless its owner said otherwise, because the answer a visitor
+ * actually wants is "can I go now" — that is the summary line. Seven rows of
+ * times unprompted would push the address and the directions link out of a
+ * 280px popup, which is why the absence of `hoursOpen` has to keep meaning
+ * closed: every card published so far is drawn from that absence.
  *
- * Inside "More details" now, so this is a fold within a fold. Still worth
- * keeping: someone who opens the details wants the description and the extra
- * fields, and would meet a week of times on the way to them.
+ * The chevron is the same path `buildMore` draws, and deliberately so — one
+ * shape for "there is more of this here", and no new bytes for a second.
  */
-function buildHours(place: SnapshotPlace): HTMLElement | null {
+function buildHours(
+  place: SnapshotPlace,
+  /** Absent for a week inside the fold, which has no block of its own. */
+  block?: CardBlock,
+): HTMLElement | null {
   const hours = place.hours ?? null;
   if (isEmptyHours(hours) || !hours) return null;
 
   const root = el("details", "lm-popup__hours");
+  if (block?.hoursOpen) root.open = true;
+
   const summary = el("summary", "lm-popup__hours-summary");
 
   const open = isOpenNow(hours);
@@ -592,12 +891,14 @@ function buildHours(place: SnapshotPlace): HTMLElement | null {
 
   const today = dayIndex();
   summary.append(state, el("span", "lm-popup__hours-today", formatDay(hours[today])));
+  summary.append(icon(["m6 9 6 6 6-6"]));
   root.append(summary);
 
   const list = el("dl", "lm-popup__hours-list");
+  const labels = block?.hoursLongDays ? DAY_LABELS : DAY_LABELS_SHORT;
 
   for (let day = 0; day < hours.length; day += 1) {
-    const term = el("dt", "lm-popup__hours-day", DAY_LABELS_SHORT[day]);
+    const term = el("dt", "lm-popup__hours-day", labels[day]);
     const value = el("dd", "lm-popup__hours-time", formatDay(hours[day]));
 
     if (day === today) {
@@ -611,37 +912,6 @@ function buildHours(place: SnapshotPlace): HTMLElement | null {
   root.append(list);
 
   return root;
-}
-
-/**
- * The map's own extra fields, rendered in the order the owner defined them.
- *
- * Only the `row` ones. Definition order rather than the order the values happen
- * to sit in the JSON, because the owner arranged these and the same card should
- * read the same way at every location.
- */
-function buildFieldRows(
-  place: SnapshotPlace,
-  fields: SnapshotField[],
-): HTMLElement | null {
-  const values = place.fields;
-  if (!values) return null;
-
-  const root = el("div", "lm-popup__fields");
-
-  for (const field of fields) {
-    if (field.showAs !== "row") continue;
-
-    const value = values[field.id];
-    if (!value) continue;
-
-    const row = el("div", "lm-popup__field");
-    row.append(el("span", "lm-popup__field-label", field.label));
-    row.append(fieldValue(field, value, "lm-popup__field-value"));
-    root.append(row);
-  }
-
-  return root.childElementCount > 0 ? root : null;
 }
 
 /**
@@ -669,21 +939,116 @@ function fieldValue(
   }
 }
 
+/**
+ * One press, drawn as a button.
+ *
+ * The twin of `CardButton` in components/card/card-block.tsx. Both ask
+ * `buttonTargetOf` where it goes and `buttonStyleOf` how it looks, which is the
+ * whole of what keeps the studio's button and this one the same button — the
+ * DOM is built by hand here because the embed must not ship React (§4), and
+ * that is a difference in *how it is made*, never in what it is.
+ *
+ * `null` when there is nowhere to go, so the block takes no space at all on a
+ * location that has not filled the link in. The studio draws a placeholder
+ * there instead; a visitor gets nothing, because there is nothing for them to
+ * do about it.
+ *
+ * Every value is written as a custom property with `styles.css` naming the
+ * fallback, exactly as `wrapBlock` writes the text group — so a button nobody
+ * has styled costs zero inline bytes and a card published years from now still
+ * draws through this stylesheet.
+ */
+/** The only class names a stored treatment or hover may become. See below. */
+const VARIANT_CLASS: Record<string, string | undefined> = {
+  outline: "lm-popup__button--outline",
+  soft: "lm-popup__button--soft",
+  ghost: "lm-popup__button--ghost",
+};
+
+const HOVER_CLASS: Record<string, string | undefined> = {
+  none: "lm-popup__button--hover-none",
+  lighten: "lm-popup__button--hover-lighten",
+  lift: "lm-popup__button--hover-lift",
+};
+
+function buildButton(
+  place: SnapshotPlace,
+  fields: SnapshotField[],
+  block: CardBlock,
+): HTMLElement | null {
+  const target = buttonTargetOf(block, place, fields);
+  if (!target) return null;
+
+  const node = link("lm-popup__button", target.label, target.href);
+  const style = buttonStyleOf(block);
+
+  if (block.buttonFull) node.classList.add("lm-popup__button--full");
+
+  /*
+   * The treatment and the hover, **looked up rather than interpolated**.
+   *
+   * This is the one place in the card where that distinction is load-bearing.
+   * The embed draws `snapshot.cardLayout` exactly as it was published and never
+   * re-runs `readCardLayout` (see embed/src/map.ts), so the string on the block
+   * here is whatever wrote the file — a hand-edited row, a snapshot from a
+   * future version, anything. `classList.add(block.buttonVariant)` would put
+   * that straight into the class attribute of an element on a stranger's site.
+   * A table can only ever yield a class this stylesheet defines.
+   *
+   * The dashboard's twin (`buttonModifiers` in components/card/card-block.tsx)
+   * interpolates, and may: its block has already been through the parse.
+   */
+  const variant = VARIANT_CLASS[block.buttonVariant ?? ""];
+  if (variant) node.classList.add(variant);
+
+  const hover = HOVER_CLASS[block.buttonHover ?? ""];
+  if (hover) node.classList.add(hover);
+
+  if (style?.background) {
+    node.style.setProperty("--lm-button-bg", style.background);
+  }
+  if (style?.padding) node.style.setProperty("--lm-button-pad", style.padding);
+  if (style?.radius) node.style.setProperty("--lm-button-radius", style.radius);
+  if (style?.border) node.style.setProperty("--lm-button-border", style.border);
+  if (style?.borderWidth) {
+    node.style.setProperty("--lm-button-border-width", style.borderWidth);
+  }
+
+  return node;
+}
+
 function buildActions(
   place: SnapshotPlace,
   fields: SnapshotField[],
+  /**
+   * Optional, because the fold builds this type with no block behind it (see
+   * `buildMore`) — and an unconfigured row shows all four, which is what an
+   * absent `hide*` means everywhere. It is also what every card published
+   * before these four fields existed says, so nothing already live moves.
+   */
+  block?: CardBlock,
 ): HTMLElement | null {
   const actions = el("div", "lm-popup__actions");
 
-  if (place.url) actions.append(link("lm-popup__link", "Website", place.url));
-  if (place.phone) {
+  // `justify-content`, for `buildTags`' reason one function up: this row is a
+  // flex list, and `align` arrives as `text-align`, which cannot move a flex
+  // item. One mapping, shared with the studio, so the two draw one row.
+  const justify = justifyOf(block?.align);
+  if (justify) actions.style.justifyContent = justify;
+
+  if (place.url && !block?.hideWebsite) {
+    actions.append(link("lm-popup__link", "Website", place.url));
+  }
+  if (place.phone && !block?.hidePhone) {
     actions.append(link("lm-popup__link", place.phone, `tel:${place.phone}`));
   }
-  if (place.email) {
+  if (place.email && !block?.hideEmail) {
     actions.append(link("lm-popup__link", "Email", `mailto:${place.email}`));
   }
 
-  actions.append(link("lm-popup__link", "Directions", directionsUrl(place)));
+  if (!block?.hideDirections) {
+    actions.append(link("lm-popup__link", "Directions", directionsUrl(place)));
+  }
 
   /*
    * The owner's own calls to action, after ours.
@@ -711,52 +1076,4 @@ function buildActions(
   }
 
   return actions.childElementCount > 0 ? actions : null;
-}
-
-/**
- * Where "Directions" goes.
- *
- * Linked out rather than drawn — routing is out of scope for v1 (CLAUDE.md §11),
- * and a link costs us nothing per visitor, which a routing API would not.
- *
- * §12 bans the Google Maps *SDK* and the terms that come with it: storing their
- * business data, caching their coordinates, showing their Places results on our
- * map. An outbound link does none of those, and §11 names it as the intended
- * answer. This was OpenStreetMap's directions page, which is a worse destination
- * for a real customer's visitor than the app already on their phone.
- *
- * Coordinates, never the name. A name is resolved by whoever receives it, and a
- * stockist inside a department store resolves to the department store — the one
- * place a visitor standing outside does not need directions to. Apple takes both
- * and treats `q` as the label only, so there it can have the name as well.
- */
-export function directionsUrl(place: SnapshotPlace): string {
-  const to = `${place.lat},${place.lng}`;
-
-  if (isApplePlatform()) {
-    return `https://maps.apple.com/?daddr=${to}&q=${encodeURIComponent(place.name)}`;
-  }
-
-  return `https://www.google.com/maps/dir/?api=1&destination=${to}&travelmode=driving`;
-}
-
-/**
- * iOS and iPadOS only, deliberately — not macOS.
- *
- * On an iPhone, Apple Maps is the app that exists; Google Maps may not be
- * installed at all, and its web page then asks the visitor to install it instead
- * of giving them a route. On a Mac the browser is as likely to be Chrome as
- * Safari and Google Maps opens in the tab they are already in, so the default
- * stays there.
- *
- * iPadOS 13+ reports itself as a Macintosh, which is why the touch count is part
- * of the test: no real Mac reports more than one touch point.
- */
-function isApplePlatform(): boolean {
-  const ua = navigator.userAgent;
-
-  return (
-    /iPhone|iPad|iPod/.test(ua) ||
-    (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
-  );
 }

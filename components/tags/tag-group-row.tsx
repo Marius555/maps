@@ -3,26 +3,36 @@
 import { Button, Input, TextField } from "@heroui/react";
 import { Plus, X } from "lucide-react";
 
+import { SwatchButton } from "@/components/ui/swatch-button";
 import type { MapTagGroup } from "@/lib/repositories/types";
+import { nextPaletteColor } from "@/lib/validation/palette";
 import { MAX_TAGS_PER_GROUP, newTagId } from "@/lib/validation/tag.schema";
 
 /**
  * One filter group: a question, and the answers a location can give.
  *
- * The nesting is the point and is why this is not shaped like a category row.
- * The embed reads groups as AND and the tags inside one as OR, so a visitor sees
- * "Sells: bikes or skis" narrowed by "Open: Sundays" — and the owner has to be
- * able to see which tags share a question while they are writing them.
+ * The nesting is the point. The embed reads groups as AND and the tags inside
+ * one as OR, so a visitor sees "Sells: bikes or skis" narrowed by "Open:
+ * Sundays" — and the owner has to be able to see which tags share a question
+ * while they are writing them.
+ *
+ * Since categories merged into tags this is the map's *only* vocabulary editor,
+ * which is why every tag now carries a colour here. That colour is not
+ * decoration: a location's first tag is what colours its pin
+ * (lib/validation/tag.schema.ts), so this row is where a map's legend is written.
  */
 export function TagGroupRow({
   group,
   usageByTag,
+  takenColors,
   onChange,
   onRemove,
 }: {
   group: MapTagGroup;
   /** How many locations wear each tag, so removing one isn't a blind decision. */
   usageByTag: Map<string, number>;
+  /** Every colour the map already uses, so a new tag arrives with a fresh one. */
+  takenColors: string[];
   onChange: (group: MapTagGroup) => void;
   onRemove: () => void;
 }) {
@@ -34,7 +44,14 @@ export function TagGroupRow({
       // Fresh id, never a reused one — see newTagId. Nothing sweeps a deleted tag
       // off the places wearing it, so a repeated id would resurrect it onto
       // locations nobody assigned it to.
-      tags: [...group.tags, { id: newTagId(), label: "" }],
+      //
+      // The colour avoids what the *whole map* already wears, not just this
+      // group: a pin shows one colour and a visitor reads one legend, so two
+      // tags matching across two groups is the collision that costs something.
+      tags: [
+        ...group.tags,
+        { id: newTagId(), label: "", color: nextPaletteColor(takenColors) },
+      ],
     });
   };
 
@@ -90,6 +107,19 @@ export function TagGroupRow({
                 >
                   <Input placeholder="Tag name" />
                 </TextField>
+
+                <SwatchButton
+                  label={`Colour for ${tag.label || "this tag"}`}
+                  value={tag.color}
+                  onChange={(color) =>
+                    onChange({
+                      ...group,
+                      tags: group.tags.map((existing, position) =>
+                        position === index ? { ...existing, color } : existing,
+                      ),
+                    })
+                  }
+                />
 
                 {/* Only when something wears it. A "0 locations" badge on every
                     tag the owner is still typing is noise, not information. */}

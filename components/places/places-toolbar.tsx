@@ -3,21 +3,22 @@
 import { Input, Label, SearchField } from "@heroui/react";
 import type { ReactNode } from "react";
 
+import { TagFilterMenu } from "@/components/tags/tag-filter-menu";
 import { SelectControl } from "@/components/ui/select-control";
 import {
   PLACE_FILTERS,
   PLACE_FILTER_LABELS,
   type PlaceFilter,
 } from "@/lib/places/place-filters";
-import type { MapCategory } from "@/lib/repositories/types";
+import type { MapTagGroup } from "@/lib/repositories/types";
 
 /**
  * Filters the locations list. Client-side — the whole list is already loaded.
  *
- * The status picker is the one that makes a bad import survivable. Search and
- * category can only find a location you already know the name of; after a 300-row
- * import the thing you need is every row the geocoder was unsure about, and
- * nothing on the page could ask for that.
+ * The status picker is the one that makes a bad import survivable. Search can
+ * only find a location you already know the name of; after a 300-row import the
+ * thing you need is every row the geocoder was unsure about, and nothing on the
+ * page could ask for that.
  *
  * It also carries the page's actions, which used to sit opposite a "Locations"
  * heading that only repeated the sidebar. **The row renders even with no places
@@ -27,38 +28,27 @@ import type { MapCategory } from "@/lib/repositories/types";
  */
 export function PlacesToolbar({
   query,
-  categoryId,
   filter,
-  categories,
+  tagGroups,
+  tagIds,
   hasPlaces,
   actions,
   onQueryChange,
-  onCategoryChange,
   onFilterChange,
+  onTagsChange,
 }: {
   query: string;
-  categoryId: string;
   filter: PlaceFilter;
-  categories: MapCategory[];
+  /** The map's filter vocabulary — what the Tags menu offers. */
+  tagGroups: MapTagGroup[];
+  tagIds: ReadonlySet<string>;
   /** Filters are pointless with nothing to filter; the actions are not. */
   hasPlaces: boolean;
   actions?: ReactNode;
   onQueryChange: (query: string) => void;
-  onCategoryChange: (categoryId: string) => void;
   onFilterChange: (filter: PlaceFilter) => void;
+  onTagsChange: (tagIds: Set<string>) => void;
 }) {
-  const options = [
-    { id: "", label: "All categories" },
-    ...categories.map((category) => ({
-      id: category.id,
-      label: category.label,
-    })),
-    // Only offered once there is a category to be missing from.
-    ...(categories.length > 0
-      ? [{ id: "__none", label: "No category" }]
-      : []),
-  ];
-
   const filterOptions = PLACE_FILTERS.map((value) => ({
     id: value,
     label: PLACE_FILTER_LABELS[value],
@@ -78,17 +68,6 @@ export function PlacesToolbar({
             <Input placeholder="Name or address" />
           </SearchField>
 
-          {categories.length > 0 ? (
-            <div className="sm:w-48">
-              <SelectControl
-                label="Category"
-                options={options}
-                value={categoryId}
-                onChange={onCategoryChange}
-              />
-            </div>
-          ) : null}
-
           <div className="sm:w-48">
             <SelectControl
               label="Show"
@@ -97,6 +76,15 @@ export function PlacesToolbar({
               onChange={(value) => onFilterChange(value as PlaceFilter)}
             />
           </div>
+
+          {/* A button rather than a labelled select, because a location wears
+              several tags and one value cannot ask that question. It renders
+              nothing at all on a map with no tags. */}
+          <TagFilterMenu
+            groups={tagGroups}
+            selected={tagIds}
+            onChange={onTagsChange}
+          />
         </>
       ) : null}
 

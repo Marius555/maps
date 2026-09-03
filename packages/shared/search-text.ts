@@ -8,16 +8,20 @@ import type {
  * What the embed's search box actually searches.
  *
  * The box used to match a location's name and its address, and nothing else —
- * so a visitor typing "retail" on a map with a Retail category got nothing,
- * because the word they read off the pin's own card was not a word the search
- * had ever been shown. The chips answered that question instead; with those
- * gone, the search has to.
+ * so a visitor typing "retail" on a map with a Retail tag got nothing, because
+ * the word they read off the pin's own card was not a word the search had ever
+ * been shown. The chips answer that for tags; typing answers it for everything,
+ * including the tags a visitor never scrolled the filter row far enough to see.
  *
- * A place stores a category *id* and bare tag ids, and the labels live on the
- * map. So the searchable text has to be composed, and it is composed **once**:
- * `matches` runs against every place on every keystroke, and a Pro map holds
- * 3,000 of them (CLAUDE.md §6) — resolving two lookups and lowercasing four
- * strings per place per character is work a mid-range phone can feel.
+ * A place stores bare tag ids and the labels live on the map, so the searchable
+ * text has to be composed — and it is composed **once**: `matches` runs against
+ * every place on every keystroke, and a Pro map holds 3,000 of them
+ * (CLAUDE.md §6), so resolving lookups and lowercasing four strings per place
+ * per character is work a mid-range phone can feel.
+ *
+ * `categories` is the pre-merge vocabulary and is read here for one reason: a
+ * snapshot published before tags absorbed categories is still live on somebody's
+ * site and is read forever (§7). Nothing writes it any more.
  *
  * Here rather than in embed/src for the same reason ./tags.ts and ./geo.ts are:
  * the vitest suite runs `lib/**` and `packages/**` only, so this is the only
@@ -30,8 +34,9 @@ export type SearchIndex = Map<string, string>;
 
 export type SearchSource = {
   places: SnapshotPlace[];
-  categories: SnapshotCategory[];
   tagGroups?: SnapshotTagGroup[];
+  /** Legacy, read-only: snapshots published before categories became tags. */
+  categories?: SnapshotCategory[];
 };
 
 export function buildSearchIndex({
@@ -40,7 +45,7 @@ export function buildSearchIndex({
   tagGroups,
 }: SearchSource): SearchIndex {
   const categoryLabels = new Map(
-    categories.map((category) => [category.id, category.label]),
+    (categories ?? []).map((category) => [category.id, category.label]),
   );
 
   const tagLabels = new Map<string, string>();

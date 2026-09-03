@@ -19,16 +19,20 @@ export function useCardDesign(initialData?: Record<string, unknown>) {
 }
 
 /**
- * Optimistic, on the same argument `useUpdateMap` makes for the appearance
- * controls: a drop, a resize or a removal is expected to repaint the canvas in
- * that frame, and a round trip of latency there reads as a broken control
- * rather than a slow one.
+ * Deliberately **not** optimistic, where every other mutation in this file's
+ * neighbourhood is.
+ *
+ * Optimism is for a control that is expected to have happened by the time the
+ * finger leaves it — a theme swatch, a dragged handle. This is a Save button
+ * pressed once at the end of a session, and the whole point of the spinner on it
+ * is that a request is genuinely in flight; writing the cache first would make
+ * that spinner decorative and a failure would show as the card silently
+ * reverting some time later. The designer holds its own draft
+ * (components/card/designer/card-designer.tsx), so nothing is waiting on this
+ * to repaint.
  */
 export function useUpdateCardDesign() {
   const queryClient = useQueryClient();
-
-  const write = (cardLayout: Record<string, unknown>) =>
-    queryClient.setQueryData(queryKeys.cardDesign, cardLayout);
 
   return useMutation({
     mutationFn: async (cardLayout: CardLayout) =>
@@ -39,20 +43,10 @@ export function useUpdateCardDesign() {
         })
       ).cardLayout,
 
-    onMutate: async (cardLayout) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.cardDesign });
-      const previous = queryClient.getQueryData<Record<string, unknown>>(
-        queryKeys.cardDesign,
-      );
-
-      write(cardLayout);
-      return { previous };
-    },
-
-    onError: (_error, _input, context) => {
-      if (context?.previous) write(context.previous);
-    },
-
-    onSuccess: write,
+    // The resolved layout the server actually stored, so anything else reading
+    // this account's card — the editor's popup, the preview — repaints from the
+    // same bytes a visitor would get.
+    onSuccess: (cardLayout) =>
+      queryClient.setQueryData(queryKeys.cardDesign, cardLayout),
   });
 }

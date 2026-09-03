@@ -38,7 +38,7 @@
       <code>/embed/dev.html</code>.
     </p>
     <p class="note">
-      Checklist: pins coloured by category (uncategorised ones grey), the four
+      Checklist: pins coloured by their <em>first</em> tag (untagged ones grey), the four
       locations with an <code>icon</code> drawn as large balls with a white glyph
       and the rest as small ones, every pin centred on its own coordinate, the
       pair beside the flagship clusters at low zoom (mixing both sizes into one
@@ -49,18 +49,62 @@
       to the console only.
     </p>
     <p class="note">
-      No category chips: there is no row of them, and searching a category&rsquo;s
-      own label &mdash; <code>depots</code> &mdash; must narrow the map to those
-      locations. That is the control the chips were replaced by, so if it does
-      not work there is now no way to filter by category at all. Tag labels are
-      searchable the same way.
+      Every tag label is searchable: typing <code>depots</code> must narrow the
+      map to those two locations even though Depots is a chip you could have
+      pressed instead. That matters because a long filter row scrolls, and a tag
+      a visitor never scrolled to is one they can still type.
     </p>
     <p class="note">
-      The card is short: a photo, the name, the category and the address, then
-      &ldquo;More details&rdquo; holding the description, the opening hours and
-      the field rows. Open a pin near the very top or the very bottom of the
-      frame &mdash; the card must pan itself fully into view rather than being
-      clipped, and the map must move once, not twice.
+      <strong>The pin, the card and the row agree on one colour.</strong> A
+      location wears several tags and its pin can only be one, so the first tag
+      in the fixture&rsquo;s own order is the colour: the flagship is
+      <code>shops</code> first, so it is orange, and the chip carrying the dot on
+      its card is Shops &mdash; not Bikes, which comes first in the map&rsquo;s
+      vocabulary. If the dot ever moves to a different chip from the pin&rsquo;s
+      colour, `tagChipsOf` has been sorted somewhere it must not be.
+    </p>
+    <p class="note">
+      <code>/embed/dev-legacy.html</code> renders the same bundle against a
+      snapshot published <em>before</em> the merge &mdash; the §7 check. Run it
+      after touching anything in this list.
+    </p>
+    <p class="note">
+      The card: a photo, then the name, address, description, tags and the week,
+      then two buttons and the links row. The fixture carries a whole
+      <code>cardLayout</code> of its own, so this is a card <em>as published</em>
+      &mdash; the embed draws it without re-resolving anything, which is the
+      path a customer&rsquo;s site takes. <code>/embed/dev-legacy.html</code> has
+      no <code>cardLayout</code> at all and is where the
+      <code>defaultCardLayout()</code> fallback still gets exercised. Open a pin
+      near the very top or the very bottom of the frame &mdash; the card must pan
+      itself fully into view rather than being clipped, and the map must move
+      once, not twice.
+    </p>
+    <p class="note">
+      <strong>Buttons.</strong> Two of them, side by side at 50% each: a blue
+      pill reading &ldquo;Book a fitting&rdquo; and an outlined one reading
+      &ldquo;Take me there&rdquo;. The first is in <em>link</em> mode pointed at
+      the <code>booking</code> field, so it appears on the flagship
+      <em>and nowhere else</em> &mdash; every other location left that field
+      blank, and a button with nothing to point at draws nothing and takes no
+      space. The second is in <em>directions</em> mode, which is what a button
+      says by carrying no action at all, so it is on every card; its href must be
+      a real <code>google.com/maps/dir</code> URL built from that pin&rsquo;s own
+      coordinates (an iPhone gets <code>maps.apple.com</code> instead). Neither
+      opens in this tab. The blue one takes its colour, its 20px corner and its
+      bold label from the block; the outlined one has no background of its own,
+      so it must wear the stylesheet&rsquo;s ground rather than a colour baked
+      into the fixture &mdash; that is the §7 promise the whole model rests on.
+    </p>
+    <p class="note">
+      <strong>The links row leaves Directions out</strong>
+      (<code>hideDirections: true</code>), which is the reason those checkboxes
+      exist: the button above it is already the way there, and the row would
+      otherwise ask the same question twice. So the flagship&rsquo;s row shows
+      Phone, Website and the &ldquo;Book a fitting&rdquo; CTA and no Directions
+      link. Old town corner shows its email alone. A row with all four unticked
+      must vanish entirely rather than leave an empty box with its own padding
+      in it.
     </p>
     <p class="note">
       Gallery: the flagship carries three pictures with &lsaquo; &rsaquo; arrows
@@ -108,8 +152,9 @@
       without filters.
     </p>
     <p class="note">
-      Tags: two filter groups, &ldquo;Sells&rdquo; and &ldquo;Open&rdquo;, each
-      under its own heading &mdash; the only chips left on the map. Within a group the chips widen
+      Tags: three filter groups &mdash; &ldquo;Sells&rdquo;, &ldquo;Open&rdquo;
+      and &ldquo;Categories&rdquo;, the last being what a migrated map looks like
+      &mdash; each under its own heading. Within a group the chips widen
       the results &mdash; ticking Bikes and Skis shows more shops than Bikes
       alone &mdash; and across groups they narrow: Bikes plus Sundays leaves only
       the flagship. That asymmetry is the whole rule; if ticking a second chip in
@@ -117,7 +162,9 @@
     </p>
     <p class="note">
       Custom fields: the flagship's card carries a &ldquo;Book a fitting&rdquo;
-      button beside Directions, plus &ldquo;Dealer code&rdquo; and
+      CTA inside the links row &mdash; the small one, not the pill above it,
+      which is a Button block pointed at the same field &mdash; plus
+      &ldquo;Dealer code&rdquo; and
       &ldquo;Workshop&rdquo; as labelled rows &mdash; in the order the fixture
       defines them, not the order the values sit in. The button shows the
       owner's label, never the URL. Old town corner has only a dealer code, and

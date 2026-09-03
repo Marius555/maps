@@ -6,8 +6,9 @@ import { Pencil, RotateCw, Trash2 } from "lucide-react";
 import { PinPreview } from "@/components/map/pin-preview";
 import { RowMenu, type RowMenuItem } from "@/components/ui/row-menu";
 import { formatCoords } from "@/lib/map/geo";
-import type { MapCategory, Place } from "@/lib/repositories/types";
+import type { Place } from "@/lib/repositories/types";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
+import { pinColorOfChips, type TagChip } from "@/packages/shared/tags";
 import { PlaceStatusFlag } from "../place-status-flag";
 import { PlaceCompleteness } from "./place-completeness";
 
@@ -26,7 +27,7 @@ import { PlaceCompleteness } from "./place-completeness";
  */
 export function PlaceTableRow({
   place,
-  category,
+  tagChips,
   pinIcons,
   isSelected,
   isAddressPending,
@@ -37,7 +38,11 @@ export function PlaceTableRow({
   onDelete,
 }: {
   place: Place;
-  category?: MapCategory;
+  /**
+   * This location's tags, resolved by the table that holds the map and in the
+   * location's own order — the first is what colours its pin.
+   */
+  tagChips: TagChip[];
   pinIcons: CustomPinIcon[];
   isSelected: boolean;
   isAddressPending?: boolean;
@@ -47,6 +52,9 @@ export function PlaceTableRow({
   onRetryAddress?: () => void;
   onDelete: () => void;
 }) {
+  /** The colour the pin took, so exactly one chip is marked as its source. */
+  const pinColor = pinColorOfChips(tagChips);
+
   // Only worth offering while there is still nothing to show. A location whose
   // address the customer has since typed has no failure left to retry.
   const canRetry = Boolean(
@@ -87,7 +95,7 @@ export function PlaceTableRow({
         <PinPreview
           icon={place.icon}
           pinIcons={pinIcons}
-          fallbackColor={category?.color}
+          fallbackColor={pinColor}
           size="sm"
           className="shrink-0"
         />
@@ -120,18 +128,46 @@ export function PlaceTableRow({
         )}
       </td>
 
+      {/*
+        Chips, not a comma-joined line, and capped at three.
+
+        A location can wear twenty tags, and twenty in a table cell makes the row
+        taller than every other row on the page — so the rest are counted. The
+        cell is what the Tags filter above is checked against, which is the only
+        reason it needs to be readable at a glance rather than complete.
+
+        The dot is on the first chip alone: a location wears any number of tags
+        and its pin can only be one colour, so the dot is the row answering which
+        of these the pin on the map is wearing. It is also why the cap keeps the
+        *first* three rather than the shortest or the alphabetical three.
+      */}
       <td className="py-2 pr-3 align-middle text-sm text-muted">
-        {category ? (
-          <span className="flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className="size-2 shrink-0 rounded-full"
-              style={{ backgroundColor: category.color }}
-            />
-            <span className="truncate">{category.label}</span>
+        {tagChips.length > 0 ? (
+          <span className="flex flex-wrap items-center gap-1">
+            {tagChips.slice(0, 3).map((chip) => (
+              <span
+                key={chip.id}
+                className="flex max-w-32 items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-xs"
+              >
+                {chip.color && chip.color === pinColor ? (
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: chip.color }}
+                  />
+                ) : null}
+                <span className="truncate">{chip.label}</span>
+              </span>
+            ))}
+
+            {tagChips.length > 3 ? (
+              <span className="text-xs tabular-nums">
+                +{tagChips.length - 3}
+              </span>
+            ) : null}
           </span>
         ) : (
-          <span aria-label="No category">—</span>
+          <span aria-label="No tags">&mdash;</span>
         )}
       </td>
 

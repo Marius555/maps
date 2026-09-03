@@ -1,16 +1,21 @@
 import { z } from "zod";
 
-import { idSchema } from "./common";
+import { hexColorSchema, idSchema } from "./common";
+import { DEFAULT_PALETTE_COLOR } from "./palette";
 
 /**
- * Tags: the map's second filter axis, beside categories.
+ * Tags: the map's one filter axis, and the thing that colours its pins.
  *
- * A category answers "what kind of place is this?" and there is exactly one,
- * because it colours the pin. A tag answers everything else — what it stocks,
- * what it offers, whether it repairs as well as sells — and a place wears as
- * many as apply. Folding the two together would mean a stockist carrying three
- * product lines needed three pins in three colours at one address, which is why
- * these are separate rather than "categories, but more of them".
+ * This used to be the *second* axis, beside categories — one category per
+ * location because it coloured the pin, and any number of colourless tags for
+ * everything else. Two vocabularies asking the same question under two names, on
+ * one screen, and the one an owner reached for first was the one that took a
+ * single value. Categories were merged into this in favour of the more capable
+ * shape: **a tag carries a colour, and a location wears as many as apply.**
+ *
+ * The pin takes the colour of the location's **first** tag, which is why
+ * `placeTagsSchema` preserves order and why nothing may sort a place's tags on
+ * the way to storage or the snapshot.
  *
  * Tags live in **groups**, and the grouping is not decoration: a group is one
  * question, and the embed reads the groups as AND and the tags inside one as OR
@@ -43,6 +48,15 @@ export const tagSchema = z.object({
   /** Stable across renames — places reference this, not the label. */
   id: idSchema,
   label: labelSchema,
+  /**
+   * The chip's colour, and the pin's when this is the location's first tag.
+   *
+   * Defaulted rather than required: every tag written before the merge with
+   * categories has none, and a stored row must keep parsing. The default is the
+   * palette's first colour, not a grey — a tag with no colour still has to be
+   * tellable from its neighbours in a legend.
+   */
+  color: hexColorSchema.default(DEFAULT_PALETTE_COLOR),
 });
 
 export const tagGroupSchema = z.object({
@@ -112,6 +126,12 @@ export const placeTagsSchema = z
  * exists to prevent; random ids prevent it without any cleanup at all.
  *
  * Never derive one from an index or a label.
+ *
+ * The one id in the system that breaks the "fresh" rule is a migrated category:
+ * `scripts/migrate-categories-to-tags.mjs` mints its tag with the category's own
+ * `cat-` id, so `places.category` folds into `places.tags` with no remapping.
+ * That is safe only because categories are retired — nothing will ever hand out
+ * a `cat-` id again, so it cannot collide with anything, past or future.
  */
 export function newTagId(): string {
   return `tag-${crypto.randomUUID().slice(0, 8)}`;

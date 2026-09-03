@@ -95,6 +95,34 @@ and `labels-field.tsx`.
 
 **A group has no pin, and "Change pins" is why that holds.** A group is a name, a colour and an order; membership lives on the members, and *nothing about a group reaches a published snapshot*. So the group row's "Change pins" does not store an icon on the group — it writes each member's own `icon`, once, through `setGroupPin` in `groups.repository.ts`. That is a single `tablesDB.updateRows` scoped by `mapId` *and* `groupId`, not one PATCH per member the way `useAssignToGroup` does membership: a marquee is bounded by a drag box, a group is not, and §6 allows 3,000 locations in one. The trade is that a location added to the group afterwards keeps its own pin, which is the honest consequence of a group not being a thing pins are stored on. Shapes are untouched — a shape wears a colour, not a pin — so the menu item is omitted rather than disabled for a group holding only shapes.
 
+**Tags are the map's one filter axis, and they absorbed categories.** There were two vocabularies. A category answered "what kind of place is this?" and there was exactly one per location because it coloured the pin; a tag answered what a location stocks or offers and there were as many as applied. On one screen that read as the same question asked twice under two names — and the *weaker* of the two was the one every owner reached for first, precisely because it was the one that changed what the map looked like. The argument for keeping them apart was that merging would make a stockist carrying three product lines need three pins at one address. The merge answers that instead: **a tag carries a colour, and a location's pin takes the colour of its first tag.** Three product lines, one pin, one colour, three chips.
+
+`places.tags` is therefore **ordered**, and that order is load-bearing: nothing between the form and the snapshot may sort it. `placeTagsSchema`'s dedupe is a `Set` spread (insertion order preserved), `buildSnapshot` narrows with `filter` and not a re-map, and `tagChipsOf` reads the *place's* order where `tagLabelsOf` reads the map's — which is why the card's first chip is the colour the pin beside it is wearing.
+
+Tags live in **groups**, and the grouping is load-bearing rather than tidy: a group is one *question*, and `packages/shared/tags.ts` reads groups as AND and the tags inside one as OR — "sells bikes OR skis, AND opens Sundays" is the shape of a real search, and both simpler rules are wrong in ways a visitor notices (AND everywhere makes ticking a second product line return *fewer* shops). That file is shared with the embed for the same reason `shapes.ts` is: the dashboard's Locations list filters by tag too, and two copies of the rule would be two different sets of the same locations on one screen. The vocabulary is `maps.tagGroups` (JSON) and a place's tags are `places.tags`, a real Appwrite string array.
+
+**The migration is what made the merge cheap, and one decision is the whole of it: a category becomes a tag that keeps its own id.** `places.category` already held `cat-xxxx`, so `scripts/migrate-categories-to-tags.mjs` (`npm run migrate:tags`, `--dry-run` first) mints the tag as `{id: "cat-xxxx", label, color}` and folds the column into `tags` **first** — no id remapping anywhere, and every existing pin comes out the exact colour it already had. That is the one id in the system breaking `newTagId`'s never-reuse rule, and it is safe only because nothing will mint a `cat-` id again. `maps.categories` and `places.category` are **retired, not dropped**: still in `scripts/appwrite-schema.mjs`, emptied per row by the migration, written by nothing.
+
+**Published snapshots keep reading the old shape, and that is not optional.** `SnapshotSchema.categories` and `SnapshotPlace.category` are now optional and marked legacy; a file published before the merge is live on a customer's site and is read forever (§7). The whole of the back-compatibility is three reads in the embed — `colorOf` in `embed/src/map.ts` falling through to the category after the tags, one chip in `list.ts`, and the retired `category` card block in `popup.ts` — plus the legacy branch in `packages/shared/search-text.ts`. `embed/dev/dev-legacy.html` renders the real bundle against a pre-merge fixture, and is the only thing standing between that promise and a silent regression.
+
+**A tag id is random, is never derived from its label, and nothing sweeps a deleted tag off the places wearing it.** The two facts are one decision. `clearFromPlaces` sets a scalar column to `""` where it equals a value, and `tags` is an array Appwrite cannot remove a single element from — so tidying up would mean rewriting up to 3,000 rows to fix ids no visitor can see. Dangling ids are therefore the *normal* state: `placeTagsSchema` deliberately does not validate against the map's list, `buildSnapshot` narrows them away at publish, and `tagLabelsOf` / `tagChipsOf` drop them when drawing. It is also why `pinColorOfTags` *walks* rather than reading `tags[0]`: a dangling id at the front would otherwise leave a pin grey while the card beside it drew three chips. And it is exactly why `newTagId` must never reuse or derive an id — a label-derived id handed out twice would resurrect a deleted tag onto every location that once wore it. That is the bug the `pinIcons` cleanup exists to prevent, avoided here with no cleanup at all.
+
+**One control asks the tag question, and creating a tag is the first row of it.** `components/tags/tag-picker.tsx` sits in the location dialog where the Category select used to, and the Tags fold under it is gone: two controls for one question, with the better one hidden, is what made the dialog incoherent. Its dropdown opens with **+ New tag** above the vocabulary — a map whose owner has never opened Settings has no tags, and a picker opening onto nothing reads as broken rather than empty, while a button beside the field is a second thing to find that says nothing about where tags come from. `tag-quick-add.tsx` is that form, in three rows: **name full width, colours, buttons.** No group picker — a new tag joins the map's first group, or a new one labelled `IMPORTED_TAG_GROUP_LABEL` ("Tags"), the same one `resolveTags` uses, so a hand-made tag and an imported one land in one place. Asking which *question* a tag answers, mid-form, is a concept lesson at the wrong moment; regrouping is one drag in Settings.
+
+Selected tags render **inside the field** as chips in pick order, and **dragging one to the front is what makes it the pin's colour** (`use-chip-reorder.ts`; `Alt` with an arrow does the same from the keyboard, which is not optional — the thing it replaced was a real button). A rule ("the first one") is only usable if there is a way to say which one that is, and the ordering gesture says it with the chips themselves. Every chip used to carry a coloured dot instead — solid on the leading one as a legend, faded on the rest as a promote button — and it read as a row of bubbles nobody had asked for; the sentence under the field says the rule now. The field is painted from the **field** tokens (`bg-field`, `rounded-field`, `shadow-field`, no border), which is what `.input-group` does, so it sits flush with the Name box above rather than being a grey box in a column of white ones. Its popover is anchored to the field with an explicit `triggerRef` and **not** to the button that opens it: the trigger has two shapes — the whole field when empty, a chevron at the end once there are chips — so the menu jumped the width of the field the moment the first tag was picked. The quick-add PATCHes the whole `tagGroups` array, because the column is one JSON blob, and parses it through `tagGroupsSchema` first: the uniqueness rules and the ceilings are questions about the *set*, so parsing is what refuses a duplicate name in the dialog instead of as a 400. Renaming, recolouring and removing stay in Settings → Filters, now the map's **only** vocabulary editor, where the usage counts are and where removal's consequences belong.
+
+**The card's Tags block is what stops the filters being a question with no answer on screen.** The embed could always filter by tag and never showed which tags the pin you clicked wears, so "why did this one match?" was answerable nowhere. It sits after the description: it is the one text block whose height varies with the *location* rather than its words, and a stockist with six tags directly under the name would push the street off a 440px card.
+
+**No chip on it carries a dot, and the pill is the owner's to design.** The first chip used to wear the pin's colour, as the card answering "which of these explains the marker I just clicked?". It was removed on request: it read as a stray bubble of a colour nobody had chosen, inside a pill whose colours are now set in the designer — and the pin it explains is on screen beside the card it opened from. In its place the Tags block (and the retired Category block, which draws one chip of the same kind) carries a **Chip colour** and a **Chip padding** control, and its **Alignment** finally moves the chips: `align` reaches a block as `text-align`, which cannot move a flex item, so those three buttons did nothing at all until `chipStyleOf` started handing back a `justify-content` as well. Both renderers read that one function (`TagChips` in `components/card/card-block.tsx`, `buildTags` in `embed/src/popup.ts`), which is what the preview panel would otherwise expose — and the same audit found the two drawing *different pills*, a soft grey one in the studio against a transparent outlined one in the embed. The embed moved to the studio's, since that is what an owner designs against. Absent is absent in both: a block nobody has styled stores nothing and draws exactly the pill it always drew (§7).
+
+**The `category` card block is retired, not deleted.** It stays in `CardBlockType` and `CARD_BLOCKS`, marked `retired: true` so `availableBlocks` stops offering it, and it draws the location's first tag. A layout saved while categories existed still parses and still names it, and a block that stopped being a block would silently drop a row out of somebody's design — the same §7 rule the snapshot fields follow. It also came off `defaultCardLayout()`, so every account that has never opened the designer gets the new arrangement immediately — and an account with a *saved* layout keeps the card it arranged, drawing its Category block as the tag that now colours the pin. That asymmetry is the rule, not an oversight: quietly editing a design somebody made is the one thing this function must never do.
+
+**The filter chips still carry no colour.** A filter chip is a control and pressed-or-not is what it has to communicate; a tag's colour answers "which pin is this?" and belongs where that is asked — on the card and the list row, beside the thing wearing it. Eight palette colours competing with the on/off state for the same edge would make the row unreadable.
+
+**Bulk tagging adds *and* removes, and neither is a toggle.** A marquee selection is a mixed bag — some of it wears the tag, some doesn't — so a toggle has to pick a meaning for that and then silently does the opposite of what half the selection needed. "Add" and "Remove" each have one meaning whatever the selection started as, which is the property that made add-only safe to ship first; removing always had it and only lacked a button. Both skip the places the write would not change, because a no-op PATCH still bumps `updatedAt` and that is what the publish tab reads to decide whether the map has unpublished changes.
+
+**Edit means the dialog, and only the dialog.** The Locations panel's row menu used to call `focusPlace` before `setEditingId`, so choosing Edit also selected the pin — drawing its card on the canvas *behind* the modal and flying the camera to something the user was about to stop looking at. Shapes had the same pair. Selecting is what clicking the row means; the menu item means what it says, and both dialogs carry their own view of the thing being edited.
+
 **Shapes are the one thing the editor draws as style layers, and that has a trap.** A location is a DOM `Marker`; an *area* cannot be, so circles and polygons are a GeoJSON source with fill and line layers (`components/map/shapes/`) — the pattern that until now lived only in the embed. `setStyle`, which `use-maplibre.ts` calls on every basemap or theme change, discards every source and layer on the map. Pins survive it precisely because they are DOM; these do not, so `use-shape-layers.ts` re-adds them on `styledata`. That is the first thing to test after touching any of this. The handles *are* DOM markers, so a drag inherits the machinery the pins already use, and a drag paints through a preview channel that writes straight to the source — the PATCH fires once, on release.
 
 **A circle is stored as a centre and a radius in metres, and drawn as 64 points.** MapLibre has no geographic circle: its `circle` layer sizes itself in pixels, so a 2km delivery radius drawn that way would be a different distance at every zoom. `packages/shared/shapes.ts` turns one into the other, and it lives there for the reason `darken-style.ts` does — the preview panel renders the real embed beside the editor's own canvas, so a ring of 64 points in one and 32 in the other would be two visibly different circles on one screen. The radius handle sits due east of the centre, which is also where a card anchored 22px from that centre used to land: `useMapAnchor` now takes the shape's extent and pushes the card clear of it, clamped so it never leaves the frame.
@@ -316,21 +344,53 @@ the children too. `usePlaceMarkers` also takes an `isArmed` and both stops
 selecting on a marker click and calls `setDraggable(false)`, so the behaviour
 does not rest on a stylesheet alone.
 
-**The card designer is switched off, and `lib/card/designer-status.ts` is the one
-switch.** It is unfinished, and what it stores is read by the editor's popup, the
-preview panel and every published snapshot — so an unfinished tool is not a page
-nobody has opened, it is what a visitor to a customer's site sees.
-`effectiveCardLayout` returns `defaultCardLayout()` while `CARD_DESIGNER_ENABLED`
-is false, which `buildSnapshot` then omits from the snapshot entirely, so the
-embed falls back to its own copy and the two agree by construction. The PATCH is
-refused server-side as well: a disabled control is a courtesy, not a guarantee.
-The page stays reachable behind an Alert, because seeing what the blocks do is
-most of what it is for.
+**Two upstreams cost money per call, and a plan is what stands in front of both.**
+Neither is in a visitor's path — both run on the dashboard, once, when an owner
+imports or draws (§2) — so the exposure is bounded by what a *signed-up account*
+can provoke, which makes it a §6 question rather than a §2 one. The two guards
+are not symmetrical, because the two costs are not.
+
+Geocoding already had a ceiling in the shape of the place limit, but it was
+enforced at the wrong end: the batch route checked ownership alone, so a free map
+with ten slots could walk a 500-row CSV through a shared instance and be refused
+at the *insert*, having spent all 500 requests on an endpoint whose policy bans
+exactly that. `assertPlaceHeadroom` was hoisted out of `createPlaces` for it, and
+the batch route now asks before the first lookup instead of after the last. What
+it does not close is a scripted caller re-sending chunks that each fit on their
+own — geocoding writes nothing, so the server cannot see how far an import has
+already got, and bounding that needs a per-user counter with somewhere durable to
+live. Worth building before signup is open to strangers.
+
+Routing had no ceiling at all and could not borrow one: a map with three pins can
+be rerouted all afternoon, and arming the tool probes every pin besides. So
+routes are a **paid feature** — `PLAN_FEATURES` beside `PLAN_LIMITS`, enforced on
+both endpoints that reach the engine (`directions`, and the `routable` sweep,
+which is the bigger spender of the two). The gate is the pricing decision and the
+spend cap in one object. `PlanFeatureError` is its own error rather than a
+`PlanLimitError` with a different noun, because the sentences differ in shape: a
+limit offers a delete *and* an upgrade, a gate offers only the upgrade. The Draw
+menu greys the Route row and says why rather than hiding it — a paid feature
+invisible from the plan below it is one nobody upgrades for — and Recalculate
+needs no separate handling, since `toastError` already renders the server's own
+sentence verbatim.
+
+**The card designer is on, and `lib/card/designer-status.ts` is the one seam
+every reader goes through.** It was switched off behind a `CARD_DESIGNER_ENABLED`
+flag in that file while it was unfinished, on the argument that what it stores is
+read by the editor's popup, the preview panel and every published snapshot — an
+unfinished tool here is not a page nobody has opened, it is what a visitor to a
+customer's site sees. The flag is gone; the seam stays, because there is still
+one place to change what "the card for this account" means.
+`effectiveCardLayout` is what `buildSnapshot` reads, and a layout equal to
+`defaultCardLayout()` is omitted from the snapshot entirely, so the embed falls
+back to its own copy and the two agree by construction with nothing added to a
+published map.
 
 That promoted the default from "what you get before you design anything" to "the
 card", so it grew into the job: `description` and `hours` came out of the fold
-onto the card itself, leaving only the map's extra fields behind "More details".
-The bytes in `card-layout.test.ts` moved with it, deliberately — that string is
+onto the card itself, which left the fold holding nothing and is why it was
+later retired outright (below). The bytes in `card-layout.test.ts` moved with it,
+deliberately — that string is
 not sacred, what is sacred is that this file and `embed/src/popup.ts` build the
 same card from the same function. The blocks are HeroUI now (`Chip`,
 `Disclosure`, `ScrollShadow`, and contact rows wearing `buttonVariants` on an
@@ -370,6 +430,132 @@ full-width block `flex: none`, not just a block with a height. Found in the
 browser with a long description, which is the only way it was ever going to be
 found.
 
+**A card can carry a Button, and it stores a *source* rather than a URL.** The
+one thing the designer could not draw was a call to action: a custom field with
+`showAs: "button"` lands as a small text link inside the Links row and cannot be
+styled at all. The `button` block is that, modelled on Atlist's — `zones:
+["middle", "bottom"]` on the Links row's argument that a card putting its call to
+action above the name has buried the answer, and the second block after the
+divider that is not `unique`, because Directions and "Book now" are two buttons
+rather than one with two jobs. **The card design is saved per *account* and drawn
+for every location on every map, so a URL kept on the block would send three
+thousand pins to one page.** `buttonSource` therefore names a place to *look* —
+absent is the location's own `url`, a value is a custom field id — and
+`buttonTargetOf` in `packages/shared/card-button.ts` resolves it per location.
+`null` there is the common case worth designing for, not an error path: one
+layout has to be right for three thousand locations filled in differently, so a
+button to a booking page is a button only on the locations that have one and
+draws nothing at all everywhere else. The documented consequence is that field
+ids are per *map*: a button bound to one finds nothing on a map without it, which
+is the same thing it does for a location that left it blank.
+
+`buttonAction` is spelled as `"link"`, so **absent is Directions** — a Button
+dragged onto the card has to work before anybody configures it, and every
+location has coordinates while not every one has a URL. That is also what made
+`directionsUrl` move out of `embed/src/popup.ts` into
+`packages/shared/directions.ts`: three renderers draw that link now and two
+copies of "which maps app does this visitor have" is one bug away from a card
+that routes correctly in the studio and not on the customer's site. A move, not a
+copy, so the embed's byte count did not change. §12 bans the Google Maps *SDK*
+and its terms; an outbound link is what §11 names as the answer.
+
+Two traps the block walks straight into, both already documented elsewhere in
+this file and both live here. **`align` reaches a block as `text-align`, which
+cannot move a flex item** — the bug `chipStyleOf` was given a `justify` to fix.
+The button is `inline-flex` precisely so the block's own `text-align` moves it;
+make it a flex child and `buttonStyleOf` needs a `justify` too. And **a hardcoded
+Tailwind utility on the leaf beats the block's `--card-*` properties**, which is
+why `CardButton` wears `card-button card-text` and nothing else: its Font, Size,
+Colour and Bold controls would otherwise look broken in exactly the silent way
+`ContactRow`'s did. Everything else is `--card-button-*` custom properties set
+inline, so a button nobody has styled writes nothing and the stylesheet's own
+fallbacks stay in charge — which is what keeps an unstyled one theme-aware where
+a stored `#ffffff` could not be (§7).
+
+**A button's outline is a width, and the colour is optional on it — where a
+chip's pair is indivisible.** That divergence is deliberate and was bought with a
+bug. A chip has nothing under its edge to fall back to, so there a colour with no
+width draws nothing and a width with no colour draws a black line nobody picked,
+and `readBlock` refuses to keep either half alone. A button *does* have something
+under its edge: `currentColor`, its own label. The version that enforced the pair
+here did it in the panel, by having the Border width control **seed** a colour on
+the first nudge — a hard-coded `#1c7ed6` that its docblock called "the accent",
+which the accent has never been (it is `oklch(64.37% 0.2195 36.18)`, an orange).
+So thickening an Outline button, whose preset deliberately stores *no* colour so
+its line stays theme-aware, turned that line blue while the Outline swatch stayed
+lit. Both stylesheets now fall back to `currentColor`, `buttonBorderWidth` stands
+alone in storage, and the control writes only a width. Nothing published moves: a
+stored width has always arrived with a colour, and a card with no width draws
+`0px`.
+
+**A new Button arrives full width** (`defaultButtonFull` on the spec, read only by
+`makeCardBlock`, beside `defaultAlign` and `defaultOverlapPct`). `buttonFull`
+still means what it always meant and absent is still a hugging button, so no card
+already published moves — this is what a *fresh* one is, not what an old one
+becomes.
+
+**Nothing in the properties panel is a slider any more.** Every number is a row
+of five named tiles — `PropertyScale` over `PropertyChoice`, with the stops in
+`components/card/designer/properties/property-scales.tsx`. The Corners control had
+already made the whole argument on its own and nobody had applied it to the other
+seventeen: nobody arranging a card is choosing 17px of roominess out of fourteen
+possibilities, and a slider cannot say **zero**, because a thumb at the far left
+of a track reads as "not set" — which is how a corner control ended up unable to
+express a square. One table per question, so the card's Border width and the
+button's are the same five words and the card's Corners and the button's are the
+same five tiles. Two things make it safe on designs that already exist. Stops sit
+*on* the defaults (`defaultCardLayout`'s 320/440/12/8, `TEXT_PADDING`'s 4,
+`DEFAULT_HOURS_ROW_GAP`'s 1) so an untouched card lights the tile it is actually
+drawing; and `nearestStop` (lib/card/scale-stops.ts) lights the closest tile for
+everything else — a width that came off a resize handle, or anything saved while
+these were sliders — **without writing it back**, because opening a panel must
+never edit a design.
+
+**Deleting a block moves nothing but the block, and getting there needed a
+measurement carried across the tree.** `settle` pays for an arrival out of the
+gap it lands in, and `vacate` refunds a departure the same way; `removeCardBlock`
+did neither, on the stated argument that a delete and a move make different
+promises. What that actually made was a card that does not survive a round trip:
+drop a block into the room above another and nothing moves, delete it again and
+everything below it jumps up by the space the arrival was charged for. So
+`removeCardBlock` takes a `VacatedSpace` now. It cannot derive one — most blocks
+have no height of their own — so `CardCanvas` reports `geometry.vacate` upward
+through `onVacate`, `CardDesigner` holds it in a **ref** (state would re-render
+the designer on every pointer move of a drag that is already measuring the card),
+and the wall reads it on release. Verified in the browser rather than in a
+fixture: gallery/logo/tags/hours/address at 160/235/318/367/**576**, a Button
+dropped into the gap leaves them at 160/235/318/367/**580**, and removing it puts
+them back at **576**.
+
+**The Links row can leave any of its four out, and the flags are spelled as the
+hidden state.** `hidePhone` / `hideEmail` / `hideWebsite` / `hideDirections`,
+`true` or absent and never `false` — every card already live on a customer's site
+draws all four, so absent has to mean shown or every published snapshot would be
+describing something it does not say. They exist because a Button carrying
+Directions makes the row ask the same question twice; that is the case they were
+asked for. Fixing them turned up a real **drift between the twin renderers**: the
+embed's row had always appended a Directions link and the dashboard's `Actions`
+never had, while `BLOCK_LABELS.actions.hint` claimed all four. The dashboard now
+draws it. `hasBlockContent` reads all four, or a row with everything unticked
+would be an empty box with its own padding in it — and it takes the block now,
+not just its type, which is why every call site passes one.
+
+**"More details" is retired, not deleted.** `DETAILS_CONTENTS` is only
+`description` and `hours`, and both came onto the default card when the designer
+shipped, so the fold drew nothing on the card everybody gets. It is off
+`defaultCardLayout()` and marked `retired: true` so `availableBlocks` stops
+offering it, and `BUILDERS.details` and the `Details` component both stay: a
+design somebody saved with the description dragged off still folds it, and every
+snapshot already live keeps drawing what it drew. Same treatment `category` got —
+the shape a block gets deleted in here.
+
+One thing found in the browser and left alone, because it predates all of this:
+**the embed's popup has `max-width` and no `width`, so a card with little in it
+is narrow** — a location with a short address and one link draws at 133px against
+the studio's 320px. It reproduces on `dev-legacy.html`, which has no `cardLayout`
+at all. Real drift between the twins, and worth fixing when somebody is next in
+`buildPopup`.
+
 **Exactly one element in the editor has a real height, and everything below it depends on that.** From `<body>` down to the locations list, every step of the layout is `min-h-*` or `flex-1` — a floor or a ratio, never a ceiling — and a percentage flex-basis against an indefinite parent resolves to `content`. So the panel's `overflow-y: auto` sat on a box that always grew to fit: adding a location scrolled the *page* rather than the list, and stretched the map taller on the way. `lg:h-[calc(100dvh-3rem)]` on the editor row in `map-editor.tsx` is the one definite height, and the 3rem is `Container`'s own `py-6` — at `lg` there is nothing else above it, since `MobileHeader` is `md:hidden` and `PageTitle` is `sr-only`. Below `lg` the row stacks and the panel caps itself at `max-h-[60dvh]` instead. `app/(dashboard)/maps/[id]/(editor)/loading.tsx` repeats all three strings verbatim and has to keep doing so. The panel scrolls with no visible scrollbar because `ScrollShadow` already had `hideScrollBar`; that was never the missing piece.
 
 A real scroller then created a gap the growing one hid: a drop target can now be off screen, and the drag deliberately `preventDefault`s every `pointermove` so it will never scroll there by itself. `lib/map/edge-autoscroll.ts` pulls the container when the pointer nears an edge — in `lib/` because, like `drop-action.ts`, it is the part of the gesture decidable without a pointer, and so the part worth testing. The same file's arrival is why rows are `touch-action: pan-y` rather than `none` — `none` gave every finger swipe to the drag, which was survivable only while the page scrolled instead. Touch now decides by stillness: movement first is a scroll and the gesture is dropped, 250ms of stillness starts a drag. That ordering is not cosmetic. The browser commits to a pan once the finger travels and ignores `preventDefault` after that, so a drag has to begin from a finger that has not moved, which is the only moment the gesture is still ours to claim.
@@ -407,7 +593,7 @@ day it matters is `docs/self-hosting-tiles.md`.
 
 Also built, out of order and knowingly: **routes** (see below). §11 listed routing as out of scope for v1 and §10 says Week 4 is next; that call was made deliberately, against a rival shipping the feature, and is recorded here rather than quietly overriding either section.
 
-Not built yet, and next: everything in Week 4 — pricing page, plan-limit UI, MoR billing + webhook, the PMTiles archive itself on R2 (the code is ready; see above), landing page, one platform page, docs, transactional email.
+Not built yet, and next: everything in Week 4 — pricing page, plan-limit UI, MoR billing + webhook, landing page, one platform page, docs, transactional email. Plus the two self-hosted instances §12 says are forced before anyone pays us: Photon and a routing engine. The PMTiles archive on R2 is ready and deliberately *not* on that list (§7).
 
 Installed since the original scaffold: `zod`, `@tanstack/react-query`, `zustand`, `papaparse`, `date-fns`, `vitest`, `vite`, `fflate` (promoted from a pmtiles transitive — it unzips .xlsx), and `jsdom` as a devDependency only (see Tests).
 Still not installed, from §3's "Add these": biome, playwright, sentry, posthog, resend.
@@ -427,6 +613,7 @@ npm run setup:appwrite  # create missing tables/columns/indexes from scripts/app
 npm run build:tile-styles -- https://tiles.example.com   # our own five style documents
 npm run mirror:tile-assets      # fonts, sprites, Natural Earth raster -> public/tiles/ (414MB)
 npm run migrate:style-host      # move published snapshots to the current tile host
+npm run migrate:tags            # fold categories into tags (--dry-run first)
 ```
 
 `npm run check` does **not** build the embed. After changing anything under `/embed`, run `npm run build:embed` too — that is where the size budget is enforced.
@@ -451,8 +638,8 @@ Tests are `vitest` (`vitest.config.mts`), unit only, `lib/**/*.test.ts` and `pac
 - **HeroUI v3** is React Aria under the hood and has a different API from v2. Don't write v2 component code from memory. One consequence bites hard: React Aria owns an input's value, so react-hook-form's `register()` **silently does not work** — a prefilled form renders blank and then saves the blanks. Always bind through `components/ui/form-field.tsx` (`FormTextField` / `FormTextArea`), which wire `Controller` to the TextField's own `value`/`onChange`. The same ownership bites a second way: `usePress` — every HeroUI `Button` — ends its `onPointerDown` with `stopPropagation()`, and React dispatches synthetic events from its root, so **a pointer handler on a wrapper around a Button never fires in the bubble phase**. It fails silently, with no error. Bind it as `onPointerDownCapture` instead; `components/map/add-location/use-drag-to-add.ts` is the working example.
 - **MapLibre's worker must be told where it lives.** MapLibre v6 derives its worker URL from `import.meta.url`, bails to `""` when that isn't an http(s) URL (which it isn't under Turbopack), and then constructs `new Worker("")` — loading the HTML page as the worker script. The worker never replies, and because vector tiles are fetched *inside* the worker, every map renders as an empty background with **no error in the console**. `scripts/copy-maplibre-worker.mjs` (via `predev`/`prebuild`) copies the worker into `public/maplibre/`, and `lib/map/worker.ts` sets `config.WORKER_URL`. A blank basemap? Check `public/maplibre/` exists before anything else.
 - **The embed is an ES module, and that is forced.** MapLibre v6 ships ESM only — no UMD, no CSP build. So the snippet is `<script type="module">`, `document.currentScript` is always null (the boot code finds its script tag by `[data-snapshot]` instead), and both `/embed` and `/maplibre` need CORS headers, because module scripts and MapLibre's cross-origin worker blob are both CORS fetches. `next.config.ts` sets them.
-- **MapLibre is external to the embed bundle, deliberately.** Bundling it inlines `maplibre-gl-shared.mjs`, and the worker then downloads its own copy of the same 131KB chunk — measured at 424KB gzipped total. Shipping MapLibre's dist files beside `map.js` lets the main thread and the worker share one URL: 311.9KB. Don't "simplify" this by removing `external` from `embed/vite.config.mts`.
-- **§4's 250KB budget is not reachable and the check knows it.** MapLibre v6 alone is 273.2KB gzipped. `scripts/check-embed-size.mjs` therefore budgets *our* code (40KB, currently 38.8KB) and puts a 320KB ceiling on the total to catch the duplication regression above. See §4.
+- **MapLibre is external to the embed bundle, deliberately.** Bundling it inlines `maplibre-gl-shared.mjs`, and the worker then downloads its own copy of the same 131KB chunk — measured at 424KB gzipped total. Shipping MapLibre's dist files beside `map.js` lets the main thread and the worker share one URL: 314.5KB. Don't "simplify" this by removing `external` from `embed/vite.config.mts`.
+- **§4's 250KB budget is not reachable and the check knows it.** MapLibre v6 alone is 273.2KB gzipped. `scripts/check-embed-size.mjs` therefore budgets *our* code (42KB, currently 41.3KB) and puts a 320KB ceiling on the total to catch the duplication regression above. See §4.
 - **Snapshots are written twice per publish.** An immutable timestamped archive, plus one live file at a fixed id that the embed actually reads. The embed's URL has to be stable across republishes or every customer would re-paste their snippet, and §2 forbids asking us which snapshot is current. `lib/snapshot/storage.ts` explains the delete-then-create window and why the embed retries once.
 - Vendored skills in `.agents/skills/`, pinned by `skills-lock.json`: `heroui-react`, `appwrite-typescript`, `next-cache-components-optimizer`. Use them instead of recalling API shapes.
 
@@ -552,7 +739,7 @@ The embed must **never** import React, HeroUI, Motion, TanStack Query, Zustand, 
 
 Target: **under 250KB gzipped including MapLibre.** If a change pushes it over, flag it.
 
-**Measured, that target is unreachable with MapLibre v6** — its own dist files are 273.2KB gzipped (`maplibre-gl.mjs` 136.4 + `maplibre-gl-shared.mjs` 131.0 + the worker 5.8), minified already, with no slim build. Actual total is **311.9KB**, of which ours is 38.8KB. `npm run build:embed` enforces a 40KB budget on our code and a 320KB ceiling on the total; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 38.8KB.
+**Measured, that target is unreachable with MapLibre v6** — its own dist files are 273.2KB gzipped (`maplibre-gl.mjs` 136.4 + `maplibre-gl-shared.mjs` 131.0 + the worker 5.8), minified already, with no slim build. Actual total is **314.5KB**, of which ours is 41.3KB. `npm run build:embed` enforces a 42KB budget on our code and a 320KB ceiling on the total; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 41.3KB.
 
 `/packages/shared` is the **only** directory both targets may import from. `@/lib`, `@/components` and `@/app` are closed to the embed, and `eslint.config.mjs` enforces both halves of that.
 
@@ -604,7 +791,9 @@ It started type-only. It now also holds a little runtime — `color.ts`, `darken
 Use plain `lat` / `lng` doubles, **not** spatial Point columns. Spatial types exist in Appwrite now, but "find nearest" runs client-side against the published snapshot, so a spatial index buys nothing and constrains self-hosting (geo-queries need MariaDB; MongoDB-backed self-hosted Appwrite doesn't support them).
 
 ### `maps`
-`userId` · `name` · `slug` (unique) · `style` · `defaultLat` · `defaultLng` · `defaultZoom` · `categories` (JSON) · `settings` (JSON) · `appearance` (JSON) · `allowedDomains` (string[]) · `publishedAt` · `snapshotUrl`
+`userId` · `name` · `slug` (unique) · `style` · `defaultLat` · `defaultLng` · `defaultZoom` · `tagGroups` (JSON) · `fields` (JSON) · `pinIcons` (JSON) · `settings` (JSON) · `appearance` (JSON) · `allowedDomains` (string[]) · `publishedAt` · `snapshotUrl` · ~~`categories`~~ (JSON, retired)
+
+`tagGroups` is the map's whole filter vocabulary: `[{id, label, tags: [{id, label, color}]}]`. It absorbed `categories`, which is left in place holding nothing — see §0. Do not drop a column with data in it.
 
 `appearance` is the label level and the layer toggles. Its own column rather than another key
 in `settings`, and the reason is mechanical: `settings` means "which of the embed's optional
@@ -615,7 +804,9 @@ from one list, and moving it would orphan every map already saved. It is a `varc
 theme keys stay short.
 
 ### `places`
-`mapId` · `name` · `lat` · `lng` · `address` · `category` · `description?` · `phone?` · `email?` · `url?` · `hours?` (JSON) · `photoId?` · `sortOrder` · `geocodeConfidence?` · `geocodeStatus` (`ok` | `low` | `failed` | `manual`)
+`mapId` · `name` · `lat` · `lng` · `address` · `tags` (string[]) · `fields?` (JSON) · `icon?` · `groupId?` · `description?` · `phone?` · `email?` · `url?` · `hours?` (JSON) · `photoId?` · `sortOrder` · `geocodeConfidence?` · `geocodeStatus` (`ok` | `low` | `failed` | `manual`) · ~~`category`~~ (retired)
+
+**`tags` is ordered and the order means something**: the first tag is what colours the pin. Nothing may sort it on the way to storage or to a snapshot.
 
 ### `shapes`
 `mapId` · `name` · `kind` (`circle` | `polygon` | `line`) · `description?` · `color` · `opacity` · `geometry` (JSON) · `sortOrder`
@@ -661,7 +852,7 @@ Enforce limits **server-side** in repositories, never only in the UI.
 
 **Snapshots are immutable and versioned.** Write to `snapshots/{mapId}/{timestamp}.json`, then update `snapshotUrl`. Never overwrite in place — a half-written file would break live customer sites.
 
-**Tiles:** point at OpenFreeMap's public instance in development. Before any paying customer, switch to our own PMTiles extract on Cloudflare R2. Public instances carry no uptime guarantee.
+**Tiles:** point at OpenFreeMap's public instance. **This is not a launch blocker and used to be written as though it were.** OpenFreeMap's FAQ permits commercial use in as many words, sets no request limit, and asks for no key — the only thing missing is an SLA ("I don't offer SLA guarantees"). So owning the tiles is insurance against one volunteer-funded service disappearing, not a policy requirement, and it costs about a dollar a month whenever you decide to buy it (`docs/self-hosting-tiles.md`). Move when OpenFreeMap wobbles or when a customer is paying enough that a blank map on their site is unacceptable — not on a date.
 
 **Motion must not run in the embed.** Editor animations only.
 
@@ -708,7 +899,7 @@ Do not start a phase before the previous one works end to end.
 
 One deviation worth knowing: **the embed's search does not geocode.** It filters the places already in the snapshot by name and address. Geocoding a visitor's typed query would be a metered call in the visitor's path, which §2 forbids outright — the geocoder runs at import time and never again. "Find nearest" uses the browser's own geolocation, which is free and more accurate than resolving a typed address anyway.
 
-**Week 4 — Business layer. ← next.** Pricing page, plan limits, MoR integration + webhook, own PMTiles on R2, landing page, one platform page (Webflow first), docs with screenshots, transactional email.
+**Week 4 — Business layer. ← next.** Pricing page, plan limits, MoR integration + webhook, landing page, one platform page (Webflow first), docs with screenshots, transactional email. **Our own geocoding and routing instances belong here too and are the two that are actually forced** — the public Photon and OSRM endpoints both forbid what a paying customer would make us do with them (§12). Own PMTiles on R2 is *not* on this list any more: OpenFreeMap permits commercial use, so that one is insurance to buy when it suits, not a gate to pass.
 
 **Then stop building and go get ten customers.** What they ask for decides Phase 2 — not this file.
 
@@ -727,6 +918,15 @@ Each of these is a week not spent getting a paying customer. If one seems necess
 - **Vercel Hobby prohibits commercial use** and caps cron at once daily. Use Vercel Pro or self-host.
 - **Google Maps is not an option anywhere in this codebase.** Their terms forbid storing business names and addresses, cap coordinate caching at 30 days, and require Places results to be shown on a Google map. Our model breaks all three.
 - **Nominatim's public API forbids autocomplete and bulk use.** If we self-host geocoding, use Photon (prebuilt GraphHopper dumps, runs as a separate service on its own VPS — it is not loaded into Appwrite).
+- **A licence and a demo server's usage policy are different things, and confusing them has cost time.** Every component of this stack — OSM data (ODbL), OpenFreeMap, OSRM (BSD-2), MapLibre and PMTiles (BSD-3/MIT) — permits commercial use outright, and nothing here has ever claimed otherwise. What is restricted is running production traffic through the free *demo endpoints* those projects host. Verified September 2026, and the three do not have the same answer:
+
+  | Service | Public endpoint | Commercial traffic on it |
+  |---|---|---|
+  | Tiles — OpenFreeMap | `tiles.openfreemap.org` | **Allowed.** No keys, no request limit, no SLA. |
+  | Geocoding — Photon | `photon.komoot.io` | **No.** "Extensive usage will be throttled or completely banned" — a CSV import is extensive usage. |
+  | Routing — OSRM | `router.project-osrm.org` | **No.** Reselling forbidden, ~1 req/s, withdrawable without notice. |
+
+  So the order before charging anyone is **geocoding first, routing with it, tiles when it suits** — not the other way round, which is how §10 used to read. Only tiles are in a visitor's path, which is why only they are forced to be flat-cost (§2); the other two run once, on the dashboard, when an owner imports or draws. Each has a runbook: `docs/self-hosting-geocoding.md`, `docs/self-hosting-routing.md`, `docs/self-hosting-tiles.md`.
 - **OpenStreetMap's ODbL is copyleft on databases.** Rendering and displaying places is fine. Offering customers a bulk export of OSM-derived data may trigger share-alike. Flag before building any export feature.
 - Attribution for OpenStreetMap and the tile provider must be visible on every rendered map, including the embed. Non-negotiable.
 

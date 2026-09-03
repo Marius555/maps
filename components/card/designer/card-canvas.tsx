@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 
 import { useRowDragState } from "@/components/groups/row-drag-context";
 import { useDropTarget } from "@/components/groups/use-row-drag";
@@ -10,7 +10,9 @@ import {
   movingBlockMotion,
 } from "@/components/ui/list-row-motion";
 import type { CardDrag, CardDropTarget } from "@/lib/card/card-edits";
-import type { MapCategory, MapField, Place } from "@/lib/repositories/types";
+import type { VacatedSpace } from "@/lib/card/drop-slots";
+import type { MapField, Place } from "@/lib/repositories/types";
+import type { TagChip } from "@/packages/shared/tags";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import {
   cardRows,
@@ -22,6 +24,7 @@ import {
 import { CardBlockContent, type CardBlockData } from "../card-block";
 import {
   CardFrame,
+  CardLead,
   CardZoneBox,
   blockContentStyle,
   blockEdges,
@@ -31,7 +34,6 @@ import {
 import type { BlockResize } from "./block-resize-handle";
 import { CardDropOverlay } from "./card-drop-overlay";
 import { DesignerBlock } from "./designer-block";
-import { useCardFits } from "./use-card-fits";
 import { useCardDropBands } from "./use-drop-bands";
 
 /**
@@ -67,21 +69,22 @@ import { useCardDropBands } from "./use-drop-bands";
 export function CardCanvas({
   layout,
   place,
-  category,
+  tagChips,
   fields,
   pinIcons,
   selectedId,
   justLanded,
   onSelect,
   onDrop,
+  onVacate,
   onResize,
   sampleImageUrl,
   onSampleImage,
-  onFit,
 }: {
   layout: CardLayout;
   place: Place;
-  category: MapCategory | undefined;
+  /** The sample location's tags, resolved — see `CardBlockData`. */
+  tagChips: readonly TagChip[];
   fields: MapField[];
   /** The map's pins — what a Logo block draws. */
   pinIcons: CustomPinIcon[];
@@ -93,16 +96,22 @@ export function CardCanvas({
   justLanded: string | null;
   onSelect: (id: string | null) => void;
   onDrop: (dragged: CardDrag, target: CardDropTarget) => void;
+  /**
+   * The space the block in the hand would free, reported for the length of the
+   * gesture — or null once there is nothing in the air.
+   *
+   * The card is the only thing that can measure this, and the *removal wall* is
+   * the thing that needs it: dropping a block there deletes it, and a deletion
+   * has to hand the space it opens to the line below or everything under it
+   * rides up (`removeCardBlock`). The wall is a sibling of this component rather
+   * than a child, so the answer goes up rather than across.
+   */
+  onVacate?: (freed: VacatedSpace | null) => void;
   /** `commit` is false while a handle is held, true once on release. */
   onResize: (id: string, patch: BlockResize, commit: boolean) => void;
   /** A local stand-in for a gallery block with nothing of its own to show. */
   sampleImageUrl: string | null;
   onSampleImage: (file: File) => void;
-  /**
-   * A card that has grown past its own bottom edge, pulled back inside it. Only
-   * ever fires with something to change — see `useCardFits`.
-   */
-  onFit: (layout: CardLayout) => void;
 }) {
   const { dragged } = useRowDragState();
 
@@ -117,25 +126,35 @@ export function CardCanvas({
   const geometry = useCardDropBands(cardRef, layout, dragged);
 
   /*
-   * Whether a resize handle is being held.
+   * And out to whoever owns the removal wall.
    *
-   * `dragged` covers a block being carried and says nothing about a handle,
-   * which is the other gesture that changes the card continuously — and the fit
-   * pass below must not trim a leading space out from under either. A handle
-   * reports every frame and commits once on release (`onResize`'s own flag), so
-   * this is that flag kept rather than only passed on.
+   * An effect rather than a call during render: this is a side effect on
+   * something outside the tree, and `geometry` already changes on every pointer
+   * move, so it costs nothing extra. The null at the end of a gesture matters as
+   * much as the value — a stale measurement applied to a later delete would give
+   * the wrong block the wrong space.
    */
-  const [isResizing, setResizing] = useState(false);
-  const onBlockResize = useCallback(
-    (id: string, patch: BlockResize, commit: boolean) => {
-      setResizing(!commit);
-      onResize(id, patch, commit);
-    },
-    [onResize],
-  );
+  const freed = geometry?.vacate ?? null;
+  useEffect(() => {
+    onVacate?.(freed);
+  }, [freed, onVacate]);
 
-  // And, at rest, whether what is on the card still fits inside it.
-  useCardFits(cardRef, layout, dragged !== null || isResizing, onFit);
+  /*
+   * There is no fit pass here any more, and its absence is the feature.
+   *
+   * A `useCardFits` used to measure the card after every change and, when the
+   * total came out over `maxHeight`, write a *smaller* layout back to the draft
+   * — trimming the empty space above the lower blocks, then shrinking the photo.
+   * It held the card together while something grew and had nothing to give back
+   * when that something shrank again, so opening and closing one week of opening
+   * hours walked every block below it up the card and left it there. A preview
+   * gesture was editing the saved design.
+   *
+   * The room is given and taken in CSS instead — see `leadBox` in
+   * packages/shared/card-layout.ts — which is symmetric by construction, lands in
+   * the same frame, and saves nothing. What no amount of slack can fit, the
+   * middle zone scrolls, exactly as a published card does.
+   */
 
   /*
    * There is deliberately no "this block is about to be paired with" state here.
@@ -150,7 +169,7 @@ export function CardCanvas({
    */
   const data: CardBlockData = {
     place,
-    category,
+    tagChips,
     fields,
     pinIcons,
     folded: detailsContents(layout),
@@ -206,7 +225,7 @@ export function CardCanvas({
         onRow={onRow}
         justLanded={justLanded === block.id}
         onSelect={() => onSelect(block.id)}
-        onResize={(patch, commit) => onBlockResize(block.id, patch, commit)}
+        onResize={(patch, commit) => onResize(block.id, patch, commit)}
         style={style}
       >
         {/* See the same wrapper in card-view.tsx: a narrowed block shrinks its
@@ -219,7 +238,7 @@ export function CardCanvas({
             first child of the first child" is a fact about this file that the
             measuring code has no business knowing. */}
         <div data-block-content style={blockContentStyle(block, layout)}>
-          <CardBlockContent type={block.type} data={data} />
+          <CardBlockContent block={block} data={data} />
         </div>
       </DesignerBlock>
     );
@@ -253,7 +272,7 @@ export function CardCanvas({
           * deleted from one that was merely re-paired.
           */}
         <AnimatePresence initial={false} mode="popLayout" custom={layout}>
-          {rows.map((row) => {
+          {rows.flatMap((row) => {
             const { outer, rest } = splitOuterBox({
               ...blockStyle(row.blocks[0], layout),
               ...blockEdges(
@@ -265,7 +284,20 @@ export function CardCanvas({
               ),
             });
 
-            return (
+            return [
+              /*
+               * The line's leading space, as a box of its own that gives way —
+               * see `CardLead`. A **sibling** rather than a wrapper, and keyed,
+               * because `AnimatePresence` only tracks its own direct children:
+               * a fragment holding the pair would hide the row from it and cost
+               * the exit animation. It renders null when there is no space,
+               * which `AnimatePresence` is happy to be handed.
+               */
+              <CardLead
+                key={`${row.blocks[0].id}:lead`}
+                row={row}
+                layout={layout}
+              />,
               /*
                * The **row** is what arrives and leaves, and it has to be,
                * because `AnimatePresence` only tracks its own direct children —
@@ -364,8 +396,8 @@ export function CardCanvas({
                 ) : (
                   designerBlock(row.blocks[0], rest, false)
                 )}
-              </motion.div>
-            );
+              </motion.div>,
+            ];
           })}
         </AnimatePresence>
       </CardZoneBox>
