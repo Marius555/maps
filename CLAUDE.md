@@ -266,8 +266,20 @@ The default engine is the **public OSRM demo server, and it is development only*
 — ~1 req/s, reselling forbidden, access withdrawable without notice, with
 commercial users warned by name. Same trap as Nominatim (§12), same answer:
 `ROUTING_URL`, self-host before a paying customer, `docs/self-hosting-routing.md`.
+**`ROUTING_PROVIDER=geoapify` is the other answer, and the one that needs no
+machine** — `lib/routing/geoapify.ts` behind the same `RouteProvider`, which is
+what that interface has always been for. Two things about it are specific to
+Geoapify rather than incidental. Its geometry is a `MultiLineString`, one
+LineString per leg with the joint coordinate repeated, so the reader joins them;
+and it has no `nearest` service, so the routability probe asks the reverse
+geocoder for the nearest *street* instead — a slightly different question,
+answered against a deliberately generous 2km threshold, which is why the two
+indexes agreeing at the margins does not matter.
 Only `car` is offered, because OSRM runs one process per profile and the demo
-server serves driving alone; a picker that 400s is a broken control. The engine
+server serves driving alone; a picker that 400s is a broken control. (Geoapify
+serves all three from one endpoint, so that reason lapses the moment
+`ROUTING_PROVIDER` is set — the control is simply not built yet, and would have
+to grey itself against OSRM.) The engine
 is **not** credited anywhere: a line naming OSRM sat under the route summary and
 was removed on request, so while the default endpoint is in use we are using that
 server without the credit its policy asks for — an accepted debt that self-hosting
@@ -593,7 +605,7 @@ day it matters is `docs/self-hosting-tiles.md`.
 
 Also built, out of order and knowingly: **routes** (see below). §11 listed routing as out of scope for v1 and §10 says Week 4 is next; that call was made deliberately, against a rival shipping the feature, and is recorded here rather than quietly overriding either section.
 
-Not built yet, and next: everything in Week 4 — pricing page, plan-limit UI, MoR billing + webhook, landing page, one platform page, docs, transactional email. Plus the two self-hosted instances §12 says are forced before anyone pays us: Photon and a routing engine. The PMTiles archive on R2 is ready and deliberately *not* on that list (§7).
+Not built yet, and next: everything in Week 4 — pricing page, plan-limit UI, MoR billing + webhook, landing page, one platform page, docs, transactional email. Plus the two upstreams §12 says are forced before anyone pays us — **which are now a switch rather than two machines**: `GEOCODER_PROVIDER=geoapify` and `ROUTING_PROVIDER=geoapify` move both off the demo endpoints onto a service that permits commercial use and permits results to be stored. What is still owed there is a plan decision, not a build: Geoapify's free tier requires its attribution, and a route drawn on it is published onto a customer's site. Self-hosted Photon and OSRM stay in the tree as the fallback, with their runbooks intact. The PMTiles archive on R2 is ready and deliberately *not* on that list (§7).
 
 Installed since the original scaffold: `zod`, `@tanstack/react-query`, `zustand`, `papaparse`, `date-fns`, `vitest`, `vite`, `fflate` (promoted from a pmtiles transitive — it unzips .xlsx), and `jsdom` as a devDependency only (see Tests).
 Still not installed, from §3's "Add these": biome, playwright, sentry, posthog, resend.
@@ -651,6 +663,18 @@ Tests are `vitest` (`vitest.config.mts`), unit only, `lib/**/*.test.ts` and `pac
 - Server-only: `APPWRITE_API_KEY`, `DATABASE_ID`, `STORAGE_ID` — unprefixed deliberately. These must never reach a client component or the embed bundle (§9).
 - Optional, all server-only, all defaulted: `GEOCODER_URL` (defaults to the public Photon instance), `GEOCODER_MIN_INTERVAL_MS` (defaults to 1000, and now spaces request *starts* rather than waiting for each round trip to finish — see `lib/geocoding/throttle.ts`) and `GEOCODER_USER_AGENT`. Point the first at a self-hosted Photon and lower the second before any real import volume. The third exists because public OSM-derived services block unidentified clients and Node's default UA is exactly that: a 403 from a WAF is otherwise indistinguishable from the service being down, and both arrive as a 502.
 - Optional, all server-only, all defaulted: `ROUTING_URL` (defaults to the public OSRM demo server), `ROUTING_MIN_INTERVAL_MS` (defaults to 1000) and `ROUTING_USER_AGENT`. Exactly the geocoder's three, for exactly the geocoder's reasons — and with a sharper deadline: the demo server's terms forbid reselling access and warn that it can be withdrawn without notice, so `ROUTING_URL` has to point somewhere of our own before the first paying customer. `docs/self-hosting-routing.md` is the runbook, including why Valhalla beats OSRM the moment coverage goes past one country. Nothing published moves when this changes — a route's geometry is baked at draw time, which is the whole feature.
+- Optional, all server-only, all defaulted: `GEOAPIFY_API_KEY`, `GEOCODER_PROVIDER` and `ROUTING_PROVIDER`. Set either provider variable to `geoapify` and that half moves onto Geoapify (`lib/geoapify/client.ts`, plus a thin adapter in each folder); unset, Photon and OSRM answer exactly as they always did, which is what makes this switchable per half and reversible. The two switches are deliberately independent — they share an account and a credit budget but not a decision, since geocoding is judged on an import of real addresses and routing on a drawn line. `GEOAPIFY_MIN_INTERVAL_MS` paces **both**, out of one process-wide throttle, because one account has one rate limit; it defaults far below the demo servers' 1000ms since arming the route tool sweeps up to 200 pins. The key is unprefixed and belongs to `APPWRITE_API_KEY`'s class — it must never reach a client component or the embed (§9), and `geoapifyGet` appends it last and keeps it out of every error message so an upstream failure cannot log it.
+- **Temporary, and testing only: `DISABLE_ALL_PLAN`.** Set to `1`/`true`/`yes`, every
+  account reads as `pro` — so every quantity limit and the routes feature gate is
+  bypassed. It exists because routes are a paid feature on an account that has no
+  billing yet (§10 Week 4), which makes the routing half of a provider swap
+  unreachable by hand, and by hand is the only way that half's failures show:
+  they are plausible wrong answers, not errors. It is one early return in
+  `getUserPlan` — the single point the plan is resolved — so §6's rule that the
+  checks live in the repositories is intact and every one of them still runs; they
+  are simply asked about a different plan, which is why the ceilings become pro's
+  3,000 places rather than none. Honoured in every environment and it warns once
+  per process when it is on. **Delete it with the pricing work.**
 - Optional, server-only: `SNAPSHOT_STORAGE_ID`, defaulting to `STORAGE_ID`. **Appwrite Cloud's free plan allows one bucket per project**, so published snapshots share the assets bucket, which is why `json` is in its allowed extensions. On a paid plan, point this at a dedicated bucket and add a second entry to `BUCKETS` in `scripts/appwrite-schema.mjs`; nothing else changes.
 - Optional, browser-safe: `NEXT_PUBLIC_TILES_URL`. Where the basemaps are served from. **Unset means OpenFreeMap and is the current state**; setting it moves `STYLE_URLS` *and* the attribution together, because both come from one pair in `lib/map/style.ts`. Changing it does not move maps that are already published — `styleUrl` is baked into each snapshot at publish time, which is what makes the switch a republish rather than a redeploy of every customer's embed. `npm run migrate:style-host` is what moves them, in either direction.
 - Optional, browser-safe: `NEXT_PUBLIC_EMBED_SCRIPT_URL`. Set it to the CDN origin in production. Unset, the embed snippet points at the dashboard's own origin, which is what makes development and self-hosting work with no config.
@@ -927,6 +951,7 @@ Each of these is a week not spent getting a paying customer. If one seems necess
   | Routing — OSRM | `router.project-osrm.org` | **No.** Reselling forbidden, ~1 req/s, withdrawable without notice. |
 
   So the order before charging anyone is **geocoding first, routing with it, tiles when it suits** — not the other way round, which is how §10 used to read. Only tiles are in a visitor's path, which is why only they are forced to be flat-cost (§2); the other two run once, on the dashboard, when an owner imports or draws. Each has a runbook: `docs/self-hosting-geocoding.md`, `docs/self-hosting-routing.md`, `docs/self-hosting-tiles.md`.
+- **Geoapify is the hosted answer to the two forced ones, and the property that decided it is storage.** `GEOCODER_PROVIDER=geoapify` and `ROUTING_PROVIDER=geoapify` move geocoding and routing off the demo endpoints without a VPS. What makes it usable *here* specifically is that it permits results to be stored and redistributed: this app writes a geocode onto the row and bakes a route's geometry into a static snapshot that customer sites read forever (§7), which Google's terms forbid outright and Mapbox's published terms decline to answer — the same trap this section already records for Google Maps. Two consequences to keep in view. **Geoapify attribution is mandatory on the free plan**, and a route drawn on it is published onto a customer's site, so a paid plan (or the credit) is owed before routes reach a customer; OpenStreetMap attribution is unchanged and already carried by every rendered map. And **their map tiles are not an option** — tiles are the one part of this stack in a visitor's path, so a metered tile host is exactly what §2 exists to forbid. Basemaps stay on OpenFreeMap. Self-hosting stays in the tree and stays reachable: Photon and OSRM are still what an unset switch builds.
 - **OpenStreetMap's ODbL is copyleft on databases.** Rendering and displaying places is fine. Offering customers a bulk export of OSM-derived data may trigger share-alike. Flag before building any export feature.
 - Attribution for OpenStreetMap and the tile provider must be visible on every rendered map, including the embed. Non-negotiable.
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   planFeatureMessage,
@@ -536,5 +536,67 @@ describe("planFeatureMessage", () => {
     expect(planFeatureMessage("routes", "free")).toBe(
       "Routes aren't included on the free plan. Upgrade to draw them.",
     );
+  });
+});
+
+describe("DISABLE_ALL_PLAN", () => {
+  /*
+   * A temporary testing switch, tested because it is the paywall it switches
+   * off. What matters is the default: the flag is read at call time, so a stray
+   * value in a shell would change behaviour with no deploy, and "absent means
+   * enforced" is the only property here worth a regression test.
+   */
+
+  beforeEach(() => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("reads every account as pro, without asking Appwrite at all", async () => {
+    vi.stubEnv("DISABLE_ALL_PLAN", "1");
+    const { getUserPlan } = await planLimits();
+
+    await expect(getUserPlan(USER_ID)).resolves.toBe("pro");
+    expect(listRows).not.toHaveBeenCalled();
+  });
+
+  it("opens the gate the free plan closes", async () => {
+    vi.stubEnv("DISABLE_ALL_PLAN", "true");
+    const { assertPlanFeature } = await planLimits();
+
+    await expect(assertPlanFeature(USER_ID, "routes")).resolves.toBeUndefined();
+  });
+
+  it("says so, once, rather than bypassing the paywall silently", async () => {
+    vi.stubEnv("DISABLE_ALL_PLAN", "yes");
+    const { getUserPlan } = await planLimits();
+
+    await getUserPlan("user-a");
+    await getUserPlan("user-b");
+
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(console.warn).mock.calls[0]?.[0]).toContain("DISABLE_ALL_PLAN");
+  });
+
+  it("stays shut for anything that is not an affirmative", async () => {
+    for (const value of ["", "0", "false", "no", "maybe"]) {
+      vi.resetModules();
+      vi.stubEnv("DISABLE_ALL_PLAN", value);
+      const { getUserPlan } = await planLimits();
+
+      await expect(getUserPlan(USER_ID)).resolves.toBe("free");
+    }
+  });
+
+  it("stays shut when it is not set at all", async () => {
+    vi.stubEnv("DISABLE_ALL_PLAN", undefined);
+    const { assertPlanFeature } = await planLimits();
+
+    await expect(assertPlanFeature(USER_ID, "routes")).rejects.toMatchObject({
+      code: "plan_feature_required",
+    });
   });
 });

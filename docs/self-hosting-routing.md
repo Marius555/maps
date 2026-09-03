@@ -5,6 +5,43 @@ convenience with an expiry date, and this is the part that costs money and a
 machine, written down while the reasoning is fresh rather than on the day it is
 needed under pressure.
 
+## Read this first: there is now a switch
+
+`ROUTING_PROVIDER=geoapify`, with `GEOAPIFY_API_KEY` set, moves routing onto
+Geoapify and settles the deadline below without a machine.
+`lib/routing/geoapify.ts` sits behind the same `RouteProvider` this document
+already describes a second adapter arriving through, so the choice is one
+environment variable in either direction.
+
+Why it is allowed where the OSRM demo server is not: Geoapify sells the service,
+permits commercial use, and permits results to be **stored and redistributed** —
+which is the property that matters here, because a route's geometry is baked into
+a published snapshot that customer sites read forever.
+
+Three things about that adapter are worth knowing before choosing it:
+
+- **The geometry is a `MultiLineString`**, one LineString per leg with the joint
+  coordinate repeated. `flattenLegs` joins them and drops the repeats; a genuine
+  gap between legs is kept rather than closed.
+- **There is no `nearest` service.** The routability probe asks the reverse
+  geocoder for the nearest *street* instead. That is a slightly different question
+  from "nearest edge in the routing graph" — an unnamed service road is in one
+  index and not the other — and it is acceptable only because
+  `ROUTE_SNAP_MAX_DISTANCE_M` is deliberately generous.
+- **No stop is ever named as unreachable.** OSRM says which coordinate it could
+  not attach to a road, in prose; Geoapify documents no equivalent, so
+  `unreachableStop` is always null and the caller falls back to a message about
+  the route. The probe is what prevents the case in the first place.
+
+And one thing that is owed rather than optional: **Geoapify attribution is
+mandatory on the free tier**, and a route drawn on it is published onto a
+customer's site. Decide the plan before routes reach a customer. OpenStreetMap
+attribution is unchanged and non-negotiable either way.
+
+Everything below still applies. It is what to do when that pricing stops working
+or a customer's traffic cannot leave the premises, and OSRM remains what an unset
+`ROUTING_PROVIDER` builds.
+
 ## When to do this
 
 **Before the first paying customer**, and there is no wriggle room in that. The

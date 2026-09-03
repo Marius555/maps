@@ -9,6 +9,34 @@ Third of three, after `self-hosting-routing.md` and `self-hosting-tiles.md`. It
 was the last written and is the **most urgent of the three**, which is worth
 saying plainly because the ordering in CLAUDE.md used to imply the opposite.
 
+## Read this first: there is now a switch
+
+`GEOCODER_PROVIDER=geoapify`, with `GEOAPIFY_API_KEY` set, moves geocoding onto
+Geoapify and settles the urgency above without a machine. `lib/geocoding/geoapify.ts`
+sits behind the same `GeocodeProvider` this document's plan was always going to
+need, so the choice is one environment variable in either direction.
+
+Why it is allowed where the public Photon instance is not: Geoapify sells the
+service, permits commercial use, and — the part that actually decides it —
+permits results to be **stored**. This app writes a geocode onto the row and
+never asks again, which is what §2 requires and what Google's terms forbid.
+OpenStreetMap attribution is required and already carried by every rendered map;
+Geoapify's own attribution is required on the free tier.
+
+Everything below still applies, and is not obsolete. It is what to do when
+Geoapify's pricing stops working, when a customer's data cannot leave the
+premises, or when import volume makes a fixed monthly VPS cheaper than credits.
+Photon remains what an unset `GEOCODER_PROVIDER` builds.
+
+One thing the swap gives up, worth knowing before choosing: `reverse-select.ts`
+and its 538 lines of tests exist because Photon publishes a bounding box per
+feature and never a polygon, and the Geoapify adapter does not use them — it
+reads the per-feature `distance` Photon lacks. The two judgements that were ours
+rather than Photon's are kept (the 300m past which nothing found is an answer
+about this pin, and the basemap's own road centreline as the tiebreak), but the
+quality of a dropped-pin address is a thing to compare side by side rather than
+assume.
+
 ## When to do this
 
 **Before the first paying customer**, alongside routing. Photon's own README is

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createGeoapifyRouter } from "./geoapify";
 import { createOsrmProvider } from "./osrm";
 import type { RouteProvider } from "./types";
 
@@ -12,8 +13,22 @@ import type { RouteProvider } from "./types";
  */
 let provider: RouteProvider | null = null;
 
+/**
+ * `ROUTING_PROVIDER=geoapify` moves routing onto Geoapify; anything else, unset
+ * included, keeps the OSRM adapter and every existing behaviour byte-identical.
+ *
+ * An explicit switch rather than "is there a key" — the same account's key also
+ * drives geocoding, and a stray value in `.env` must not silently reroute an
+ * engine nobody meant to move. It is also what keeps OSRM reachable, which
+ * matters because self-hosting is still the endgame if this pricing stops
+ * working (docs/self-hosting-routing.md).
+ */
 export function getRouter(): RouteProvider {
-  provider ??= createOsrmProvider();
+  provider ??=
+    process.env.ROUTING_PROVIDER === "geoapify"
+      ? createGeoapifyRouter()
+      : createOsrmProvider();
+
   return provider;
 }
 

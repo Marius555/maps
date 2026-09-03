@@ -63,6 +63,50 @@ export async function assertPlanFeature(
   }
 }
 
+/**
+ * TEMPORARY, and testing only — delete this with the browser pass it exists for.
+ *
+ * Routes are a paid feature and everyone reads as `free` until Week 4 wires up
+ * billing, so both endpoints that reach the routing engine answer 403 and the
+ * Draw menu greys its Route row. That leaves the routing half of a provider swap
+ * unreachable by hand — and by hand is the only way its failures show up, since
+ * they are plausible wrong answers rather than errors.
+ *
+ * `DISABLE_ALL_PLAN` answers `pro` for everyone instead. It sits here, at the
+ * one point the plan is resolved, rather than at any of the ten places a limit
+ * is actually enforced: CLAUDE.md §6 says those checks live in the repositories
+ * and never only in the UI, and every one of them still runs untouched — they
+ * are simply asked about a different plan. The ceilings therefore become pro's
+ * 3,000 places and 250 shapes rather than no ceiling at all, which is
+ * indistinguishable from unlimited for testing and keeps every "n of N" badge
+ * reading like a sentence.
+ *
+ * Read at call time rather than at module load, so a test can set it per case.
+ */
+function planChecksDisabled(): boolean {
+  const raw = process.env.DISABLE_ALL_PLAN;
+  if (!raw || !/^(1|true|yes)$/i.test(raw.trim())) return false;
+
+  warnOnce();
+  return true;
+}
+
+/**
+ * Once per process, not once per request. `getUserPlan` is `cache()`d per
+ * request, so a warning inside its body would print on every page load until
+ * it stopped being read as a warning.
+ */
+let warned = false;
+
+function warnOnce(): void {
+  if (warned) return;
+  warned = true;
+
+  console.warn(
+    "DISABLE_ALL_PLAN is set: every account reads as `pro`, so every plan limit and feature gate is bypassed. Testing only — unset it before this is in front of anyone.",
+  );
+}
+
 type SubscriptionRow = Models.Row & {
   plan?: string | null;
   status?: string | null;
@@ -75,6 +119,9 @@ type SubscriptionRow = Models.Row & {
  * `cache()` keeps it to one read per request even when several creates check it.
  */
 export const getUserPlan = cache(async (userId: string): Promise<PlanId> => {
+  // TEMPORARY — see planChecksDisabled above. Skips the read as well as the check.
+  if (planChecksDisabled()) return "pro";
+
   const result = await admin.tablesDB.listRows<SubscriptionRow>({
     databaseId: env.databaseId,
     tableId: TABLES.subscriptions,
