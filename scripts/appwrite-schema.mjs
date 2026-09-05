@@ -173,6 +173,21 @@ export const TABLES = [
        */
       varchar("photoIds", 36, { array: true }),
       varchar("photoId", 36),
+      /*
+       * This location's own brand mark, as a storage file id.
+       *
+       * A file rather than an inline `data:` URI, which is how the *map's*
+       * custom pins carry an image (`pinIcons`, capped at 6KB decoded so it can
+       * ride inside the snapshot). That cap works for eight pins shared across a
+       * map; it does not for three thousand locations each with their own logo,
+       * which would bake megabytes of base64 into a file every visitor to the
+       * customer's site downloads (CLAUDE.md §2). A published snapshot carries
+       * the URL instead, exactly as it already does for a photo.
+       *
+       * One id and not an array: a location has one logo. The gallery next door
+       * is the thing that holds many pictures.
+       */
+      varchar("logoId", 36),
       integer("sortOrder", { min: 0, xdefault: 0 }),
       float("geocodeConfidence", { min: 0, max: 1 }),
       enumeration("geocodeStatus", GEOCODE_STATUSES, { xdefault: "manual" }),
@@ -187,6 +202,30 @@ export const TABLES = [
       // Which group this location belongs to, or "" for none — the same way
       // `category` and `icon` already spell "nothing chosen".
       varchar("groupId", 36, { xdefault: "" }),
+      /*
+       * How *this* location's card differs from the account's own design.
+       *
+       * `{ [blockId]: CardBlock }`, JSON on the same argument `hours` and
+       * `fields` make: read whole, rendered whole, never queried on. The design
+       * itself stays one row per account (`cardDesigns`) and still decides which
+       * blocks a card has, in which zone, in which order — this only ever
+       * changes what one of them *is*. Nothing here can add, delete or move a
+       * block, which is what keeps the account's design meaningful.
+       *
+       * **A whole resolved block per entry rather than a diff against the
+       * account's**, and that is the decision the rest of the feature rests on.
+       * Absent is meaningful all over `CardBlock` — no `logoMode` is the pin, no
+       * `fit` is Fill, no `bold` is not bold — so a diff would need a second
+       * "and unset these" list travelling beside it, and every one of the three
+       * renderers would have to apply both. A resolved block makes the merge
+       * `overrides[block.id] ?? block` everywhere and has no ambiguity in it.
+       *
+       * The consequence, which the card's own Reset button exists for: a block
+       * that has been singled out stops tracking the account design for that
+       * block alone. Every other block on that pin, and every other pin, still
+       * follows it.
+       */
+      text("cardBlocks"),
     ],
     indexes: [
       { key: "idx_places_mapId", type: "key", columns: ["mapId"], orders: ["asc"] },

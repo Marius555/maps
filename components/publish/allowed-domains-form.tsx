@@ -7,7 +7,6 @@ import { z } from "zod";
 
 import { ErrorMessage } from "@/components/ui/error-message";
 import { FormTextArea } from "@/components/ui/form-field";
-import { SectionPanel } from "@/components/ui/section-panel";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { useUpdateMap } from "@/lib/query/maps";
 import type { AppMap } from "@/lib/repositories/types";
@@ -69,32 +68,40 @@ export function AllowedDomainsForm({ map }: { map: AppMap }) {
     }
   });
 
+  /*
+   * No `SectionPanel` around this any more — see EmbedSnippet's note. It is one
+   * fold in the design sidebar, which already names it.
+   *
+   * Still a form with its own Save button rather than joining the designer's
+   * write-on-change channel: a half-typed domain list is not a state to save,
+   * and a debounced write would lock a map to `exampl` on the way to
+   * `example.com`.
+   */
   return (
-    <form onSubmit={onSubmit} noValidate>
-      <SectionPanel
-        title="Allowed domains"
-        description={`One per line, up to ${MAX_ALLOWED_DOMAINS}. Subdomains are included, so example.com also covers www.example.com. Leave it empty to allow the map anywhere.`}
-        footer={
-          <Button type="submit" isPending={isSubmitting} isDisabled={!isDirty}>
-            Save changes
-          </Button>
-        }
+    <form onSubmit={onSubmit} noValidate className="space-y-2">
+      <p className="text-pretty text-xs text-muted">
+        {`One per line, up to ${MAX_ALLOWED_DOMAINS}. Subdomains are included, so example.com also covers www.example.com. Leave it empty to allow the map anywhere.`}
+      </p>
+
+      {updateMap.error && !errors.domains ? (
+        <ErrorMessage error={updateMap.error} />
+      ) : null}
+
+      <FormTextArea control={control} name="domains" label="Domains" />
+
+      <p className="text-xs text-muted">
+        This discourages someone copying your snippet onto their own site. It
+        isn&rsquo;t a security control — the published map is a public file.
+      </p>
+
+      <Button
+        type="submit"
+        size="sm"
+        isPending={isSubmitting}
+        isDisabled={!isDirty}
       >
-        {updateMap.error && !errors.domains ? (
-          <ErrorMessage error={updateMap.error} />
-        ) : null}
-
-        <FormTextArea
-          control={control}
-          name="domains"
-          label="Domains"
-        />
-
-        <p className="text-xs text-muted">
-          This discourages someone copying your snippet onto their own site. It
-          isn&rsquo;t a security control — the published map is a public file.
-        </p>
-      </SectionPanel>
+        Save changes
+      </Button>
     </form>
   );
 }

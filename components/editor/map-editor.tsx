@@ -1264,6 +1264,11 @@ export function MapEditor({
           colorFor={colorFor}
           pinIcons={map.pinIcons}
           showPlaceCard
+          /* Every block this location left empty draws a dashed `+` on its
+             card, opening the one field behind it — see `cardSlotOf`. The map
+             itself, not just its id, because the tags slot's quick-add writes
+             the map's own `tagGroups`. */
+          cardSlots={{ map }}
           onSelectPlace={selectPlace}
           onEditPlace={setEditingId}
           /*

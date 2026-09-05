@@ -1,69 +1,110 @@
 "use client";
 
-import { PreviewPanel } from "@/components/preview/preview-panel";
+import { EmbedPreview } from "@/components/preview/embed-preview";
 import { PageTitle } from "@/components/ui/page-title";
-import { SectionPanel } from "@/components/ui/section-panel";
 import { useMap } from "@/lib/query/maps";
 import { usePlaces } from "@/lib/query/places";
 import { useShapes } from "@/lib/query/shapes";
 import type { AppMap, Place, Shape } from "@/lib/repositories/types";
-import { hasUnpublishedChanges } from "@/lib/snapshot/staleness";
-import { AllowedDomainsForm } from "./allowed-domains-form";
-import { EmbedSettingsForm } from "./embed-settings-form";
-import { EmbedSnippet } from "./embed-snippet";
-import { PublishAction } from "./publish-action";
-import { PublishStatus } from "./publish-status";
+import { DesignSidebar } from "./design-sidebar/design-sidebar";
+import { useEmbedDesign } from "./design-sidebar/use-embed-design";
 
 /**
- * Client shell for the Publish tab.
+ * The Publish tab: the map as visitors will get it, and the controls that decide
+ * what that means.
  *
- * Reads through the query cache like the settings page does, so publishing
- * updates the status line and reveals the snippet without a navigation.
+ * It was five stacked panels in a 672px column — a box explaining publishing, a
+ * box explaining the preview, the snippet, a row of switches, a domain list —
+ * with the preview itself narrower than the embed's own 640px breakpoint, so the
+ * results panel a visitor would see beside the map stacked underneath it
+ * instead. The owner was looking at a layout their customers would never see,
+ * and being told about it in prose.
+ *
+ * **The design column stands where the app nav does on every other page**
+ * (`lib/layout/app-nav.ts` hides it here), so this page is one column of
+ * controls and one map, edge to edge. That is what makes it read as a designer
+ * rather than as a form with a picture beside it — and it is what gives the
+ * preview the width to render the layout a desktop visitor will actually see.
+ *
+ * The draft is held here rather than inside the sidebar, because the preview
+ * needs it too: `useEmbedDesign` writes on a 400ms trailing timer, and a preview
+ * reading the saved row would lag every press by that timer. Same hook, two
+ * readers, one writer.
  */
 export function PublishPanel({
   initialMap,
   initialPlaces,
   initialShapes,
+  initialCardDesign,
 }: {
   initialMap: AppMap;
   initialPlaces: Place[];
   initialShapes: Shape[];
+  /** Loaded server-side so the preview never builds a document twice — see
+      `EmbedPreview`'s `cardDesign`. */
+  initialCardDesign?: Record<string, unknown>;
 }) {
   const { data: map = initialMap } = useMap(initialMap.id, initialMap);
   const { data: places = initialPlaces } = usePlaces(initialMap.id, initialPlaces);
   const { data: shapes = initialShapes } = useShapes(initialMap.id, initialShapes);
 
+  const design = useEmbedDesign(map);
+  const isEmpty = places.length === 0 && shapes.length === 0;
+
   return (
-    <div className="space-y-6">
+    <>
       <PageTitle>Publish</PageTitle>
 
-      <SectionPanel
-        title="Publish this map"
-        description="Publishing writes a static copy of your locations that visitors load directly. Your dashboard is never part of what they load."
-        footer={<PublishAction mapId={map.id} />}
-      >
-        <PublishStatus
+      {/*
+        `lg:flex-none` is load-bearing: without it `flex-1`'s `flex-basis: 0%`
+        beats `height` on the main axis and the definite height is silently
+        ignored, leaving the page to grow instead of the column to scroll. The
+        full `100dvh` rather than a subtraction, because this page has no
+        `Container` padding above it and `MobileHeader` is `md:hidden`.
+
+        **`lg` and not `xl`.** The embed decides its own shape with a container
+        query at 640px of its own width, and under that it stacks the results
+        panel below the map — right on a phone, wrong as the only thing a
+        designer ever shows. With the app nav gone, `1024 − 320` leaves the frame
+        704px, which clears it; below `lg` the page stacks and the map takes the
+        full width, clearing it by more. There is deliberately no
+        `publish/loading.tsx` to keep these strings in step with — see CLAUDE.md
+        on why this route has no loading boundary.
+      */}
+      <div className="flex min-h-0 flex-1 flex-col lg:h-[100dvh] lg:flex-none lg:flex-row">
+        {/* The map first in source, so a phone gets the subject before the
+            controls; `lg:order-first` puts the column back on the left where
+            the nav was as soon as there are two columns. */}
+        <div className="relative order-1 h-[55dvh] min-h-64 w-full lg:order-2 lg:h-auto lg:min-h-0 lg:flex-1">
+          {/* A map of nothing but shapes is a real map — a delivery area needs
+              no pins in it — so the empty state waits until both are empty. */}
+          {isEmpty ? (
+            <div className="flex h-full items-center justify-center bg-surface-secondary p-4">
+              <p className="text-pretty text-center text-xs text-muted">
+                Add some locations on the Locations tab and they&rsquo;ll show up
+                here.
+              </p>
+            </div>
+          ) : (
+            <EmbedPreview
+              map={map}
+              places={places}
+              shapes={shapes}
+              settings={design.settings}
+              cardDesign={initialCardDesign}
+              frame={false}
+              className="h-full w-full"
+            />
+          )}
+        </div>
+
+        <DesignSidebar
           map={map}
-          hasPendingChanges={hasUnpublishedChanges(map, places, shapes)}
+          places={places}
+          shapes={shapes}
+          design={design}
         />
-
-        {/* A map carrying only shapes publishes something real, so this waits
-            until there is genuinely nothing to put on a customer's site. */}
-        {places.length === 0 && shapes.length === 0 ? (
-          <p className="text-xs text-muted">
-            This map has no locations yet, so it would publish empty. Add some on
-            the Locations tab first.
-          </p>
-        ) : null}
-      </SectionPanel>
-
-      <PreviewPanel map={map} places={places} shapes={shapes} />
-
-      {map.snapshotUrl ? <EmbedSnippet snapshotUrl={map.snapshotUrl} /> : null}
-
-      <EmbedSettingsForm key={`settings-${map.id}`} map={map} />
-
-      <AllowedDomainsForm key={map.id} map={map} />
-    </div>
+      </div>
+    </>
   );
 }

@@ -7,7 +7,7 @@ import { useForm, useWatch } from "react-hook-form";
 
 import { ErrorMessage } from "@/components/ui/error-message";
 import { applyFieldErrors } from "@/lib/query/form-errors";
-import { useSavePlacePhotos } from "@/lib/query/photo";
+import { useSavePlaceLogo, useSavePlacePhotos } from "@/lib/query/photo";
 import { useUpdatePlace } from "@/lib/query/places";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import {
@@ -16,6 +16,7 @@ import {
 } from "@/lib/validation/place.schema";
 import type { PhotoSlot } from "@/lib/photos/save-plan";
 import { emptyHours } from "@/packages/shared/hours";
+import type { LogoDraft } from "./logo-field";
 import { ContactSection } from "./sections/contact-section";
 import { CoordinatesSection } from "./sections/coordinates-section";
 import { EssentialsSection } from "./sections/essentials-section";
@@ -39,11 +40,12 @@ import { MediaSection } from "./sections/media-section";
  * map") pointed at a map that did not exist in the dialog. There is one now, and
  * the boxes underneath it, and either can move the pin.
  *
- * **Everything in here is a draft, including the photos.** They were the one
+ * **Everything in here is a draft, including the pictures.** Photos were the one
  * exception — uploaded the moment they were picked, so Cancel did not undo them
  * and Save did not save them. They are `PhotoSlot`s in local state now, held
  * beside the form rather than inside it because a `File` has no business in a
- * zod schema, and written by `useSavePlacePhotos` on submit.
+ * zod schema, and written by `useSavePlacePhotos` on submit. The logo is a
+ * `LogoDraft` on exactly those terms.
  */
 export function PlaceForm({
   map,
@@ -58,12 +60,19 @@ export function PlaceForm({
 }) {
   const updatePlace = useUpdatePlace(map.id);
   const savePhotos = useSavePlacePhotos(map.id);
+  const saveLogo = useSavePlaceLogo(map.id);
 
   /*
    * The gallery, as it will be. Seeded from the saved row, and reset with the
    * rest of the form by the `key` the dialog puts on this component.
    */
   const [photos, setPhotos] = useState<PhotoSlot[]>(() => galleryOf(place));
+
+  /*
+   * The logo, as it will be — and `logoOf` rather than a bare initialiser so
+   * "what the row holds" is spelled once, the way `galleryOf` already is.
+   */
+  const [logo, setLogo] = useState<LogoDraft>(() => logoOf(place));
 
   const {
     handleSubmit,
@@ -143,6 +152,24 @@ export function PlaceForm({
         onPlace: (written) => setPhotos(galleryOf(written)),
       });
 
+      /*
+       * Last, and only when it changed — `logoRequest` answers `undefined` for
+       * the common case, which is a form saved without anybody touching it, and
+       * the hook makes no request at all for that.
+       *
+       * After the photos rather than before, on the same argument the two above
+       * are ordered by: this is the cheapest half to repeat, so it is the one
+       * that should be left outstanding if something fails earlier.
+       */
+      const written = await saveLogo.mutateAsync({
+        placeId: place.id,
+        logo: logoRequest(logo, place),
+      });
+
+      // Same reason the gallery resyncs: an uploaded file stops being a pending
+      // file at once, so a retry sends nothing twice.
+      if (written) setLogo(logoOf(written));
+
       onSaved?.();
     } catch (error) {
       applyFieldErrors(error, setError);
@@ -153,6 +180,7 @@ export function PlaceForm({
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
       {updatePlace.error ? <ErrorMessage error={updatePlace.error} /> : null}
       {savePhotos.error ? <ErrorMessage error={savePhotos.error} /> : null}
+      {saveLogo.error ? <ErrorMessage error={saveLogo.error} /> : null}
 
       <EssentialsSection
         map={map}
@@ -183,9 +211,11 @@ export function PlaceForm({
         <FieldsSection control={control} fields={map.fields} />
         <HoursSection control={control} hasError={Boolean(errors.hours)} />
         <MediaSection
+          logo={logo}
           photos={photos}
           control={control}
           hasError={Boolean(errors.description)}
+          onLogoChange={setLogo}
           onPhotosChange={setPhotos}
         />
       </div>
@@ -217,4 +247,26 @@ function galleryOf(place: Place): PhotoSlot[] {
     id,
     url: place.photoUrls[index],
   }));
+}
+
+/** A stored row's logo as a draft. `galleryOf`'s single-valued twin. */
+function logoOf(place: Place): LogoDraft {
+  return place.logoUrl ? { kind: "saved", url: place.logoUrl } : null;
+}
+
+/**
+ * What to send for the logo: a file, `null` to clear, or `undefined` to leave it
+ * alone.
+ *
+ * The third answer is the one worth having, and it is why this is a function
+ * rather than a value read off the draft. A draft that is still the `saved` slot
+ * it started as means nobody touched the control, and a request there would be a
+ * delete-and-reupload of a file that has not changed — or, worse, a DELETE for a
+ * location that never had one, on every single save.
+ */
+function logoRequest(logo: LogoDraft, place: Place): File | null | undefined {
+  if (logo?.kind === "new") return logo.file;
+  if (!logo && place.logoId) return null;
+
+  return undefined;
 }

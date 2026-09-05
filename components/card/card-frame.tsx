@@ -8,6 +8,7 @@ import {
   blockBox,
   cardRowBox,
   leadBox,
+  logoRadiusOf,
   rowOffsetHolder,
   upwardLiftOf,
   type CardBlock,
@@ -49,11 +50,33 @@ const CARD_SHADOWS: Record<CardShadow, string> = {
  * generated for a value that does not exist until someone drags a handle.
  */
 
-/** The card's design as CSS custom properties, for the parts CSS reads. */
+/**
+ * The card's design as CSS custom properties, for the parts CSS reads.
+ *
+ * `--card-h` is the designed height rather than an inline `height`, and that is
+ * the whole reason it is here: the editor's card has to take the *smaller* of
+ * what its owner designed and what the map frame can show, and only CSS can see
+ * both numbers at once — the frame's is written onto the anchor by
+ * `useMapAnchor`, long after React last rendered. See `.map-card` in
+ * app/globals.css. The designer's canvas sets a real inline `height` on top of
+ * this, which wins, because there is no frame to clamp against there.
+ */
 export function cardVars(layout: CardLayout): CSSProperties {
   return {
     "--card-pad": `${String(layout.padding)}px`,
     "--card-gap": `${String(layout.gap)}px`,
+    "--card-h": `${String(layout.maxHeight)}px`,
+    /*
+     * The card's own corner, as a property as well as the `border-radius`
+     * below.
+     *
+     * Read by things drawn *inside* the card that have to look like they belong
+     * to it and cannot see the layout — the empty block's dashed slot, which is
+     * a stylesheet rule in app/globals.css and was wearing a fixed `--radius-md`
+     * borrowed from the app's chrome. A square card with round dashes in it
+     * reads as a placeholder from a different design.
+     */
+    "--card-radius": `${String(layout.radius)}px`,
   } as CSSProperties;
 }
 
@@ -68,12 +91,51 @@ export function cardStyle(layout: CardLayout): CSSProperties {
      * to a literal here. Absent means "whatever surface this theme uses", which
      * is what keeps a card readable in dark mode — a stored `#ffffff` could not
      * be, and would look deliberate while being wrong.
+     *
+     * `cardGround` is what a see-through card needs on top of that: the mix has
+     * to name a colour, and the one it names when the owner chose none is the
+     * token, not a literal. A card with no transparency writes nothing at all
+     * and `bg-surface` on the root stays in charge, exactly as before.
      */
-    ...(layout.background ? { background: layout.background } : {}),
+    ...cardGround(layout),
     ...(layout.border && layout.borderWidth > 0
       ? { border: `${String(layout.borderWidth)}px solid ${layout.border}` }
       : {}),
     boxShadow: CARD_SHADOWS[layout.shadow],
+    /*
+     * Absent is no filter at all rather than `blur(0)`.
+     *
+     * A `backdrop-filter` — even a zero one — makes the element a backdrop
+     * root, and this element is moved by transform at 60fps by `useMapAnchor`.
+     * The results panel can afford `blur(var(--lm-panel-blur, 0))` because
+     * there is one of it and it does not move; a card cannot.
+     */
+    ...(layout.backdropBlur
+      ? { backdropFilter: `blur(${String(layout.backdropBlur)}px)` }
+      : {}),
+  };
+}
+
+/**
+ * The card's ground, and the only thing that knows how to make it see-through.
+ *
+ * `color-mix` towards `transparent` rather than the `opacity` property, which
+ * is the same decision `.lm-panel` documents in the embed's stylesheet:
+ * `opacity` fades a card's text along with its background, so a glass card
+ * would be an unreadable one. `oklab` because that is the space every other
+ * mix in this codebase interpolates in.
+ */
+function cardGround(layout: CardLayout): CSSProperties {
+  const ground = layout.background ?? "var(--surface)";
+
+  if (layout.backgroundOpacity === undefined) {
+    // Untouched, and untouched has to keep meaning what it meant: no colour is
+    // no declaration, so the root's own `bg-surface` decides.
+    return layout.background ? { background: layout.background } : {};
+  }
+
+  return {
+    background: `color-mix(in oklab, ${ground} ${String(layout.backgroundOpacity)}%, transparent)`,
   };
 }
 
@@ -166,6 +228,30 @@ export function blockStyle(
     ...(box.lines ? ({ "--card-lines": box.lines } as CSSProperties) : {}),
     ...(box.rowGap
       ? ({ "--card-hours-gap": box.rowGap } as CSSProperties)
+      : {}),
+    // How much room this block holds when the location filled it in with
+    // nothing — `.card-block--empty` in app/globals.css falls through it to the
+    // one line that is right for most blocks. See `emptyBlockHeight`.
+    ...(box.emptyHeight
+      ? ({ "--card-empty-h": box.emptyHeight } as CSSProperties)
+      : {}),
+    /*
+     * The corner the block's own dashed slot wears.
+     *
+     * Only a Button has a radius of its own, and only when its owner set one —
+     * everything else on a card is square-cornered content inside a rounded
+     * card, so `.card-slot` falls through this to `--card-radius`. Written here
+     * rather than read off `--card-button-radius`, which `CardButton` sets on
+     * the anchor itself: there is no anchor on an empty block.
+     */
+    ...(block.buttonRadius !== undefined
+      ? ({ "--card-slot-radius": `${String(block.buttonRadius)}px` } as CSSProperties)
+      : {}),
+    // And a Logo's, on exactly those terms: a `+` offering an upload should be
+    // the shape of the mark that will land in it, not a rounded rectangle where
+    // a circle is coming.
+    ...(logoRadiusOf(block)
+      ? ({ "--card-slot-radius": logoRadiusOf(block) } as CSSProperties)
       : {}),
   };
 }
@@ -333,12 +419,11 @@ export function blockEdges(
  *
  * **The card's vertical padding belongs to whichever zones are on the ends**,
  * and it used to belong to the zones *named* top and bottom, which is not the
- * same thing and was a real bug. A zone with nothing in it is not rendered at
- * all — `CardView` returns null and the embed appends nothing (see the filter
- * in card-view.tsx and `section.childElementCount` in embed/src/popup.ts) —
- * because its padding would otherwise be a band of nothing at the top or bottom
- * of the card. But then a location with no photo and no contact details lost
- * *both* end zones, and with them every pixel of vertical padding the card had:
+ * same thing and was a real bug. A zone with nothing in it used to be dropped
+ * outright — `CardView` returned null and the embed appended nothing — because
+ * its padding would otherwise be a band of nothing at the top or bottom of the
+ * card. But then a location with no photo and no contact details lost *both*
+ * end zones, and with them every pixel of vertical padding the card had:
  * its name sat flush against the top edge and the Edit footer sat flush against
  * the bottom, in a card seventy pixels tall. Measured, on a location that had
  * only a name.
@@ -353,10 +438,13 @@ export function blockEdges(
  * last. `blockEdges`' `cancelTop` / `cancelBottom` therefore still name the zone
  * that actually carries the padding they cancel.
  *
- * The designer cannot drop the element — it has to stay a drop target and a
- * thing to measure — so it passes `padTop` / `padBottom` false for an empty
- * zone instead, which leaves it exactly the zero-height box a missing zone
- * leaves.
+ * **Nobody drops the element any more.** The designer never could — a zone has
+ * to stay a drop target and a thing to measure — and the other two renderers
+ * have stopped, because the middle zone is the `flex-1` that pins the bottom
+ * strip to the bottom of the card: drop it and a location that filled in
+ * nothing for the middle draws its contact row halfway up. So every zone box is
+ * always there and an empty one says `hasBlocks` false instead, which leaves it
+ * exactly the zero-height, padding-free box a missing zone left.
  *
  * The middle zone's scrollbar is hidden without the scrolling going with it —
  * `hideScrollBar` on the `ScrollShadow` in `CardZoneBox`, which is what the
@@ -364,7 +452,12 @@ export function blockEdges(
  * other pixel its owner chose is chrome they did not design, and it moves the
  * card's content sideways the moment it appears.
  */
-function zoneClass(zone: CardZone, padTop: boolean, padBottom: boolean): string {
+function zoneClass(
+  zone: CardZone,
+  padTop: boolean,
+  padBottom: boolean,
+  hasBlocks: boolean,
+): string {
   /*
    * The bottom zone pads its own top whether or not it is the zone carrying the
    * card's top padding, and that is a second rule rather than a special case of
@@ -378,10 +471,10 @@ function zoneClass(zone: CardZone, padTop: boolean, padBottom: boolean): string 
    * takes the card's own padding above it, which is the same measurement it
    * already carries below and at both sides.
    */
-  const padsTop = padTop || zone === "bottom";
+  const padsTop = hasBlocks && (padTop || zone === "bottom");
 
   const pad = `${padsTop ? "pt-[var(--card-pad)]" : ""} ${
-    padBottom ? "pb-[var(--card-pad)]" : ""
+    hasBlocks && padBottom ? "pb-[var(--card-pad)]" : ""
   }`;
 
   // The only scroller. The name and the actions are what the card is *for*, so
@@ -398,6 +491,7 @@ export function CardZoneBox({
   className,
   padTop = zone === "top",
   padBottom = zone === "bottom",
+  hasBlocks = true,
 }: {
   zone: CardZone;
   children: ReactNode;
@@ -411,8 +505,19 @@ export function CardZoneBox({
    */
   padTop?: boolean;
   padBottom?: boolean;
+  /**
+   * Whether this zone has any blocks in it at all.
+   *
+   * **A zone box is always in the DOM now**, on every surface, because the
+   * middle one is the `flex-1` that holds the bottom strip against the bottom
+   * of the card — drop it on a location that filled in nothing for it and the
+   * contact row floats up into the middle of a card whose owner put it at the
+   * bottom. So an empty zone stays, and this is what keeps it invisible: no
+   * blocks, no padding, zero height, exactly the nothing a missing box left.
+   */
+  hasBlocks?: boolean;
 }) {
-  const boxClass = `flex min-w-0 flex-col gap-[var(--card-gap)] px-[var(--card-pad)] ${zoneClass(zone, padTop, padBottom)}${className ? ` ${className}` : ""}`;
+  const boxClass = `flex min-w-0 flex-col gap-[var(--card-gap)] px-[var(--card-pad)] ${zoneClass(zone, padTop, padBottom, hasBlocks)}${className ? ` ${className}` : ""}`;
 
   /*
    * The middle zone is the only one that scrolls, so it is the only one that has

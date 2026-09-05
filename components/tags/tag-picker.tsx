@@ -290,7 +290,7 @@ export function TagPicker({
                             — so a flat list of forty chips would hide which of
                             them are alternatives. */}
                         <legend className="text-xs font-medium text-muted">
-                          {group.label || "Untitled group"}
+                          {group.label || "Ungrouped"}
                         </legend>
 
                         <div className="flex flex-wrap gap-2">
@@ -301,7 +301,6 @@ export function TagPicker({
                               <TagToggleChip
                                 key={tag.id}
                                 label={tag.label || "Unnamed tag"}
-                                color={tag.color}
                                 isOn={isOn}
                                 isDisabled={!isOn && isFull}
                                 onToggle={() => toggle(tag.id)}
@@ -315,6 +314,24 @@ export function TagPicker({
                     {isFull ? (
                       <p className="text-xs text-muted">
                         A location can carry up to {MAX_TAGS_PER_PLACE} tags.
+                      </p>
+                    ) : null}
+
+                    {/*
+                      Where the headings above come from.
+
+                      The menu shows group names and offers only "New tag", so
+                      the groups read as a second vocabulary that exists and
+                      cannot be added to — a category by another name. One line
+                      naming the screen that owns them is the whole fix; a group
+                      picker in this form is not, because asking which *question*
+                      a tag answers, mid-way through filling in a location, is a
+                      concept lesson at the wrong moment.
+                    */}
+                    {usable.length > 0 ? (
+                      <p className="border-t border-border pt-2 text-xs text-muted">
+                        Groups are the questions your tags answer. Add and rename
+                        them in Settings → Filters.
                       </p>
                     ) : null}
                   </>

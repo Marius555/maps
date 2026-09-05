@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PublishPanel } from "@/components/publish/publish-panel";
-import { Container, Measure } from "@/components/ui/container";
 import { requireUser } from "@/lib/auth/current-user";
+import { getCardDesign } from "@/lib/repositories/card-design.repository";
 import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
 import { loadMap } from "@/lib/repositories/load-map";
@@ -29,27 +29,40 @@ export default async function MapPublishPage(
     throw error;
   }
 
+  /*
+   * No `Container` at all, and that is the point rather than an oversight.
+   *
+   * This page's left column stands where the app nav does everywhere else
+   * (`lib/layout/app-nav.ts`), so it has to reach the window edge — inside
+   * `Container`'s own `py-6` it would be a floating card pretending to be a
+   * sidebar. The map takes the rest, edge to edge, which is also the only way
+   * the preview is wide enough to draw the desktop layout a visitor gets.
+   */
   return (
-    <Container>
-      <Measure>
-        <PublishPanel
-          initialMap={data.map}
-          initialPlaces={data.places}
-          initialShapes={data.shapes}
-        />
-      </Measure>
-    </Container>
+    <PublishPanel
+      initialMap={data.map}
+      initialPlaces={data.places}
+      initialShapes={data.shapes}
+      initialCardDesign={data.cardDesign}
+    />
   );
 }
 
 async function loadPublishData(userId: string, mapId: string) {
   // Places and shapes come along so the panel can tell the customer their
   // published map is behind the editor — neither kind of edit touches the map row.
-  const [map, places, shapes] = await Promise.all([
+  //
+  // The card design comes along for a different reason: the preview draws the
+  // account's own card, and fetching it from the browser means the first
+  // document is built against the *default* card and then thrown away and
+  // rebuilt when the real one lands. One more query here, one less full
+  // MapLibre boot on every visit — see `EmbedPreview`'s `cardDesign`.
+  const [map, places, shapes, cardDesign] = await Promise.all([
     loadMap(userId, mapId),
     listAllPlaces(repoContext(userId), mapId),
     listAllShapes(repoContext(userId), mapId),
+    getCardDesign(repoContext(userId)),
   ]);
 
-  return { map, places, shapes };
+  return { map, places, shapes, cardDesign };
 }

@@ -1,10 +1,15 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 
 import {
+  DEFAULT_PIN_SHAPE,
+  DEFAULT_PIN_SIZE,
+  DEFAULT_RING_WIDTH,
   GLYPH_SOURCE_BOX,
   GLYPH_STROKE_WIDTH,
   PIN_BOX,
+  PIN_RING_WIDTHS,
   PIN_SHAPES,
+  PIN_SIZES,
   glyphBoxFor,
   imageBoxFor,
   imageCircleFor,
@@ -73,6 +78,72 @@ export function pinImageId(icon: string, color: string): string {
 }
 
 /**
+ * Every pin we have drawn, by the id above.
+ *
+ * The map registers its pins once, on load, and throws the canvas away — but the
+ * results list draws the same pins on every keystroke, up to a hundred rows at a
+ * time. Redrawing a path per row per character is work nobody asked for when a
+ * map has three distinct pins on it, so the pixels are kept and each row copies
+ * them.
+ *
+ * `null` is cached too: a canvas the browser refused is a permanent answer, and
+ * retrying it once per row per keystroke is the cost this map exists to avoid.
+ */
+const drawn = new Map<string, HTMLCanvasElement | null>();
+
+/**
+ * The pin, as pixels a caller can put in the page.
+ *
+ * A canvas rather than an `<img>` with a data URI, on the same rule this file's
+ * header sets out: a host page whose CSP restricts `img-src` blocks a data URI
+ * outright and invisibly, and a canvas is not a fetch at all.
+ *
+ * An uploaded logo cannot be drawn synchronously — decoding one is a promise —
+ * so a pin carrying an image comes back as its body alone until
+ * `registerPinImageBitmaps` has filled the cache in, at which point the next
+ * redraw picks the finished pin up. The alternative is an async list, which is a
+ * hundred promises per keystroke for a handful of logos.
+ */
+export function pinCanvas(
+  icon: string,
+  color: string,
+  custom?: readonly CustomPinIcon[],
+): HTMLCanvasElement | null {
+  const id = pinImageId(icon, color);
+  const hit = drawn.get(id);
+
+  if (hit !== undefined) return hit;
+
+  // A place with no icon is a dot on the map, and the plain body is what a dot
+  // is a picture of — so a row still gets a pin in the location's own colour
+  // rather than an empty gap where the others have one.
+  const pin = resolvePin(icon, custom) ?? PLAIN_PIN;
+  const canvas = drawPin(pin, color);
+
+  drawn.set(id, canvas);
+
+  return canvas;
+}
+
+/**
+ * What a location with no icon of its own draws in a list row.
+ *
+ * Deliberately not `resolvePin("")`, which answers null — the map draws those
+ * places through a circle layer instead, and there is nothing there to reuse.
+ */
+const PLAIN_PIN: ResolvedPin = {
+  key: "plain",
+  paths: [],
+  image: "",
+  color: null,
+  ring: null,
+  ringWidth: PIN_RING_WIDTHS[DEFAULT_RING_WIDTH],
+  iconColor: null,
+  scale: PIN_SIZES[DEFAULT_PIN_SIZE],
+  shape: DEFAULT_PIN_SHAPE,
+};
+
+/**
  * Register an image for every glyph pin the snapshot uses. Synchronous.
  *
  * Bounded and small: a map has at most 24 categories and 8 custom pins, and only
@@ -96,7 +167,11 @@ export function registerPinImages(
     // without awaiting a decode, and this one must not block the first frame.
     if (pin.image) continue;
 
-    const image = drawPin(pin, color);
+    const canvas = drawPin(pin, color);
+    drawn.set(id, canvas);
+    if (!canvas) continue;
+
+    const image = imageDataOf(canvas);
     if (!image) continue;
 
     map.addImage(id, image, { pixelRatio: PIXEL_RATIO });
@@ -132,8 +207,16 @@ export async function registerPinImageBitmaps(
       const bitmap = await decode(pin.image);
       if (!bitmap) return;
 
-      const image = drawPin(pin, color, bitmap);
+      const canvas = drawPin(pin, color, bitmap);
       bitmap.close();
+      if (!canvas) return;
+
+      // Overwrites whatever the list drew for this pin while the logo was still
+      // decoding — its own attempt is the body alone, because it cannot wait.
+      // The next redraw (any keystroke, any filter) picks the finished pin up.
+      drawn.set(id, canvas);
+
+      const image = imageDataOf(canvas);
       if (!image) return;
 
       // Between the decode starting and finishing the map may have been removed
@@ -187,7 +270,7 @@ function drawPin(
   pin: ResolvedPin,
   color: string,
   bitmap?: ImageBitmap,
-): ImageData | null {
+): HTMLCanvasElement | null {
   // The pin's own size multiplies the raster rather than the geometry: one more
   // pixel per unit, not a different pin. The symbol layer keeps `icon-size: 1`
   // and the image is still the pin's own square, so nothing downstream changes.
@@ -227,7 +310,24 @@ function drawPin(
   if (bitmap) drawImageHead(context, bitmap, pin);
   else drawGlyphHead(context, pin);
 
-  return context.getImageData(0, 0, width, height);
+  return canvas;
+}
+
+/**
+ * The same pixels, in the form `addImage` takes.
+ *
+ * Split out when the list started wanting the canvas itself: MapLibre needs the
+ * bytes and a results row needs something it can put in the page, and drawing
+ * the pin twice to serve both is how the two would end up different pictures of
+ * one pin.
+ */
+function imageDataOf(canvas: HTMLCanvasElement): ImageData | null {
+  // Same context as `drawPin` used — `getContext` returns the one it made.
+  return (
+    canvas
+      .getContext("2d")
+      ?.getImageData(0, 0, canvas.width, canvas.height) ?? null
+  );
 }
 
 /*

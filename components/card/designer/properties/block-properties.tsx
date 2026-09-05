@@ -1,5 +1,6 @@
 "use client";
 
+import { Accordion } from "@heroui/react";
 import {
   AlignCenter,
   AlignLeft,
@@ -21,7 +22,7 @@ import {
   type CardButtonHover,
   type CardButtonVariant,
 } from "@/packages/shared/card-layout";
-import type { MapField } from "@/lib/repositories/types";
+import type { MapField, Place } from "@/lib/repositories/types";
 import { BLOCK_LABELS, zonesSentence } from "../block-labels";
 import { ButtonProperties } from "./button-properties";
 import { ButtonStyleProperties } from "./button-style-properties";
@@ -35,7 +36,8 @@ import {
   PropertyChecks,
   PropertyChoice,
   PropertyScale,
-} from "./property-fields";
+} from "@/components/ui/properties/property-fields";
+import { PropertyNumberSelect } from "@/components/ui/properties/property-select";
 import {
   BLOCK_MARGIN,
   BLOCK_PADDING,
@@ -44,7 +46,7 @@ import {
   heightStops,
   widthStops,
 } from "./property-scales";
-import { PropertyGroup, PropertyGroups } from "./property-group";
+import { PropertyFold } from "@/components/ui/properties/property-fold";
 import { TextProperties } from "./text-properties";
 
 /** What a control on this panel can change about the selected block. */
@@ -82,7 +84,8 @@ export type BlockPatch = Partial<
   bold?: boolean;
   hoursOpen?: boolean;
   hoursLongDays?: boolean;
-  logoMode?: "pin" | "image";
+  logoMode?: "pin" | "image" | "mixed";
+  logoRadius?: "square" | "rounded" | "round";
   // Spelled out too, for `color`'s reason one field over: an empty string is how
   // the Reset beside the picker says "back to the ground this theme draws", and
   // `undefined` already means "leave it alone".
@@ -218,7 +221,7 @@ const ALIGN_OPTIONS = [
  * is *inside* it. The groups are, in the order somebody works in them: where the
  * block goes and how big it is, how much room is around it, what it says, what
  * its words look like, what its chips look like, and last the one control that
- * changes nothing but the preview. See `PropertyGroup`.
+ * changes nothing but the preview. See `PropertyFold`.
  */
 export function BlockProperties({
   block,
@@ -227,6 +230,9 @@ export function BlockProperties({
   overlapsNothing,
   aloneOnLine,
   logoHasImage,
+  logoSample,
+  isOwnCard,
+  mapId,
   chipPreview,
   onChipPreview,
   onChange,
@@ -264,9 +270,27 @@ export function BlockProperties({
    * block's "Logo" mode has something to draw. See `LogoProperties`.
    */
   logoHasImage: boolean;
-  /** How many chips the preview is padded to. `null` is the sample's own. */
-  chipPreview: number | null;
-  onChipPreview: (count: number | null) => void;
+  /** The location the canvas draws, whose own logo the Logo panel uploads. */
+  logoSample: Place | null;
+  /**
+   * Whether `logoSample` is the location this panel was opened over, rather than
+   * a stand-in the canvas picked. Only the Logo panel reads it, to decide
+   * whether an upload needs explaining -- see `LogoProperties`.
+   */
+  isOwnCard?: boolean;
+  mapId: string;
+  /**
+   * How many chips the preview is padded to. `null` is the sample's own.
+   *
+   * **Optional, and its absence hides the group.** It is the one control on this
+   * panel that writes nothing to the design -- it pads the *canvas* so somebody
+   * can see what four chips would do to a card built against a location wearing
+   * one. Opened over a real pin on the map (`BlockEditorForm`) there is nothing
+   * to pretend about: that card is the card, and a control that padded it would
+   * be showing chips this location does not have.
+   */
+  chipPreview?: number | null;
+  onChipPreview?: (count: number | null) => void;
   onChange: (patch: BlockPatch) => void;
 }) {
   const spec = CARD_BLOCKS[block.type];
@@ -284,13 +308,54 @@ export function BlockProperties({
    *
    * A group has to know whether every control in it is hidden before it draws
    * its heading — five headings over one slider is what a spacer's panel would
-   * otherwise be — and React counts a `false` as a child, so `PropertyGroup`
+   * otherwise be — and React counts a `false` as a child, so `PropertyFold`
    * cannot work that out from what it is handed. These are the same conditions
    * the JSX below reads; naming them is what lets both use one answer.
    */
   const showAlign = has("align") && (aloneOnLine || !isSelfSized(block.type));
   const showValign = has("valign") && narrow;
   const showMargin = has("margin") && !narrow;
+
+  /*
+   * The same answers again, as a table — because the folds need them twice.
+   *
+   * Once to decide whether to render at all (`PropertyFold`'s `isEmpty`), and
+   * once to decide which one starts open. Declaration order is the order on
+   * screen, which is what makes `find` below mean "the first one".
+   */
+  const emptyGroups: Record<string, boolean> = {
+    size:
+      !has("height") &&
+      !has("fit") &&
+      !has("width") &&
+      !showAlign &&
+      !showValign &&
+      !has("overlap"),
+    spacing: !showMargin && !has("padding"),
+    content:
+      !has("logo") &&
+      !has("clamp") &&
+      !has("hours") &&
+      !has("button") &&
+      !has("links"),
+    text: !has("text"),
+    chips: !has("chips"),
+    button: !has("buttonStyle"),
+    preview: !has("chips") || !onChipPreview,
+  };
+
+  /*
+   * One fold open, and it has to be found rather than named.
+   *
+   * The publish designer can write `defaultExpandedKeys={["panel"]}` because its
+   * four folds are always all there. These are not: which controls a block
+   * offers is the block's own business, so a hard-coded id lands on a spacer
+   * with Size & position hidden and opens nothing at all — a panel of shut
+   * drawers, which is the failure this whole arrangement exists to avoid.
+   */
+  const firstOpen = Object.entries(emptyGroups).find(
+    ([, isEmpty]) => !isEmpty,
+  )?.[0];
 
   return (
     /* `space-y-4` — `SectionPanel`'s own body rhythm, so this panel is spaced
@@ -307,17 +372,29 @@ export function BlockProperties({
         </span>
       </h3>
 
-      <PropertyGroups>
-        <PropertyGroup
+      {/*
+        Folds, where this was a flat `divide-y` column of always-open groups.
+
+        The argument for always-open was that the panel already scrolls, so
+        folding buys height that was never scarce and costs a click on the way to
+        every control. What it did not weigh is that a block can offer seven
+        groups and around twenty controls at 24rem, and a column that long is one
+        nobody reads down — the same thing the Blocks palette and the publish
+        designer both concluded, and this is now the third panel to agree.
+
+        `key={block.id}` so picking a different block re-opens the default rather
+        than inheriting whatever was left open on the last one, whose folds are
+        not even the same set.
+      */}
+      <Accordion
+        key={block.id}
+        allowsMultipleExpanded
+        defaultExpandedKeys={firstOpen ? [firstOpen] : []}
+      >
+        <PropertyFold
+          id="size"
           title="Size & position"
-          isEmpty={
-            !has("height") &&
-            !has("fit") &&
-            !has("width") &&
-            !showAlign &&
-            !showValign &&
-            !has("overlap")
-          }
+          isEmpty={emptyGroups.size}
         >
           {has("height") ? (
             <PropertyScale
@@ -447,11 +524,11 @@ export function BlockProperties({
               ) : null}
             </>
           ) : null}
-        </PropertyGroup>
+        </PropertyFold>
 
-        <PropertyGroup title="Spacing" isEmpty={!showMargin && !has("padding")}>
+        <PropertyFold id="spacing" title="Spacing" isEmpty={emptyGroups.spacing}>
           {showMargin ? (
-            <PropertyScale
+            <PropertyNumberSelect
               label="Margin"
               // The card's own padding is where an untouched block sits, so that
               // is what the control has to show — not zero, which would read as
@@ -463,14 +540,14 @@ export function BlockProperties({
           ) : null}
 
           {has("padding") ? (
-            <PropertyScale
+            <PropertyNumberSelect
               label="Padding"
               value={block.padding ?? 0}
               options={BLOCK_PADDING}
               onChange={(padding) => onChange({ padding })}
             />
           ) : null}
-        </PropertyGroup>
+        </PropertyFold>
 
         {/*
          * What the block *says*, as opposed to the box it says it in.
@@ -481,16 +558,7 @@ export function BlockProperties({
          * are all changes to the content, and they sat interleaved with sliders
          * that moved the box around them.
          */}
-        <PropertyGroup
-          title="Content"
-          isEmpty={
-            !has("logo") &&
-            !has("clamp") &&
-            !has("hours") &&
-            !has("button") &&
-            !has("links")
-          }
-        >
+        <PropertyFold id="content" title="Content" isEmpty={emptyGroups.content}>
           {has("button") ? (
             <ButtonProperties
               block={block}
@@ -507,6 +575,9 @@ export function BlockProperties({
             <LogoProperties
               block={block}
               hasImage={logoHasImage}
+              sample={logoSample}
+              isOwnCard={isOwnCard}
+              mapId={mapId}
               onChange={onChange}
             />
           ) : null}
@@ -537,9 +608,9 @@ export function BlockProperties({
           {has("hours") ? (
             <HoursProperties block={block} onChange={onChange} />
           ) : null}
-        </PropertyGroup>
+        </PropertyFold>
 
-        <PropertyGroup title="Text" isEmpty={!has("text")}>
+        <PropertyFold id="text" title="Text" isEmpty={emptyGroups.text}>
           {has("text") ? (
             <TextProperties
               block={block}
@@ -549,34 +620,35 @@ export function BlockProperties({
               onChange={onChange}
             />
           ) : null}
-        </PropertyGroup>
+        </PropertyFold>
 
         {/* After the text, because a chip is the box those words sit in and the
             order here is the order someone works in — what it says, then what it
             says it in, then what it is drawn on. */}
-        <PropertyGroup title="Chips" isEmpty={!has("chips")}>
+        <PropertyFold id="chips" title="Chips" isEmpty={emptyGroups.chips}>
           {has("chips") ? (
             <ChipProperties block={block} onChange={onChange} />
           ) : null}
-        </PropertyGroup>
+        </PropertyFold>
 
         {/* After the text, for the reason the Chips group is: a button is the
             box its label sits in, and the order here is what it says, then what
             it says it in, then what it is drawn on. */}
-        <PropertyGroup title="Button" isEmpty={!has("buttonStyle")}>
+        <PropertyFold id="button" title="Button" isEmpty={emptyGroups.button}>
           {has("buttonStyle") ? (
             <ButtonStyleProperties block={block} onChange={onChange} />
           ) : null}
-        </PropertyGroup>
+        </PropertyFold>
 
         {/* Last, and the only group here that writes nothing to the design. Its
-            own heading is what says so — see `PreviewProperties`. */}
-        <PropertyGroup title="Preview" isEmpty={!has("chips")}>
-          {has("chips") ? (
-            <PreviewProperties count={chipPreview} onCount={onChipPreview} />
+            own heading is what says so — see `PreviewProperties`. Gone entirely
+            where there is no canvas to pad — see `chipPreview`. */}
+        <PropertyFold id="preview" title="Preview" isEmpty={emptyGroups.preview}>
+          {has("chips") && onChipPreview ? (
+            <PreviewProperties count={chipPreview ?? null} onCount={onChipPreview} />
           ) : null}
-        </PropertyGroup>
-      </PropertyGroups>
+        </PropertyFold>
+      </Accordion>
     </section>
   );
 }

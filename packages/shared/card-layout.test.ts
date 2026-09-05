@@ -28,6 +28,7 @@ import {
   chipStyleOf,
   defaultMarginOf,
   defaultCardLayout,
+  emptyBlockHeight,
   detailsContents,
   emptyCardLayout,
   findBlock,
@@ -371,6 +372,55 @@ describe("resolveCardLayout", () => {
     expect(layout.borderWidth).toBe(6);
     // An unreadable shadow is the default one, not none.
     expect(layout.shadow).toBe(defaultCardLayout().shadow);
+  });
+
+  /*
+   * The §7 half of the glass card. Absent means opaque and unblurred — which is
+   * what every layout saved before these fields existed says — so a value equal
+   * to that has to be dropped rather than written back. Otherwise the first
+   * owner to try Glass and change their mind puts two keys into every snapshot
+   * published from then on, for a card that draws exactly what it always drew,
+   * and `isDefaultCardLayout` stops recognising an untouched card.
+   */
+  it("drops a transparency and a blur that say what absent already says", () => {
+    const solid = resolveCardLayout({
+      ...(defaultCardLayout() as unknown as Record<string, unknown>),
+      backgroundOpacity: 100,
+      backdropBlur: 0,
+    });
+
+    expect(solid.backgroundOpacity).toBeUndefined();
+    expect(solid.backdropBlur).toBeUndefined();
+    expect("backgroundOpacity" in solid).toBe(false);
+    expect("backdropBlur" in solid).toBe(false);
+    // Byte-identical to an untouched card, which is what `isDefaultCardLayout`
+    // in lib/validation/card-layout.schema.ts asks and what decides whether
+    // `buildSnapshot` writes a `cardLayout` field at all.
+    expect(JSON.stringify(solid)).toBe(JSON.stringify(defaultCardLayout()));
+  });
+
+  it("keeps a real transparency and a real blur, clamped", () => {
+    const glass = resolveCardLayout({
+      ...(defaultCardLayout() as unknown as Record<string, unknown>),
+      backgroundOpacity: 60,
+      backdropBlur: 900,
+    });
+
+    expect(glass.backgroundOpacity).toBe(60);
+    // The results panel's own ceiling — one number for one effect.
+    expect(glass.backdropBlur).toBe(24);
+    expect(JSON.stringify(glass)).not.toBe(JSON.stringify(defaultCardLayout()));
+  });
+
+  it("ignores a transparency that is not a number", () => {
+    const layout = resolveCardLayout({
+      ...(defaultCardLayout() as unknown as Record<string, unknown>),
+      backgroundOpacity: "glass",
+      backdropBlur: null,
+    });
+
+    expect(layout.backgroundOpacity).toBeUndefined();
+    expect(layout.backdropBlur).toBeUndefined();
   });
 
   it("treats a colour it cannot read as unset, so the theme decides", () => {
@@ -971,15 +1021,56 @@ describe("a logo block's drawing", () => {
   });
 
   /*
-   * The assertion the feature rests on. A design is saved for the whole account
-   * and drawn against every location in it — so "draw the logo" has to mean
-   * "draw the logo *if this pin has one*", or a card arranged against the one
-   * location with a brand mark goes blank on the rest.
+   * The assertion Mixed rests on. A design is saved for the whole account and
+   * drawn against every location in it — so a mark that means "the logo" has to
+   * have a way to mean "the logo *if this one has one*", or a card arranged
+   * against the single location with a brand mark goes blank on the rest.
    */
-  it("falls back to the pin for a location whose pin has no image", () => {
+  it("falls back to the pin, on Mixed, for a location with no image anywhere", () => {
+    expect(logoImageOf({ id: "a", type: "logo", logoMode: "mixed" }, "")).toBe(
+      null,
+    );
+  });
+
+  /*
+   * And the assertion that makes the third option worth having. Strict Logo does
+   * *not* fall back — that is the whole difference from Mixed, and it is what
+   * puts a `+` on the editor's card and holds the space on a visitor's.
+   */
+  it("draws nothing, on Logo, for a location with no image anywhere", () => {
     expect(logoImageOf({ id: "a", type: "logo", logoMode: "image" }, "")).toBe(
       null,
     );
+  });
+
+  /*
+   * The location's own upload beats the image on the pin it wears, and both are
+   * still honoured. A pin is shared by every location wearing it, so it is the
+   * weaker answer of the two — but a card designed against one has to keep
+   * drawing it (§7).
+   */
+  it("prefers the location's own logo to the image on its pin", () => {
+    expect(
+      logoImageOf(
+        { id: "a", type: "logo", logoMode: "mixed" },
+        "data:image/png;base64,pin",
+        "https://cdn.example.com/logo.png",
+      ),
+    ).toBe("https://cdn.example.com/logo.png");
+
+    expect(
+      logoImageOf(
+        { id: "a", type: "logo", logoMode: "mixed" },
+        "data:image/png;base64,pin",
+        null,
+      ),
+    ).toBe("data:image/png;base64,pin");
+  });
+
+  it("keeps Mixed through a round trip", () => {
+    const stored = { zones: { top: [{ id: "a", type: "logo", logoMode: "mixed" }] } };
+
+    expect(resolveCardLayout(stored).zones.top[0].logoMode).toBe("mixed");
   });
 
   it("survives a round trip, and is dropped from a type that is not a mark", () => {
@@ -2620,5 +2711,96 @@ describe("the links controls", () => {
     };
 
     expect(resolveCardLayout(stored).zones.middle[0].hidePhone).toBeUndefined();
+  });
+});
+
+/**
+ * How much room an empty block holds.
+ *
+ * Worth testing where the card's layout is not (§9 skips UI layout), because
+ * this is arithmetic with a right answer and the way it fails is invisible: a
+ * block that reserves too little does not look broken, it silently moves every
+ * block under it up the card, at positions the studio never showed anybody.
+ *
+ * The numbers are the ones measured in a real card — a filled open week comes to
+ * 153.9px — so a change that moves them is a change that has to be re-measured
+ * rather than re-derived.
+ */
+describe("emptyBlockHeight", () => {
+  it("holds one line for a closed week and the whole week for an open one", () => {
+    const closed = emptyBlockHeight({ id: "a", type: "hours" });
+    const open = emptyBlockHeight({ id: "a", type: "hours", hoursOpen: true });
+
+    expect(closed).toBe(16);
+    // Measured against a real filled card at 153.9px.
+    expect(open).toBe(154);
+  });
+
+  it("counts the owner's own spacing between the days", () => {
+    const tight = emptyBlockHeight({ id: "a", type: "hours", hoursOpen: true });
+    const roomy = emptyBlockHeight({
+      id: "a",
+      type: "hours",
+      hoursOpen: true,
+      hoursRowGap: 7,
+    });
+
+    // Six gaps between seven days, so six pixels per point of spacing.
+    expect(roomy - tight).toBe(36);
+  });
+
+  it("scales with the type size the owner picked", () => {
+    expect(
+      emptyBlockHeight({ id: "a", type: "hours", hoursOpen: true, fontSize: 18 }),
+    ).toBeGreaterThan(emptyBlockHeight({ id: "a", type: "hours", hoursOpen: true }));
+  });
+
+  it("reserves a clipped paragraph's lines and one line otherwise", () => {
+    const one = emptyBlockHeight({ id: "a", type: "description" });
+
+    expect(one).toBe(16);
+    expect(emptyBlockHeight({ id: "a", type: "description", clampLines: 4 })).toBe(
+      one * 4,
+    );
+  });
+
+  /*
+   * A chip has a floor of its own, so the owner's padding does nothing until it
+   * is past that — which is a fact about `.chip--lg`, measured, not a guess.
+   */
+  it("reserves a chip, with a floor the padding only moves past 4px", () => {
+    expect(emptyBlockHeight({ id: "a", type: "tags" })).toBe(33);
+    expect(emptyBlockHeight({ id: "a", type: "tags", chipPadding: 4 })).toBe(33);
+    expect(emptyBlockHeight({ id: "a", type: "tags", chipPadding: 6 })).toBe(37);
+  });
+
+  it("reserves the button's own box, outline and all", () => {
+    expect(emptyBlockHeight({ id: "a", type: "button" })).toBe(27);
+    expect(emptyBlockHeight({ id: "a", type: "button", buttonPadding: 4 })).toBe(35);
+    expect(
+      emptyBlockHeight({ id: "a", type: "button", buttonBorderWidth: 2 }),
+    ).toBe(31);
+  });
+
+  /*
+   * Nothing for the blocks that are one line already, and nothing for the two
+   * that carry a height of their own — `blockBox` gives those a real `height`,
+   * so a floor there would be a second number to disagree with the first.
+   */
+  it("says nothing for a block one line is enough for", () => {
+    for (const type of ["name", "address", "divider", "spacer"] as const) {
+      expect(emptyBlockHeight({ id: "a", type })).toBe(0);
+    }
+  });
+
+  it("is not emitted at all for a block with a height of its own", () => {
+    const layout = defaultCardLayout();
+
+    expect(
+      blockBox({ id: "a", type: "gallery", heightPct: 27 }, layout).emptyHeight,
+    ).toBeUndefined();
+    expect(
+      blockBox({ id: "a", type: "hours", hoursOpen: true }, layout).emptyHeight,
+    ).toBe("154px");
   });
 });

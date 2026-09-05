@@ -1,6 +1,7 @@
 import type { Models } from "node-appwrite";
 
 import type { MapStyleKey } from "@/lib/map/style";
+import type { CardBlock } from "@/packages/shared/card-layout";
 import type { OpeningHours } from "@/packages/shared/hours";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import type { ShapeGeometry, ShapeStrokeStyle } from "@/packages/shared/shapes";
@@ -54,11 +55,15 @@ export type PlaceRow = Models.Row & {
   photoIds?: string[] | null;
   /** The single-photo column `photoIds` replaced. Read-only; never written. */
   photoId?: string | null;
+  /** This location's own brand mark, as a storage file id. */
+  logoId?: string | null;
   sortOrder?: number | null;
   geocodeConfidence?: number | null;
   geocodeStatus?: string | null;
   addressParts?: string | null;
   groupId?: string | null;
+  /** How this location's card differs from the account design, as JSON. */
+  cardBlocks?: string | null;
 };
 
 export type ShapeRow = Models.Row & {
@@ -182,6 +187,18 @@ export type Place = {
    * otherwise index into an array to say so.
    */
   photoUrl: string | null;
+  /**
+   * This location's own brand mark, as a storage file id, or null.
+   *
+   * Its own upload rather than the image on the map's custom pin, which is what
+   * a Logo card block used to draw: a pin is shared by every location wearing
+   * it, so a map of stockists carrying six different brands could show one logo
+   * or none. Read through `logoUrl` below; the id is here for the control that
+   * replaces or clears it.
+   */
+  logoId: string | null;
+  /** The same, resolved to a public URL on the server. */
+  logoUrl: string | null;
   sortOrder: number;
   geocodeConfidence: number | null;
   geocodeStatus: GeocodeStatus;
@@ -192,6 +209,24 @@ export type Place = {
   addressParts: AddressParts | null;
   /** The group this belongs to, or "" — see the `Group` type below. */
   groupId: string;
+  /**
+   * How this location's card differs from the account's own design, keyed by
+   * block id — `{}` for the overwhelming majority of locations, which is every
+   * one nobody has singled out.
+   *
+   * The design lives once per account (`cardDesigns`) and decides which blocks a
+   * card has, where they sit and in what order. This only ever replaces what one
+   * of those blocks *is*, which is why an entry is a whole resolved `CardBlock`
+   * and not a diff: absent is meaningful all over that type — no `logoMode` is
+   * the pin, no `bold` is not bold — so a diff would have to carry a second
+   * list of fields to unset. Merging is `overrides[block.id] ?? block`, in the
+   * editor, the snapshot and the embed alike (`mergeCardBlocks`).
+   *
+   * An id naming a block the design no longer has is ignored, on the same terms
+   * as a tag id whose tag was deleted: nothing sweeps these, `buildSnapshot`
+   * narrows them away at publish, and every reader drops them when drawing.
+   */
+  cardBlocks: Record<string, CardBlock>;
   createdAt: string;
   updatedAt: string;
 };

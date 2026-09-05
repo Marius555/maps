@@ -53,7 +53,15 @@ function scroller({
   top = 0,
   height = 500,
   content = 2000,
-}: { top?: number; height?: number; content?: number } = {}) {
+  left = 0,
+  width = 300,
+}: {
+  top?: number;
+  height?: number;
+  content?: number;
+  left?: number;
+  width?: number;
+} = {}) {
   const element = document.createElement("div");
   element.style.overflowY = "auto";
 
@@ -69,7 +77,14 @@ function scroller({
   });
 
   element.getBoundingClientRect = () =>
-    ({ top, bottom: top + height, height }) as DOMRect;
+    ({
+      top,
+      bottom: top + height,
+      height,
+      left,
+      right: left + width,
+      width,
+    }) as DOMRect;
 
   document.body.appendChild(element);
   return element;
@@ -180,6 +195,67 @@ describe("startEdgeAutoScroll", () => {
     clock.step(10);
 
     expect(element.scrollTop).toBe(moved);
+    auto.stop();
+  });
+
+  /*
+   * The band is a band, not an infinite horizontal strip.
+   *
+   * This is the card designer's palette drag: the block leaves the panel and is
+   * carried across the card, which is a long way to the left of it. Held near
+   * the top of the window it was inside the vertical band the whole time, so
+   * the panel scrolled out from under a gesture that had already left it.
+   */
+  it("does not pull while the pointer is beside the container", () => {
+    const element = scroller({ left: 900, width: 380 });
+    const auto = startEdgeAutoScroll(element);
+
+    auto.update(499, 400);
+    clock.step(5);
+
+    expect(element.scrollTop).toBe(0);
+    expect(clock.pending()).toBe(0);
+    auto.stop();
+  });
+
+  it("pulls at the same edge once the pointer is over the container", () => {
+    const element = scroller({ left: 900, width: 380 });
+    const auto = startEdgeAutoScroll(element);
+
+    auto.update(499, 1000);
+    clock.step(2);
+
+    expect(element.scrollTop).toBeGreaterThan(0);
+    auto.stop();
+  });
+
+  it("stops an existing pull when the pointer moves off to the side", () => {
+    const element = scroller({ left: 900, width: 380 });
+    const auto = startEdgeAutoScroll(element);
+
+    auto.update(499, 1000);
+    clock.step(2);
+    const moved = element.scrollTop;
+    expect(moved).toBeGreaterThan(0);
+
+    auto.update(499, 400);
+    clock.step(10);
+
+    expect(element.scrollTop).toBe(moved);
+    auto.stop();
+  });
+
+  // Every caller before the card designer passed a y alone, and the two ends of
+  // a Locations drag are both inside the panel — so "not told" has to stay the
+  // behaviour it always was rather than a silent freeze.
+  it("ignores the horizontal test when it is given no x", () => {
+    const element = scroller({ left: 900, width: 380 });
+    const auto = startEdgeAutoScroll(element);
+
+    auto.update(499);
+    clock.step(2);
+
+    expect(element.scrollTop).toBeGreaterThan(0);
     auto.stop();
   });
 });

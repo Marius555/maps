@@ -96,7 +96,6 @@ export function TagFilterMenu({
                     <TagToggleChip
                       key={tag.id}
                       label={tag.label || "Unnamed tag"}
-                      color={tag.color}
                       isOn={selected.has(tag.id)}
                       onToggle={() => toggle(tag.id)}
                     />
@@ -110,9 +109,6 @@ export function TagFilterMenu({
             <fieldset className="space-y-1.5 border-t border-border pt-3">
               <legend className="sr-only">Locations with no tags</legend>
 
-              {/* No colour, so no dot: it is the absence of every answer
-                  rather than one of them, and a dot would file it beside the
-                  tags as though it were another. */}
               <TagToggleChip
                 label="Untagged"
                 isOn={isUntagged}

@@ -41,6 +41,7 @@ import { BlockRemoveZone, REMOVE_DROP_ID } from "./block-remove-zone";
 export function DesignerCanvasArea({
   cardWidth,
   cardHeight,
+  isTranslucent,
   onBackdropClick,
   onRemove,
   children,
@@ -49,6 +50,20 @@ export function DesignerCanvasArea({
   cardWidth: number;
   /** The card's own height in px — the strip is exactly as tall. */
   cardHeight: number;
+  /**
+   * Whether the card being designed is see-through.
+   *
+   * The workspace is one flat tone, so a glass card drawn on it looks exactly
+   * like a solid one and the Transparency control appears to do nothing — the
+   * failure this panel's own rules are written against. A checkerboard is the
+   * standard idiom for "there is nothing behind this" and is honest in a way a
+   * fake basemap would not be: it says see-through, it does not pretend to be
+   * the map the card will actually float over.
+   *
+   * Only while the setting is on, so the studio is unchanged for anyone who
+   * never reaches for it.
+   */
+  isTranslucent: boolean;
   /** Clicking the backdrop deselects — a way out that isn't a small X. */
   onBackdropClick: () => void;
   /** A block released over the removal strip. */
@@ -82,7 +97,9 @@ export function DesignerCanvasArea({
          rounded corners: the wall is flush to the top, right and bottom edges
          and square, so without it its corners poke past the radius below `lg`,
          where nothing else was clipping. At `lg` the scroller takes over. */
-      className="relative min-h-64 overflow-hidden rounded-xl bg-default/40 lg:min-h-0 lg:overflow-auto"
+      className={`relative min-h-64 overflow-hidden rounded-xl bg-default/40 lg:min-h-0 lg:overflow-auto ${
+        isTranslucent ? "transparency-grid" : ""
+      }`}
     >
       {/*
        * The card is centred, and stays reachable when it is taller than the

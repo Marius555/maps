@@ -2,6 +2,7 @@ import type { StyleSpecification } from "maplibre-gl";
 import maplibreCss from "maplibre-gl/dist/maplibre-gl.css?inline";
 
 import { MIDNIGHT_TINT } from "@/packages/shared/darken-style";
+import { chromeAttrs, chromeVars } from "@/packages/shared/embed-chrome";
 import { loadMapStyle } from "@/packages/shared/load-style";
 import type { MapAppearance } from "@/packages/shared/map-appearance";
 import type { MapSnapshot, SnapshotPlace } from "@/packages/shared/snapshot";
@@ -15,7 +16,6 @@ import {
   type EmbedConfig,
 } from "./config";
 import { button, el } from "./dom";
-import { createTagFilters, matchesTags, tagGroupIndex } from "./filters";
 import { createGazetteer } from "./gazetteer";
 import { nearestPlace, formatDistance, distanceKm, type Located } from "./geo";
 import { createList, type ListHandle } from "./list";
@@ -172,6 +172,7 @@ async function render(
 
   const root = el("div", isDark ? "lm-root lm-root--dark" : "lm-root");
   root.style.height = "100%";
+  applyChrome(root, snapshot);
 
   const layout = el("div", "lm-layout");
   const canvas = el("div", "lm-canvas");
@@ -196,12 +197,27 @@ async function render(
     : null;
 
   if (list) {
-    // Search and filters belong to the results panel once there is one; over
-    // the map they would cover the list rather than the thing they filter.
+    // The search belongs to the results panel once there is one; over the map it
+    // would cover the list rather than the thing it searches.
     toolbar.classList.add("lm-toolbar--docked");
 
     const panel = el("div", "lm-panel");
     panel.append(toolbar, list.element);
+
+    /*
+     * One source order, whichever edge the panel ends up on.
+     *
+     * Which side it sits on and whether it floats are `data-lm-side` and
+     * `data-lm-float` on the root (`chromeAttrs`), and the stylesheet does the
+     * rest — `order` for the docked case, a `translateX` for the floating one.
+     * It used to be a real DOM swap here, which is what made a side flip cost
+     * the publish preview an entire new document; source order cannot be
+     * animated or rewritten on a running map, and an attribute can be both.
+     *
+     * Panel first is also the reading order the layout wants — search, then
+     * results, then the map they are plotted on — and it is what a screen reader
+     * gets on either side now rather than only on the left.
+     */
     layout.append(panel, canvas);
   } else {
     layout.append(canvas);
@@ -221,7 +237,38 @@ async function render(
     onSelect: (placeId) => list?.select(placeId),
   });
 
+  /*
+   * The running map, reachable from the element.
+   *
+   * The dashboard's publish preview renders this bundle in a same-origin
+   * `srcdoc` frame and has to rebuild that document when a structural setting
+   * changes. Without a way to ask where the map is looking first, every one of
+   * those rebuilds threw the owner back to the saved default view — which is
+   * what "the map keeps moving" meant. Nothing on a customer's site reads this;
+   * it is a handful of bytes and the only seam a parent document has.
+   */
+  (root as HTMLElement & { lmMap?: MapHandle }).lmMap = map;
+
   wireControls({ map, snapshot, toolbar, status, list });
+}
+
+/**
+ * Everything the owner designed about the chrome, onto the root.
+ *
+ * The table itself is `chromeVars` in /packages/shared, because the publish
+ * preview writes the same properties into a running frame without rebuilding it
+ * — see that file for why one table rather than two.
+ */
+function applyChrome(root: HTMLElement, snapshot: MapSnapshot): void {
+  for (const [name, value] of Object.entries(chromeVars(snapshot.settings))) {
+    if (value) root.style.setProperty(name, value);
+  }
+
+  // The layout's own state — which edge, and over or beside. Same rule: absent
+  // is never written, and absent is what an older snapshot already renders.
+  for (const [name, value] of Object.entries(chromeAttrs(snapshot.settings))) {
+    if (value) root.setAttribute(name, value);
+  }
 }
 
 /**
@@ -321,17 +368,12 @@ function wireControls({
 
   /** The typed text, already trimmed and lowercased — see ./search.ts. */
   let needle = "";
-  let tags = new Set<string>();
   /*
-   * Which group each tag belongs to, built once. `matchesTags` needs it on every
-   * place on every keystroke, and walking the group list each time would be
-   * three thousand places times sixty tags of work per character typed.
-   */
-  const groupOf = tagGroupIndex(snapshot.tagGroups ?? []);
-  /*
-   * Everything about a place a visitor might type, composed once for the same
-   * reason. This is what makes "retail" find the retail locations now that the
-   * category chips are gone.
+   * Everything about a place a visitor might type, composed once: a map §6
+   * allows 3,000 locations in would otherwise be re-composed per character.
+   * This is what makes "retail" find the retail locations now that there are no
+   * chips at all — tag labels are in here, so the word a visitor reads off a
+   * pin's own card is the word that filters the map.
    */
   const searchIndex = buildSearchIndex(snapshot);
   /**
@@ -378,10 +420,8 @@ function wireControls({
   };
 
   const visible = (): SnapshotPlace[] =>
-    snapshot.places.filter(
-      (place) =>
-        matchesSearch(searchIndex, place, needle) &&
-        matchesTags(place.tags, tags, groupOf),
+    snapshot.places.filter((place) =>
+      matchesSearch(searchIndex, place, needle),
     );
 
   const apply = () => {
@@ -402,8 +442,7 @@ function wireControls({
     showStatus("");
     // Only re-frame when something is actually narrowing the set; refitting on
     // an empty filter would yank the map back every time a search box clears.
-    // Tags count as narrowing — they always did, and were left out by mistake.
-    if (needle || tags.size > 0) map.fitTo(places);
+    if (needle) map.fitTo(places);
   };
 
   if (snapshot.settings.search) {
@@ -426,19 +465,14 @@ function wireControls({
   }
 
   /*
-   * Tag chips only. The category chips this switch used to raise are gone —
-   * their question is answered by typing the label now (./filters.ts) — but the
-   * switch keeps its meaning, because tags are what is left of filtering and a
-   * map whose owner turned filtering off must still get no chips.
+   * There were tag chips here, and before them category chips, and both are
+   * gone. A chip row is a second vocabulary competing with the search box for
+   * the top of a panel that is a proportion of the embed rather than a fixed
+   * 320px — and every label it could offer is already in the search index, so
+   * the question it answered is answered by typing the word. `settings.filters`
+   * is still in the contract because published snapshots carry it; nothing
+   * reads it.
    */
-  if (snapshot.settings.filters) {
-    const tagFilters = createTagFilters(snapshot.tagGroups ?? [], (next) => {
-      tags = next;
-      apply();
-    });
-
-    if (tagFilters) toolbar.append(tagFilters);
-  }
 
   async function goToNearest(): Promise<void> {
     // Sticky: it is replaced by its own outcome, which may be ten seconds away.

@@ -5,7 +5,11 @@ import { SelectControl } from "@/components/ui/select-control";
 import { CARD_FONTS } from "@/packages/shared/card-fonts";
 import type { CardBlock } from "@/packages/shared/card-layout";
 import type { BlockPatch } from "./block-properties";
-import { PropertyCheckbox, PropertyScale } from "./property-fields";
+import {
+  PropertyCheckbox,
+  PropertyChecks,
+} from "@/components/ui/properties/property-fields";
+import { PropertyNumberSelect } from "@/components/ui/properties/property-select";
 import { FONT_SIZES } from "./property-scales";
 
 /**
@@ -84,7 +88,10 @@ export function TextProperties({
        * has that as a choice, which is what `resizeCardBlock` already reads any
        * size at or below zero as.
        */}
-      <PropertyScale
+      {/* A select rather than five tiles, because "Default" takes a fifth of
+          the row against four single letters and clipped to "Defa…". The tile
+          argument only holds while every option is short or drawn. */}
+      <PropertyNumberSelect
         label="Size"
         value={block.fontSize ?? 0}
         options={FONT_SIZES}
@@ -94,18 +101,26 @@ export function TextProperties({
       <ColorPickerField
         label="Colour"
         value={block.color ?? ""}
+        // Label above, so it sits on the same rhythm as the Font and Size
+        // fields either side of it — see `labelPlacement`.
+        labelPlacement="outside"
         onChange={(color) => onChange({ color })}
         // An empty string is the absence, and the absence is theme-aware where
         // a stored literal could not be — see `CardLayout.background`.
         onClear={() => onChange({ color: "" })}
       />
 
+      {/* Last in the fold, and inside a `PropertyChecks` like every other
+          checkbox in the panel — it was the one bare `PropertyCheckbox` left,
+          so it took the fold's own `space-y-3` where the others take `gap-2`. */}
       {showBold ? (
-        <PropertyCheckbox
-          label="Bold"
-          isSelected={Boolean(block.bold)}
-          onChange={(bold) => onChange({ bold })}
-        />
+        <PropertyChecks>
+          <PropertyCheckbox
+            label="Bold"
+            isSelected={Boolean(block.bold)}
+            onChange={(bold) => onChange({ bold })}
+          />
+        </PropertyChecks>
       ) : null}
     </>
   );

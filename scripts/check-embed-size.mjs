@@ -42,12 +42,29 @@ const OUT_DIR = join(process.cwd(), "public", "embed");
  * designer is. The alternative was leaving 300 bytes of headroom, which is a
  * budget that fails on the next comment somebody writes.
  *
+ * Raised again, from 42KB, for the map designer — and this time the budget was
+ * genuinely at zero rather than nearly there: 43,008 of 43,008 bytes, passing
+ * only because the comparison is `>`. What it bought is the whole of what a
+ * customer's visitors see becoming the owner's to arrange: the results panel
+ * over the map on whichever side, see-through, a pin at the head of every
+ * results row, MapLibre's own controls in a corner of the owner's choosing, and
+ * the embed's colour tokens.
+ *
+ * Two things make 46 the honest number rather than a shrug. The *total* — the
+ * thing §4 is actually protecting, and the thing a visitor downloads — has the
+ * headroom for it: 4.8KB spare under the ceiling below, and 46KB spends about
+ * three of them. And it was paid for in part rather than borrowed whole: the
+ * tag filter chips went out with this change (`embed/src/filters.ts`, its CSS,
+ * and the per-row tag), because every label they offered is in the search index
+ * and a chip row is a second vocabulary competing with the search box for the
+ * top of the panel.
+ *
  * The floor to hold the line at is roughly a kilobyte of slack. If a change
  * eats it, measure before raising this again: `ours` growing by tens of
  * kilobytes is a React or a date library that has found its way in (§4), and
  * that is exactly what this number exists to catch.
  */
-const OWN_BUDGET_BYTES = 42 * 1024;
+const OWN_BUDGET_BYTES = 46 * 1024;
 /** Ours plus MapLibre. Above the 273.2KB floor with room for a minor upgrade. */
 const TOTAL_CEILING_BYTES = 320 * 1024;
 

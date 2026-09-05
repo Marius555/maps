@@ -74,15 +74,23 @@ export function PropertyChoice<T extends string>({
           if (next !== undefined) onChange(String(next) as T);
         }}
       >
+        {/* `min-w-0` on the button and `truncate` on the word: a flex item's
+            floor is its content, so five tiles reading None / Tight / Regular
+            / Roomy / Wide are about 300px of text that will make its container
+            300px wide rather than wrap — which is a horizontal scrollbar on
+            any panel narrower than that. At 24rem nothing changes; on a phone
+            a tile degrades to "Regu…", which is a control you can still see
+            and press. Icon-only options are unaffected: their word is
+            `sr-only` and takes no width at all. */}
         {options.map((option, index) => (
-          <ToggleButton key={option.value} id={option.value}>
+          <ToggleButton key={option.value} id={option.value} className="min-w-0">
             {/* Every button but the first draws the rule to its left; the group
                 owns the radii, so this is all a divider takes. */}
             {index > 0 ? <ToggleButtonGroup.Separator /> : null}
             {option.icon ?? null}
             {/* An icon says it faster and a word says it unambiguously, so the
                 word stays for a screen reader when there is an icon to see. */}
-            <span className={option.icon ? "sr-only" : undefined}>
+            <span className={option.icon ? "sr-only" : "truncate"}>
               {option.label}
             </span>
           </ToggleButton>
@@ -142,42 +150,31 @@ export function PropertyScale({
 }
 
 /**
- * The row a group's checkboxes sit in, two across — or three.
+ * The run a fold's checkboxes sit in: one per line, at the end of the fold.
  *
- * A checkbox is a word and a 16px box; on a 24rem column each one took a whole
- * line to say "Bold", which read as an unfinished row rather than as a control.
- * Two per line is what a pair of yes-or-nos actually needs, and a lone one still
- * sits at half width — which is honest about there being room for another rather
- * than stretching one word across the panel.
+ * It was a grid, two across and optionally three, on the argument that a
+ * checkbox is a word beside a 16px box and a whole line to say "Bold" reads as
+ * an unfinished row. **`PropertyCheckbox` is two lines tall now** — the label
+ * sits above its box — so that argument is gone, and what it left behind was the
+ * bug: three columns of a two-line control is 7rem a column against labels like
+ * "Full day names", and the Hours panel could not lay it out without pushing
+ * past its own width.
  *
- * **Three is for a set that is genuinely one question**, and the opening hours
- * block is the case it was added for: Bold, Only today and Full day names are
- * three answers to "how does this week read", and at two across the third sat
- * alone on a second line looking like a different subject. It is not the default
- * because three columns is 7rem each, which is under the width most of these
- * labels want.
+ * **What is left in here is lone booleans**, and that is the point of it now.
+ * The sets that were four and three of these — the Links row, the week — are
+ * `PropertyToggles` rows: one question with several parts, on one line. What
+ * stayed is the odd single yes-or-no that qualifies the fold it is in ("Full
+ * width", "Show it in full"), and the rule is that it goes *last*, so a boolean
+ * never interrupts a run of fields. A checkbox landing halfway down a column was
+ * the whole of "checkboxes sprinkled all over".
  *
- * `items-center` because they are not always one line tall: "Full day names"
- * wraps at either width and "Only today" does not.
+ * One column also means one rule for both panels, which is why the `cols` prop
+ * went rather than defaulting to 1: the studio and the per-pin card menu draw
+ * the same `BlockProperties`, and a control that looks different depending on
+ * which of them opened it is two controls.
  */
-export function PropertyChecks({
-  cols = 2,
-  children,
-}: {
-  cols?: 2 | 3;
-  children: ReactNode;
-}) {
-  return (
-    // Both class names written out, never assembled: Tailwind reads source text,
-    // so a `grid-cols-${cols}` is a utility that is never generated.
-    <div
-      className={`grid items-center gap-x-3 gap-y-2 ${
-        cols === 3 ? "grid-cols-3" : "grid-cols-2"
-      }`}
-    >
-      {children}
-    </div>
-  );
+export function PropertyChecks({ children }: { children: ReactNode }) {
+  return <div className="flex min-w-0 flex-col gap-2">{children}</div>;
 }
 
 /**
@@ -188,6 +185,11 @@ export function PropertyChecks({
  * moment it moves, which is what the map's layer toggles are. Everything in this
  * panel is a property of a draft that does not leave the page until Save, and a
  * checkbox is what a property looks like.
+ *
+ * And a checkbox rather than a `PropertyToggles` tile, which is the other
+ * neighbour: that one is for a question with several parts, where the answers
+ * share a row and each has an icon that draws it. "Full width" is one answer to
+ * one question and has no such icon, so a tile of it would be a row of one.
  *
  * **The label is the whole explanation.** These carried a line of hint text
  * underneath, which doubled the height of every one of them. Where the
@@ -217,22 +219,25 @@ export function PropertyCheckbox({
      * `border border-border` patch of our own; the token stays untouched, since
      * `--field-border` is every input in the app.
      *
-     * `Control` goes *inside* `Content`, which is the same shape
-     * `components/appearance/layers-field.tsx` gives its `Switch`. It matters
-     * because `.checkbox` is the field wrapper and is `flex-direction: column` —
-     * composed as siblings, the box drew on its own line *above* the word.
-     * `.checkbox__content` is the row.
+     * `Control` still goes *inside* `Content`, and that is load-bearing for a
+     * reason the layout below does not change: `.checkbox` is the field wrapper
+     * and is itself `flex-direction: column`, so composed as siblings the box
+     * would draw on a line of its own with the word beside nothing.
+     * `.checkbox__content` is the box that is being turned.
+     *
+     * **The word above and the box below**, which is a column rather than the
+     * row `.checkbox__content` paints by default. Asked for directly, and it is
+     * what lets a checkbox live in a 20rem panel at all: a row is as wide as its
+     * label plus its box and has no way to give any of that back, so a set of
+     * them is a fixed width the panel has to find. Stacked, the label is free to
+     * wrap and the control is 16px wide whatever it is called.
      */
-    <Checkbox
-      variant="secondary"
-      isSelected={isSelected}
-      onChange={onChange}
-    >
-      <Checkbox.Content>
+    <Checkbox variant="secondary" isSelected={isSelected} onChange={onChange}>
+      <Checkbox.Content className="flex-col items-start gap-1">
+        {label}
         <Checkbox.Control>
           <Checkbox.Indicator />
         </Checkbox.Control>
-        {label}
       </Checkbox.Content>
     </Checkbox>
   );

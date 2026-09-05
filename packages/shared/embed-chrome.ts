@@ -1,0 +1,105 @@
+import type { SnapshotSettings } from "./snapshot";
+
+/**
+ * Everything the owner designed about the embed's chrome, as CSS custom
+ * properties.
+ *
+ * One table, in `/packages/shared`, because **two renderers write it**. The
+ * embed writes it onto its own root at boot (`applyChrome` in
+ * embed/src/index.ts), and the dashboard's publish preview writes it into the
+ * running preview frame on every pointer move of a colour drag — without
+ * rebuilding the document, which is the whole reason that page stopped blinking
+ * (lib/preview/live-chrome.ts).
+ *
+ * A second copy of this table in the dashboard would be a preview that recolours
+ * one set of tokens and a publish that writes another, and the drift would show
+ * up as "the preview lied" months later. Same argument `shapes.ts` and
+ * `darken-style.ts` already make, and it costs the embed nothing: the code moved
+ * here rather than being duplicated.
+ *
+ * **`undefined` is a real answer and is never written.** An absent property
+ * leaves the stylesheet's own value in charge, which is what keeps an undesigned
+ * embed theme-aware — `.lm-root--dark` redefines exactly these tokens, and a
+ * stored `#ffffff` could not follow it. That is also the CLAUDE.md §7 half: a
+ * snapshot published before any of these fields existed produces an empty table
+ * and renders precisely what it always rendered.
+ */
+export function chromeVars(
+  settings: SnapshotSettings,
+): Record<string, string | undefined> {
+  const c = settings.colors;
+
+  return {
+    "--lm-panel-w":
+      settings.panelWidth === undefined ? undefined : `${settings.panelWidth}%`,
+    "--lm-panel-opacity":
+      settings.panelOpacity === undefined
+        ? undefined
+        : `${settings.panelOpacity}%`,
+    // Zero is not "a blur of none" but "no backdrop-filter at all": the property
+    // is expensive enough on a scrolling panel that a `blur(0)` nobody asked for
+    // is worth not writing.
+    "--lm-panel-blur": settings.panelBlur ? `${settings.panelBlur}px` : undefined,
+    "--lm-panel-radius":
+      settings.panelRadius === undefined
+        ? undefined
+        : `${settings.panelRadius}px`,
+    "--lm-row-pin":
+      settings.rowPinSize === undefined ? undefined : `${settings.rowPinSize}px`,
+    "--lm-surface": c?.surface,
+    "--lm-foreground": c?.foreground,
+    "--lm-muted": c?.muted,
+    "--lm-border": c?.border,
+    "--lm-focus": c?.accent,
+  };
+}
+
+/**
+ * The rest of the chrome, as data attributes on the same root.
+ *
+ * Where a colour or a width is a *value* CSS can interpolate, these two are
+ * *state* the layout branches on — which edge the panel sits against, and whether
+ * it floats over the map or sits beside it. They used to be neither: the side was
+ * real DOM source order (`layout.append(canvas, panel)`) and the placement was a
+ * class, both decided once at boot and unreachable afterwards. So flipping either
+ * one cost the publish preview a whole new document — a new MapLibre, a new WebGL
+ * context and a fresh tile fetch for a change that moves one box.
+ *
+ * As attributes they are the same kind of thing `chromeVars` writes: one table,
+ * two renderers, applied to a map that is already running. The stylesheet does
+ * the layout from them (`order` for the docked case, a `translateX` for the
+ * floating one), which is also what makes the move animatable — you cannot
+ * transition source order.
+ *
+ * **`undefined` is never written, and absent is the older behaviour**, exactly as
+ * above. No `data-lm-side` is the left column and no `data-lm-float` is the
+ * docked panel, which is what every snapshot published before these fields
+ * existed already renders (§7).
+ */
+export function chromeAttrs(
+  settings: SnapshotSettings,
+): Record<string, string | undefined> {
+  return {
+    "data-lm-side": settings.panelSide === "right" ? "right" : undefined,
+    "data-lm-float": settings.panelFloat ? "1" : undefined,
+  };
+}
+
+/**
+ * The keys `chromeVars` and `chromeAttrs` answer, so a caller can tell a live
+ * repaint from a rebuild without listing them again.
+ *
+ * The publish preview reads this to strip the live fields out of the key it
+ * rebuilds its iframe on: changing one of these is a property or attribute write
+ * on a running map, and only the rest are worth tearing a document down for.
+ */
+export const CHROME_SETTING_KEYS = [
+  "panelSide",
+  "panelFloat",
+  "panelWidth",
+  "panelOpacity",
+  "panelBlur",
+  "panelRadius",
+  "rowPinSize",
+  "colors",
+] as const satisfies readonly (keyof SnapshotSettings)[];

@@ -20,7 +20,16 @@ import type {
 import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { isDefaultCardLayout } from "@/lib/validation/card-layout.schema";
 import { readMapAppearance } from "@/lib/validation/map-appearance.schema";
-import { resolveCardLayout, type CardLayout } from "@/packages/shared/card-layout";
+import {
+  findBlock,
+  resolveCardLayout,
+  type CardBlock,
+  type CardLayout,
+} from "@/packages/shared/card-layout";
+import {
+  hasCardBlockOverrides,
+  mergeCardBlocks,
+} from "@/packages/shared/card-overrides";
 import {
   isPlainAppearance,
   type MapAppearance,
@@ -148,6 +157,16 @@ export function buildSnapshot(
    */
   const drawable = resolved.filter(isDrawableShape);
 
+  /*
+   * The card this map publishes, resolved once.
+   *
+   * Two things need the same answer and used to compute it separately: the
+   * `cardLayout` field itself, and every location's own overrides, which are
+   * narrowed against the blocks this layout actually has. Resolving twice would
+   * be two chances to disagree about which blocks those are.
+   */
+  const publishedLayout = resolveCardLayout(cardLayout ?? {});
+
   return {
     snapshot: {
       version: 1,
@@ -182,7 +201,7 @@ export function buildSnapshot(
       ...(tagGroups.length > 0 ? { tagGroups } : {}),
       ...(fields.length > 0 ? { fields } : {}),
       places: usable.map((place) =>
-        toSnapshotPlace(place, definedTags, definedFields),
+        toSnapshotPlace(place, definedTags, definedFields, publishedLayout),
       ),
       // Dropped entirely when empty, like every other optional field — and this
       // one has to be, because absent is also what every snapshot published
@@ -192,7 +211,7 @@ export function buildSnapshot(
       // never opened the appearance menu publishes the exact bytes it published
       // before any of this existed.
       ...appearanceField(map),
-      ...cardLayoutField(cardLayout),
+      ...cardLayoutField(publishedLayout),
       ...gazetteerField(gazetteerBase, usable),
       settings: readEmbedSettings(map.settings),
       allowedDomains: map.allowedDomains,
@@ -264,12 +283,45 @@ function appearanceField(map: AppMap): { appearance?: MapAppearance } {
  * published before any of this existed, on every map it owns, and the embed
  * falls back to the card it has always drawn (§7).
  */
-function cardLayoutField(
-  cardLayout: CardLayout | null | undefined,
-): { cardLayout?: CardLayout } {
-  const layout = resolveCardLayout(cardLayout ?? {});
-
+function cardLayoutField(layout: CardLayout): { cardLayout?: CardLayout } {
   return isDefaultCardLayout(layout) ? {} : { cardLayout: layout };
+}
+
+/**
+ * This location's card overrides as they are published, or nothing at all.
+ *
+ * Three things happen here, and the reason all three happen at publish rather
+ * than at read is the same: the embed draws these bytes exactly as it finds
+ * them, forever, on sites we do not control (CLAUDE.md §7).
+ *
+ *   - **Narrowed.** An override naming a block the design no longer has is
+ *     dropped, on the same terms as a tag id whose tag was deleted. Nothing
+ *     sweeps these when a block is removed in the studio, deliberately, so this
+ *     is where they stop.
+ *   - **Resolved.** `resolveCardLayout` clamps every number and drops every
+ *     block that has wandered into a zone it may not occupy. It runs on the
+ *     *merged* layout rather than on the entries alone, because the rules a
+ *     block is held to -- how wide it may be, what an unset margin falls back to
+ *     -- are questions about the card it lives in.
+ *   - **Omitted when it changes nothing**, which is the load-bearing half: a map
+ *     whose owner has never opened edit mode publishes the exact bytes it
+ *     published before any of this existed.
+ */
+function publishedCardBlocks(
+  place: Place,
+  cardLayout: CardLayout | null,
+): Record<string, CardBlock> | undefined {
+  if (!cardLayout || !hasCardBlockOverrides(place.cardBlocks)) return undefined;
+
+  const resolved = resolveCardLayout(mergeCardBlocks(cardLayout, place.cardBlocks));
+  const out: Record<string, CardBlock> = {};
+
+  for (const id of Object.keys(place.cardBlocks)) {
+    const found = findBlock(resolved, id);
+    if (found) out[id] = found.block;
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /**
@@ -401,6 +453,12 @@ function toSnapshotPlace(
   place: Place,
   definedTags: ReadonlySet<string>,
   definedFields: ReadonlySet<string>,
+  /**
+   * The card this map publishes, so a location's own overrides can be narrowed
+   * against it. Null while no design is in play, which is every map whose owner
+   * has never opened the designer -- and then there is nothing to override.
+   */
+  cardLayout: CardLayout | null,
 ): SnapshotPlace {
   const snapshot: SnapshotPlace = {
     id: place.id,
@@ -428,6 +486,10 @@ function toSnapshotPlace(
    */
   if (place.photoUrl) snapshot.photoUrl = place.photoUrl;
   if (place.photoUrls.length > 1) snapshot.photoUrls = place.photoUrls;
+  // Only when there is one. A Logo block reads it through `logoImageOf`, which
+  // falls back to the map's own custom pin, so absent is not a missing mark —
+  // it is a location drawing the pin.
+  if (place.logoUrl) snapshot.logoUrl = place.logoUrl;
 
   /*
    * Narrowed, not copied: a place can be wearing a tag the map deleted, and the
@@ -447,6 +509,9 @@ function toSnapshotPlace(
     ),
   );
   if (Object.keys(fields).length > 0) snapshot.fields = fields;
+
+  const cardBlocks = publishedCardBlocks(place, cardLayout);
+  if (cardBlocks) snapshot.cardBlocks = cardBlocks;
 
   return snapshot;
 }

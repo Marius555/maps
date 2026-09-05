@@ -46,7 +46,7 @@ const pct = z.number().int().min(0).max(100);
 /** `#rgb` or `#rrggbb`. The same shape `resolveCardLayout`'s own reader takes. */
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
-const cardBlockSchema = z.object({
+export const cardBlockSchema = z.object({
   id: z.string().trim().min(1).max(64),
   type: z.enum(BLOCK_TYPES),
   widthPct: pct.optional(),
@@ -135,7 +135,11 @@ const cardBlockSchema = z.object({
   // `z.literal("image")`, for the forgiveness `half` and `bleed` get above: the
   // word "pin" hand-written into a row is the default said out loud, and the
   // resolver normalises it away rather than this 422ing on the doorstep.
-  logoMode: z.enum(["pin", "image"]).optional(),
+  logoMode: z.enum(["pin", "image", "mixed"]).optional(),
+  // Absent is square. `"square"` is accepted for the forgiveness `logoMode`
+  // gets one line up: a control pressing its way back to the default has a word
+  // for it, and the resolver turns that word back into the field being absent.
+  logoRadius: z.enum(["square", "rounded", "round"]).optional(),
   /*
    * What a button does, where its link comes from, and what it says.
    *
@@ -218,6 +222,12 @@ export const cardLayoutSchema = z
     // Absent means "the theme decides", which is the only way a card stays
     // readable on a visitor's dark map. An empty string would not be.
     background: z.string().regex(HEX).optional(),
+    // Optional for `background`'s reason one step on: absent means opaque and
+    // no blur, which is what every card published before these existed says.
+    // Unbounded here and clamped in `resolveCardLayout`, as every other number
+    // on this object is.
+    backgroundOpacity: z.number().int().optional(),
+    backdropBlur: z.number().int().optional(),
     border: z.string().regex(HEX).optional(),
     borderWidth: z.number().int(),
     shadow: z.enum(["none", "soft", "strong"]),

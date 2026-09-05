@@ -523,6 +523,126 @@ everything else — a width that came off a resize handle, or anything saved whi
 these were sliders — **without writing it back**, because opening a panel must
 never edit a design.
 
+**And not every number is a row of tiles either — the Modify tab is now a mix,
+and which control a question gets is decided by width.** A tile that *draws* what
+it is choosing costs no label width at all, so Corners, Alignment, Vertical,
+Shadow, Fill/Fit, Width and Height stay tiles. A tile carrying a *word* gets
+about 36px of room across this column at five across, so every `room()` scale —
+None / Tight / Regular / Roomy / Wide — clipped: Padding, Gap between blocks,
+Margin, Space between days, Chip padding, Roominess and all three Border widths
+are `PropertyNumberSelect` now, and Hover and Size are selects for the same
+reason with four and five words of their own. It is the argument the card's own
+Transparency already made in this file, applied to the seven controls it had not
+been. Narrowing is safe on designs that already exist for the reason above:
+`nearestStop` lights the closest remaining option and writes nothing.
+
+**The Modify tab folds, which reverses an argument this file used to make.**
+`PropertyGroup` was always-open on the grounds that the panel already scrolls, so
+folding buys height that was never scarce and costs a click on the way to every
+control. What that did not weigh is how much there is: a block offers up to seven
+headings and around twenty controls at 24rem, and a column that long is one
+nobody reads down. The palette and the publish designer had each reached the
+opposite conclusion separately, so three panels now agree and `PropertyGroup` is
+deleted — `PropertyFold` took its `isEmpty`, which is the rule that a group with
+every control hidden renders nothing at all, heading included. **Which fold opens
+has to be *found* rather than named**: the publish sidebar can write
+`defaultExpandedKeys={["panel"]}` because its four are always there, while a
+block's are its own business, so a hard-coded id lands on a spacer and opens
+nothing. `key={block.id}` on the `Accordion` is what stops a new block inheriting
+the last one's open set.
+
+**Booleans are one question on one line, and lone ones go last.** The Links row's
+four and the week's three are `PropertyToggles` — the control the publish
+designer uses for "Each row shows", and the thing its docblock already called
+*"stop putting checkboxes in their own row"*. That docblock's stated reason was
+wrong and has been corrected: the split is not draft-versus-immediate (this panel
+*is* a draft, and the same `BlockProperties` is drawn immediately-writing in the
+per-pin card menu) but how many answers one question has. A single yes-or-no is
+still a `PropertyCheckbox`, and the rule is that it sits at the end of its fold —
+a boolean interrupting a run of fields is the whole of what "checkboxes sprinkled
+all over" meant. The week's `hoursOpen` flipped its wording with the change: as a
+checkbox it read "Only today", the inverse of the field, and a toggle that is on
+when its field is *absent* is a control that lies about what it stores. It is
+"Whole week" now.
+
+**A colour field can put its label above, and that is a question about the column
+rather than about the control.** `ColorPickerField` keeps label-inside as its
+default, because the publish designer's Colours fold is five of them and nothing
+else — a name beside each swatch is a tidy list there. In the card designer the
+same control sits among label-above fields, and a label-inside one spends none of
+the 6px between a label and its box, so at one shared `space-y-3` a colour read
+as crowded against whatever sat above it. With `labelPlacement="outside"` the
+trigger says the value instead (`Default` when unset), which is what makes a
+full-width bar with a swatch alone in it worth looking at.
+
+**The palette is shelved and folded, where it was one grid of chips.** The Blocks
+tab drew `availableBlocks` as a two-column grid of 12px chips, and two things
+were wrong with it, both about the same 24rem column. The chips were
+`border-border bg-surface` **inside a `bg-surface` panel**, so a dozen hairline
+rectangles floated on an identical ground with nothing saying they could be
+picked up — `.is-draggable` is deliberately `cursor: pointer` (see globals.css),
+so there was no cursor to say it either. And at half the column's width every
+label truncated, which is why `hint` — one good sentence per block, already
+written — had nowhere to live but a native `title`. So: full-width rows on
+`bg-default`, a `GripVertical`, the glyph in a tile of its own, and the hint on
+screen at two lines before it clamps. Eleven of those is a wall, which is what
+the folds are for: `BLOCK_GROUPS` in `block-labels.ts` shelves them by the
+question each answers, **a shelf holding nothing renders nothing at all**
+(`PropertyGroup`'s rule), and the palette therefore shrinks as the card fills up
+until it is the two or three blocks that genuinely repeat.
+
+`PropertyFold` — the publish designer's own `Fold`, lifted to
+`components/ui/properties/property-fold.tsx` — is what both now use, because that
+`Accordion.Item` → `Heading` → `Trigger` / `Panel` → `Body` anatomy is
+load-bearing and a hand-copied second version is a trigger with no accessible
+heading. It is **not** a replacement for `PropertyGroup`: that one is always open
+and its argument still holds where it is, on the Modify tab, which is a
+fixed-height panel about one selected block. The two folds also differ in what
+they open with — publish opens on one, because comparing a panel setting against
+a colour is real; the palette opens on all of them, because nothing is being
+compared across shelves and hiding the block you came for is a click for nothing.
+
+`EVERY_BLOCK_IS_SHELVED` is the one thing in that file worth not deleting. A new
+`CardBlockType` nobody filed would be a block that exists, drops onto a card
+perfectly well and is offered nowhere — a failure with no runtime symptom at all.
+`BLOCK_LABELS` is a `Record` and so forces its own entry; that constant is the
+same guarantee for the shelves, and it fails at compile time.
+
+**A card can be glass, and it is the panel's own mechanism one element over.**
+`backgroundOpacity` and `backdropBlur` on `CardLayout`, both optional, **absent
+meaning opaque and unblurred** — which is what every card saved or published
+before them already says, so no migration and no republish (§7). It is a
+`background-color` with alpha through `color-mix`, never the `opacity` property,
+for the reason `.lm-panel` gives: `opacity` fades the card's text along with its
+ground, so a glass card would be an unreadable one. `cardGround` in
+`card-frame.tsx` and the two `.maplibregl-popup-content` rules in
+`embed/src/styles.css` run the same mix, over `var(--surface)` / `var(--lm-surface)`
+when the owner chose no colour — a stored `#ffffff` could not stay theme-aware,
+which is the argument `background` itself already makes by being absent.
+
+Three things about it are load-bearing. **Absent blur is `none`, not `blur(0)`** —
+a backdrop filter of zero still makes the element a backdrop root, and a card is
+moved by transform at 60fps by `useMapAnchor` where the results panel sits still;
+so `--lm-card-backdrop` carries the whole `blur(...)` where `--lm-panel-blur`
+carries a length. **The tip came with it**: MapLibre paints
+`.maplibregl-popup-tip` from its own stylesheet, so a solid white triangle would
+hang off a glass card — `.lm-root .maplibregl-popup-tip` now runs the same mix at
+MapLibre's own specificity, later in the same injected sheet, which is what lets
+it win. No blur on the tip, because a backdrop filter applies to the border box
+and the tip's is a square. **And Solid stores the absence**: `optional()` in
+`resolveCardLayout` drops a value equal to what absent already means, the way
+`usedPinIcons` drops a pin field left at its default, so an owner who tries Glass
+and goes back publishes the bytes they always did and `sameCardLayout` reports
+the design clean. Verified in the browser both ways round.
+
+The studio needed one thing for the control to be honest. Its workspace is
+`bg-default/40`, one flat tone, so a glass card drawn on it looks exactly like a
+solid one — the failure this panel refuses everywhere else. `.transparency-grid`
+is a checkerboard behind the card while, and only while, the card is see-through:
+the standard idiom, and honest in a way a fake basemap would not be. Blur is
+offered only once there is transparency for it to show through, for the reason
+the Border width below it is offered only once there is a border colour.
+
 **Deleting a block moves nothing but the block, and getting there needed a
 measurement carried across the tree.** `settle` pays for an arrival out of the
 gap it lands in, and `vacate` refunds a departure the same way; `removeCardBlock`
@@ -568,9 +688,570 @@ the studio's 320px. It reproduces on `dev-legacy.html`, which has no `cardLayout
 at all. Real drift between the twins, and worth fixing when somebody is next in
 `buildPopup`.
 
+**An empty block on the editor's own card is a dashed `+` that fills itself in.**
+Blocks stopped collapsing on a half-filled location — the card is the size its
+owner designed (`--card-h`) and an unfilled block holds its place at
+`.card-block--empty`'s floor — which fixed the layout and left a hole nobody
+could tell from a gap. `lib/card/card-slots.ts` says which block is missing what
+(`CardSlot`), `CardView` gained a `renderSlot` seam beside `renderEmptyState`,
+and `components/map/place-card/slots/` is one small form per answer, each reusing
+the control the edit dialog already uses — `TagPicker`, `HoursField`,
+`PhotoGalleryField`, `AddressSearchField` — over the existing
+`PATCH /api/maps/[id]/places/[placeId]`. No new route, no schema change, and
+`useUpdatePlace` being optimistic is what makes the dashed box become content
+under the finger.
+
+Four things about it are load-bearing. **The slot replaces the block's content
+rather than overlaying it**, so it inherits the block's width, height, margins
+and place in the line — filling one in moves nothing else, measured in the
+browser at 147/274/313/362/532/543 before and 147/274/313/361/531/543 after.
+**`cardSlotOf` is not `hasBlockContent`**: that one answers `true` for a gallery
+with no photo, correctly, because the band is the owner's design — but a missing
+photo is the most obvious thing on a card to offer, so it is a slot here; and a
+slot has to name a *field*, where the other answers a boolean. **It is
+editor-only** and arrives as an optional `cardSlots` prop group, so the import
+review and the preview panel pass nothing and the embed has no idea it exists
+(§2, §4). And **the popover is portalled**, so it cannot follow a card that
+`useMapAnchor` moves by transform at 60fps: an open slot closes on the map's
+`movestart`, and Escape is guarded so one press does not close the popover and
+the card under it together. `.card-slot`'s open state is our own `data-open` —
+HeroUI's `Button` leaves `aria-expanded` false on a trigger whose popover is
+open. With slots on, the card-wide "No details yet" sentence is retired: the
+slots say it per block, each naming its own field.
+
+**An empty block holds the room its filled twin would take, and one flat number
+used to do eight jobs.** `.card-block--empty` was `min-height: 1.5rem` for every
+block alike, which is right for the ones that draw a line and badly wrong for the
+week: Hours with "Only today" unticked draws a summary row *plus seven days*, so
+a location with no opening times lost 130px out of the middle of its card and
+every block under it moved up into space the studio had never shown anybody —
+the failure blocks stopped collapsing to fix, reintroduced one level down.
+`emptyBlockHeight` in `packages/shared/card-layout.ts` is the reservation, read
+off the block's own settings (`hoursOpen`, `hoursRowGap`, `clampLines`,
+`chipPadding`, `buttonPadding`, `fontSize`) and carried out of `blockBox` as
+`emptyHeight` so all three renderers ask one function. **Its numbers were
+measured in the browser rather than derived** — a `Disclosure` body's 8px, a
+`.chip--lg`'s 32.8px floor, a button's 27px box — and a filled open week comes to
+153.9px against the 154 it answers. The floor lands on the block's **content**
+element in every renderer, not on its box, which is what lets one number serve
+all three: on the box it would have to know the padding too, since a
+`min-height` on a border-box element covers it. That moved the class one level
+down in `card-view.tsx` and `card-canvas.tsx`; the embed already had it there.
+A block with a `heightPct` emits nothing, so a card nobody has touched writes no
+new property at all.
+
+**The slot wears the card's corners, not the app's.** `.card-slot` hardcoded
+`--radius-md`, which is the dashboard chrome's rounding and has nothing to do
+with the thing being designed — a square card drew round dashed boxes inside it.
+`cardVars` publishes `--card-radius` for it, and `blockStyle` writes
+`--card-slot-radius` for the one block with a corner of its own, so a Button's
+slot is the shape of the button that will land there.
+
+**A location carries its own logo, and the Logo block's Show control has three
+answers.** The only logo in the system was the image on a *map-level* custom pin
+(`map.pinIcons`, eight per map, 6KB of base64 each, shared by every location
+wearing that pin) — so a map of stockists carrying six brands could show one logo
+or none, and there was no way to add one from the card at all. `places.logoId` is
+a storage file id, mapped to `place.logoUrl` through the same `photoViewUrl` the
+gallery uses, uploaded through `POST /api/maps/[id]/places/[placeId]/logo`
+(`setPlaceLogo`/`clearPlaceLogo` in `files.repository.ts`, modelled on
+`addPlacePhotos` down to the public-read permission). **A file and not a data
+URI**, which is what the pins are: a URL costs a published snapshot nothing,
+where three thousand inline logos would hand every visitor megabytes of base64
+(§2). `SnapshotPlace.logoUrl` is written only when there is one.
+
+The three modes have to be three *behaviours*, or the middle one is a second word
+for something that already exists — so **`"image"` stopped falling back to the
+pin**, and that argument became `"mixed"`'s:
+
+| Stored | Label | Draws |
+|---|---|---|
+| absent | Pin | always the pin. Every card published before this (§7). |
+| `"mixed"` | Mixed | this location's logo if it has one, else the pin. What a fresh Logo block arrives as, via `defaultLogoMode`. |
+| `"image"` | Logo | the logo, always. No logo → an empty block, which is a `+` slot on the editor's card. |
+
+`logoImageOf` takes the location's own logo *and* the pin's image and prefers the
+first, so a card designed against a pin logo keeps drawing one. The documented
+consequence: a card already saved as **Logo**, on a location with no logo, stops
+drawing the pin — picking **Mixed** is the one-press way back. Both renderers had
+to be taught this together, and the first attempt was real twin drift found in
+the browser: `buildLogo` returned null while `Logo` in `card-block.tsx` still
+fell through to `PinPreview`, so the studio showed a pin where the customer's
+site would show a gap. On the designer's canvas that nothing is a dashed hint
+(`.card-logo--empty`), because the sample is whichever row happened to be first
+and an invisible block reads as a broken control.
+
+`LogoField` is the one control, in the Edit dialog's media fold, in the card
+slot, and in the designer's own Logo panel — where it uploads onto the *sample*
+location and says so, because the design is per account and a logo is not.
+
+**A card can be edited per pin, and the whole of that is one column and one
+substitution.** The card design is saved per *account* and drawn for every
+location on every map, which is the right default and the wrong answer for a
+flagship store that should show its logo where the rest show a pin. Edit mode is
+the seam: the button at the **top left** of a place card (`PlaceCardChrome`, its
+own cluster away from the pair on the right, because those two are about the
+location and this one latches and is about the card) turns every block into
+something with a pencil in its corner, and the pencil opens **the designer's own
+properties panel** pointed at this location instead of at the account.
+
+Reusing `BlockProperties` rather than building a second panel is the decision
+that made "everything the designer offers" affordable: it is already a walk over
+the block's declared `controls` with an `onChange`, so a control added to the
+studio arrives here wired on the same day. Three small things had to give for it
+— `chipPreview` became optional and its group hides without it (it pads the
+*canvas* so somebody can see what four chips would do, and over a real pin there
+is nothing to pretend about), `LogoProperties` gained `isOwnCard` to drop the
+sentence explaining whose row an upload writes, and the zone facts
+`overlapsNothing` / `aloneOnLine` moved into `lib/card/block-panel-facts.ts` so
+the two panels cannot disagree about whether a control does anything.
+
+**An entry is a whole resolved block, not a diff, and that is the load-bearing
+call.** Absent is meaningful all over `CardBlock` — no `logoMode` is the pin, no
+`fit` is Fill, no `bold` is not bold — so a diff would need a second "and unset
+these" list travelling beside it, and all three renderers would have to apply
+both halves. A resolved block reduces the merge to `overrides[block.id] ?? block`
+(`overrideBlock` in packages/shared/card-overrides.ts), which is the only reason
+this fits in the embed at all. The documented consequence is what the panel's
+**Reset to card design** button exists for: a block that has been singled out
+stops following the account design *for that block*. Every other block on that
+pin, and every other pin, still does.
+
+A patch is never assembled by hand. It goes `resizeCardBlock(effective, id,
+patch)` and then `findBlock` back out, so the card menu inherits every clamp,
+every refusal of a control the type does not offer, and — crucially — the
+*deletion* of a field that returns to its default. That is what makes "back to
+square corners" store the absence of a radius rather than a word meaning square,
+which is what every card published before the control existed already says (§7).
+
+`overrideBlock` must run **before `cardRows`**: a width or an overlap decides how
+blocks pair into lines, so overriding after the pairing draws a line the pairing
+never agreed to. Both renderers do it on the pairing's own input — `renderZone`
+in card-view.tsx, and the zone loop in embed/src/popup.ts. Two rules narrow it,
+and both live in that one function: an id the design no longer has never matches,
+and a **type mismatch is ignored**, so a block id minted again after a delete
+cannot inherit the old one's settings. Dangling ids are the normal state here for
+the reason they are for tags — nothing sweeps them, `publishedCardBlocks` narrows
+them away at publish, and every reader drops them when drawing.
+
+**The overlay is an overlay, where a slot is a replacement, and the two differ on
+purpose.** `CardView` has both seams now. A slot's job is to *be* the content of
+a block that has none, so it takes the block's box; an editor's job is the
+opposite, because what is being edited is what you are looking at. So
+`renderOverlay` draws inside the same box without displacing anything, and
+`.card-edit-target` is `position: absolute; inset: 0` over a content element
+`CardView` marks `relative` — turning edit mode on must move nothing, or the
+design being edited is not the one on screen. The pencil is a **corner badge and
+not the whole box**, which is not a style choice: an empty block already gives
+its entire box to the dashed `+` that fills it in, and two press targets stacked
+on a 24px line is a control nobody can hit on purpose. One rule for every block
+instead. The `+` slots are untouched by any of this and still work with edit mode
+off.
+
+**The panel paints through a preview channel and writes the row once, and that
+is a correctness fix rather than a saving.** `ColorPickerField` fires its
+`onChange` on every pointer move, which is right in the studio — `CardDesigner`
+holds a local draft and nothing leaves the page until Save. This panel had no
+draft, so a one-second drag on the colour area became thirty to sixty concurrent
+PATCHes; replies do not land in the order they were sent, `onSuccess` merges
+whichever lands last, and the card walked backwards and forwards between colours.
+It was worse than a flicker, because the next patch was computed from the cache:
+a stale reply became the base for the following write and was *saved*. So the
+picture and the record are two channels. `PlaceCard` holds a `preview` — keyed on
+the place id, like `openPanel`, so an uncommitted edit cannot be drawn over the
+next pin clicked — which feeds `CardView`'s existing `blockOverrides` and
+repaints under the pointer with no network at all, the same channel a shape drag
+paints through. `useDeferredOverrides` holds the record: one PATCH on a 400ms
+trailing timer, flushed by Done and by unmount, which is every other way out
+(Escape, a click outside, the map's `movestart`, the edit-mode toggle). **The
+base a patch is applied to is the preview and never `place.cardBlocks`**, which
+is the half of the fix that stops a revert being persisted. Its `mutateAsync`
+is deliberate: Query runs a `mutate` call's own callbacks only while the observer
+still has listeners, and every exit unmounts this one, so an `onSettled` written
+there would never fire and the preview would stand for ever over a row that may
+not have saved.
+
+`useUpdatePlace` carries ``scope: { id: `places:${mapId}` }`` underneath that,
+which serialises every place PATCH for one map instead of letting them race. The
+debounce decides how often we write; the scope decides what happens when two
+writes overlap anyway. **It is a behaviour change for every caller** — the pin
+drag included, which had the same latent bug and hit it far more rarely.
+
+Three smaller things about the panel, each a real bug rather than a nicety. The
+pencil badge is `min(1.125rem, 100%)` on both axes, because the block's box is
+`overflow-hidden` and a one-line block is shorter than a fixed 18px square — the
+address row clipped it. The popover is a **bounded, clipping flex column**, so
+React Aria's own computed `maxHeight` reaches the form's scroller: the cap used
+to be a `dvh` on an element inside the dialog and `.popover` has no `overflow` of
+its own, so a tall panel overflowed a body-level absolutely positioned element
+and gave the *whole page* a scrollbar that came and went with it. And the panel
+is **24rem, the width the studio documents**, with `overflow-x-hidden` written
+out beside `overflow-y-auto` — a lone `overflow-y: auto` leaves the other axis
+`visible`, which computes to `auto`, so a one-axis scroller quietly gets both.
+
+**The panel is not inside the block it edits, and that is what makes it hold
+still.** It began as a `Popover.Root` in `CardEditTarget`, which put a portalled
+dialog inside the one element on the card that the panel's own controls can
+move — and it failed two ways at once, both measured in the browser rather than
+argued. It **chased the block**: React Aria positions from the trigger and
+watches it with a `ResizeObserver`, so dragging a Button's Width control walked
+the pencil along the block's corner and the panel after it. And it **closed and
+reopened on every press**: `cardRows` gives a block at 100% its own line and
+anything narrower a shared row, and `CardView` draws those through *different DOM
+parents*, so crossing that threshold reparents the block, React unmounts the
+subtree, and the open dialog goes with it — `openPanel` still named the block, so
+a fresh one mounted open. Between 75% and 100% that fired every time.
+
+So `PlaceCard` owns the panel (`BlockEditorPopover`), the badge is a trigger and
+nothing else, and the popover is anchored to the **card** by an explicit
+`triggerRef` — the fix `TagPicker` already documents for the milder version of
+the same failure, taken one step further because here the trigger does not merely
+change shape, it unmounts. Verified: one popover rect, unchanged across eight
+width changes, and zero `[role=dialog]` additions or removals across four
+crossings of the 100% boundary. The trade is that the panel points at the card
+rather than at the block, and stays put while you move between blocks; it is also
+deliberately **not keyed on the block**, so a change still on its 400ms timer
+rides into the next block's PATCH instead of being flushed by an unmount. It is a
+**standalone `Popover.Content`** with no `Popover.Root` above it, which React Aria
+supports outright — `Popover` takes its own state whenever `isOpen` is passed and
+`Overlay` sets `restoreFocus` itself. A `Popover.Root` is `DialogTrigger`, whose
+whole job is binding a trigger three components away inside the card, and with no
+pressable child it logs a `PressResponder` warning on every open. What that costs
+is HeroUI's slot classes, passed explicitly from `popoverVariants()`.
+
+**The gallery's badge is the one that leaves the corner**, because the gallery is
+the one block that reaches the card's own chrome: `PlaceCardChrome` draws the
+close X at `top-1.5 right-1.5` at `z-10`, over the card rather than in it, so the
+badge underneath it was not merely overlapped but unpressable —
+`elementFromPoint` at its own centre answered "Close". It moves two ways, because
+an empty gallery has neither of the other corners free: with a picture the middle
+is clear, and with none the middle belongs to the dashed `+` that adds one while
+the corner is still the X, so the badge goes to the bottom. `.card-edit-target`
+is a one-cell grid and all three placements are one `place-items` declaration, so
+there is no second set of insets to keep in step. `CardView` is what knows a block
+is drawing a `+`, which is why `renderOverlay` is handed that fact rather than
+guessing at it. Every other block keeps the corner, where nothing is in its way.
+
+**A `PropertyCheckbox` is a label above its box, and `PropertyChecks` stacks
+them one per line.** Asked for directly, and applied in the studio too rather
+than only in the card menu: both panels draw the same `BlockProperties`, and a
+control that looks different depending on which opened it is two controls. It is
+also what fixed the Hours panel, whose three checks sat three across — 7rem a
+column against "Full day names" — and pushed the panel wider than itself. A row
+is as wide as its label plus its box with no way to give any of it back; stacked,
+the label wraps and the control is 16px whatever it is called. `PropertyChoice`
+truncates rather than overflowing for the same reason, since five tiles reading
+None / Tight / Regular / Roomy / Wide are about 300px of text with no wrap in
+them.
+
+**The mark has corners now**, `logoRadius`, absent meaning the square the logo
+`<img>` has always drawn (§7). Percentages rather than pixels — 12% and 50% —
+because a logo block is squared by `blockBox` and its size is a percentage of a
+card the owner can resize, so one number is the same corner at every size, and
+there is no custom property to define in two stylesheets and drift.
+`logoRadiusOf` is the single resolver both renderers ask, beside `logoImageOf`;
+it answers nothing for a pin, which is drawn from paths and is already its own
+shape. A wide wordmark under **Round** loses its ends, because the image is
+letterboxed rather than cropped — a real cost, offered rather than guessed at.
+
+**It cost the embed its last 204 bytes, and the budget was met by trimming rather
+than raising it.** The first version merged all three zones into a new layout per
+popup and came in 60 bytes over; `overrideBlock` answers a block at a time, which
+is all either renderer needs, and `mergeCardBlocks` — which `buildSnapshot` still
+wants, because clamping is a question about the whole card — tree-shakes out of
+the bundle entirely. Our own code now sits **exactly on** the 42KB line with no
+headroom at all, so the next thing to reach `/embed` or `/packages/shared` trips
+it. `embed/src/popup.test.ts` is the first test to live under `/embed`
+(`vitest.config.mts` was widened by one line to find it) and is what stands
+between the twin renderers and a silent regression: a bug here does not look like
+a bug, it looks like a card drawn correctly for the wrong location.
+
+**The pin picker pages rather than scrolls.** `PinField` was a bare
+`overflow-x-auto` row — a native scrollbar under a row of pictures, which is the
+one control in the Edit location dialog you had to discover by dragging. It is
+`CarouselTrack` at `columns={4}` now, the same control the pin studio's library
+and field rows already use, with the chevrons *beside* the track: an overlaid
+arrow on a four-up row covers a quarter of what is being looked at.
+
+**No tag chip carries a colour dot.** `TagDot` is gone, and with it the swatch on
+every chip in the picker's dropdown, the Locations filter menu and the bulk-tag
+menu. Each of those is a *control*, and pressed-or-not is the one thing it has to
+communicate; the accent that says "on" is itself a colour, so eight palette
+colours were answering at the same volume. A tag's colour belongs where "which
+pin is this?" is asked — the card, the list row — and where it is being edited,
+in Settings → Filters.
+
+**A tag group is a thing you create, and the picker never said so.** The dropdown
+shows group names as `<legend>`s and offers only "+ New tag", so the groups read
+as a second, uncreatable vocabulary — which is exactly the "categories" a user
+reported being unable to add to, on a map whose own first group happens to be
+*named* Categories. The fix is one muted line under the groups naming Settings →
+Filters, and a real **Add group** button in that panel's empty state, which said
+"Add a group" and rendered nothing to press. Deliberately *not* a group picker in
+the quick-add: asking which question a tag answers, mid-way through filling in a
+location, is a concept lesson at the wrong moment.
+
+**The card's X and Edit buttons lost their tooltips.** They borrowed them from
+`IconButton`, whose tooltip earns its place on a toolbar full of glyphs nobody
+has a prior for. A cross and a pencil in the corner of a card are the two most
+over-learned icons on the web, and a bubble saying "Close" covers the card to
+explain the card. The labels stay in `aria-label`.
+
+**"Copy to every day" is gone from the hours field**, on request. Worth knowing
+what went with it: it appeared only once a first day was filled in, so it moved
+the legend row as you typed, and it overwrote all seven days including ones
+already set — one press that silently discarded a Sunday, with no undo. Copying a
+row at a time is the shape to reach for if it comes back.
+
+**A button's Label could not hold a space, and the fix was to stop normalising
+mid-typing.** `resizeCardBlock` ran `.replace(/\s+/g, " ").trim()` on
+`patch.buttonLabel`, borrowed from `readBlock`'s `text()` on the sound argument
+that an emptied box should read as unset immediately. But `PropertyText` is a
+controlled input reading its value back off the block and the designer commits
+every keystroke — and a space typed while composing is always a *trailing* space
+at that instant, so `Book now` came out `Booknow`. The blank test stays and the
+normalisation goes; `readBlock` still collapses and trims on the way in, which is
+the moment a stored label is read.
+
+
+**The Publish tab is the map designer, and the whole of what a visitor sees is
+one JSON column.** It was five stacked panels in a 672px `Measure` column — a box
+explaining publishing, a box explaining the preview, the snippet, five switches,
+a domain list — with the preview itself *narrower than the embed's own 640px
+container query*, so the results panel a visitor gets beside the map stacked
+underneath it instead. The owner was looking at a layout their customers would
+never see. It is now one column of controls and one map, edge to edge — and the
+column **stands where the app nav does on every other page**: `hidesAppNav` in
+`lib/layout/app-nav.ts` returns true for this route and `Sidebar` returns null,
+so `components/publish/design-sidebar/` takes that 15rem and the map gets
+everything else. Which is why the page has no `Container` either: a column meant
+to read as the nav's replacement cannot sit inside `py-6`. The consequence is
+that the back link in the sidebar's header is the only way out, so it is
+structure rather than decoration.
+
+**That reversed the breakpoint from `xl` back to `lg`, and both numbers were
+measured.** The embed decides its own shape with a container query at 640px *of
+its own width*, and under it the results panel stacks below the map. The two-pane
+row first went to `xl` because the nav plus a right-hand column left the frame
+about 400px at `lg` — the preview drew the phone layout, the Side and Placement
+controls appeared to do nothing, and the page taught the opposite of what it is
+for. With the nav gone, 1024 minus 320 leaves 704px, which clears it; below `lg`
+the page stacks and the map takes the full width, clearing it by more.
+
+**This page has no `loading.tsx`, and that is the fix for a real complaint rather
+than an omission.** It had one, whose layout strings were copied verbatim from
+`publish-panel.tsx` on the sound argument that a skeleton at the wrong size moves
+the page when the real thing swaps in. What it produced was worse than a move.
+Measured across a real navigation from the editor: one commit at t+0 in which the
+app nav unmounts, `main` jumps 240px to the left, and **eight `animate-pulse` grey
+boxes** take the whole viewport — then, 550ms later, a second commit replacing all
+of it. Two large grey states for one click, which is what "the publish page
+blinks" was. With no loading boundary the router awaits the payload instead, the
+editor stays on screen, and the nav's removal and the designer's arrival land in
+the same paint. The click is still acknowledged, because `SidebarNavItem` already
+renders a `useLinkStatus()` spinner inside the `<Link>` and the pathname — and so
+the nav — is still there for the whole pending phase. Re-measured after: no frame
+anywhere in the navigation has an `animate-pulse` in it. `SidebarMapNav` is the
+only link to this route, so nothing else needed an affordance.
+
+**Nothing in the panel is a checkbox, and the reason is the same one the card
+designer gives for keeping them.** A checkbox is a property of a draft that does
+not leave the page until Save, which is what `BlockProperties` is; everything
+here repaints the map under the pointer, which is what a switch is. Most of them
+are not even one switch — the four fields a result row can draw and the four
+MapLibre controls are each *one* question with four parts, so they are one line
+of icon tiles (`PropertyToggles`, a multi-select `ToggleButtonGroup`) rather than
+four labelled two-line controls stacked down a 20rem column. `PropertySwitch` is
+for the handful whose label is a sentence and cannot become a glyph — "Show the
+results panel", "Zoom with the scroll wheel".
+
+**A five-tile scale is illegible at this width, and the fix is per control rather
+than a rule.** Five words across 20rem is about 60px each, so Width and
+Transparency became `PropertyNumberSelect` (`SelectControl` with the string
+boundary done once) and Blur and Pin size dropped to three stops. Corners, Side,
+Placement and the controls corner stayed tiles, because **a tile that draws the
+thing it is choosing costs no label width at all** — the argument
+`PropertyChoice` already makes. Narrowing a scale is safe on designs that already
+exist: `nearestStop` lights the closest remaining tile and writes nothing.
+
+**The Search placeholder and Nearest label are deleted, not hidden.** Wording is
+not what anyone opens this panel to change, and the pair cost two full-width text
+boxes in a column where every other control is one line. Gone from the schema,
+from `SnapshotSettings` and from the embed's `createSearchField` and
+`createNearestButton` — §7 does not apply, because those fields never reached a
+published snapshot.
+
+**Embed code and Allowed domains are a dialog, not a fold.** Both are read once
+each — when the snippet is first pasted, when a domain is locked down — against
+controls somebody adjusts for as long as they are on the page, and a 20rem column
+made the snippet a code block scrolled sideways a word at a time.
+`components/publish/share-dialog/` is a `Modal` holding both forms unchanged;
+only their container was ever wrong.
+
+**Everything the designer writes is optional on `SnapshotSettings`, and absent
+means what the embed did before that field existed.** That is §7, and the
+asymmetry it forces is the thing to understand before adding a setting:
+`DEFAULT_EMBED_SETTINGS` in `lib/validation/embed-settings.schema.ts` is what a
+map *publishes* and carries the current design (panel right, floating, pins in
+the rows, controls top-left); the **embed** reads a missing key as the old
+behaviour (panel docked left, no pins, controls top-right). Changing a default
+changes what the next publish writes and can never change what a live customer
+site already renders. `readEmbedSettings` resolves one fully-populated object
+that feeds both the controls and `buildSnapshot`, so the panel and the published
+map cannot disagree about an unset field — and it is the **only** writer of
+`settings`, because that column is one blob `updateMap` serialises whole and two
+forms writing it are the lost update §6 records. `EmbedSettingsForm` was deleted
+rather than left beside it.
+
+`useEmbedDesign` holds a draft and PATCHes on a 400ms trailing timer, flushed on
+unmount. Not a saving: `ColorPickerField` fires `onChange` per pointer move, so a
+one-second drag is thirty concurrent writes of one blob, replies land out of
+order, and the last to arrive is what sticks. **The base a write applies to is
+the draft and never `map.settings`** — that half is what stops a late reply
+becoming the base for the next write and persisting a colour the owner has
+already moved off. Measured in the browser: five changes in 300ms produce one
+PATCH. The hook lives in `publish-panel.tsx` rather than in the sidebar, because
+the preview reads the same draft — a preview reading the saved row would lag
+every press by that timer.
+
+**The preview does not rebuild itself for most of what the designer changes, and
+that is the difference between a customizer and a slideshow.** `EmbedPreview`
+keyed its `srcdoc` on the whole snapshot, so every press threw the document away:
+a new MapLibre instance, a new WebGL context, a new tile fetch, and the camera
+back at the map's saved view. Dragging a colour did that thirty times a second.
+It blinked, it moved, and it got *worse the longer the page stayed open*, because
+browsers cap live WebGL contexts and the churn was unbounded.
+
+So there are two channels, the same split the card block panel makes between a
+picture and a record.
+
+The **live** one is possible at all because a `srcdoc` frame inherits this
+document's origin, so its DOM is simply reachable: `lib/preview/live-chrome.ts`
+writes the embed's own custom properties straight onto the running map's root.
+That covers the panel's width, transparency, blur and corners, the row pin size
+and all five colours — every control a pointer drags. **Drift is prevented by
+construction rather than by discipline**: the table is `chromeVars` in
+`packages/shared/embed-chrome.ts`, which `applyChrome` in `embed/src/index.ts`
+also calls, so the preview cannot recolour one set of tokens while publishing
+writes another. A property that becomes `undefined` is *removed*, not skipped, or
+clearing a colour would do nothing.
+
+The **rebuild** one is for the discrete presses — panel on/off, side, placement,
+the row fields, the map controls, clustering, scroll zoom. `rebuildKey` is the
+snapshot with `CHROME_SETTING_KEYS` stripped out, and it is what the `srcdoc`
+effect depends on. Two things make what is left of it invisible. There are **two
+iframes**, and the replacement is built in the standby one and revealed only on
+its `load` — assigning `srcdoc` blanks a frame the instant it is set, so the
+outgoing document stays on screen until then and is released immediately after,
+which also bounds the live GPU contexts at two. And the **camera is carried
+over**: `MapHandle.getView()` plus `root.lmMap = map` in `mount()` is the only
+seam a parent document has, and without it every structural press threw the owner
+back to the map's saved view.
+
+**Arriving on the page was the one path none of that covered, and it built four
+documents.** "It blinks several times before it initialises" was a separate bug
+from the one above, in the same file, and it was mostly one line. React inserts
+both iframes with no `src` and no `srcdoc`, which queues a `load` for each
+frame's own initial `about:blank` — and that load is delivered *after* the mount
+effect has already assigned a real document. `handleLoad` guards frame A with
+`index !== standby.current` and had nothing guarding frame B, which is the frame
+every navigation goes to, so the blank load cleared `navigating` while the real
+one was still in flight and `flush` immediately assigned `srcdoc` again — the
+one-navigation-at-a-time invariant that ref exists for, broken on every single
+mount. A document we build always carries `script[data-snapshot]`, so `got ===
+null` means "not ours" and is now simply ignored while a navigation is in the
+air. Nothing deadlocks behind that: with no navigation ever aborted, every
+assignment fires exactly one `load`.
+
+Three smaller ones went with it, and two are StrictMode. `builtFor` holds the
+`rebuildKey` the effect last minted a blob for, so the double-invoked mount pass
+flushes instead of building a second document. The unmount cleanup skips a blob
+that is still `wanted` or `showing` — React 19 *simulates* an unmount between
+those two passes, so it was revoking the URL the first document was on its way to
+fetching, which the embed answers by warning, returning, and never setting
+`data-lm-ready`: a white box that `awaitReady` reveals anyway two seconds later.
+And `useCardDesign` now takes its `initialData` from the page's own
+`Promise.all`, because it was the one *legitimate* extra rebuild — the first
+document was built against the default card and thrown away when the account's
+real one landed.
+
+The fourth is the crossfade, which was inert on the one load that needed it. The
+rule it works by is written in globals.css — *both frames are opaque and the
+outgoing one is still underneath* — and at mount that is false, because frame A
+has never held a document. So it faded a blank white frame in over the frame
+where the document was actually being built. `reveal` is `null` until something
+has drawn, an opaque cover stands in for the missing outgoing document, and the
+first arrival does not animate at all, having nothing to cross from. **Measured
+in the browser: one `srcdoc` assignment on a cold load, against the four traced
+before.** A chrome control still costs zero and a structural press still costs
+exactly one.
+
+**The results panel got the visual pass it never had**, on request, and one line
+of it was a real bug: `.lm-list__row` is a `<button>` and `.lm-list__actions` is
+its *sibling*, so the hover ground stopped above the Directions and phone links
+and they read as belonging to something else. It is `.lm-list__item:hover` now,
+which is why `--on` has to be more specific rather than merely later. With it:
+the links became small outlined pills instead of `#1c7ed6` underlined text — a
+hardcoded blue that ignored the owner's own accent, and the single thing making a
+designed panel read as an undesigned web page — the name and address got a type
+scale and a two-line clamp, the docked toolbar's field takes a foreground tint
+rather than `--lm-surface` (a *solid* colour, so a field painted with it on a
+translucent floating panel was an opaque patch in a see-through box), and the
+selected row wears an inset bar because a 10% tint over a basemap is invisible.
+The whole pass cost 0.1KB: the dead `.lm-list__tag` rules and the two deleted
+text settings paid for it.
+
+**The tag filter chips are gone from the embed, and that one is not free.** The
+bundle is shared, so a map published with chips loses them on the next deploy of
+`/embed` without its owner republishing — the one place §7 is not honoured, taken
+deliberately. Every label they offered is in `buildSearchIndex`, so nothing
+became unfindable, and the row's tag dot went with them because the pin at the
+head of the row now answers "which of these is on the map?" better than a label
+did. `settings.filters` stays in the type because published snapshots carry it;
+nothing reads it.
+
+**A results row's pin is a canvas, and that is the third renderer of one
+geometry.** Not `pinSvg()` — it returns a string for `innerHTML`, and
+`embed/src/dom.ts` sets none anywhere on purpose. Not a `data:` URI on an `<img>`
+either: `pin-raster.ts` documents that a host CSP restricting `img-src` blocks
+that outright and invisibly. So `drawPin` returns its canvas now, `pinCanvas`
+caches one per `pinImageId(icon, color)`, and a row copies it with `drawImage` —
+no fetch, no CSP surface, and one drawing shared by a hundred rows. A logo pin
+cannot be drawn synchronously, so it is its body alone until
+`registerPinImageBitmaps` fills the cache in and the next redraw picks it up.
+
+**Adding a MapLibre control is nearly free and that is a fact about the build.**
+`maplibre-gl` is `external` in `embed/vite.config.mts`, so its dist files ship
+whole whether a map names `FullscreenControl` or not — what a switch costs is the
+line that reads it. Attribution is the one control with no switch (§12), and
+there is no traffic or satellite toggle because both are metered feeds in the
+visitor's path (§2).
+
 **Exactly one element in the editor has a real height, and everything below it depends on that.** From `<body>` down to the locations list, every step of the layout is `min-h-*` or `flex-1` — a floor or a ratio, never a ceiling — and a percentage flex-basis against an indefinite parent resolves to `content`. So the panel's `overflow-y: auto` sat on a box that always grew to fit: adding a location scrolled the *page* rather than the list, and stretched the map taller on the way. `lg:h-[calc(100dvh-3rem)]` on the editor row in `map-editor.tsx` is the one definite height, and the 3rem is `Container`'s own `py-6` — at `lg` there is nothing else above it, since `MobileHeader` is `md:hidden` and `PageTitle` is `sr-only`. Below `lg` the row stacks and the panel caps itself at `max-h-[60dvh]` instead. `app/(dashboard)/maps/[id]/(editor)/loading.tsx` repeats all three strings verbatim and has to keep doing so. The panel scrolls with no visible scrollbar because `ScrollShadow` already had `hideScrollBar`; that was never the missing piece.
 
 A real scroller then created a gap the growing one hid: a drop target can now be off screen, and the drag deliberately `preventDefault`s every `pointermove` so it will never scroll there by itself. `lib/map/edge-autoscroll.ts` pulls the container when the pointer nears an edge — in `lib/` because, like `drop-action.ts`, it is the part of the gesture decidable without a pointer, and so the part worth testing. The same file's arrival is why rows are `touch-action: pan-y` rather than `none` — `none` gave every finger swipe to the drag, which was survivable only while the page scrolled instead. Touch now decides by stillness: movement first is a scroll and the gesture is dropped, 250ms of stillness starts a drag. That ordering is not cosmetic. The browser commits to a pan once the finger travels and ignores `preventDefault` after that, so a drag has to begin from a finger that has not moved, which is the only moment the gesture is still ours to claim.
+
+**That pull had no horizontal bound, and the card designer is where it showed.**
+`update` took a `clientY` and nothing else, so the band was not a band but an
+infinite horizontal strip: anything above `rect.top + 56` counted as "at the top
+edge" of a panel the pointer might be nowhere near. A block dragged out of the
+Blocks palette and across the card — which is the whole gesture, since the drop
+target is never in the palette — sat inside that strip the entire time, and the
+palette scrolled out from under it at up to 14px a frame. `update` takes an
+optional `clientX` now and gives up when the pointer is outside the container's
+own left and right; optional so the nine existing calls in
+`edge-autoscroll.test.ts` still pass **unmodified**, which is what says the
+vertical behaviour did not move. The Locations list had the same bug against the
+map beside it and is fixed by the same line.
+
+The palette also simply stops scrolling while a block is in the air
+(`DesignerTabPanel`), because a wheel can still move it and a panel that shifts
+mid-drag re-aims the drop at a row nobody chose. An **inline** `overflow-y:
+hidden`, since it has to beat both HeroUI's `.scroll-shadow--vertical` and the
+element's own `lg:overflow-y-auto`, and a media-query rule wins on source order
+however the class list is written — and `hidden` rather than `clip`, which would
+make the box a non-scroll-container, drop `scrollTop` to 0 and jump the palette
+under the user's hand.
 
 **Page width is three choices, not seven.** `Container` is `content` (unbounded — the map editor, which needs every pixel), `centered` (`max-w-5xl`, the locations table: things you read and fill in), or `narrow`. `Measure` is still the left-aligned readable column *inside* a full-width page. Switching between a map and its Locations tab does step sideways, and that is accepted rather than overlooked — the alternative was a full-width table or a narrower map. Every `loading.tsx` must pass the same `size` as its page, or the skeleton swap moves.
 
@@ -651,7 +1332,7 @@ Tests are `vitest` (`vitest.config.mts`), unit only, `lib/**/*.test.ts` and `pac
 - **MapLibre's worker must be told where it lives.** MapLibre v6 derives its worker URL from `import.meta.url`, bails to `""` when that isn't an http(s) URL (which it isn't under Turbopack), and then constructs `new Worker("")` — loading the HTML page as the worker script. The worker never replies, and because vector tiles are fetched *inside* the worker, every map renders as an empty background with **no error in the console**. `scripts/copy-maplibre-worker.mjs` (via `predev`/`prebuild`) copies the worker into `public/maplibre/`, and `lib/map/worker.ts` sets `config.WORKER_URL`. A blank basemap? Check `public/maplibre/` exists before anything else.
 - **The embed is an ES module, and that is forced.** MapLibre v6 ships ESM only — no UMD, no CSP build. So the snippet is `<script type="module">`, `document.currentScript` is always null (the boot code finds its script tag by `[data-snapshot]` instead), and both `/embed` and `/maplibre` need CORS headers, because module scripts and MapLibre's cross-origin worker blob are both CORS fetches. `next.config.ts` sets them.
 - **MapLibre is external to the embed bundle, deliberately.** Bundling it inlines `maplibre-gl-shared.mjs`, and the worker then downloads its own copy of the same 131KB chunk — measured at 424KB gzipped total. Shipping MapLibre's dist files beside `map.js` lets the main thread and the worker share one URL: 314.5KB. Don't "simplify" this by removing `external` from `embed/vite.config.mts`.
-- **§4's 250KB budget is not reachable and the check knows it.** MapLibre v6 alone is 273.2KB gzipped. `scripts/check-embed-size.mjs` therefore budgets *our* code (42KB, currently 41.3KB) and puts a 320KB ceiling on the total to catch the duplication regression above. See §4.
+- **§4's 250KB budget is not reachable and the check knows it.** MapLibre v6 alone is 273.2KB gzipped. `scripts/check-embed-size.mjs` therefore budgets *our* code (46KB, currently **42.7KB**) and puts a 320KB ceiling on the total to catch the duplication regression above. See §4.
 - **Snapshots are written twice per publish.** An immutable timestamped archive, plus one live file at a fixed id that the embed actually reads. The embed's URL has to be stable across republishes or every customer would re-paste their snippet, and §2 forbids asking us which snapshot is current. `lib/snapshot/storage.ts` explains the delete-then-create window and why the embed retries once.
 - Vendored skills in `.agents/skills/`, pinned by `skills-lock.json`: `heroui-react`, `appwrite-typescript`, `next-cache-components-optimizer`. Use them instead of recalling API shapes.
 
@@ -763,7 +1444,9 @@ The embed must **never** import React, HeroUI, Motion, TanStack Query, Zustand, 
 
 Target: **under 250KB gzipped including MapLibre.** If a change pushes it over, flag it.
 
-**Measured, that target is unreachable with MapLibre v6** — its own dist files are 273.2KB gzipped (`maplibre-gl.mjs` 136.4 + `maplibre-gl-shared.mjs` 131.0 + the worker 5.8), minified already, with no slim build. Actual total is **314.5KB**, of which ours is 41.3KB. `npm run build:embed` enforces a 42KB budget on our code and a 320KB ceiling on the total; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 41.3KB.
+**Measured, that target is unreachable with MapLibre v6** — its own dist files are 273.2KB gzipped (`maplibre-gl.mjs` 136.4 + `maplibre-gl-shared.mjs` 131.0 + the worker 5.8), minified already, with no slim build. Actual total is **315.9KB**, of which ours is 42.7KB. `npm run build:embed` enforces a 46KB budget on our code and a 320KB ceiling on the total; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 42.7KB.
+
+**The own-code budget was raised from 42KB to 46KB for the map designer**, and that is the second and last time it should happen casually. It was at *exactly* 43,008 of 43,008 bytes — passing only because the check compares with `>` — and the designer needed a floating panel, a pin per results row and a dozen settings reads. Two things made 46 honest rather than a shrug: the **total**, which is what §4 actually protects and what a visitor downloads, had the room (315.9KB against the 320KB ceiling); and it was part-paid by deleting the tag filter chips rather than borrowed whole. The reasoning is written out in `scripts/check-embed-size.mjs`. Do not raise it again to get past a binding budget — it exists to catch the MapLibre duplication regression above, and a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam.
 
 `/packages/shared` is the **only** directory both targets may import from. `@/lib`, `@/components` and `@/app` are closed to the embed, and `eslint.config.mjs` enforces both halves of that.
 
@@ -817,6 +1500,8 @@ Use plain `lat` / `lng` doubles, **not** spatial Point columns. Spatial types ex
 ### `maps`
 `userId` · `name` · `slug` (unique) · `style` · `defaultLat` · `defaultLng` · `defaultZoom` · `tagGroups` (JSON) · `fields` (JSON) · `pinIcons` (JSON) · `settings` (JSON) · `appearance` (JSON) · `allowedDomains` (string[]) · `publishedAt` · `snapshotUrl` · ~~`categories`~~ (JSON, retired)
 
+`settings` is the whole map designer: which of the embed's optional controls exist, the results panel's side, placement, width, transparency, blur and corners, what a results row draws, which of MapLibre's own controls are on the map and in which corner, and the embed's five colour tokens. Every field beyond the original booleans is optional in `SnapshotSettings` and absent means what the embed did before it existed — see §0. One writer only (`useEmbedDesign`), because the column is one JSON blob written whole.
+
 `tagGroups` is the map's whole filter vocabulary: `[{id, label, tags: [{id, label, color}]}]`. It absorbed `categories`, which is left in place holding nothing — see §0. Do not drop a column with data in it.
 
 `appearance` is the label level and the layer toggles. Its own column rather than another key
@@ -828,7 +1513,17 @@ from one list, and moving it would orphan every map already saved. It is a `varc
 theme keys stay short.
 
 ### `places`
-`mapId` · `name` · `lat` · `lng` · `address` · `tags` (string[]) · `fields?` (JSON) · `icon?` · `groupId?` · `description?` · `phone?` · `email?` · `url?` · `hours?` (JSON) · `photoId?` · `sortOrder` · `geocodeConfidence?` · `geocodeStatus` (`ok` | `low` | `failed` | `manual`) · ~~`category`~~ (retired)
+`mapId` · `name` · `lat` · `lng` · `address` · `tags` (string[]) · `fields?` (JSON) · `icon?` · `groupId?` · `description?` · `phone?` · `email?` · `url?` · `hours?` (JSON) · `photoIds?` (string[]) · `photoId?` (retired) · `logoId?` · `sortOrder` · `geocodeConfidence?` · `geocodeStatus` (`ok` | `low` | `failed` | `manual`) · ~~`category`~~ (retired) · `cardBlocks?` (JSON)
+
+`cardBlocks` is how *this* location's card differs from the account's design:
+`{ [blockId]: CardBlock }`, a whole resolved block per entry rather than a diff
+— see §0. It can change what a block *is* and nothing else; which blocks a card
+has, where they sit and in what order stay in `cardDesigns`, one row per account.
+
+`logoId` is this location's own brand mark, as a storage file id — not the image
+on the map's custom pin, which is `pinIcons` and is shared by every location
+wearing it. A file rather than an inline data URI because a snapshot names it by
+URL; see §0.
 
 **`tags` is ordered and the order means something**: the first tag is what colours the pin. Nothing may sort it on the way to storage or to a snapshot.
 

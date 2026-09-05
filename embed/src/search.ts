@@ -12,7 +12,7 @@ import type { Gazetteer, GazetteerHit } from "./gazetteer";
  * What the text filter reads, and how the query is prepared.
  *
  * Re-exported rather than reimplemented, the way ./geo.ts re-exports the
- * distance maths and ./filters.ts re-exports the tag rule: the composing lives
+ * distance maths: the composing lives
  * in /packages/shared because that is the only side of the boundary vitest can
  * reach, and the rest of the embed still imports its searching from one place.
  */
@@ -93,7 +93,19 @@ export function createSearchField({
   list.setAttribute("role", "listbox");
   list.hidden = true;
 
-  wrapper.append(label, input, list);
+  /*
+   * Inside the field, at the end of it.
+   *
+   * A magnifier is what makes a bordered box read as a search box rather than a
+   * text input, and at the end rather than the start because the placeholder is
+   * a sentence: a leading glyph pushes it far enough right that a narrow panel
+   * truncates it. `pointer-events: none` in the stylesheet keeps the whole
+   * field clickable through it — it is a picture, not a button.
+   */
+  const glyph = icon(["M21 21l-4.3-4.3", "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16"]);
+  glyph.classList.add("lm-search__icon");
+
+  wrapper.append(label, input, glyph, list);
 
   let hits: GazetteerHit[] = [];
   let active = -1;

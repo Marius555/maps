@@ -22,6 +22,19 @@ export const PHOTO_KEYS = [
   "photoUrl",
 ] as const satisfies readonly (keyof Place)[];
 
+/**
+ * The fields the logo endpoint owns, on the same terms — a logo is uploaded
+ * rather than patched, so it has no schema either.
+ *
+ * Its own list rather than two more entries on `PHOTO_KEYS`: the two endpoints
+ * write different columns, and a reply from one must not be allowed to write
+ * back the other's. That is the whole reason these lists are narrow.
+ */
+export const LOGO_KEYS = [
+  "logoId",
+  "logoUrl",
+] as const satisfies readonly (keyof Place)[];
+
 /** The keys a PATCH body actually carried — the only ones it may write back. */
 export function patchedKeys(input: UpdatePlaceInput): PatchableKey[] {
   return Object.keys(input) as PatchableKey[];

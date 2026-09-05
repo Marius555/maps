@@ -80,10 +80,14 @@ const TRANSPARENT = "#00000000";
  */
 const DEFAULT_FALLBACK = "#3d7ea6";
 
+/** What the trigger says for a colour nobody has set. See `labelPlacement`. */
+const UNSET_LABEL = "Default";
+
 export function ColorPickerField({
   label,
   value,
   fallback = DEFAULT_FALLBACK,
+  labelPlacement = "inside",
   onChange,
   onClear,
 }: {
@@ -92,6 +96,23 @@ export function ColorPickerField({
   value: string;
   /** What the wheel opens on when nothing is set. See `DEFAULT_FALLBACK`. */
   fallback?: string;
+  /**
+   * Where the field's name goes, and it is a question about the column around
+   * it rather than about this control.
+   *
+   * `inside` is the original and stays the default: the publish designer's
+   * Colours fold is five of these and nothing else, so a name beside each
+   * swatch is a tidy list and a stack of labels above them would be twice the
+   * height for no more information.
+   *
+   * `outside` is for a column of *mixed* controls, which is every panel in the
+   * card designer. Everything else there is a label above a full-width control,
+   * and a label-inside field spends none of the 6px between the two — so at one
+   * shared `space-y-3` a colour read as crowded against whatever sat above it.
+   * One shape, one gap. The trigger then says the value instead, since a swatch
+   * alone in a full-width bar is a lot of nothing.
+   */
+  labelPlacement?: "inside" | "outside";
   onChange: (hex: string) => void;
   /** Offered only when there is something to clear — see above. */
   onClear?: () => void;
@@ -120,7 +141,7 @@ export function ColorPickerField({
     if (hexOf(draft) !== value.toLowerCase()) setDraft(toHsb(value, fallback));
   }
 
-  return (
+  const field = (
     /*
      * The positioning context for the reset — see the docblock. The × is a
      * sibling of the picker and drawn over it, not a child of the trigger.
@@ -150,7 +171,10 @@ export function ColorPickerField({
          */}
         {/* `pe-9` is the room the reset sits in, kept whether or not there is
             one — see the docblock. */}
-        <ColorPicker.Trigger className="w-full gap-2 rounded-lg bg-default py-2 pe-9 ps-2.5">
+        <ColorPicker.Trigger
+          aria-label={labelPlacement === "outside" ? label : undefined}
+          className="w-full gap-2 rounded-lg bg-default py-2 pe-9 ps-2.5"
+        >
           {/*
            * The stored colour, not the fallback the wheel opens on — a swatch
            * showing grey for "not set" would be a colour nobody picked
@@ -180,7 +204,20 @@ export function ColorPickerField({
           <span aria-hidden="true" className="flex">
             <ColorSwatch color={value || TRANSPARENT} size="xs" />
           </span>
-          <Label className="cursor-[inherit] truncate">{label}</Label>
+          {labelPlacement === "inside" ? (
+            <Label className="cursor-[inherit] truncate">{label}</Label>
+          ) : (
+            /* The label is above, so the trigger says the value — and it needs
+               an accessible name of its own, since the `Label` that was giving
+               it one is no longer inside it. */
+            <span className="truncate text-sm">
+              {value ? (
+                <span className="tabular-nums">{value}</span>
+              ) : (
+                <span className="text-muted">{UNSET_LABEL}</span>
+              )}
+            </span>
+          )}
         </ColorPicker.Trigger>
 
         <ColorPicker.Popover>
@@ -236,6 +273,17 @@ export function ColorPickerField({
           />
         </span>
       ) : null}
+    </div>
+  );
+
+  if (labelPlacement === "inside") return field;
+
+  // The same `flex flex-col gap-1.5` every label-above control in
+  // components/ui/properties/ uses, so a colour lands on their rhythm exactly.
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <Label>{label}</Label>
+      {field}
     </div>
   );
 }

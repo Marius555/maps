@@ -1,15 +1,19 @@
 "use client";
 
 import { ColorPickerField } from "@/components/ui/color-picker-field";
-import type { CardBlock } from "@/packages/shared/card-layout";
+import type {
+  CardBlock,
+  CardButtonHover,
+} from "@/packages/shared/card-layout";
 import type { BlockPatch } from "./block-properties";
+import { SelectControl } from "@/components/ui/select-control";
 import { ButtonPresets } from "./button-presets";
 import {
   PropertyCheckbox,
   PropertyChecks,
-  PropertyChoice,
   PropertyScale,
-} from "./property-fields";
+} from "@/components/ui/properties/property-fields";
+import { PropertyNumberSelect } from "@/components/ui/properties/property-select";
 import {
   BORDER_WIDTHS,
   BUTTON_ROOM,
@@ -81,6 +85,9 @@ export function ButtonStyleProperties({
       <ColorPickerField
         label="Background"
         value={block.buttonBackground ?? ""}
+        // Label above, so both colours sit on the rhythm of the selects under
+        // them — see `labelPlacement`.
+        labelPlacement="outside"
         // The accent, which is what an unstyled button already draws, so the
         // wheel opens on roughly what is on screen rather than on a colour
         // nobody has seen.
@@ -102,6 +109,7 @@ export function ButtonStyleProperties({
       <ColorPickerField
         label="Border colour"
         value={block.buttonBorder ?? ""}
+        labelPlacement="outside"
         fallback={BUTTON_PICKER_START}
         onChange={(buttonBorder) => onChange({ buttonBorder })}
         onClear={() => onChange({ buttonBorder: "" })}
@@ -122,7 +130,7 @@ export function ButtonStyleProperties({
        * button's own label colour, which is a colour the owner can already see
        * and which follows the theme; see `CardBlock.buttonBorder`.
        */}
-      <PropertyScale
+      <PropertyNumberSelect
         label="Border width"
         value={block.buttonBorderWidth ?? 0}
         options={BORDER_WIDTHS}
@@ -142,20 +150,32 @@ export function ButtonStyleProperties({
           than it is, not specifying a box from scratch. It is also a different
           question from the block's own Padding above — that holds the button
           off its neighbours, this holds the label off the button's edge. */}
-      <PropertyScale
+      <PropertyNumberSelect
         label="Roominess"
         value={block.buttonPadding ?? 0}
         options={BUTTON_ROOM}
         onChange={(buttonPadding) => onChange({ buttonPadding })}
       />
 
-      <PropertyChoice
+      {/* A select rather than four tiles: "Lighten" is wider than the ~51px a
+          quarter of this column leaves, so the row clipped the one option whose
+          name is the only thing distinguishing it from "Lift". */}
+      <SelectControl
+        variant="secondary"
         label="Hover"
         value={block.buttonHover ?? "darken"}
-        options={HOVER_OPTIONS}
-        onChange={(buttonHover) => onChange({ buttonHover })}
+        options={HOVER_OPTIONS.map((option) => ({
+          id: option.value,
+          label: option.label,
+        }))}
+        onChange={(buttonHover) =>
+          onChange({ buttonHover: buttonHover as CardButtonHover })
+        }
       />
 
+      {/* Last in the fold, which is where every lone checkbox in this panel
+          now sits — a boolean interrupting a run of fields is what "checkboxes
+          sprinkled all over" was. */}
       <PropertyChecks>
         <PropertyCheckbox
           label="Full width"

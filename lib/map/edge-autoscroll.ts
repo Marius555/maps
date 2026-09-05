@@ -27,8 +27,14 @@ const BAND = 56;
 const MAX_SPEED = 14;
 
 export type EdgeAutoScroll = {
-  /** Latest pointer position, in viewport coordinates. */
-  update: (clientY: number) => void;
+  /**
+   * Latest pointer position, in viewport coordinates.
+   *
+   * `clientX` is optional because the vertical band is the whole of the
+   * behaviour and every existing caller only had a y — but a pull that ignores
+   * x is a real bug rather than a simplification. See `update` below.
+   */
+  update: (clientY: number, clientX?: number) => void;
   stop: () => void;
 };
 
@@ -87,8 +93,26 @@ export function startEdgeAutoScroll(container: HTMLElement): EdgeAutoScroll {
   };
 
   return {
-    update: (clientY) => {
+    update: (clientY, clientX) => {
       const rect = container.getBoundingClientRect();
+
+      /*
+       * A pointer that is not over this container is not near its edge.
+       *
+       * Without this the band is an infinite horizontal strip: the card
+       * designer's palette drags *out* of the panel and across the card, and
+       * anything held above `rect.top + BAND` — most of the upper half of the
+       * window — read as "at the top edge" and pulled the panel out from under
+       * the drag. The Locations list has the same shape of bug against the map
+       * beside it.
+       *
+       * Undefined means "not told", which stays the old behaviour rather than
+       * silently freezing a caller that has not been updated.
+       */
+      if (clientX !== undefined && (clientX < rect.left || clientX > rect.right)) {
+        velocity = 0;
+        return;
+      }
 
       // Proportional to how far into the band the pointer is, so easing towards
       // the edge eases the scroll — a fixed speed makes the list feel like it is

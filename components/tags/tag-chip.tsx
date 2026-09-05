@@ -35,34 +35,25 @@ import { Chip } from "@heroui/react";
  * components/ui/inline-select.tsx already documents).
  */
 
-/**
- * The tag's colour, as the mark that sits inside a chip.
+/*
+ * **No chip in this file carries the tag's colour, and that is the rule rather
+ * than an omission.**
  *
- * Deliberately the same dot `card-block.tsx` draws, so the dialog and the
- * location card agree about what a tag looks like. That file is not refactored
- * to import this one: it is rendered beside the real embed bundle in the preview
- * panel, and nothing here has a reason to go near that parity.
+ * Every one of them is a *control* — a toggle in the picker and the filter menu,
+ * a one-shot action in the bulk menu — and pressed-or-not is the single thing it
+ * has to communicate. A row of eight palette colours competes with that state
+ * for the same edge, and the result reads as a row of bubbles nobody asked for
+ * rather than as a set of buttons: the accent that says "on" is itself a colour,
+ * so the two are answering at the same volume.
  *
- * A tag with no colour draws no dot rather than a grey one — "Untagged" is the
- * absence of every answer, not an answer with a dull colour.
+ * A tag's colour answers a different question — *which pin is this?* — and it is
+ * drawn where that question is asked: on the card and the list row, beside the
+ * thing wearing it (`TagChips` in components/card/card-block.tsx, which likewise
+ * draws no dot), and in Settings → Filters, where the colour is the thing being
+ * edited rather than a decoration on something else.
+ *
+ * This used to be a `TagDot`, rendered by both chips below.
  */
-export function TagDot({
-  color,
-  className = "",
-}: {
-  color?: string;
-  className?: string;
-}) {
-  if (!color) return null;
-
-  return (
-    <span
-      aria-hidden="true"
-      className={`size-2 shrink-0 rounded-full ring-1 ring-black/10 ${className}`}
-      style={{ backgroundColor: color }}
-    />
-  );
-}
 
 /**
  * A tag as a toggle: a chip-shaped `<label>` over a real, screen-reader-only
@@ -81,7 +72,6 @@ export function TagDot({
  */
 export function TagToggleChip({
   label,
-  color,
   isOn,
   isDisabled = false,
   inputType = "checkbox",
@@ -89,7 +79,6 @@ export function TagToggleChip({
   onToggle,
 }: {
   label: string;
-  color?: string;
   isOn: boolean;
   isDisabled?: boolean;
   inputType?: "checkbox" | "radio";
@@ -115,7 +104,6 @@ export function TagToggleChip({
         disabled={isDisabled}
         onChange={onToggle}
       />
-      <TagDot color={color} />
       <Chip.Label className="truncate">{label}</Chip.Label>
     </Chip>
   );
@@ -133,11 +121,9 @@ export function TagToggleChip({
  */
 export function TagActionChip({
   label,
-  color,
   onClick,
 }: {
   label: string;
-  color?: string;
   onClick: () => void;
 }) {
   return (
@@ -148,7 +134,6 @@ export function TagActionChip({
       className="cursor-pointer transition-colors hover:bg-default-hover focus-visible:inset-ring-2 focus-visible:inset-ring-focus"
       render={(props) => <button type="button" {...props} onClick={onClick} />}
     >
-      <TagDot color={color} />
       <Chip.Label className="truncate">{label}</Chip.Label>
     </Chip>
   );

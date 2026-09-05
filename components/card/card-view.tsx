@@ -12,6 +12,7 @@ import {
 import type { MapField, Place } from "@/lib/repositories/types";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import type { TagChip } from "@/packages/shared/tags";
+import { overrideBlock, type CardBlockOverrides } from "@/packages/shared/card-overrides";
 import { CardBlockContent, hasBlockContent, type CardBlockData } from "./card-block";
 import {
   CardFrame,
@@ -39,7 +40,11 @@ export function CardView({
   pinIcons,
   className,
   renderEmptyState,
+  renderSlot,
+  blockOverrides,
+  renderOverlay,
   children,
+  ref,
 }: {
   layout: CardLayout;
   place: Place;
@@ -62,8 +67,67 @@ export function CardView({
    * A visitor gets the card as it stands.
    */
   renderEmptyState?: () => React.ReactNode;
+  /**
+   * What to draw *instead of* a block whose content this location has not filled
+   * in — the dashed slot with a `+` in it, on the editor's own card.
+   *
+   * Returning null (which is the common answer, for every block that did draw)
+   * leaves the block exactly as it was, so a card whose caller passes nothing is
+   * byte-for-byte the card it drew before this existed. The seam is here rather
+   * than inside `CardBlockContent` because the slot has to sit in the block's
+   * own box, at the block's own size and position — that is the whole promise:
+   * filling one in moves nothing else on the card.
+   *
+   * Editor-only, for `renderEmptyState`'s reason one level down. The embed
+   * passes nothing: "add opening hours" is not a sentence a visitor to a
+   * customer's site can act on, and the machinery behind it — a PATCH, a tag
+   * vocabulary, a photo upload — is the dashboard's (CLAUDE.md §2, §4).
+   */
+  renderSlot?: (block: CardBlock) => React.ReactNode;
+  /**
+   * How *this* location's card differs from the design, keyed by block id.
+   *
+   * Applied before anything else reads a block, because a width or an overlap
+   * decides how blocks pair into lines -- see `overrideBlock`. Absent, and for
+   * the overwhelming majority of locations that have singled nothing out, every
+   * block is the design's own and this card is byte-for-byte the card it drew
+   * before any of this existed.
+   */
+  blockOverrides?: CardBlockOverrides | null;
+  /**
+   * What to draw *over* a block, on top of whatever it already shows -- the
+   * hover outline and the pencil that open its menu in edit mode.
+   *
+   * **An overlay, where `renderSlot` is a replacement**, and the two differ for
+   * a reason rather than by accident. A slot's whole job is to *be* the content
+   * of a block that has none, so it takes the block's own box and the block
+   * draws nothing else. An editor's job is the opposite: the content has to stay
+   * on screen, because what is being edited is what you are looking at. So this
+   * renders beside the content rather than instead of it, inside the same box so
+   * it inherits the block's size and position without knowing either.
+   *
+   * It is told whether the block is drawing a slot, which is the one thing
+   * about the block that only this component knows: `renderSlot` is asked here
+   * and its answer decides the box's whole content, so an overlay that has to
+   * keep clear of a centred `+` cannot work it out for itself.
+   *
+   * Editor-only, on `renderSlot`'s terms one level down: the embed passes
+   * nothing and has no idea it exists (CLAUDE.md §2, §4).
+   */
+  renderOverlay?: (block: CardBlock, hasSlot: boolean) => React.ReactNode;
   /** Chrome outside the layout — the close button, the Edit footer. */
   children?: React.ReactNode;
+  /**
+   * The card's own box.
+   *
+   * Editor-only in practice, and `PlaceCard` is what wants it: the per-pin
+   * block editor is a portalled popover anchored to *this* element rather than
+   * to the pencil that opened it, because a block crossing 100% width changes
+   * its DOM parent and takes anything inside it with it. The card cannot move
+   * for any edit made in that panel, which is the whole property being bought.
+   * `CardFrame` has always taken one, for the designer's drop geometry.
+   */
+  ref?: React.Ref<HTMLDivElement>;
 }) {
   const data: CardBlockData = {
     place,
@@ -74,50 +138,59 @@ export function CardView({
   };
 
   /**
-   * The zones that will actually draw something, worked out before any of them
+   * The zones this layout puts blocks in, worked out before any of them
    * renders.
    *
    * Needed up front because the card's vertical padding belongs to the first
    * and last of *these*, not to the zones named top and bottom — see
    * `zoneClass` in card-frame.tsx for the bug that came of confusing the two.
+   *
+   * A fact about the *layout* rather than about this location, which it did not
+   * used to be: it asked which zones had something to draw, so the same design
+   * moved its padding around from pin to pin. Nothing is dropped per location
+   * any more (see `renderZone`), so the two questions have the same answer for
+   * every location on the map — which is the whole point.
    */
-  const filled = CARD_ZONES.filter((zone) =>
-    layout.zones[zone].some((block) => hasBlockContent(block.type, data, block)),
-  );
+  const filled = CARD_ZONES.filter((zone) => layout.zones[zone].length > 0);
 
   const renderZone = (zone: CardZone) => {
     /*
-     * Only the blocks this location actually fills in.
+     * **Every block the layout names, whether or not this location filled it
+     * in.** A card is the design its owner arranged, and a block that vanished
+     * on a half-filled location took the blocks under it up the card with it —
+     * so the same saved design drew a different card on every pin, at positions
+     * the studio had never shown anybody.
      *
-     * A block that draws nothing is not free: it still pays its own padding and
-     * still takes a gap after it, so a location with no photo and no hours would
-     * open a card with two mystery bands in it. The embed gets this for free —
-     * `buildPopup` appends a wrapper only once its builder has returned a node —
-     * and this is the same subtraction, made before rendering because React
-     * renders children afterwards and cannot be asked.
-     *
-     * The designer's canvas deliberately does *not* do this: an empty block
-     * there has to stay visible, selectable and draggable, or half the palette
-     * would vanish the moment it landed.
+     * What an empty block draws is nothing: an empty box, its own padding, the
+     * gap after it, and its designed height if it has one. That is exactly what
+     * the designer's canvas has always drawn for a block the sample location
+     * left blank, which is what makes the two agree. `hasBlockContent` is still
+     * asked — it decides the floor an empty box gets (`card-block--empty`) and
+     * it still answers `isBare` below — it just no longer decides whether a
+     * block exists.
      */
-    const blocks = layout.zones[zone].filter((block) =>
-      hasBlockContent(block.type, data, block),
+    /*
+     * Each one as *this* location draws it -- see `blockOverrides`.
+     *
+     * Here rather than anywhere further down, because everything below reads a
+     * block: `cardRows` pairs on widths, `blockStyle` and `blockEdges` size and
+     * space them, and `hasBlockContent` decides whether the box holds its floor.
+     * Overriding after any of those would draw a card the pairing never agreed
+     * to. `overrideBlock` returns the design's own block untouched for every
+     * location that has singled nothing out, which is nearly all of them.
+     */
+    const blocks = layout.zones[zone].map((block) =>
+      overrideBlock(block, blockOverrides),
     );
 
-    // An empty zone is not an empty box — it would still pay its own padding,
-    // which on a location with no photo is a stray gap above the name.
-    if (blocks.length === 0) return null;
-
     /*
-     * Paired *after* the filter, which is the whole ordering rule.
+     * Paired over the layout, which is what the designer pairs over.
      *
-     * `cardRows` is a pure function of the list it is handed, so pairing what
-     * this location actually shows means a card whose Category block is blank
-     * lets the Name and the Address pair up instead of leaving a hole where the
-     * category would have been. It also means a pair can come out as a lone
-     * half, and a lone half stays half: promoting it to full width would make
-     * the same saved design draw at two different sizes on two locations, and
-     * the owner can see neither state in the studio.
+     * It used to pair over the survivors, so an untagged location closed the
+     * hole where its chips would have been and let the Name and the Address
+     * either side share a line. That was the right call while blocks could
+     * vanish and is the wrong one now: the lines a real card draws are the
+     * lines the studio drew, on every location alike.
      */
     const rows = cardRows(blocks, layout);
 
@@ -128,41 +201,78 @@ export function CardView({
      * instead made a logo's overlap switch on and off as its line-mates came and
      * went — see `upwardLiftOf` in packages/shared/card-layout.ts.
      */
-    const blockView = (block: CardBlock, row: CardRow, onRow: boolean) => (
-      <div
-        key={block.id}
-        style={{
-          ...blockStyle(block, layout, onRow),
-          ...blockEdges(
-            block,
-            layout,
-            zone,
-            row.index === 0,
-            row.end === blocks.length,
-            onRow,
-          ),
-        }}
-        // overflow-hidden for the same reason DesignerBlock's own content
-        // box has it: a narrowed block's image must clip to its own box
-        // rather than poke past it. Cheap insurance here specifically,
-        // since nothing on this read-only path currently rounds a block's
-        // own corners the way the designer's selection state does.
-        className="min-w-0 overflow-hidden"
-      >
-        {/* A second element only because a half shrinks its content and must
-            not shrink its own flex basis with it. It is an empty style object
-            for every other block, so the extra div costs nothing anyone can
-            see. */}
-        <div style={blockContentStyle(block, layout)}>
-          <CardBlockContent block={block} data={data} />
+    const blockView = (block: CardBlock, row: CardRow, onRow: boolean) => {
+      /*
+       * Asked once and read twice: it decides what the block draws *and* where
+       * the editor's badge sits. Calling it again for the second question would
+       * be a second answer waiting to disagree with the first.
+       */
+      const slot = renderSlot?.(block) ?? null;
+
+      return (
+        <div
+          key={block.id}
+          style={{
+            ...blockStyle(block, layout, onRow),
+            ...blockEdges(
+              block,
+              layout,
+              zone,
+              row.index === 0,
+              row.end === blocks.length,
+              onRow,
+            ),
+          }}
+          // overflow-hidden for the same reason DesignerBlock's own content
+          // box has it: a narrowed block's image must clip to its own box
+          // rather than poke past it. Cheap insurance here specifically,
+          // since nothing on this read-only path currently rounds a block's
+          // own corners the way the designer's selection state does.
+          className="min-w-0 overflow-hidden"
+        >
+          {/* A second element only because a half shrinks its content and must
+              not shrink its own flex basis with it. It is an empty style object
+              for every other block, so the extra div costs nothing anyone can
+              see.
+
+              `card-block--empty` is the floor an empty block holds, and it is on
+              *this* element rather than on the box above deliberately: the embed
+              applies its own copy to the innermost node too, and a floor measured
+              from the content is one number both can use. On the box it would
+              have to know the block's padding as well, since a `min-height` on a
+              border-box element covers it. */}
+          <div
+            className={`relative ${
+              hasBlockContent(block.type, data, block) ? "" : "card-block--empty"
+            }`}
+            style={blockContentStyle(block, layout)}
+          >
+            {/* The slot, when this location left the block empty and the caller
+                offers one — see `renderSlot`. `??` and not a ternary: a caller
+                that offers nothing, and a block that is filled in, are the same
+                answer here and both draw the block. */}
+            {slot ?? <CardBlockContent block={block} data={data} />}
+
+            {/* The editor's hover target, over whatever the block just drew --
+                see `renderOverlay`. Null for every caller that offers none, and
+                for every block when edit mode is off, so the DOM below is
+                untouched for all of them.
+
+                Told whether it is drawn over a slot, because that is the one
+                thing only this function knows and the overlay has to move for:
+                a `+` owns the whole box, so the badge goes back to the corner
+                rather than landing on its glyph. */}
+            {renderOverlay?.(block, slot !== null)}
+          </div>
         </div>
-      </div>
-    );
+      );
+    };
 
     return (
       <CardZoneBox
         key={zone}
         zone={zone}
+        hasBlocks={blocks.length > 0}
         padTop={zone === filled[0]}
         padBottom={zone === filled[filled.length - 1]}
       >
@@ -206,6 +316,12 @@ export function CardView({
    * thing now, so counting one as content and not the other would give the same
    * half-filled location two different answers depending on which block its
    * owner's layout happens to name.
+   *
+   * And `gallery`, which is a newer exception and a necessary one: it reports
+   * content unconditionally now, because the band holds its place and draws a
+   * plain fill when there is no picture (see `hasBlockContent`). Without it here
+   * a card with a photo block on it is never bare, and a location holding
+   * nothing but its name silently loses the one line telling its owner so.
    */
   const isBare = !CARD_ZONES.some((zone) =>
     layout.zones[zone].some(
@@ -213,12 +329,18 @@ export function CardView({
         block.type !== "name" &&
         block.type !== "category" &&
         block.type !== "tags" &&
+        block.type !== "gallery" &&
         hasBlockContent(block.type, data, block),
     ),
   );
 
   return (
-    <CardFrame layout={layout} className={className} renderZone={renderZone}>
+    <CardFrame
+      ref={ref}
+      layout={layout}
+      className={className}
+      renderZone={renderZone}
+    >
       {isBare ? renderEmptyState?.() : null}
       {children}
     </CardFrame>

@@ -329,10 +329,11 @@ export function CardDesigner({
    *
    * Both are facts about the sample rather than about the design, which is why
    * they are worked out here — this is the only component that knows which
-   * location the canvas is drawing. `logoHasImage` is what stops the Logo
-   * block's "Logo" button being a control that silently does nothing on a
-   * location whose pin carries a glyph; the panel says which case it is instead
-   * (`LogoProperties`).
+   * location the canvas is drawing. `logoHasImage` is what lets the Logo panel
+   * say which case a mark drawing nothing is in — a location whose pin carries a
+   * glyph and which has uploaded no logo of its own — rather than leaving an
+   * empty block unexplained (`LogoProperties`). The sample itself goes down too,
+   * because that panel can upload one.
    */
   const tagChips = useMemo(
     () =>
@@ -402,6 +403,8 @@ export function CardDesigner({
             // and its height is the height the strip matches.
             cardWidth={draft.width}
             cardHeight={draft.maxHeight}
+            // Absent is opaque, here as everywhere else it is read.
+            isTranslucent={(draft.backgroundOpacity ?? 100) < 100}
             onBackdropClick={() => setSelectedId(null)}
             onRemove={onRemove}
           >
@@ -489,6 +492,8 @@ export function CardDesigner({
                 layout={draft}
                 selectedId={selectedId}
                 logoHasImage={logoHasImage}
+                logoSample={sample}
+                mapId={initialMap.id}
                 fields={initialMap.fields}
                 chipPreview={chipPreview}
                 onChipPreview={setChipPreview}

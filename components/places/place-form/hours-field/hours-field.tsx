@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, FieldError, Label } from "@heroui/react";
+import { FieldError, Label } from "@heroui/react";
 
 import {
   DAY_LABELS,
@@ -14,10 +14,14 @@ import { HoursDayRow } from "./hours-day-row";
 /**
  * Opening hours for one location: seven rows, Monday first.
  *
- * "Copy to every day" earns its place. Most of the 40–500 locations this product
- * is for keep the same weekday hours, and without it the common case is fourteen
- * time entries per location — enough friction that people would leave the field
- * empty instead, which is the outcome that makes the published map worse.
+ * There was a "Copy to every day" button beside the legend, on the argument that
+ * most of the 40–500 locations this product is for keep the same weekday hours
+ * and fourteen time entries per location is enough friction to leave the field
+ * empty. It was removed on request. Worth knowing what went with it: it appeared
+ * only once a first day was filled in, so it moved the legend row as you typed,
+ * and it overwrote all seven days including the ones already set — a single
+ * press that silently discarded a Sunday somebody had just entered, with no
+ * undo. Copying a row at a time is the shape to reach for if it comes back.
  */
 export function HoursField({
   value,
@@ -29,7 +33,6 @@ export function HoursField({
   onChange: (value: OpeningHours) => void;
 }) {
   const hours = value ?? emptyHours();
-  const firstOpen = hours.find((day): day is NonNullable<DayHours> => day !== null);
 
   const setDay = (index: number, day: DayHours) => {
     const next = [...hours];
@@ -39,19 +42,7 @@ export function HoursField({
 
   return (
     <fieldset className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <Label elementType="legend">Opening hours</Label>
-
-        {firstOpen ? (
-          <Button
-            size="sm"
-            variant="tertiary"
-            onPress={() => onChange(hours.map(() => ({ ...firstOpen })))}
-          >
-            Copy to every day
-          </Button>
-        ) : null}
-      </div>
+      <Label elementType="legend">Opening hours</Label>
 
       <div className="space-y-1">
         {DAY_LABELS.map((label, index) => (

@@ -4,7 +4,6 @@ import { Button, toast } from "@heroui/react";
 import { Copy } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
-import { SectionPanel } from "@/components/ui/section-panel";
 import { embedScriptUrl, embedSnippet } from "@/lib/embed/snippet";
 
 /**
@@ -48,22 +47,33 @@ export function EmbedSnippet({ snapshotUrl }: { snapshotUrl: string }) {
     }
   };
 
+  /*
+   * No `SectionPanel` around this any more: it is folded into the design
+   * sidebar, where the disclosure already carries the heading and a second
+   * bordered box inside a 320px column is a frame around a frame.
+   */
   return (
-    <SectionPanel
-      title="Embed code"
-      description="Paste this into your page where the map should appear. It keeps working after you publish again — you only paste it once."
-      footer={
-        <Button variant="secondary" onPress={onCopy} isDisabled={!snippet}>
-          <Copy aria-hidden="true" className="size-4" />
-          Copy embed code
-        </Button>
-      }
-    >
+    <div className="space-y-2">
+      <p className="text-pretty text-xs text-muted">
+        Paste this into your page where the map should appear. It keeps working
+        after you publish again — you only paste it once.
+      </p>
+
       <pre className="overflow-x-auto rounded-xl bg-surface-secondary p-3 text-xs text-foreground">
         <code className="whitespace-pre">
           {snippet ?? "Loading the snippet…"}
         </code>
       </pre>
-    </SectionPanel>
+
+      <Button
+        variant="secondary"
+        size="sm"
+        onPress={onCopy}
+        isDisabled={!snippet}
+      >
+        <Copy aria-hidden="true" className="size-4" />
+        Copy embed code
+      </Button>
+    </div>
   );
 }

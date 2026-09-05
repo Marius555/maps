@@ -3,10 +3,12 @@
 import { ScrollShadow } from "@heroui/react";
 import { ChevronsLeft } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { IconButton } from "@/components/ui/icon-button";
 import type { AuthUser } from "@/lib/auth/types";
 import { PRODUCT_NAME } from "@/lib/config";
+import { hidesAppNav } from "@/lib/layout/app-nav";
 import { UserMenu } from "../user-menu";
 import { useSidebar } from "./sidebar-context";
 import { SidebarNav } from "./sidebar-nav";
@@ -32,6 +34,15 @@ import { SidebarNav } from "./sidebar-nav";
  */
 export function Sidebar({ user }: { user: AuthUser }) {
   const { isCollapsed, toggleCollapsed } = useSidebar();
+  const pathname = usePathname();
+
+  /*
+   * The publish designer takes this column rather than sitting beside it — see
+   * lib/layout/app-nav.ts. Returning null and not hiding with a class, because
+   * the point is to give the width back: a `hidden` rail still occupies its
+   * place in the flex row at every breakpoint above `md`.
+   */
+  if (hidesAppNav(pathname)) return null;
 
   return (
     <aside

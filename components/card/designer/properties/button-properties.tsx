@@ -11,7 +11,7 @@ import {
   WEBSITE_LABEL,
 } from "@/packages/shared/card-button";
 import type { BlockPatch } from "./block-properties";
-import { PropertyChoice, PropertyText } from "./property-fields";
+import { PropertyChoice, PropertyText } from "@/components/ui/properties/property-fields";
 
 /**
  * What the button does — as opposed to what it looks like, which is the group

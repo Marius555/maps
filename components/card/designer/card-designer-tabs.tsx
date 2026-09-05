@@ -3,6 +3,7 @@
 import { ScrollShadow, Tabs } from "@heroui/react";
 import type { ReactNode } from "react";
 
+import { useRowDragState } from "@/components/groups/row-drag-context";
 import { SectionPanel } from "@/components/ui/section-panel";
 import { useTabSwipe } from "./use-tab-swipe";
 
@@ -98,7 +99,11 @@ export function CardDesignerTabs({
           <Tabs.ListContainer>
             <Tabs.List aria-label="Card designer">
               <Tabs.Tab id="elements">
-                Elements
+                {/* The word the panel header uses, not a second one for the
+                    same thing: the strip said "Elements" directly under a
+                    heading that said "Blocks". The key stays `elements`, which
+                    is a `DesignerTab` several components deep. */}
+                Blocks
                 {isDirty ? <UnsavedDot /> : null}
                 <Tabs.Indicator />
               </Tabs.Tab>
@@ -190,6 +195,28 @@ function UnsavedDot() {
  *
  * `mt-0` cancels HeroUI's `.tabs__panel` margin, which assumed the strip was
  * directly above it. It is in the header now, one rule up.
+ *
+ * **It stops scrolling while a palette block is in the air**, and both halves of
+ * that are deliberate. A block is dragged *out* of this panel and across the
+ * card, so there is nothing in here for the gesture to reach — the scroll is
+ * never wanted and is only ever the panel moving out from under the pointer.
+ * `edge-autoscroll` used to cause it directly and no longer can, but the wheel
+ * and the trackpad still can, and a palette that shifts mid-drag re-aims the
+ * drop at a row nobody chose.
+ *
+ * **An inline style rather than a class**, because it has to beat both HeroUI's
+ * own `.scroll-shadow--vertical { overflow-y: auto }` and the `lg:overflow-y-auto`
+ * on this very element — a media-query rule wins on source order however the
+ * class list is written.
+ *
+ * **`hidden` and never `clip`**: `clip` makes the box a non-scroll-container,
+ * which drops `scrollTop` to 0 and jumps the palette under the user's hand at
+ * the exact moment they are aiming.
+ *
+ * It also disarms the autoscroll a second way, for free: `setDragged` and the
+ * source row's own drag state commit together, and `scrollableAncestor` runs in
+ * the passive effect after that commit — so it reads `overflow-y: hidden` here
+ * and returns null, and the frame loop is never started.
  */
 function DesignerTabPanel({
   id,
@@ -206,6 +233,13 @@ function DesignerTabPanel({
   swipeProps: ReturnType<typeof useTabSwipe>;
   children: ReactNode;
 }) {
+  // `card-new` is a block from the palette; `card-block` is one already on the
+  // card, whose drag belongs to the canvas and has no business freezing this.
+  // The context's default is a working no-op, so this stays usable with no
+  // `RowDragProvider` above it.
+  const { dragged } = useRowDragState();
+  const isFrozen = dragged?.type === "card-new";
+
   return (
     <Tabs.Panel
       id={id}
@@ -216,6 +250,11 @@ function DesignerTabPanel({
         size={24}
         className="lg:min-h-0 lg:flex-1 lg:overflow-x-hidden lg:overflow-y-auto"
         {...swipeProps}
+        style={
+          isFrozen
+            ? { ...swipeProps.style, overflowY: "hidden" }
+            : swipeProps.style
+        }
       >
         {children}
       </ScrollShadow>

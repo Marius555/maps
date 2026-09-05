@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { AUTO_STYLE, BASEMAP_SOURCES, CONCRETE_MAP_STYLES } from "@/lib/map/style";
 import type { AppMap, Place, Shape } from "@/lib/repositories/types";
+import { DEFAULT_EMBED_SETTINGS } from "@/lib/validation/embed-settings.schema";
 import { defaultCardLayout, type CardLayout } from "@/packages/shared/card-layout";
 import { emptyHours } from "@/packages/shared/hours";
 import { buildSnapshot } from "./build";
@@ -52,10 +53,13 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     photoIds: [],
     photoUrls: [],
     photoUrl: null,
+    logoId: null,
+    logoUrl: null,
     sortOrder: 0,
     geocodeConfidence: null,
     addressParts: null,
     groupId: "",
+    cardBlocks: {},
     geocodeStatus: "ok",
     createdAt: GENERATED_AT,
     updatedAt: GENERATED_AT,
@@ -221,6 +225,88 @@ describe("buildSnapshot", () => {
     expect(snapshot.cardLayout?.zones.top[0].heightPct).toBe(70);
   });
 
+  /*
+   * A pin whose card was singled out in edit mode.
+   *
+   * The same omit-when-it-changes-nothing rule the card layout follows, one
+   * level down: a map whose owner has never opened edit mode publishes exactly
+   * the bytes it published before any of this existed.
+   */
+  it("omits card overrides for a location that has singled nothing out", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [makePlace()],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.places[0].cardBlocks).toBeUndefined();
+    expect(JSON.stringify(snapshot)).not.toContain("cardBlocks");
+  });
+
+  it("carries a location's own card overrides", () => {
+    const layout = defaultCardLayout();
+    const logo = layout.zones.middle.find((block) => block.type === "logo")
+      ?? layout.zones.top[0];
+
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [makePlace({ cardBlocks: { [logo.id]: { ...logo, padding: 6 } } })],
+      [],
+      GENERATED_AT,
+      undefined,
+      layout,
+    );
+
+    expect(snapshot.places[0].cardBlocks?.[logo.id].padding).toBe(6);
+  });
+
+  /*
+   * Narrowed against the layout being published, exactly as a place's tags are
+   * narrowed against the map's vocabulary. Nothing sweeps an override when its
+   * block is deleted in the studio, so this is where a dangling one stops --
+   * before it reaches a file customer sites read forever (§7).
+   */
+  it("drops an override naming a block the published card no longer has", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [
+        makePlace({
+          cardBlocks: {
+            gone: { id: "gone", type: "logo", padding: 6 },
+          },
+        }),
+      ],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.places[0].cardBlocks).toBeUndefined();
+  });
+
+  /** Clamped on the way out, for `cardLayoutField`'s reason one level down. */
+  it("clamps a stored override before publishing it", () => {
+    const layout = defaultCardLayout();
+    const gallery = layout.zones.top[0];
+
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [
+        makePlace({
+          cardBlocks: {
+            [gallery.id]: { ...gallery, heightPct: 400 },
+          },
+        }),
+      ],
+      [],
+      GENERATED_AT,
+      undefined,
+      layout,
+    );
+
+    expect(snapshot.places[0].cardBlocks?.[gallery.id].heightPct).toBe(70);
+  });
+
   /** A hand-edited console row must not publish nonsense to live sites. */
   it("ignores a stored appearance of the wrong shape", () => {
     const { snapshot } = buildSnapshot(
@@ -265,18 +351,19 @@ describe("buildSnapshot", () => {
     expect(snapshot.theme).toBeUndefined();
   });
 
-  it("defaults every embed control to on when settings were never written", () => {
-    // What every map created before the settings form existed looks like:
+  it("resolves the whole design when settings were never written", () => {
+    // What every map created before the designer existed looks like:
     // `settings: "{}"` at creation and nothing after it.
     const { snapshot } = buildSnapshot(makeMap({ settings: {} }), [], [], GENERATED_AT);
 
-    expect(snapshot.settings).toEqual({
-      clustering: true,
-      search: true,
-      filters: true,
-      nearest: true,
-      list: true,
-    });
+    // Against DEFAULT_EMBED_SETTINGS rather than a second copy of it: this test
+    // is here to prove the resolver runs and publishes a complete answer, not
+    // to restate the design — pinning the numbers would make every change to a
+    // default a change to a test that never disagreed with the code.
+    expect(snapshot.settings).toEqual(DEFAULT_EMBED_SETTINGS);
+    // `filters` is retired: published snapshots still carry it and the type
+    // still names it, but nothing writes one any more.
+    expect(snapshot.settings.filters).toBeUndefined();
   });
 
   it("carries stored embed controls through to the snapshot", () => {
@@ -291,7 +378,7 @@ describe("buildSnapshot", () => {
     expect(snapshot.settings.nearest).toBe(false);
     // Absent keys still fall back rather than becoming undefined.
     expect(snapshot.settings.search).toBe(true);
-    expect(snapshot.settings.filters).toBe(true);
+    expect(snapshot.settings.panelSide).toBe("right");
   });
 
   it("ignores a settings value of the wrong type rather than publishing it", () => {
@@ -607,16 +694,10 @@ describe("buildSnapshot", () => {
     expect(snapshot.places[0].lng).toBe(25.280877);
   });
 
-  it("defaults every embed control to on", () => {
+  it("publishes the default design for a map nobody has designed", () => {
     const { snapshot } = buildSnapshot(makeMap(), [], [], GENERATED_AT);
 
-    expect(snapshot.settings).toEqual({
-      clustering: true,
-      search: true,
-      filters: true,
-      nearest: true,
-      list: true,
-    });
+    expect(snapshot.settings).toEqual(DEFAULT_EMBED_SETTINGS);
   });
 
   it("honours stored settings and ignores values of the wrong type", () => {

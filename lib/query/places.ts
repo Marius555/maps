@@ -128,11 +128,15 @@ export function useCreatePlace(mapId: string) {
         photoIds: [],
         photoUrls: [],
         photoUrl: null,
+        logoId: null,
+        logoUrl: null,
         sortOrder: input.sortOrder ?? 0,
         geocodeConfidence: input.geocodeConfidence ?? null,
         addressParts: input.addressParts ?? null,
         geocodeStatus: input.geocodeStatus ?? "manual",
         groupId: input.groupId ?? "",
+        // A brand-new location has singled nothing out.
+        cardBlocks: {},
         createdAt: now,
         updatedAt: now,
       };
@@ -205,6 +209,31 @@ export function useUpdatePlace(mapId: string) {
   };
 
   return useMutation({
+    /*
+     * One queue per map, rather than every PATCH racing every other.
+     *
+     * Query runs scoped mutations serially: a second one waits for the first to
+     * settle instead of going out beside it. Without it the ordering guarantee
+     * here was only that responses *usually* come back in the order they were
+     * sent, and `onSuccess` merges whichever lands last over whatever the cache
+     * holds — so two writes 300ms apart could leave the earlier one's value on
+     * the row. That is a rare bug on the pin drag and was a constant one on the
+     * per-pin card panel, whose colour controls fire per pointer-move.
+     *
+     * The panel debounces as well (`useDeferredOverrides`), and this is the
+     * layer under it: the debounce decides how *often* we write, and the scope
+     * decides what happens when two writes overlap anyway. Scoped on the map and
+     * not on the place, because that is the granularity of the cache entry every
+     * one of them rewrites.
+     *
+     * It is a behaviour change for every caller: place PATCHes for one map now
+     * queue. They are single small writes and the optimistic patch has already
+     * repainted, so the queue is invisible — but a caller that fires hundreds
+     * without debouncing would now serialise them, which is the correct answer
+     * and worth knowing before writing one.
+     */
+    scope: { id: `places:${mapId}` },
+
     mutationFn: async ({
       placeId,
       input,

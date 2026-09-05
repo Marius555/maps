@@ -7,6 +7,7 @@ import {
   MAX_BLOCK_FONT_SIZE,
   MAX_BLOCK_MARGIN,
   MAX_BLOCK_PADDING,
+  MAX_BUTTON_LABEL,
   DEFAULT_CHIP_BORDER_WIDTH,
   MAX_CHIP_BORDER_WIDTH,
   MAX_CLAMP_LINES,
@@ -2370,5 +2371,63 @@ describe("resizeCardBlock and the block's own options", () => {
     expect(
       patched({ id: "g", type: "gallery" }, { logoMode: "image" }).logoMode,
     ).toBeUndefined();
+  });
+
+  /*
+   * The label is the one free-text control in the whole designer, and the panel
+   * commits it on **every keystroke** into a controlled input that reads its
+   * value straight back off the block. So anything this function does to the
+   * string is done to the box someone is still typing in.
+   */
+  const button: CardBlock = { id: "b", type: "button" };
+
+  it("keeps a space, which is what makes a two-word label typeable at all", () => {
+    // The regression: this trimmed, so the space vanished the instant it was
+    // typed and `Book now` came out `Booknow`.
+    expect(patched(button, { buttonLabel: "Book " }).buttonLabel).toBe("Book ");
+    expect(patched(button, { buttonLabel: "Book now" }).buttonLabel).toBe(
+      "Book now",
+    );
+  });
+
+  it("reads an emptied box as the action's own word back", () => {
+    const labelled = patched(button, { buttonLabel: "Book now" });
+
+    // Whitespace is *tested* rather than written back — a label of spaces is a
+    // button with no words on it, and it unsets now rather than on reload.
+    expect(patched(labelled, { buttonLabel: "   " }).buttonLabel).toBeUndefined();
+    expect(patched(labelled, { buttonLabel: "" }).buttonLabel).toBeUndefined();
+  });
+
+  it("caps a label at the length both renderers will draw", () => {
+    expect(
+      patched(button, { buttonLabel: "x".repeat(MAX_BUTTON_LABEL + 20) })
+        .buttonLabel,
+    ).toHaveLength(MAX_BUTTON_LABEL);
+  });
+
+  it("ignores a label on a block that draws no button", () => {
+    expect(
+      patched({ id: "a", type: "address" }, { buttonLabel: "Book now" })
+        .buttonLabel,
+    ).toBeUndefined();
+  });
+});
+
+/**
+ * What a Logo block arrives as.
+ *
+ * Its own assertion because the value is written down on *arrival* rather than
+ * inferred from the absence — absent has to keep meaning the pin, or every card
+ * already published would change what it draws (§7).
+ */
+describe("a new logo block", () => {
+  it("arrives as Mixed", () => {
+    expect(makeCardBlock("logo").logoMode).toBe("mixed");
+  });
+
+  it("leaves every other type without one", () => {
+    expect(makeCardBlock("name").logoMode).toBeUndefined();
+    expect(makeCardBlock("gallery").logoMode).toBeUndefined();
   });
 });

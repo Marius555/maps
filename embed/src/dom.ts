@@ -40,10 +40,15 @@ export function button(className: string, label: string): HTMLButtonElement {
  *
  * `stroke="currentColor"` so a glyph inherits the button's colour and follows
  * the dark theme with no second rule.
+ *
+ * 1.5 rather than lucide's own 2, because these sit at 18px inside a small
+ * control: at that size a 2-unit stroke reads as a heavy blob rather than a
+ * line drawing, and next to the search field's own hairline border it was the
+ * loudest thing in the panel.
  */
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-export function icon(paths: string[]): SVGSVGElement {
+export function icon(paths: string[], strokeWidth = 1.5): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, "svg");
 
   svg.setAttribute("viewBox", "0 0 24 24");
@@ -51,7 +56,7 @@ export function icon(paths: string[]): SVGSVGElement {
   svg.setAttribute("height", "18");
   svg.setAttribute("fill", "none");
   svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-width", String(strokeWidth));
   svg.setAttribute("stroke-linecap", "round");
   svg.setAttribute("stroke-linejoin", "round");
   // The button carries the accessible name; the drawing is decoration.

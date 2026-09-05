@@ -231,6 +231,16 @@ export type CardBlockSpec = {
    * moves (CLAUDE.md §7).
    */
   defaultButtonFull?: true;
+  /**
+   * What a fresh Logo block's Show control is set to.
+   *
+   * One entry, on `defaultButtonFull`'s argument: absent has to keep meaning the
+   * pin so nothing published moves (§7), and "the pin unless this location has a
+   * logo" is what somebody dropping a Logo block onto a card almost always
+   * means. So the value is written down on arrival rather than inferred from the
+   * absence, and only a *new* block gets it.
+   */
+  defaultLogoMode?: "mixed";
 };
 
 /**
@@ -407,9 +417,9 @@ export const CARD_BLOCKS: Record<CardBlockType, CardBlockSpec> = {
      *
      * `align` here moves the *box*, not the words — see `SELF_SIZED`.
      *
-     * `logo` is the one thing about this block that is not a measurement: a pin
-     * carrying an uploaded image can be drawn as that image on its own, without
-     * the body and ring around it. See `logoImageOf`.
+     * `logo` is the one thing about this block that is not a measurement: the
+     * mark can be drawn as this location's own uploaded logo rather than as the
+     * pin, in three ways. See `logoImageOf`.
      */
     controls: ["height", "align", "overlap", "margin", "logo"],
     /*
@@ -422,6 +432,7 @@ export const CARD_BLOCKS: Record<CardBlockType, CardBlockSpec> = {
     maxHeightPct: 40,
     defaultOverlapPct: 50,
     defaultAlign: "center",
+    defaultLogoMode: "mixed",
   },
   name: {
     // Not `bottom`: a card whose heading is the last thing on it reads as a
@@ -1049,15 +1060,41 @@ export type CardBlock = {
    */
   chipBorderWidth?: number;
   /**
-   * Draw the pin's uploaded image on its own, instead of the whole pin. `logo`
-   * blocks only.
+   * Which of its three drawings the mark is. `logo` blocks only.
    *
-   * Spelled as the one non-default value the way `fit` is: **absent is the pin**,
-   * body and ring and glyph, which is what every card drawn before this field
-   * existed draws and what a location with no uploaded logo still gets. See
-   * `logoImageOf`, which is the one place the fallback is decided.
+   * **Absent is the pin** — body, ring and glyph — which is what every card
+   * drawn before this field existed draws, so nothing published moves (§7).
+   *
+   * `"image"` is the logo and only the logo: a location with none draws an empty
+   * block, which on the editor's own card is a `+` inviting one. `"mixed"` is
+   * the logo when this location has one and the pin when it does not, and it is
+   * what a freshly dragged Logo block arrives as — see `defaultLogoMode`.
+   *
+   * The three have to be three *behaviours*, or the middle one is a second word
+   * for something that already exists. See `logoImageOf`, the one place any of
+   * this is decided.
    */
-  logoMode?: "image";
+  logoMode?: "image" | "mixed";
+  /**
+   * How round the mark's corners are. `logo` blocks only.
+   *
+   * **Absent is square**, which is what the logo `<img>` has always drawn —
+   * `h-full w-full object-contain` with no radius at all — so every card
+   * published before this field existed still draws exactly what it drew (§7).
+   * The `logoMode` idiom one field up: the default is the absence, and only the
+   * departures from it have a word.
+   *
+   * Only the *image* reads it. A pin is already a shape of its own, drawn from
+   * paths, and rounding the box around it would clip the body it is drawn as.
+   *
+   * `"round"` is a circle, because a logo block is squared by `blockBox`
+   * (`SELF_SIZED`). The image inside it is letterboxed rather than cropped, which
+   * is deliberate — see the note on `Logo` in components/card/card-block.tsx —
+   * so a wide wordmark under `"round"` has its ends clipped by the circle. That
+   * is the owner's choice to make and the reason there are three answers rather
+   * than a switch.
+   */
+  logoRadius?: "rounded" | "round";
   /**
    * What pressing this button does. `button` blocks only.
    *
@@ -1246,6 +1283,28 @@ export type CardLayout = {
    * trap an unstyled pin ring avoids by staying unset.
    */
   background?: string;
+  /**
+   * How much of that background is actually painted, as a percent.
+   *
+   * **Absent means opaque**, which is every card designed before this existed
+   * and every card nobody has touched — the same promise `background` itself
+   * makes by being absent. Below 100 the ground is mixed towards transparent
+   * and the map shows through, which is what makes a card glass.
+   *
+   * It is a `background-color` with alpha rather than the `opacity` property,
+   * for the reason `.lm-panel` gives about the results panel: `opacity` fades
+   * the text along with the ground, so a see-through card becomes an
+   * unreadable one.
+   */
+  backgroundOpacity?: number;
+  /**
+   * Pixels of blur applied to whatever is behind a see-through card.
+   *
+   * Absent means none, and none is not `blur(0)` — the filter is left off
+   * entirely, because a backdrop root on an element `useMapAnchor` moves by
+   * transform at 60fps is not free.
+   */
+  backdropBlur?: number;
   border?: string;
   borderWidth: number;
   shadow: CardShadow;
@@ -1258,6 +1317,12 @@ const CARD_LIMITS = {
   radius: [0, 28],
   padding: [0, 28],
   gap: [0, 20],
+  /* A percent, so the bounds are the bounds. Zero is a card that is nothing but
+     its text and its border, which is a real — if brave — design. */
+  backgroundOpacity: [0, 100],
+  /* The same ceiling the results panel's own blur has (`panelBlur` in
+     lib/validation/embed-settings.schema.ts). One number for one effect. */
+  backdropBlur: [0, 24],
   borderWidth: [0, 6],
   /*
    * A block's own padding, in pixels.
@@ -1633,6 +1698,14 @@ export function resolveCardLayout(stored: unknown): CardLayout {
     padding,
     gap: clamp(stored.gap, CARD_LIMITS.gap, fallback.gap),
     ...(hex(stored.background) ? { background: hex(stored.background) } : {}),
+    /*
+     * Both dropped when they say what absent already says — an owner who tries
+     * Glass and goes back to Solid publishes the bytes they always did, and
+     * `isDefaultCardLayout` still recognises an untouched card. Same rule as
+     * `usedPinIcons` dropping a pin field left at its default.
+     */
+    ...optional("backgroundOpacity", stored.backgroundOpacity, 100),
+    ...optional("backdropBlur", stored.backdropBlur, 0),
     ...(hex(stored.border) ? { border: hex(stored.border) } : {}),
     borderWidth: clamp(
       stored.borderWidth,
@@ -1898,8 +1971,17 @@ function readBlock(
    * anything else — including the word "pin" somebody might reasonably write —
    * leaves the field absent, which is the pin.
    */
-  if (spec.controls.includes("logo") && raw.logoMode === "image") {
-    block.logoMode = "image";
+  if (spec.controls.includes("logo")) {
+    // Absent, and any word this build does not know, are both the pin — a card
+    // published by a later version and read back by an older one has to draw
+    // *something* rather than throw on a stranger's page.
+    if (raw.logoMode === "image") block.logoMode = "image";
+    else if (raw.logoMode === "mixed") block.logoMode = "mixed";
+
+    // And its corners, on exactly those terms: absent, and any word this build
+    // does not know, are both the square the mark has always been drawn as.
+    if (raw.logoRadius === "rounded") block.logoRadius = "rounded";
+    else if (raw.logoRadius === "round") block.logoRadius = "round";
   }
 
   /*
@@ -2240,6 +2322,14 @@ export type CardBlockBox = {
    * every card has drawn.
    */
   rowGap?: string;
+  /**
+   * How much room to hold for this block when *this location* has filled in
+   * nothing for it, as a length. Absent means one line is enough, which is the
+   * floor every renderer already applies.
+   *
+   * See `emptyBlockHeight`, which is where the numbers and the argument are.
+   */
+  emptyHeight?: string;
 };
 
 /** The four things that can be said about a block's words. All optional. */
@@ -2352,6 +2442,13 @@ export function blockBox(
   /** The block's own type styling, or nothing at all. See `textOf`. */
   const text = textOf(block);
 
+  /*
+   * A block with a real height of its own never consults the floor, so working
+   * one out for it would be a property written for nothing — and, worse, a
+   * second number disagreeing with the first.
+   */
+  const empty = block.heightPct ? 0 : emptyBlockHeight(block);
+
   return {
     // Absent, not "start": an unset alignment has to inherit, or every card
     // drawn before this field existed would have its text re-anchored.
@@ -2436,7 +2533,108 @@ export function blockBox(
     ...(block.hoursRowGap === undefined
       ? {}
       : { rowGap: `${String(block.hoursRowGap)}px` }),
+    /*
+     * What to hold open when this location fills the block in with nothing.
+     *
+     * Emitted from here rather than worked out by each renderer for `blockBox`'s
+     * own reason: the editor's card, the designer's canvas and the embed's popup
+     * all need the same answer, and a block that reserves 24px in one and 154px
+     * in another is the studio lying about what it is building.
+     */
+    ...(empty > 0 ? { emptyHeight: `${String(empty)}px` } : {}),
   };
+}
+
+/**
+ * How tall an empty block has to be so the card keeps the shape its owner
+ * designed.
+ *
+ * **The problem this solves is one number doing eight jobs.** Every block that
+ * this location left blank used to hold exactly one line — a flat `1.5rem` floor
+ * in both stylesheets — and for most blocks that is right, because most of them
+ * draw one line. It is badly wrong for the week: a Hours block with "Only today"
+ * unticked draws a summary row *plus seven days* when it is filled, so on a
+ * location with no opening times the card lost 130px out of its middle and every
+ * block under it moved up into space the studio had never shown anybody. That is
+ * exactly the failure blocks stopped collapsing to fix, reintroduced one level
+ * down.
+ *
+ * So the reservation is the block's own: it reads `hoursOpen`, `hoursRowGap`,
+ * `clampLines`, `chipPadding`, `buttonPadding` and `fontSize`, because those are
+ * what decide how tall the filled block would have been.
+ *
+ * **The numbers below were measured in the browser, not derived.** They are the
+ * heights the leaves actually draw — a HeroUI `Disclosure`'s body padding, a
+ * `.chip--lg`'s minimum, the ring a chip wears — and none of them is reachable
+ * from this file, which has no dependencies by design (CLAUDE.md §4). They sit
+ * here as constants for the same reason `CARD_SHADOWS` is duplicated in
+ * card-frame.tsx: the alternative is each renderer inventing its own.
+ *
+ * Two things about how it is applied. It is the height of the block's
+ * **content**, not of its box — every renderer puts the floor on the content
+ * element, inside whatever padding the block is paying, which is what lets one
+ * number serve all three. And it is deliberately not exact for the embed, whose
+ * week is a `<details>` with its own padding rather than a `Disclosure`: the two
+ * already draw slightly different filled weeks, and one shared approximation
+ * keeps them closer than two exact ones would.
+ *
+ * Zero means "one line is enough", and nothing is written at all — so an
+ * ordinary card emits no new property and is byte-for-byte what it was.
+ */
+export function emptyBlockHeight(block: CardBlock): number {
+  /** This block's own type size, or the `.card-text--*` class default. */
+  const size = block.fontSize;
+  const type = block.type;
+
+  /*
+   * The one case this function exists for.
+   *
+   * A closed week is its summary row and nothing else. An open one is that row
+   * plus the `Disclosure` body's 8px either side, the list's own 4px lead, seven
+   * days and the six gaps between them — `8 * row + 20`, with the days' gap on
+   * top. Measured against a real card, where a filled one comes to 153.9px and
+   * this answers 154.
+   */
+  if (type === "hours") {
+    const row = (size ?? 12) * (4 / 3);
+    if (!block.hoursOpen) return Math.ceil(row);
+
+    return Math.ceil(row * 8 + 20 + 6 * (block.hoursRowGap ?? DEFAULT_HOURS_ROW_GAP));
+  }
+
+  // A clipped paragraph knows how many lines it keeps; an unclipped one could be
+  // any length, so it asks for the one line every block already gets.
+  if (type === "description") {
+    return Math.ceil((size ?? 12) * (4 / 3) * (block.clampLines ?? 1));
+  }
+
+  // A pill, which is taller than the line inside it and has a floor of its own
+  // that the owner's padding only starts to move past 4px.
+  if (type === "tags" || type === "category") {
+    return Math.max(33, 25 + 2 * (block.chipPadding ?? 0));
+  }
+
+  // One link row: 11px small print on `py-0.5`.
+  if (type === "actions") return Math.ceil((size ?? 11) * 1.5) + 4;
+
+  // The button's own box — its 6px of standing padding either side, the owner's
+  // on top, and the outline if it has one.
+  if (type === "button") {
+    return Math.ceil(
+      2 * (6 + (block.buttonPadding ?? 0) + (block.buttonBorderWidth ?? 0)) +
+        1.25 * (size ?? 12),
+    );
+  }
+
+  /*
+   * Nothing, meaning one line is enough.
+   *
+   * `gallery` and `logo` carry a `heightPct`, so `blockBox` gives them a real
+   * height and never consults the floor. `name` and `address` are one line,
+   * which is what an unset reservation already means. `divider` and `spacer` are
+   * shapes rather than content and are never empty. `details` is retired.
+   */
+  return 0;
 }
 
 /**
@@ -2585,31 +2783,69 @@ export function buttonStyleOf(block: CardBlock): CardButtonStyle | undefined {
 }
 
 /**
- * What a Logo block actually draws: an uploaded image, or nothing — meaning the
- * pin.
+ * What a Logo block actually draws: an image, or nothing — meaning the pin.
  *
  * `chipStyleOf`'s sibling, and here for its reason: the studio, the editor's own
  * popup and the embed all draw this block, and three copies of "is this a logo
  * or a pin" is how the preview panel ends up showing a pin beside a logo on one
  * screen.
  *
- * **The fallback is the whole function.** A location whose pin carries a glyph
- * rather than an uploaded image has no logo to draw, and a Logo block that went
- * blank for it would be a design that works on the location it was made against
- * and silently empties on the other four hundred. So asking for the image is
- * asking for it *if there is one*, and the pin is what a card gets otherwise —
- * which is also what every card drew before this field existed (CLAUDE.md §7).
+ * **Two images, and the location's own wins.** `logo` is this location's uploaded
+ * brand mark (`Place.logoUrl`, a storage URL). `pinImage` is the image on the
+ * *map's* custom pin, which is what this block drew before locations could carry
+ * their own — shared by every location wearing that pin, so it is the weaker
+ * answer and the fallback rather than the first choice. Both are still honoured,
+ * which is what keeps a card designed against a pin logo drawing one.
  *
- * Takes the already-resolved image string rather than the pin, so this file
- * stays free of a `pin-icons` import: the two renderers have both resolved the
- * pin by the time they ask.
+ * **The three modes are three behaviours, and `"image"` no longer falls back to
+ * the pin.** It used to, on the argument that a Logo block going blank is a
+ * design that works on the location it was made against and empties on the other
+ * four hundred. That argument is now `"mixed"`'s, which is what a new block
+ * arrives as. Strict `"image"` is what makes the empty case *visible*: an empty
+ * block, which on the editor's card is a `+` offering the upload (`cardSlotOf`)
+ * and on a visitor's card is the space the owner designed. A card saved as
+ * `"image"` before this therefore stops drawing the pin on a location with no
+ * logo, and picking `"mixed"` is the one-press way back.
+ *
+ * Takes already-resolved strings rather than a pin and a place, so this file
+ * stays free of a `pin-icons` import: every renderer has both by the time it
+ * asks.
  */
 export function logoImageOf(
   block: CardBlock,
   /** `ResolvedPin.image` — a `data:` URI, or "" for a pin drawn from paths. */
-  image: string,
+  pinImage: string,
+  /** `Place.logoUrl` — this location's own mark, or "" / null for none. */
+  logo?: string | null,
 ): string | null {
-  return block.logoMode === "image" && image ? image : null;
+  if (!block.logoMode) return null;
+
+  return logo || pinImage || null;
+}
+
+/**
+ * The mark's corner, as a CSS length, or `undefined` for the square it has
+ * always been.
+ *
+ * One function so the studio's canvas, the editor's card and the embed's popup
+ * cannot disagree about what "Rounded" is -- the same reason `chipStyleOf` and
+ * `buttonStyleOf` exist.
+ *
+ * **Percentages, not pixels, and that is what makes one number serve every
+ * size.** A logo block is squared by `blockBox` and its size is a percentage of
+ * a card the owner can resize, so a fixed 12px corner is a soft edge on a small
+ * mark and a barely visible one on a large mark. 12% of the box is the same
+ * corner at both, and 50% is the circle at both. It also keeps this out of the
+ * two stylesheets: there is no custom property to define twice and no way for
+ * the dashboard's value and the embed's to drift.
+ *
+ * Returns nothing for a pin: a pin is drawn from paths and is already its own
+ * shape, and a radius on the box around it would cut the body off.
+ */
+export function logoRadiusOf(block: CardBlock): string | undefined {
+  if (!block.logoRadius) return undefined;
+
+  return block.logoRadius === "round" ? "50%" : "12%";
 }
 
 /**
@@ -3060,6 +3296,30 @@ function isButtonHover(value: unknown): value is CardButtonHover {
 }
 
 /** A `#rgb` or `#rrggbb`, lowercased. Anything else is "not set". */
+/**
+ * One optional, clamped card-level number — kept only when it says something.
+ *
+ * `clamp` answers with a number always, which is right for a field the type
+ * requires and wrong for one where **absent is a promise**: writing the default
+ * back would put a key into every snapshot published from here on, for a card
+ * that draws exactly what it drew before the field existed (CLAUDE.md §7).
+ *
+ * Returns a spreadable object rather than `number | undefined` so the call site
+ * reads the same as the `hex` ones either side of it.
+ */
+function optional<K extends keyof typeof CARD_LIMITS>(
+  key: K,
+  value: unknown,
+  /** What absent already means, and therefore what is not worth storing. */
+  unset: number,
+): Partial<Record<K, number>> {
+  if (!isNumber(value)) return {};
+
+  const resolved = clamp(value, CARD_LIMITS[key], unset);
+
+  return resolved === unset ? {} : ({ [key]: resolved } as Record<K, number>);
+}
+
 function hex(value: unknown): string | undefined {
   return typeof value === "string" && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)
     ? value.toLowerCase()

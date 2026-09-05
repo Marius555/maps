@@ -331,7 +331,10 @@ export function useRowDragSource({
       if (ghost.current) moveRowGhost(ghost.current, event.clientX, event.clientY);
 
       // Reaching a group that is scrolled out of the panel — see edge-autoscroll.
-      autoScroll.current?.update(event.clientY);
+      // `clientX` as well as `clientY`, or the pull's band is an infinite
+      // horizontal strip and a drag held anywhere near the top of the window
+      // scrolls a panel it is nowhere near.
+      autoScroll.current?.update(event.clientY, event.clientX);
 
       /*
        * The ghost sits under the pointer, so it would be the topmost element at

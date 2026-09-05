@@ -157,6 +157,41 @@ export const CARD_HEIGHTS: readonly ScaleOption[] = [
 ];
 
 /**
+ * How much of the card's ground is painted, and the results panel's own words.
+ *
+ * The same five stops as `OPACITIES` in
+ * components/publish/design-sidebar/panel-group.tsx, deliberately: an owner
+ * makes a panel see-through on one screen and a card see-through on another,
+ * and two tables of different numbers under one word would be two features
+ * wearing one name. Stored as opacity and labelled as transparency, which is
+ * the way round somebody looking at a see-through card describes it.
+ *
+ * `100` sits on the stop `nearestStop` lights for a card that has never been
+ * touched, and writing it clears the field rather than storing it — see
+ * `CardProperties`.
+ */
+export const CARD_OPACITIES: readonly ScaleOption[] = [
+  { value: 100, label: "Solid" },
+  { value: 94, label: "Faint" },
+  { value: 88, label: "Light" },
+  { value: 76, label: "Clear" },
+  { value: 60, label: "Glass" },
+];
+
+/**
+ * Three, not five, and the panel's own three.
+ *
+ * Blur is a background effect nobody is choosing 16px of, and this control is
+ * only ever on screen for a card that is already see-through — so the question
+ * it answers is "a little or a lot", not a number.
+ */
+export const CARD_BLURS: readonly ScaleOption[] = [
+  { value: 0, label: "None" },
+  { value: 10, label: "Soft" },
+  { value: 20, label: "Strong" },
+];
+
+/**
  * A share of the line, as a percentage.
  *
  * Labelled with the number, because that is what someone is choosing here: a

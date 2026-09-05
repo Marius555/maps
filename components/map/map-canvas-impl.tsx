@@ -24,6 +24,7 @@ import { effectiveCardLayout } from "@/lib/card/designer-status";
 import type { MapStyleKey } from "@/lib/map/style";
 import { configureMaplibreWorker } from "@/lib/map/worker";
 import type {
+  AppMap,
   MapField,
   MapTagGroup,
   Place,
@@ -208,6 +209,24 @@ export type MapCanvasProps = {
   onSelectPlace: (placeId: string | null) => void;
   /** Adds an Edit action to the card. Omit and the card is read-only. */
   onEditPlace?: (placeId: string) => void;
+  /**
+   * Lets the place card fill itself in: every block this location left empty
+   * draws a dashed `+` that opens the one field behind it. See `PlaceCard.slots`
+   * and `cardSlotOf`.
+   *
+   * A prop group for `shapes`' and `selection`'s reason — one feature, arriving
+   * whole — and omitted by the two canvases that must not have it: the import
+   * review, whose drafts are not rows yet and cannot be PATCHed, and the preview
+   * panel, which is showing what a visitor sees.
+   *
+   * **The whole `AppMap`, where this canvas otherwise deliberately takes only
+   * `fields` and `tagGroups`.** The tags slot opens `TagPicker`, whose quick-add
+   * writes the map's own `tagGroups` and so needs its id as well as its
+   * vocabulary (components/tags/tag-quick-add.tsx). Narrowing it to those two
+   * props would mean a picker that cannot create the first tag on a map that has
+   * none — which is the map every one of these slots is most useful on.
+   */
+  cardSlots?: { map: AppMap };
   onMapClick: (coords: { lng: number; lat: number }) => void;
   /** Omit to make pins fixed. Supplying it is what enables dragging. */
   onMovePlace?: (placeId: string, coords: { lng: number; lat: number }) => void;
@@ -261,6 +280,7 @@ export default function MapCanvasImpl({
   pinIcons,
   shapes,
   selection,
+  cardSlots,
   onSelectPlace,
   onEditPlace,
   onMapClick,
@@ -831,6 +851,7 @@ export default function MapCanvasImpl({
           // The same pins the markers are drawn from, so a card holding a Logo
           // block shows the pin its own location wears.
           pinIcons={pinIcons ?? []}
+          slots={cardSlots}
           onClose={() => onSelectPlace(null)}
           onEdit={onEditPlace}
         />

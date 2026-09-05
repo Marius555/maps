@@ -3,7 +3,7 @@
 import { ColorPickerField } from "@/components/ui/color-picker-field";
 import type { CardBlock } from "@/packages/shared/card-layout";
 import type { BlockPatch } from "./block-properties";
-import { PropertyScale } from "./property-fields";
+import { PropertyNumberSelect } from "@/components/ui/properties/property-select";
 import { CHIP_BORDER_WIDTHS, CHIP_ROOM } from "./property-scales";
 
 /**
@@ -36,6 +36,9 @@ export function ChipProperties({
       <ColorPickerField
         label="Chip colour"
         value={block.chipBackground ?? ""}
+        // Label above, so both colours here sit on the same rhythm as the
+        // selects under them — see `labelPlacement`.
+        labelPlacement="outside"
         // The soft neutral both renderers already draw, so the wheel opens on
         // roughly what is on screen rather than on a colour nobody has seen.
         fallback="#e9ecef"
@@ -57,6 +60,7 @@ export function ChipProperties({
       <ColorPickerField
         label="Chip border"
         value={block.chipBorder ?? ""}
+        labelPlacement="outside"
         // A shade of the neutral ground, so the wheel opens on something that
         // looks like an outline rather than on an accent nobody would pick.
         fallback="#c8ced6"
@@ -76,7 +80,7 @@ export function ChipProperties({
           back to its own label colour, so a width alone draws something there.
           A chip has nothing under its edge to fall back to. */}
       {block.chipBorder ? (
-        <PropertyScale
+        <PropertyNumberSelect
           label="Border width"
           value={block.chipBorderWidth ?? 0}
           options={CHIP_BORDER_WIDTHS}
@@ -84,7 +88,10 @@ export function ChipProperties({
         />
       ) : null}
 
-      <PropertyScale
+      {/* Selects rather than tiles: both are five-word scales, and five words
+          across this column clip to about 36px each. The card's own Padding
+          makes the same move for the same reason. */}
+      <PropertyNumberSelect
         label="Chip padding"
         value={block.chipPadding ?? 0}
         options={CHIP_ROOM}

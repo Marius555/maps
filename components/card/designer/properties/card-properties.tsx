@@ -1,24 +1,29 @@
 "use client";
 
+import { Accordion } from "@heroui/react";
+
 import { ColorPickerField } from "@/components/ui/color-picker-field";
-import type { MapField } from "@/lib/repositories/types";
+import type { MapField, Place } from "@/lib/repositories/types";
 import {
-  cardRows,
   findBlock,
   type CardLayout,
   type CardShadow,
 } from "@/packages/shared/card-layout";
+import { blockPanelFacts } from "@/lib/card/block-panel-facts";
 import { BlockProperties, type BlockPatch } from "./block-properties";
-import { PropertyChoice, PropertyScale } from "./property-fields";
+import { PropertyChoice, PropertyScale } from "@/components/ui/properties/property-fields";
+import { PropertyNumberSelect } from "@/components/ui/properties/property-select";
 import {
   BORDER_WIDTHS,
+  CARD_BLURS,
   CARD_GAP,
   CARD_HEIGHTS,
+  CARD_OPACITIES,
   CARD_PADDING,
   CARD_WIDTHS,
   RADIUS_STOPS,
 } from "./property-scales";
-import { PropertyGroup, PropertyGroups } from "./property-group";
+import { PropertyFold } from "@/components/ui/properties/property-fold";
 
 /**
  * The numbers behind the card, for the things a drag cannot say.
@@ -36,6 +41,8 @@ export function CardProperties({
   layout,
   selectedId,
   logoHasImage,
+  logoSample,
+  mapId,
   chipPreview,
   onChipPreview,
   fields,
@@ -53,6 +60,8 @@ export function CardProperties({
    * nothing. Worked out in `CardDesigner`, which is where the sample is.
    */
   logoHasImage: boolean;
+  logoSample: Place | null;
+  mapId: string;
   /**
    * How many chips the canvas pads the sample's tags to. `null` is the
    * location's own.
@@ -77,34 +86,16 @@ export function CardProperties({
 
   if (selected) {
     /*
-     * Whether the block's overlap currently has a neighbour to overlap.
-     *
-     * Worked out here rather than in the panel because it is a fact about the
-     * *zone*, and the panel is handed one block. The rule is `blockEdges`'s in
-     * components/card/card-frame.tsx: a block is pulled over a sibling in its own
-     * zone, so the first block of one has nothing above it and the last has
-     * nothing below.
+     * The two facts about the zone that the panel cannot work out from the one
+     * block it is handed -- shared with the card's own edit mode, which opens
+     * this same panel over a pin. See `blockPanelFacts`.
      */
-    const list = layout.zones[selected.zone];
-    const overlapsNothing =
-      selected.block.overlapEdge === "below"
-        ? selected.index === list.length - 1
-        : selected.index === 0;
-
-    /*
-     * Whether the block has its line to itself.
-     *
-     * A fact about the *line*, so it is worked out here for the same reason
-     * `overlapsNothing` is: the panel is handed one block, and only the zone
-     * knows what is next to it. It is what decides whether a mark's Alignment
-     * control has anything to move — a logo sharing a line sits where its
-     * neighbours leave it, and three buttons that quietly do nothing are exactly
-     * what this panel's own rule forbids.
-     */
-    const alone =
-      cardRows(list, layout).find((row) =>
-        row.blocks.some((block) => block.id === selected.block.id),
-      )?.blocks.length === 1;
+    const { overlapsNothing, aloneOnLine } = blockPanelFacts(
+      layout,
+      selected.zone,
+      selected.index,
+      selected.block,
+    );
 
     return (
       <BlockProperties
@@ -112,8 +103,10 @@ export function CardProperties({
         fields={fields}
         cardPadding={layout.padding}
         overlapsNothing={overlapsNothing}
-        aloneOnLine={alone}
+        aloneOnLine={aloneOnLine}
         logoHasImage={logoHasImage}
+        logoSample={logoSample}
+        mapId={mapId}
         chipPreview={chipPreview}
         onChipPreview={onChipPreview}
         onChange={(patch) => onBlock(selected.block.id, patch)}
@@ -131,12 +124,12 @@ export function CardProperties({
         </span>
       </h3>
 
-      {/* Grouped exactly as the block panel is, and for its reason: the two
+      {/* Folded exactly as the block panel is, and for its reason: the two
           halves of this tab are one screen, and a flat column on one side
-          against five headings on the other would read as two different
-          panels. See `PropertyGroup`. */}
-      <PropertyGroups>
-        <PropertyGroup title="Size">
+          against a stack of folds on the other would read as two different
+          panels. See `PropertyFold`. */}
+      <Accordion allowsMultipleExpanded defaultExpandedKeys={["size"]}>
+        <PropertyFold id="size" title="Size">
           <PropertyScale
             label="Width"
             value={layout.width}
@@ -149,27 +142,32 @@ export function CardProperties({
             options={CARD_HEIGHTS}
             onChange={(maxHeight) => onCard({ maxHeight })}
           />
-        </PropertyGroup>
+        </PropertyFold>
 
-        <PropertyGroup title="Spacing">
-          <PropertyScale
+        <PropertyFold id="spacing" title="Spacing">
+          {/* Selects, not tiles. Both of these are `room()` scales — None /
+              Tight / Regular / Roomy / Wide — and five words across this column
+              is about 36px of room each, so every one of them clipped. It is
+              the argument Transparency below already makes, applied to the two
+              controls whose *labels* were the visible half of the complaint. */}
+          <PropertyNumberSelect
             label="Padding"
             value={layout.padding}
             options={CARD_PADDING}
             onChange={(padding) => onCard({ padding })}
           />
-          <PropertyScale
+          <PropertyNumberSelect
             label="Gap between blocks"
             value={layout.gap}
             options={CARD_GAP}
             onChange={(gap) => onCard({ gap })}
           />
-        </PropertyGroup>
+        </PropertyFold>
 
         {/* Corners sits here rather than under Size: a radius is not how big
             the card is, it is what its edge looks like — the same question the
             shadow and the border answer. */}
-        <PropertyGroup title="Style">
+        <PropertyFold id="style" title="Style">
           {/* The same five tiles the button's corners are, out of one table —
               two controls with one word between them that drew two different
               kinds of control was the panel disagreeing with itself. */}
@@ -202,13 +200,55 @@ export function CardProperties({
             label="Background"
             value={layout.background ?? ""}
             fallback="#ffffff"
+            // Label above, like every other control in this column — see
+            // `labelPlacement`. The publish designer's Colours fold keeps the
+            // label inside, because there it is five colours and nothing else.
+            labelPlacement="outside"
             onChange={(background) => onCard({ background })}
             onClear={() => onCard({ background: undefined })}
           />
 
+          {/*
+           * Directly under the colour it makes see-through, and a select rather
+           * than five tiles for the reason the results panel's own Transparency
+           * gives: five words across this column is about 60px each and none of
+           * them are readable.
+           *
+           * **Solid stores the absence**, not the number 100 — which is what
+           * every card designed before this control existed already says, and
+           * what keeps `isDefaultCardLayout` able to leave an untouched card out
+           * of the snapshot entirely (CLAUDE.md §7).
+           */}
+          <PropertyNumberSelect
+            label="Transparency"
+            value={layout.backgroundOpacity ?? OPAQUE}
+            options={CARD_OPACITIES}
+            onChange={(value) =>
+              onCard({
+                backgroundOpacity: value === OPAQUE ? undefined : value,
+              })
+            }
+          />
+
+          {/* Only once there is something for the blur to show through, on the
+              rule the border width below already follows: a control that
+              visibly does nothing is the one thing this panel does not do. It
+              is also what `panel-group.tsx` does with the same pair. */}
+          {(layout.backgroundOpacity ?? OPAQUE) < OPAQUE ? (
+            <PropertyScale
+              label="Blur behind"
+              value={layout.backdropBlur ?? 0}
+              options={CARD_BLURS}
+              onChange={(value) =>
+                onCard({ backdropBlur: value === 0 ? undefined : value })
+              }
+            />
+          ) : null}
+
           <ColorPickerField
             label="Border"
             value={layout.border ?? ""}
+            labelPlacement="outside"
             onChange={(border) => onCard({ border })}
             onClear={() => onCard({ border: undefined })}
           />
@@ -218,18 +258,27 @@ export function CardProperties({
               which is the one thing this panel does not do — and it is the
               pattern the chips' own outline now copies. */}
           {layout.border ? (
-            <PropertyScale
+            <PropertyNumberSelect
               label="Border width"
               value={layout.borderWidth}
               options={BORDER_WIDTHS}
               onChange={(borderWidth) => onCard({ borderWidth })}
             />
           ) : null}
-        </PropertyGroup>
-      </PropertyGroups>
+        </PropertyFold>
+      </Accordion>
     </section>
   );
 }
+
+/**
+ * The transparency a card has when nobody has set one.
+ *
+ * Named rather than written as `100` at four call sites, because it is doing
+ * two jobs there: it is the value the control shows for an unset card, and it
+ * is the value that means "store nothing".
+ */
+const OPAQUE = 100;
 
 const SHADOW_OPTIONS = [
   { value: "none", label: "None" },

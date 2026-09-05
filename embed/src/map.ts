@@ -1,9 +1,11 @@
 import {
+  FullscreenControl,
   GeolocateControl,
   LngLatBounds,
   Map as MapLibreMap,
   NavigationControl,
   Popup,
+  ScaleControl,
   type GeoJSONSource,
   type LngLatLike,
   type MapGeoJSONFeature,
@@ -158,6 +160,27 @@ export type MapHandle = {
    */
   focusPoint: (lat: number, lng: number) => void;
   fitTo: (places: SnapshotPlace[]) => void;
+  /**
+   * Where the map is looking, right now.
+   *
+   * The one read-only question in this handle, and the only one nothing inside
+   * the embed asks. It is here for the dashboard's publish preview: that page
+   * rebuilds the frame when a *structural* setting changes, and without a way to
+   * carry the camera across, every press of a switch threw the owner back to the
+   * map's saved default view. A few bytes against a control that reads as broken
+   * — see components/preview/embed-preview.tsx.
+   */
+  getView: () => { lng: number; lat: number; zoom: number };
+  /**
+   * Remeasure and repaint.
+   *
+   * Also for the publish preview, and also because of how a browser treats a
+   * frame nobody can see: a document that is not being rendered gets no
+   * animation frames, so a map built in one comes up with a half-painted canvas
+   * and — MapLibre drawing on demand rather than in a loop — stays that way once
+   * it is revealed. The parent asks for this the moment it swaps a frame in.
+   */
+  resize: () => void;
   destroy: () => void;
 };
 
@@ -221,15 +244,47 @@ export function createMap(
     },
   });
 
-  map.addControl(new NavigationControl({ showCompass: false }), "top-right");
+  /*
+   * Which controls, and in which corner — the owner's, with absent meaning what
+   * every published map already has: zoom and geolocate, top right, no compass.
+   *
+   * Adding `FullscreenControl` and `ScaleControl` here is close to free, and
+   * that is a fact about the build rather than about them: `maplibre-gl` is
+   * `external` in embed/vite.config.mts, so its dist files ship whole whether we
+   * name these or not. What a switch costs is the line that reads it.
+   *
+   * `top-right` stays the fallback rather than becoming `top-left`, because a
+   * snapshot published last year says nothing about corners and must keep
+   * putting its zoom buttons where its owner last saw them (§7). The new
+   * default reaches a map through DEFAULT_EMBED_SETTINGS, on their next publish.
+   */
+  const corner = snapshot.settings.controlsCorner ?? "top-right";
+
   map.addControl(
-    new GeolocateControl({ trackUserLocation: false }),
-    "top-right",
+    new NavigationControl({ showCompass: snapshot.settings.compass === true }),
+    corner,
   );
+
+  if (snapshot.settings.geolocate !== false) {
+    map.addControl(new GeolocateControl({ trackUserLocation: false }), corner);
+  }
+
+  if (snapshot.settings.fullscreen) {
+    map.addControl(new FullscreenControl(), corner);
+  }
+
+  if (snapshot.settings.scale) {
+    // Bottom-left whatever the stack does: a scale bar is a ruler read against
+    // the map's edge, and stacking it under the zoom buttons puts a 100px bar in
+    // the middle of the chrome.
+    map.addControl(new ScaleControl({ maxWidth: 96 }), "bottom-left");
+  }
+
   // No AttributionControl is added here on purpose: the `attributionControl`
   // map option above already creates one. Adding a second renders the credit
   // twice, stacked — a different doubling from the one described above, and
-  // both were live at once.
+  // both were live at once. It is also the one control with no switch: the
+  // credit is non-negotiable (§12).
 
   /*
    * ...and `compact: true` only makes it collapsible, not collapsed. MapLibre
@@ -240,15 +295,45 @@ export function createMap(
   map.on("load", () => collapseAttribution(map.getContainer()));
   map.on("styledata", () => collapseAttribution(map.getContainer()));
 
-  // A map on someone's landing page must not swallow the page scroll.
-  map.scrollZoom.disable();
-  map.on("wheel", (event) => {
-    if (event.originalEvent.ctrlKey || event.originalEvent.metaKey) {
-      map.scrollZoom.enable();
-      return;
-    }
-    map.scrollZoom.disable();
+  /*
+   * "This map has drawn something", for a parent document to wait on.
+   *
+   * Only the dashboard's publish preview reads it, and it is the difference
+   * between a preview that blinks and one that does not. That page builds a
+   * replacement document in a second iframe and swaps it to the front — but the
+   * only signal it had was the iframe's own `load` event, which fires when this
+   * module *starts*, not when it finishes: `mount()` still has a snapshot fetch
+   * and a style fetch to await after it. So the swap revealed a blank white
+   * document and the map arrived a beat later, which is exactly what "the map
+   * disappears and reappears" was.
+   *
+   * On the map's own `load`, so it means the style is up and the first frame is
+   * painted rather than merely that `createMap` returned. An attribute rather
+   * than a method on the handle: the parent is polling for it, and an attribute
+   * selector is something it can ask the DOM for directly.
+   */
+  map.on("load", () => {
+    map.getContainer().closest(".lm-root")?.setAttribute("data-lm-ready", "1");
   });
+
+  /*
+   * A map on someone's landing page must not swallow the page scroll, so the
+   * wheel needs ctrl or meta unless the owner has said otherwise — which they
+   * would for a map that fills its own page, where the guard is just a map that
+   * ignores the wheel.
+   *
+   * Absent is the guard, which is what every published map has.
+   */
+  if (snapshot.settings.scrollZoom !== true) {
+    map.scrollZoom.disable();
+    map.on("wheel", (event) => {
+      if (event.originalEvent.ctrlKey || event.originalEvent.metaKey) {
+        map.scrollZoom.enable();
+        return;
+      }
+      map.scrollZoom.disable();
+    });
+  }
 
   const categories = new Map(
     // Legacy, read-only: a snapshot published before categories became tags.
@@ -489,6 +574,14 @@ export function createMap(
       if (bounds) map.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 16 });
     },
 
+    getView: () => {
+      const center = map.getCenter();
+
+      return { lng: center.lng, lat: center.lat, zoom: map.getZoom() };
+    },
+
+    resize: () => map.resize(),
+
     destroy: () => map.remove(),
   };
 }
@@ -518,7 +611,37 @@ function styleCard(popup: Popup, layout: CardLayout): void {
   set("--lm-card-pad", `${String(layout.padding)}px`);
   set("--lm-card-radius", `${String(layout.radius)}px`);
   set("--lm-card-gap", `${String(layout.gap)}px`);
+  /*
+   * The designed height, which `.lm-popup--place` takes as a real `height`.
+   *
+   * It is a *property* rather than an inline height on our own root because
+   * `placeCard` clamps the card against the frame with `--lm-popup-max`, and
+   * `max-height` beating `height` is the whole of how those two settle. The
+   * shape popup deliberately never sees this — it is a name and a sentence, and
+   * is meant to be the size of them.
+   */
+  set("--lm-card-h", `${String(layout.maxHeight)}px`);
   set("--lm-card-bg", layout.background);
+  /*
+   * A see-through card, in the two properties the stylesheet reads.
+   *
+   * A percent because it goes straight into a `color-mix`, exactly as
+   * `--lm-panel-opacity` does; the whole `blur(...)` because the card's default
+   * is `none` rather than `blur(0)` — a popup is created and destroyed per
+   * click, and a backdrop root nobody asked for is not free. Both unset unless
+   * the owner chose them, so a card designed before this existed writes
+   * nothing and paints what it always painted.
+   */
+  set(
+    "--lm-card-opacity",
+    layout.backgroundOpacity === undefined
+      ? undefined
+      : `${String(layout.backgroundOpacity)}%`,
+  );
+  set(
+    "--lm-card-backdrop",
+    layout.backdropBlur ? `blur(${String(layout.backdropBlur)}px)` : undefined,
+  );
   set(
     "--lm-card-border",
     layout.border && layout.borderWidth > 0
@@ -1192,13 +1315,13 @@ function wireInteractions(
  * they merged carries, and it is read here and nowhere else in the embed. A file
  * has one or the other, never both, so the order below never has to arbitrate.
  */
-type PinColors = {
+export type PinColors = {
   tagGroups: SnapshotTagGroup[];
   /** Legacy, read-only: category id → hex, for pre-merge snapshots. */
   categories: Map<string, string>;
 };
 
-function colorsOf(snapshot: MapSnapshot): PinColors {
+export function colorsOf(snapshot: MapSnapshot): PinColors {
   return {
     tagGroups: snapshot.tagGroups ?? [],
     categories: new Map(
@@ -1218,7 +1341,7 @@ function colorsOf(snapshot: MapSnapshot): PinColors {
  * customer arranged and the pin their visitors get quietly stop matching. The
  * label is the one field the snapshot drops, and nothing here renders it.
  */
-function pinsOf(snapshot: MapSnapshot): CustomPinIcon[] {
+export function pinsOf(snapshot: MapSnapshot): CustomPinIcon[] {
   return (snapshot.pinIcons ?? []).map((pin) => ({
     id: pin.id,
     label: "",
@@ -1251,7 +1374,7 @@ function pinsOf(snapshot: MapSnapshot): CustomPinIcon[] {
  * `pinColorOfTags` finds nothing and this answers, and on a new one it never
  * runs. Deleting it would turn every already-published map grey.
  */
-function colorOf(
+export function colorOf(
   place: SnapshotPlace,
   colors: PinColors,
   pins?: readonly CustomPinIcon[],

@@ -16,7 +16,7 @@
  * the empty strings add up, and the embed treats absent and empty the same way.
  */
 
-import type { CardLayout } from "./card-layout";
+import type { CardBlock, CardLayout } from "./card-layout";
 import type { OpeningHours } from "./hours";
 import type { MapAppearance } from "./map-appearance";
 import type { PinRingWidth, PinShape, PinSize } from "./pin-icons";
@@ -173,6 +173,34 @@ export type SnapshotPlace = {
    */
   photoUrls?: string[];
   /**
+   * This location's own brand mark, when a Logo block is set to draw one.
+   *
+   * A public storage URL like the photos above, and for the same reason: a logo
+   * per location cannot ride inside the file the way the map's shared custom
+   * pins do (`pinIcons`, capped at 6KB of base64 each), or a map of three
+   * thousand stockists would hand every visitor megabytes of it (§2).
+   *
+   * Optional, and written only when the location has one — so a map whose owner
+   * has never uploaded a logo publishes exactly the bytes it always did, and
+   * every file published before this field existed still parses (§7).
+   */
+  logoUrl?: string;
+  /**
+   * How this location's card differs from the one in `cardLayout`, keyed by the
+   * id of the block it stands in for -- see `mergeCardBlocks`.
+   *
+   * Present only on a location somebody singled out in the editor's edit mode,
+   * which is a handful on a map of three thousand, and **already narrowed and
+   * resolved**: `buildSnapshot` drops any id the published layout does not have
+   * and clamps what is left, because the embed draws these bytes as they were
+   * published and never runs them back through the resolver (§7). So the whole
+   * of the embed's side of this is `overrides[block.id] ?? block`.
+   *
+   * Optional, on the rule every field above follows: a map whose owner has never
+   * opened edit mode publishes exactly the bytes it always did.
+   */
+  cardBlocks?: Record<string, CardBlock>;
+  /**
    * Tag ids, already narrowed to ones the map still defines — a place may be
    * storing ids for tags that were deleted, and those are dropped here rather
    * than shipped for the embed to fail to match.
@@ -247,12 +275,62 @@ export type SnapshotShape = {
   | { kind: "line"; points: [number, number][]; durationS?: number }
 );
 
-/** Which of the embed's optional controls are switched on. */
+/** Which side of the map the results panel sits on. */
+export type SnapshotPanelSide = "left" | "right";
+
+/** A corner of the map, for MapLibre's own control stack. */
+export type SnapshotCorner =
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right";
+
+/**
+ * The embed's own colour tokens, overridden by the owner.
+ *
+ * These are written straight onto `.lm-root` as the custom properties the whole
+ * stylesheet is built from (`embed/src/styles.css`), so each one must be a hex
+ * colour and is validated as such before it is stored — this is a string going
+ * into a stylesheet on a stranger's website.
+ *
+ * Every field is absent unless the owner picked something, and absent means the
+ * stylesheet's own value. That is what keeps an unstyled embed theme-aware:
+ * `.lm-root--dark` redefines exactly these tokens, and a stored `#ffffff` could
+ * not follow it.
+ */
+export type SnapshotColors = {
+  surface?: string;
+  foreground?: string;
+  muted?: string;
+  border?: string;
+  accent?: string;
+};
+
+/**
+ * Which of the embed's optional controls are switched on, and what the chrome
+ * around the map looks like.
+ *
+ * **Everything added after the first four is optional, and absent means what the
+ * embed did before that field existed.** Snapshots are immutable and live
+ * customer sites keep reading the file they were published with (§7), so a map
+ * whose owner has never opened the designer publishes exactly the bytes it
+ * always did and keeps rendering exactly what it always rendered. The new look
+ * arrives through `DEFAULT_EMBED_SETTINGS`, on the owner's next publish — never
+ * by us redefining what absent means.
+ */
 export type SnapshotSettings = {
   clustering: boolean;
   search: boolean;
-  filters: boolean;
   nearest: boolean;
+  /**
+   * **Legacy, read-only — and not even read.** The tag filter chips were removed
+   * from the embed: their question ("show me the retail ones") is answered by
+   * typing the word, because tag labels are part of the search index. Nothing
+   * writes this and nothing reads it; it stays in the type only because every
+   * snapshot published before the removal still carries it and must keep
+   * parsing.
+   */
+  filters?: boolean;
   /**
    * The results panel beside the map.
    *
@@ -265,6 +343,54 @@ export type SnapshotSettings = {
    * growing a panel on someone's website without them republishing is not that.
    */
   list?: boolean;
+
+  /* The results panel — absent is the docked left column it has always been. */
+
+  /** Absent means left, which is where every published panel sits today. */
+  panelSide?: SnapshotPanelSide;
+  /** Over the map rather than beside it. Absent means beside. */
+  panelFloat?: boolean;
+  /** Percent of the embed's own width. Absent means 40. */
+  panelWidth?: number;
+  /** Percent. Absent means opaque, and only a floating panel can be less. */
+  panelOpacity?: number;
+  /** Pixels of backdrop blur behind a see-through panel. Absent means none. */
+  panelBlur?: number;
+  /** Pixels. Absent means square, which is what a docked column is. */
+  panelRadius?: number;
+
+  /* One results row — absent is the row as it was before any of this. */
+
+  /** Draw the location's own pin at the head of its row. Absent means no pin. */
+  rowPin?: boolean;
+  /** Pixels. Absent means 28, and only read when `rowPin` is on. */
+  rowPinSize?: number;
+  /** `false` hides it. Absent means shown — every published row shows these. */
+  rowAddress?: boolean;
+  rowDistance?: boolean;
+  /** The Directions and phone links under a row. `false` hides them. */
+  rowActions?: boolean;
+
+  /* MapLibre's own controls. */
+
+  /** Absent means top-right, where they have always been. */
+  controlsCorner?: SnapshotCorner;
+  compass?: boolean;
+  /** `false` hides it. Absent means shown, which is what ships today. */
+  geolocate?: boolean;
+  fullscreen?: boolean;
+  scale?: boolean;
+  /**
+   * Let the wheel zoom without ctrl/meta.
+   *
+   * Absent means it is held back, and that default is not cosmetic: a map on
+   * someone's landing page must not swallow the page scroll.
+   */
+  scrollZoom?: boolean;
+
+  /* Colour. */
+
+  colors?: SnapshotColors;
 };
 
 /**

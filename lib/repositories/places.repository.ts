@@ -314,7 +314,7 @@ export async function updatePlace(
    * through untouched so a PATCH carrying one field still writes only that field,
    * and only add a key back when the request actually carried it.
    */
-  const { hours, addressParts, fields, ...rest } = input;
+  const { hours, addressParts, fields, cardBlocks, ...rest } = input;
   const data = {
     ...rest,
     ...(hours === undefined ? {} : { hours: serialiseHours(hours) }),
@@ -324,6 +324,13 @@ export async function updatePlace(
     // `tags` is not in this list on purpose: it is a real array column, so its
     // domain shape *is* its column shape and it rides through in `rest`.
     ...(fields === undefined ? {} : { fields: serialiseJson(fields) }),
+    // The card overrides, on `fields`' terms: a record here, a JSON string in
+    // the column. An empty record is written as one rather than skipped -- it is
+    // how the card's Reset puts a block back on the account's design, and
+    // skipping it would make the last override unremovable.
+    ...(cardBlocks === undefined
+      ? {}
+      : { cardBlocks: serialiseJson(cardBlocks) }),
   };
 
   try {

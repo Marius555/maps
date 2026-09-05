@@ -22,6 +22,20 @@ export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
  */
 export const MAX_PHOTOS_PER_PLACE = 8;
 
+/**
+ * How big one location's logo may be.
+ *
+ * Far under a photo's 5MB, and the reason is what a logo *is*: a mark drawn at
+ * about 60px on a card, where a photo is a band across it. Anything over this is
+ * a photograph somebody has picked by mistake, and refusing it here is kinder
+ * than storing it and serving it to every visitor.
+ *
+ * A separate number from the map's custom pins, which cap at 6KB *decoded*
+ * because those ride inside the published snapshot as `data:` URIs. A logo is a
+ * storage file the snapshot names by URL, so it pays no such tax.
+ */
+export const MAX_LOGO_BYTES = 512 * 1024;
+
 export const ALLOWED_PHOTO_TYPES = [
   "image/jpeg",
   "image/png",

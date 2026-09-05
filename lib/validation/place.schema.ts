@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { cardBlocksSchema } from "./card-overrides.schema";
+
 import { DAYS_IN_WEEK } from "@/packages/shared/hours";
 import { latSchema, lngSchema, pinIconRefSchema } from "./common";
 import { placeFieldsSchema } from "./field.schema";
@@ -144,6 +146,14 @@ export const updatePlaceSchema = z
     geocodeConfidence: geocodeConfidenceSchema,
     addressParts: addressPartsSchema,
     groupId: groupIdSchema,
+    /*
+     * How this location's card differs from the account's own design.
+     *
+     * On `updatePlaceSchema` and not on `createPlaceSchema`: nothing arrives
+     * singled out. A location is created from the design everything else uses,
+     * and only stops following it once somebody opens edit mode on its card.
+     */
+    cardBlocks: cardBlocksSchema,
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, "Nothing to save.");

@@ -1,7 +1,7 @@
 "use client";
 
 import { CHIP_PREVIEW_COUNTS } from "@/lib/card/preview-chips";
-import { PropertyChoice } from "./property-fields";
+import { PropertyChoice } from "@/components/ui/properties/property-fields";
 
 /**
  * How many chips the sample card is drawn with — and nothing else.

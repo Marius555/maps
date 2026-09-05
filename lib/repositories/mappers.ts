@@ -1,6 +1,7 @@
 import { DEFAULT_MAP_STYLE, isMapStyleKey } from "@/lib/map/style";
 import { photoViewUrl, photoViewUrls } from "@/lib/storage/photo-url";
 import { parseHours } from "@/packages/shared/hours";
+import { readCardBlocks } from "@/lib/validation/card-overrides.schema";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import {
   GEOCODE_STATUSES,
@@ -195,6 +196,10 @@ export function toPlace(row: PlaceRow): Place {
     photoIds,
     photoUrls: photoViewUrls(photoIds),
     photoUrl: photoViewUrl(photoIds[0]),
+    logoId: row.logoId ?? null,
+    // The same public view URL a photo gets, composed on the server so the
+    // bucket id never reaches a client — see lib/storage/photo-url.ts.
+    logoUrl: photoViewUrl(row.logoId),
     sortOrder: row.sortOrder ?? 0,
     geocodeConfidence: row.geocodeConfidence ?? null,
     geocodeStatus: toGeocodeStatus(row.geocodeStatus),
@@ -203,6 +208,16 @@ export function toPlace(row: PlaceRow): Place {
     // than taking the whole list down.
     addressParts: parseJson<AddressParts | null>(row.addressParts, null),
     groupId: row.groupId ?? "",
+    /*
+     * How this location's card differs from the account design, if at all.
+     *
+     * `{}` for every location nobody has singled out, which is nearly all of
+     * them -- `mergeCardBlocks` hands the design straight back for that case.
+     * Same never-throw contract as the JSON above, one step stricter: it drops a
+     * single unreadable entry rather than the whole record, so one bad block
+     * falls back to the design and the rest of the card keeps what it was given.
+     */
+    cardBlocks: readCardBlocks(parseJson<unknown>(row.cardBlocks, {})),
     createdAt: row.$createdAt,
     updatedAt: row.$updatedAt,
   };

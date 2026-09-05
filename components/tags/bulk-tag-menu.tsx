@@ -125,7 +125,6 @@ export function BulkTagMenu({
                     <TagActionChip
                       key={tag.id}
                       label={tag.label || "Unnamed tag"}
-                      color={tag.color}
                       onClick={() => pick(tag.id)}
                     />
                   ))}

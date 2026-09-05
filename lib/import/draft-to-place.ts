@@ -38,6 +38,8 @@ export function draftToPlace(draft: DraftPlace, mapId: string): Place {
     photoIds: [],
     photoUrls: [],
     photoUrl: null,
+    logoId: null,
+    logoUrl: null,
     sortOrder: draft.rowNumber,
     geocodeConfidence: draft.confidence,
     addressParts: null,
@@ -45,6 +47,7 @@ export function draftToPlace(draft: DraftPlace, mapId: string): Place {
     // A CSV has no group column, and the review step has no sidebar to show one
     // in. Imported locations land loose and are grouped afterwards, if at all.
     groupId: "",
+    cardBlocks: {},
     createdAt: now,
     updatedAt: now,
   };

@@ -83,6 +83,20 @@
       ],
       "fields": {
         "code": "GB-22"
+      },
+      "cardBlocks": {
+        "actions": {
+          "id": "actions",
+          "type": "actions",
+          "hidePhone": true,
+          "hideEmail": true,
+          "hideDirections": true
+        },
+        "description": {
+          "id": "description",
+          "type": "description",
+          "clampLines": 1
+        }
       }
     },
     {
@@ -230,9 +244,25 @@
   "settings": {
     "clustering": true,
     "search": true,
-    "filters": true,
     "nearest": true,
-    "list": true
+    "list": true,
+    "panelSide": "right",
+    "panelFloat": true,
+    "panelWidth": 34,
+    "panelOpacity": 88,
+    "panelBlur": 10,
+    "panelRadius": 12,
+    "rowPin": true,
+    "rowPinSize": 28,
+    "rowAddress": true,
+    "rowDistance": true,
+    "rowActions": true,
+    "controlsCorner": "top-left",
+    "compass": false,
+    "geolocate": true,
+    "fullscreen": false,
+    "scale": false,
+    "scrollZoom": false
   },
   "allowedDomains": [],
   "tagGroups": [

@@ -26,6 +26,7 @@ import {
   chipStyleOf,
   justifyOf,
   logoImageOf,
+  logoRadiusOf,
   type CardBlock,
   type CardBlockType,
   type CardButtonStyle,
@@ -391,7 +392,9 @@ function Logo({
   fallbackColor: string | undefined;
 }) {
   const pin = resolvePin(data.place.icon, data.pinIcons);
-  const image = logoImageOf(block, pin?.image ?? "");
+  // This location's own upload first, then the image on whichever custom pin it
+  // wears — see `logoImageOf`, which owns that order and the three modes.
+  const image = logoImageOf(block, pin?.image ?? "", data.place.logoUrl);
 
   if (image) {
     return (
@@ -401,8 +404,44 @@ function Logo({
         alt=""
         draggable={false}
         className="h-full w-full object-contain"
+        // Inline rather than a class, and undefined for the square every card
+        // published before the control existed draws -- so an unrounded mark
+        // writes no property at all. `logoRadiusOf` is the same function
+        // `buildLogo` asks in the embed.
+        style={{ borderRadius: logoRadiusOf(block) }}
       />
     );
+  }
+
+  /*
+   * The mark set strictly to **Logo**, on a location that has none.
+   *
+   * Not the pin: falling back to it here is what Mixed is for, and doing it in
+   * both places would leave the two modes drawing the same thing. It would also
+   * put this renderer out of step with `buildLogo` in embed/src/popup.ts, which
+   * returns null for exactly this case — so the studio would show a pin where
+   * the customer's site shows a gap, which is the one thing a design tool must
+   * never do.
+   *
+   * On the canvas that "nothing" is a hint, on the same terms as the empty
+   * gallery and the button with no link beside it: the sample location is
+   * whichever row happened to be first, so an invisible block would read as a
+   * broken control rather than as this location's missing logo. On a real card
+   * it is nothing at all, and the editor draws its `+` slot over the top
+   * (`cardSlotOf`).
+   */
+  if (block.logoMode === "image") {
+    return data.isDesigner ? (
+      // The hint wears the corner the mark will, or a square dashed box would be
+      // previewing a shape the block does not have.
+      <span
+        className="card-logo--empty"
+        aria-hidden="true"
+        style={{ borderRadius: logoRadiusOf(block) }}
+      >
+        <ImageOff className="size-4" />
+      </span>
+    ) : null;
   }
 
   return (
@@ -457,16 +496,22 @@ function Gallery({
     );
   }
 
-  // No photo to show. `onSampleImage` is only ever set by the designer, which
-  // is what turns this into a real drop target rather than a dead end — a
-  // real card has no file to drop, so it gets the plain half instead.
+  /*
+   * No photo to show. `onSampleImage` is only ever set by the designer, which
+   * is what turns this into a real drop target rather than a dead end — a real
+   * card has no file to drop, so it gets the plain half instead.
+   *
+   * And the plain half is a plain fill: the band is the *owner's* design, and it
+   * holds its place whether or not this particular location has a picture in it.
+   * It used to say "No photo" under a crossed-out camera, which is a message to
+   * the owner drawn on the card a visitor reads — and it never appeared anyway,
+   * because the block was filtered out before it could. `bg-default` rather than
+   * a stored grey, so the placeholder follows the theme (§7).
+   */
   return onSampleImage ? (
     <GallerySampleDropzone onSampleImage={onSampleImage} />
   ) : (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted">
-      <ImageOff aria-hidden="true" className="size-5" />
-      <span className="text-[11px]">No photo</span>
-    </div>
+    <div className="h-full w-full bg-default" />
   );
 }
 
@@ -714,13 +759,31 @@ export function hasBlockContent(
   const { place, fields } = data;
 
   switch (type) {
+    /*
+     * Always, like the logo below it. The photo band is a thing the owner put on
+     * the card, not a thing this location filled in, so it keeps its height and
+     * draws a plain fill when there is no picture — see `Gallery`. Collapsing it
+     * per location is what made the same saved design a different shape on every
+     * pin.
+     */
     case "gallery":
-      return Boolean(place.photoUrls[0] ?? place.photoUrl ?? data.sampleImageUrl);
-    // Always. `resolvePin` answers a plain ball for a location that has never
-    // been given an icon, which is still this location's mark — there is no
-    // under-filled case for a logo to collapse on.
-    case "logo":
       return true;
+    /*
+     * Always, *except* on the mark that is strictly a logo.
+     *
+     * `resolvePin` answers a plain ball for a location that has never been given
+     * an icon, which is still this location's mark — so Pin and Mixed always
+     * draw something. `logoMode: "image"` is the one that does not: it is the
+     * owner saying "this block is the company's logo", and a location without
+     * one has genuinely filled in nothing. That is what puts a `+` on the
+     * editor's card (`cardSlotOf`) and holds the space on a visitor's.
+     */
+    case "logo":
+      return (
+        block?.logoMode !== "image" ||
+        Boolean(place.logoUrl) ||
+        Boolean(resolvePin(place.icon, data.pinIcons)?.image)
+      );
     case "name":
       return Boolean(place.name);
     // The retired Category block, drawing this location's first tag — see the

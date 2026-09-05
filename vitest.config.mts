@@ -12,7 +12,14 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts", "packages/**/*.test.ts"],
+    // `embed` is here for one file: embed/src/popup.test.ts, which checks the
+    // card a visitor is handed. See its own docblock for why that cannot be
+    // asked from /lib.
+    include: [
+      "lib/**/*.test.ts",
+      "packages/**/*.test.ts",
+      "embed/**/*.test.ts",
+    ],
   },
   resolve: {
     alias: {

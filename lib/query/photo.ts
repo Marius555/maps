@@ -11,7 +11,7 @@ import {
 import type { Place } from "@/lib/repositories/types";
 import { apiFetch, apiUpload } from "./fetcher";
 import { queryKeys } from "./keys";
-import { PHOTO_KEYS, mergePlaceFields } from "./place-cache";
+import { LOGO_KEYS, PHOTO_KEYS, mergePlaceFields } from "./place-cache";
 
 /**
  * The photo gallery, saved as one thing.
@@ -155,8 +155,53 @@ export function useSavePlacePhotos(mapId: string) {
 }
 
 /**
- * These endpoints change the photos and nothing else, so only the photo fields
- * are taken from the reply. Replacing the whole row let an upload land on top of
+ * This location's own brand mark, uploaded or cleared.
+ *
+ * Lives beside the gallery rather than in a file of its own because it is the
+ * same machinery — a multipart POST, a public storage file, a reply carrying the
+ * whole row — and the one thing a reader has to compare it against is
+ * `useSavePlacePhotos` directly above.
+ *
+ * There is no draft stage and no plan: a logo is one file, so "what it should
+ * look like" is either a `File` to send or `null` to clear, and both are one
+ * request. `undefined` is the third answer and the common one — the form was
+ * saved without anybody touching the logo — which writes nothing at all.
+ */
+export function useSavePlaceLogo(mapId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      placeId,
+      logo,
+    }: {
+      placeId: string;
+      /** A file to upload, `null` to clear, `undefined` to leave alone. */
+      logo: File | null | undefined;
+    }): Promise<Place | null> => {
+      if (logo === undefined) return null;
+
+      const url = `/api/maps/${mapId}/places/${placeId}/logo`;
+
+      if (logo === null) {
+        return (await apiFetch<{ place: Place }>(url, { method: "DELETE" }))
+          .place;
+      }
+
+      const body = new FormData();
+      body.append("logo", logo);
+
+      return (await apiUpload<{ place: Place }>(url, body)).place;
+    },
+    onSuccess: (place) => {
+      if (place) patchPlace(queryClient, mapId, place, LOGO_KEYS);
+    },
+  });
+}
+
+/**
+ * These endpoints change the photos or the logo and nothing else, so only those
+ * fields are taken from the reply. Replacing the whole row let an upload land on top of
  * an address the reverse geocoder had written a moment earlier, and revert it —
  * the same defect described in lib/query/place-cache.ts.
  */
@@ -164,13 +209,14 @@ function patchPlace(
   queryClient: ReturnType<typeof useQueryClient>,
   mapId: string,
   place: Place,
+  keys: readonly (keyof Place)[] = PHOTO_KEYS,
 ): void {
   queryClient.setQueryData<Place[]>(
     queryKeys.places.list(mapId),
     (places = []) =>
       places.map((existing) =>
         existing.id === place.id
-          ? mergePlaceFields(existing, place, PHOTO_KEYS)
+          ? mergePlaceFields(existing, place, keys)
           : existing,
       ),
   );

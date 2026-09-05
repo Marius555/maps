@@ -125,3 +125,60 @@ export function zonesSentence(zones: readonly string[]): string {
 
   return `the ${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
 }
+
+/**
+ * The two blocks that still render and are never offered.
+ *
+ * `CARD_BLOCKS[type].retired` is the runtime rule and `availableBlocks` is what
+ * enforces it; this is the same fact at the type level, so `UnshelvedBlock`
+ * below can tell "nobody filed it" apart from "deliberately not offered".
+ */
+type RetiredBlockType = "category" | "details";
+
+/**
+ * The palette's shelves, and the order blocks are offered in.
+ *
+ * `CARD_BLOCKS` is keyed by type, and its `Object.keys` order is an
+ * implementation detail of a table the embed also reads. This is the *owner's*
+ * order, grouped by the question each block answers — what the location says,
+ * what it shows, what a visitor can do with it, and how the card is spaced out.
+ * It lives here with `BLOCK_LABELS` for that table's own reason: English the
+ * dashboard needs and the embed must never ship.
+ *
+ * `compact` is the one shelf whose rows carry no hint. "Divider" and "Space"
+ * say themselves, and two words on two lines each is a shelf of mostly nothing,
+ * so `BlockPalette` draws that one two-up.
+ */
+export const BLOCK_GROUPS = [
+  {
+    id: "content",
+    label: "Content",
+    types: ["name", "address", "description", "tags", "hours"],
+  },
+  { id: "media", label: "Media", types: ["gallery", "logo"] },
+  { id: "actions", label: "Actions", types: ["actions", "button"] },
+  { id: "layout", label: "Layout", types: ["divider", "spacer"], compact: true },
+] as const satisfies readonly {
+  id: string;
+  label: string;
+  types: readonly CardBlockType[];
+  compact?: true;
+}[];
+
+/**
+ * Compile-time proof that every block the palette can offer is on a shelf.
+ *
+ * A new `CardBlockType` that nobody filed would be a block that exists, drops
+ * onto a card perfectly well, and is offered nowhere — the one failure this
+ * grouping introduces and the one nothing at runtime would report. `BLOCK_LABELS`
+ * is a `Record` and so forces its own entry; this is that guarantee for the
+ * shelves. Add the type to a group, or to `RetiredBlockType` if it is one.
+ */
+type UnshelvedBlock = Exclude<
+  CardBlockType,
+  (typeof BLOCK_GROUPS)[number]["types"][number] | RetiredBlockType
+>;
+
+export const EVERY_BLOCK_IS_SHELVED: [UnshelvedBlock] extends [never]
+  ? true
+  : never = true;

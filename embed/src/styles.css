@@ -113,13 +113,51 @@
 .lm-root--dark .maplibregl-popup-content {
   /* `--lm-card-bg` is only set when the owner chose a colour; unset is what
      keeps a card readable on a dark map — see the shell rules further down. */
-  background: var(--lm-card-bg, var(--lm-surface));
+  background: color-mix(
+    in oklab,
+    var(--lm-card-bg, var(--lm-surface)) var(--lm-card-opacity, 100%),
+    transparent
+  );
   color: var(--lm-foreground);
 }
 
+/*
+ * The tip wears the card's ground, and now the card's transparency with it.
+ *
+ * A solid white triangle hanging off a glass card reads as a bug, so both rules
+ * run the same mix as the content box above. **No `backdrop-filter` on it**: a
+ * backdrop filter applies to the border box, and the tip's is a square, so a
+ * blurred square would appear behind a triangle.
+ *
+ * These are `.lm-root`-scoped at MapLibre's own specificity and come later in
+ * the same stylesheet, which is what lets them win. Top and bottom only — the
+ * anchors a card opening above or below a pin uses; a popup pushed to a left or
+ * right anchor at the frame's edge keeps MapLibre's white, as it always has.
+ */
+.lm-root .maplibregl-popup-tip {
+  border-top-color: color-mix(
+    in oklab,
+    var(--lm-card-bg, #ffffff) var(--lm-card-opacity, 100%),
+    transparent
+  );
+  border-bottom-color: color-mix(
+    in oklab,
+    var(--lm-card-bg, #ffffff) var(--lm-card-opacity, 100%),
+    transparent
+  );
+}
+
 .lm-root--dark .maplibregl-popup-tip {
-  border-top-color: var(--lm-surface);
-  border-bottom-color: var(--lm-surface);
+  border-top-color: color-mix(
+    in oklab,
+    var(--lm-card-bg, var(--lm-surface)) var(--lm-card-opacity, 100%),
+    transparent
+  );
+  border-bottom-color: color-mix(
+    in oklab,
+    var(--lm-card-bg, var(--lm-surface)) var(--lm-card-opacity, 100%),
+    transparent
+  );
 }
 
 .lm-root--dark .maplibregl-popup-close-button {
@@ -164,8 +202,7 @@
 }
 
 .lm-search__input,
-.lm-button,
-.lm-chip {
+.lm-button {
   font: inherit;
   border-radius: 8px;
   border: 1px solid var(--lm-border);
@@ -177,17 +214,39 @@
 .lm-search__input {
   width: 190px;
   max-width: 100%;
-  padding: 7px 10px;
+  /* Room at the end for the magnifier sitting inside the field. */
+  padding: 7px 32px 7px 10px;
   -webkit-appearance: none;
   appearance: none;
+}
+
+/* The type-to-clear cross Safari and Chrome add to `type="search"` lands under
+   the glyph and gives the field two things in one corner. */
+.lm-search__input::-webkit-search-cancel-button {
+  display: none;
 }
 
 .lm-search__input::placeholder {
   color: var(--lm-muted);
 }
 
-.lm-button,
-.lm-chip {
+/*
+ * A picture, not a button.
+ *
+ * `pointer-events: none` so the whole field stays clickable through it — the
+ * one thing that makes an icon inside an input worse than no icon is a dead
+ * 18px patch at the end of the box a visitor is trying to click into.
+ */
+.lm-search__icon {
+  position: absolute;
+  inset-inline-end: 9px;
+  top: 50%;
+  translate: 0 -50%;
+  pointer-events: none;
+  color: var(--lm-muted);
+}
+
+.lm-button {
   padding: 7px 10px;
   cursor: pointer;
   white-space: nowrap;
@@ -204,27 +263,8 @@
   color: var(--lm-foreground);
 }
 
-.lm-button:hover,
-.lm-chip:hover {
+.lm-button:hover {
   border-color: #c9ced7;
-}
-
-.lm-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* No colour dot, even though a tag now carries one.
-
-   A filter chip is a control — pressed or not is what it has to communicate, and
-   `--lm-foreground` is what says so. A tag's colour answers a different question
-   ("which pin is this?") and is shown where that question is asked: on the card
-   and on the list row, next to the thing wearing it. Putting it here too would
-   have the on/off state competing with eight palette colours for the same edge. */
-.lm-chip--on {
-  border-color: var(--lm-foreground);
-  box-shadow: var(--lm-shadow), inset 0 0 0 1px var(--lm-foreground);
 }
 
 .lm-root :focus-visible {
@@ -324,7 +364,21 @@
      out through it. */
   padding: 0;
   border-radius: var(--lm-card-radius, 4px);
-  background: var(--lm-card-bg, #ffffff);
+  /*
+   * `100%` is exactly the colour the token already names, so a card whose owner
+   * never reached for Transparency paints the byte-identical background it
+   * always did. Below that the map shows through — and it is a `background`
+   * with alpha rather than the `opacity` property for `.lm-panel`'s reason:
+   * `opacity` would fade the card's text along with its ground.
+   */
+  background: color-mix(
+    in oklab,
+    var(--lm-card-bg, #ffffff) var(--lm-card-opacity, 100%),
+    transparent
+  );
+  /* The whole filter, not a length: absent has to be `none` rather than
+     `blur(0)`, which would still make every popup a backdrop root. */
+  backdrop-filter: var(--lm-card-backdrop, none);
   border: var(--lm-card-border, none);
   box-shadow: var(--lm-card-shadow, 0 1px 2px rgba(0, 0, 0, 0.1));
   /* So a bleeding photo takes the card's own corners rather than squaring them
@@ -347,32 +401,73 @@
   padding-inline: var(--lm-card-pad, 10px);
   min-width: 0;
   /*
-   * `none`, and this is load-bearing.
+   * `none`, and this is load-bearing — for the two ends.
    *
-   * `.lm-popup` is a flex column with a max-height that `fitCard` writes from
-   * the room the card has on the map. A shrinkable zone inside that box does not
-   * scroll when the card runs out of room — it *collapses*, because the gallery
-   * above it is a fixed height and the middle is the only thing that can give.
-   * On a short map that took the name, the category and the address off the card
-   * entirely and left a photo sitting directly on the links.
-   *
-   * The card scrolls as a whole instead, which is what it has always done.
+   * A shrinkable zone with nowhere to put its overflow does not scroll when the
+   * card runs out of room, it *collapses*: the gallery above it is a fixed
+   * height, so the middle is the only thing that can give, and on a short map
+   * that took the name, the category and the address off the card entirely and
+   * left a photo sitting directly on the links. The top and bottom zones are
+   * therefore the size of what is in them, always.
    */
   flex: none;
 }
 
 /*
- * A floor as well as a cap, and on the location card alone — a shape's popup is
- * a name and a sentence and is deliberately smaller (see `buildShapePopup`).
+ * The card's one scroller, and the twin of `zoneClass`'s `min-h-0 flex-1
+ * overflow-y-auto` in the dashboard's card-frame.tsx.
  *
- * `min()` because `min-height` beats `max-height` in CSS: without it a short map
- * would push the card past the room `fitCard` measured for it. Same number as
- * the dashboard's `.map-card`, for the same reason — a location holding nothing
- * but its name is still a card, and content-sized it came out at about seventy
- * pixels, which reads as broken rather than as empty.
+ * It is only safe — and only necessary — because `.lm-popup--place` is a fixed
+ * box now. The card used to scroll as a whole, which was right while its height
+ * was the height of its contents; against a designed height it would leave the
+ * actions row floating in the middle of a card with empty space under it, where
+ * the studio pins that row to the bottom edge. `min-height: 0` is what makes the
+ * zone scroll instead of collapsing, which is the failure the rule above
+ * describes.
+ *
+ * The bar is hidden the way `ScrollShadow hideScrollBar` hides the dashboard's:
+ * a scrollbar inside a card whose every other pixel its owner chose is chrome
+ * they did not design, and it moves the content sideways the moment it appears.
+ * There is no fade at the edge to go with it — `ScrollShadow` is React and the
+ * embed cannot have it (§4).
+ */
+.lm-popup__zone--middle {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.lm-popup__zone--middle::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * **A location's card is the size its owner designed, not the size of what this
+ * place filled in** — and on the location card alone: a shape's popup is a name
+ * and a sentence and is deliberately smaller (see `buildShapePopup`).
+ *
+ * `--lm-card-h` is `layout.maxHeight`, written by `styleCard`. It used to be a
+ * floor and a cap with the content deciding in between, which drew the same
+ * saved design at a different size on every pin, and at no size the studio had
+ * ever shown — the designer's canvas has always pinned the card at exactly this
+ * height.
+ *
+ * `.lm-popup`'s `max-height: var(--lm-popup-max)` still sits above this and
+ * still wins, because `max-height` beats `height`: that is how a map frame too
+ * short for the card shrinks it. And because `placeCard` clears that property
+ * before it measures, `card.offsetHeight` now reads the designed height as the
+ * card's natural size, which is exactly the number that pass is looking for.
+ *
+ * `overflow: hidden` because the scrolling moved down to
+ * `.lm-popup__zone--middle`, so the name stays at the top and the links stay at
+ * the bottom while the week moves between them. The bare `.lm-popup` keeps its
+ * own `overflow-y: auto` for the shape card, which has no zones to scroll.
  */
 .lm-popup--place {
-  min-height: min(140px, var(--lm-popup-max, 140px));
+  height: var(--lm-card-h, 440px);
+  overflow: hidden;
 }
 
 /*
@@ -398,8 +493,35 @@
  * opening hours does not: flush against the last of them it reads as one more
  * row of hours.
  */
-.lm-popup__zone--bottom {
+/*
+ * The strip at the foot of the card takes the card's own padding above it,
+ * whether or not it is the zone carrying the card's top padding — nothing else
+ * separates one zone from the next, so the links would otherwise sit directly
+ * under the last row of the opening hours and read as one more of them.
+ *
+ * `:not(:empty)` because the box is always in the DOM now, even for a location
+ * that fills in nothing for it: without the guard an empty strip is 10px of
+ * nothing at the bottom of every card. The dashboard's `hasBlocks` is the same
+ * guard said in React (components/card/card-frame.tsx).
+ */
+.lm-popup__zone--bottom:not(:empty) {
   padding-top: var(--lm-card-pad, 10px);
+}
+
+/*
+ * A block this location filled in nothing for. It is still drawn — see
+ * `buildPopup` — and this is the floor that keeps its nothing the size of a
+ * line, so the space a card holds for it is the space the studio held.
+ *
+ * One line is the floor; `--lm-block-empty-h` is the block's own answer when one
+ * line is not enough — a week with its days showing holds all eight rows, or
+ * every block under it moves up the card. `applyBox` writes it from
+ * `emptyBlockHeight`, the same function the dashboard asks, so only the property
+ * *name* is kept in step by hand with `.card-block--empty` in app/globals.css,
+ * the way `--lm-card-gap` and `--card-gap` already are.
+ */
+.lm-popup__block--empty {
+  min-height: var(--lm-block-empty-h, 1.5rem);
 }
 
 /*
@@ -575,6 +697,24 @@
 .lm-popup__gallery {
   position: relative;
   height: 100%;
+}
+
+/*
+ * The band with no picture in it — see `buildGallery`, which returns this rather
+ * than nothing so a location without a photo is still the card its owner
+ * designed.
+ *
+ * A translucent black rather than a grey, so it darkens whatever surface the
+ * card is on and stays sensible against a background the owner recoloured. The
+ * dark rule below lightens instead, for the same reason: on a dark card a
+ * black band is invisible.
+ */
+.lm-popup__gallery--empty {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.lm-root--dark .lm-popup__gallery--empty {
+  background: rgba(255, 255, 255, 0.09);
 }
 
 .lm-popup__photo {
@@ -1079,12 +1219,101 @@
  */
 .lm-panel {
   display: flex;
-  flex: 0 0 40%;
+  flex: 0 0 var(--lm-panel-w, 40%);
   min-width: 240px;
   flex-direction: column;
   min-height: 0;
   border-right: 1px solid var(--lm-border);
-  background: var(--lm-surface);
+  /*
+   * The owner is watching this move while they design it.
+   *
+   * Every one of these is something the publish designer changes on a running
+   * map — a width, a corner, a colour, and the `translateX` that carries a
+   * floating panel from one edge to the other. Short, because it is feedback
+   * that a press landed rather than a scene change; `transform` because that is
+   * the one the compositor can do without touching layout, which is what makes
+   * the side flip a slide instead of a jump.
+   *
+   * `.lm-root`'s reduced-motion rule above already covers all of it.
+   */
+  transition:
+    flex-basis 180ms ease,
+    width 180ms ease,
+    border-radius 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+  /*
+   * Opaque unless the owner said otherwise, and `100%` is exactly the colour
+   * the token already names — so an undesigned panel and a panel designed at
+   * full opacity are the same pixels, and a snapshot published before any of
+   * this writes no property at all.
+   */
+  background: color-mix(
+    in oklab,
+    var(--lm-surface) var(--lm-panel-opacity, 100%),
+    transparent
+  );
+}
+
+/*
+ * Docked on the other side: the border belongs to the edge facing the map.
+ *
+ * `order` rather than DOM position, which is what it used to be. The panel is
+ * always written first — that is the reading order — and which edge it is drawn
+ * against is state on the root, so the publish designer can flip it on a map that
+ * is already running instead of building a new one. `.lm-canvas`'s `order: -1` in
+ * the narrow query still beats this, so a stacked map still paints first.
+ */
+.lm-root[data-lm-side="right"] .lm-panel {
+  order: 1;
+  border-right: 0;
+  border-left: 1px solid var(--lm-border);
+}
+
+/*
+ * Over the map rather than beside it.
+ *
+ * Out of the flex row entirely, so `.lm-canvas` gets the whole box and the map
+ * is a map with a panel on it rather than a map in the leftover 60%. This is
+ * what makes the transparency mean anything: there is something behind it.
+ *
+ * `inset-inline` rather than `left`/`right` so one rule serves both sides —
+ * `.lm-panel--right` is the only thing that decides which edge it sits on, and
+ * a `dir="rtl"` host page gets the mirrored answer for free.
+ */
+.lm-root[data-lm-float] .lm-panel {
+  position: absolute;
+  z-index: 2;
+  inset-block: 10px;
+  inset-inline-start: 10px;
+  width: var(--lm-panel-w, 40%);
+  flex: none;
+  border: 1px solid var(--lm-border);
+  border-radius: var(--lm-panel-radius, 0);
+  box-shadow: var(--lm-shadow);
+  overflow: hidden;
+  backdrop-filter: blur(var(--lm-panel-blur, 0));
+}
+
+/*
+ * Anchored to the same edge on both sides, and *moved* to the other one.
+ *
+ * The obvious rule is `inset-inline-start: auto; inset-inline-end: 10px`, which
+ * is what this was — and `auto` cannot interpolate, so flipping the side teleported
+ * the panel across the map. A translate off the one anchor is the same picture
+ * and animates, so the owner sees where it went.
+ *
+ * `100cqw` is the embed's own width: `.lm-root` declares `container-type:
+ * inline-size` at the top of this file, and the layout it contains is `inset: 0`.
+ * So this is "the full width, less the panel's own, less both 10px gutters".
+ */
+.lm-root[data-lm-float][data-lm-side="right"] .lm-panel {
+  transform: translateX(calc(100cqw - 100% - 20px));
+}
+
+/* Mirrored for an RTL host page, where the start edge is already the right one. */
+[dir="rtl"] .lm-root[data-lm-float][data-lm-side="right"] .lm-panel {
+  transform: translateX(calc(100% + 20px - 100cqw));
 }
 
 /* Every control can be switched off independently of the list, and a docked
@@ -1097,24 +1326,52 @@
 .lm-toolbar--docked {
   position: static;
   max-width: none;
-  padding: 10px;
+  flex-wrap: nowrap;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--lm-border);
 }
 
 /* Docked, the controls sit on the panel rather than over a map, so the shadow
    that lifted them off the basemap is just noise. */
 .lm-toolbar--docked .lm-search__input,
-.lm-toolbar--docked .lm-button,
-.lm-toolbar--docked .lm-chip {
+.lm-toolbar--docked .lm-button {
   box-shadow: none;
+}
+
+/*
+ * On a panel, a field is a well rather than a card.
+ *
+ * `--lm-surface` is a solid colour, so a field painted with it on a translucent
+ * floating panel is an opaque patch sitting in a see-through box — the one place
+ * the design visibly came apart. A tint of the foreground inherits whatever the
+ * panel is letting through, and reads as an inset field on both themes without a
+ * token of its own.
+ */
+.lm-toolbar--docked .lm-search__input,
+.lm-toolbar--docked .lm-button {
+  border-color: transparent;
+  background: color-mix(in oklab, var(--lm-foreground) 6%, transparent);
+}
+
+.lm-toolbar--docked .lm-button:hover {
+  border-color: transparent;
+  background: color-mix(in oklab, var(--lm-foreground) 11%, transparent);
+}
+
+/*
+ * The search takes the row and "nearest to me" sits at the end of it.
+ *
+ * `.lm-search` has to be the flexible one rather than the input: the input is
+ * inside it, and a wrapper sized to its own content leaves the field at 190px
+ * with the button floating in the space after it.
+ */
+.lm-toolbar--docked .lm-search {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .lm-toolbar--docked .lm-search__input {
   width: 100%;
-}
-
-.lm-toolbar--docked .lm-chip--on {
-  box-shadow: inset 0 0 0 1px var(--lm-foreground);
 }
 
 .lm-list {
@@ -1138,17 +1395,20 @@
   border-bottom: 1px solid var(--lm-border);
 }
 
-.lm-list__item--on {
-  background: color-mix(in oklab, var(--lm-focus) 10%, transparent);
-}
 
+/*
+ * Pin, then everything else.
+ *
+ * The text is its own column (`.lm-list__text`) rather than a sibling of the
+ * name and the address, because a pin beside three flex children centres itself
+ * against the first of them and leaves the address starting under it.
+ */
 .lm-list__row {
   display: flex;
   width: 100%;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 10px 12px 4px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 10px;
   border: 0;
   background: none;
   color: inherit;
@@ -1157,8 +1417,54 @@
   cursor: pointer;
 }
 
-.lm-list__row:hover {
+.lm-list__text {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+/*
+ * The location's own pin, at the head of its row.
+ *
+ * A canvas, drawn from the same geometry the map draws — see
+ * packages/shared/pin-raster.ts for why it is not an `<img>`. `flex: none` so a
+ * long name cannot squash it, and the box comes from the owner's own size with
+ * the old-list default behind it.
+ */
+.lm-list__pin {
+  flex: none;
+  width: var(--lm-row-pin, 28px);
+  height: var(--lm-row-pin, 28px);
+}
+
+/*
+ * The whole entry lights up, not the button inside it.
+ *
+ * `.lm-list__row` is a `<button>` and `.lm-list__actions` is its *sibling* — so
+ * hovering used to paint the name and the address and stop dead above the
+ * Directions and phone links, which read as the links belonging to something
+ * else. One ground under the `<li>` is the fix, and it is why the selected rule
+ * below has to be more specific than this one rather than merely later.
+ */
+.lm-list__item:hover {
   background: color-mix(in oklab, var(--lm-foreground) 4%, transparent);
+}
+
+/*
+ * The open one, and it says so twice.
+ *
+ * A tint alone at 10% is nearly invisible over a translucent panel on a busy
+ * basemap — which is the panel this list now usually sits in. The bar at the
+ * inline start is what actually reads, and it is drawn with an inset shadow so
+ * it costs no layout and cannot shift the row it marks.
+ */
+.lm-list__item--on,
+.lm-list__item--on:hover {
+  background: color-mix(in oklab, var(--lm-focus) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--lm-focus);
 }
 
 .lm-list__head {
@@ -1171,6 +1477,12 @@
 
 .lm-list__name {
   font-weight: 600;
+  line-height: 1.3;
+  /* A name is the one line a visitor scans down, so it stays on one line and
+     ends in an ellipsis rather than pushing the address out of rhythm. */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* Never wraps, never shrinks: it is the column a visitor scans down, and a
@@ -1183,60 +1495,75 @@
   white-space: nowrap;
 }
 
-/* One chip per row: the location's first tag, which is the one its pin is drawn
-   in. The rest of a location's tags are the popup's — a row is for choosing
-   between places, not for reading one. */
-.lm-list__tag {
-  color: var(--lm-muted);
-  font-size: 12px;
-}
-
-.lm-list__tag::before {
-  content: "";
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 5px;
-  border-radius: 50%;
-  background: var(--lm-tag-color, var(--lm-muted));
-  vertical-align: -1px;
-}
-
+/* Two lines at most: a full postal address on one line is an ellipsis after the
+   house number, and on four it buries the next result. */
 .lm-list__address {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   color: var(--lm-muted);
   font-size: 13px;
+  line-height: 1.45;
 }
 
 .lm-list__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  padding: 0 12px 10px;
+  gap: 6px;
+  /* Pulled up under the row, whose own padding closes the gap when these are
+     switched off (`.lm-list__item--bare`). */
+  margin-top: -2px;
+  padding: 0 14px 12px;
+  /* The pins beside them are `--lm-row-pin` wide plus the row's 10px gap, so
+     the actions line up with the name above rather than with the pin. */
+  padding-inline-start: calc(14px + var(--lm-row-pin, 28px) + 10px);
 }
 
+/*
+ * Small outlined pills, not blue underlined links.
+ *
+ * These were `#1c7ed6` with an underline on hover — a hardcoded blue that
+ * ignored the owner's accent, and the single thing that made a designed panel
+ * read as an undesigned web page. The treatment is `.lm-popup__link--cta`'s,
+ * which the card already uses for the owner's own call to action, so this is the
+ * embed's existing vocabulary rather than a second one.
+ */
 .lm-list__link {
-  font-size: 13px;
-  color: #1c7ed6;
+  padding: 3px 9px;
+  border: 1px solid var(--lm-border);
+  border-radius: 999px;
+  color: var(--lm-foreground);
+  font-size: 12px;
+  line-height: 1.5;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .lm-list__link:hover {
-  text-decoration: underline;
+  border-color: color-mix(in oklab, var(--lm-focus) 45%, var(--lm-border));
+  background: color-mix(in oklab, var(--lm-focus) 8%, transparent);
+  color: var(--lm-focus);
 }
 
-.lm-root--dark .lm-list__link,
 .lm-root--dark .lm-popup__link {
   /* The owner's colour first here too — this rule is more specific than the one
      above, so without the var it would take the choice back on a dark map. */
   color: var(--lm-card-color, var(--lm-focus));
 }
 
+/* Both are the panel talking about itself rather than about a place, so they are
+   centred and quieter than a row — a left-aligned sentence at row rhythm reads
+   as a result with no name. */
 .lm-list__empty,
 .lm-list__footer {
   margin: 0;
-  padding: 14px 12px;
+  padding: 18px 14px;
   color: var(--lm-muted);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .lm-list__footer:empty {
@@ -1257,10 +1584,54 @@
     flex-direction: column;
   }
 
+  /*
+   * Stacked, a floating panel would sit over the whole map rather than beside
+   * it — so it comes back into the flow and becomes the bottom half, which is
+   * what the docked layout has always done on a phone. `position: static` is
+   * what undoes `--float`; the rest follows it back.
+   */
   .lm-panel {
+    position: static;
+    order: 0;
+    transform: none;
     flex: 1 1 auto;
-    border-right: 0;
+    width: auto;
+    border: 0;
     border-top: 1px solid var(--lm-border);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /*
+   * ...and again at the weight of the rules being undone, which is the part that
+   * is easy to get wrong.
+   *
+   * Side and placement are attribute-scoped now — `.lm-root[data-lm-float]
+   * .lm-panel` is three selectors against the one above — so the bare rule
+   * cannot reach them and source order stops deciding. Left as it was, a phone
+   * kept a floating panel hanging over its map. Each override therefore repeats
+   * the selector it is cancelling, and only the declarations that selector
+   * actually sets.
+   */
+  .lm-root[data-lm-float] .lm-panel {
+    position: static;
+    flex: 1 1 auto;
+    width: auto;
+    border: 0;
+    border-top: 1px solid var(--lm-border);
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .lm-root[data-lm-side="right"] .lm-panel {
+    order: 0;
+    border-left: 0;
+  }
+
+  .lm-root[data-lm-float][data-lm-side="right"] .lm-panel,
+  [dir="rtl"] .lm-root[data-lm-float][data-lm-side="right"] .lm-panel {
+    transform: none;
   }
 
   .lm-canvas {
@@ -1292,33 +1663,6 @@
   .lm-search__input {
     width: 100%;
   }
-}
-
-/* Tag filters ------------------------------------------------------------ */
-
-/*
- * A group is one question, so it gets a heading and its own row of chips. The
- * embed reads groups as AND and the chips inside one as OR, and a visitor who
- * cannot see that boundary reads a filter that narrows as a filter that broke.
- */
-.lm-filter-groups {
-  display: flex;
-  width: 100%;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.lm-filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.lm-filter-group__label {
-  margin: 0;
-  color: var(--lm-muted);
-  font-size: 12px;
-  font-weight: 500;
 }
 
 /* Custom fields ---------------------------------------------------------- */

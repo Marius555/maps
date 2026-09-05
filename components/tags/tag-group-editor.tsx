@@ -114,11 +114,27 @@ export function TagGroupEditor({ map, places }: { map: AppMap; places: Place[] }
       {updateMap.error ? <ErrorMessage error={updateMap.error} /> : null}
 
       {draft.length === 0 ? (
+        /*
+         * The button, not just the sentence telling you to press one.
+         *
+         * This state said "Add a group" and rendered nothing to press: the only
+         * way through it was the small secondary button in the panel's own
+         * header, on the opposite side of the heading from the words asking for
+         * it. An empty state is an invitation to act and the action belongs in
+         * it (§8) — and this is the one moment a map has no vocabulary at all,
+         * so it is exactly where somebody is looking for the way in.
+         */
         <EmptyState
           size="sm"
           icon={Filter}
           title="No filters yet"
-          description="Add a group — like “Sells” or “Services” — and the tags a visitor can pick from."
+          description="A group is one question — “Sells”, or “Open on Sundays”. The tags inside it are the answers a visitor picks from."
+          action={
+            <Button variant="secondary" onPress={addGroup}>
+              <Plus aria-hidden="true" className="size-4" />
+              Add group
+            </Button>
+          }
         />
       ) : (
         <ul className="space-y-3">

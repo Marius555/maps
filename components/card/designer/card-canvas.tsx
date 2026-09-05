@@ -15,13 +15,18 @@ import type { MapField, Place } from "@/lib/repositories/types";
 import type { TagChip } from "@/packages/shared/tags";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import {
+  CARD_ZONES,
   cardRows,
   detailsContents,
   type CardBlock,
   type CardLayout,
   type CardZone,
 } from "@/packages/shared/card-layout";
-import { CardBlockContent, type CardBlockData } from "../card-block";
+import {
+  CardBlockContent,
+  hasBlockContent,
+  type CardBlockData,
+} from "../card-block";
 import {
   CardFrame,
   CardLead,
@@ -201,6 +206,17 @@ export function CardCanvas({
     onDrop: () => {},
   });
 
+  /**
+   * The zones this layout puts blocks in.
+   *
+   * The card's vertical padding belongs to the first and last of these, which
+   * is `CardView`'s rule and now this one too — the canvas used to hang the
+   * padding on the zones *named* top and bottom, so a layout with an empty top
+   * zone drew its first line flush against the card's edge here and inset over
+   * there. One rule, both files. See `zoneClass` in ../card-frame.tsx.
+   */
+  const filled = CARD_ZONES.filter((zone) => layout.zones[zone].length > 0);
+
   const renderZone = (zone: CardZone) => {
     const blocks = layout.zones[zone];
     /*
@@ -237,7 +253,19 @@ export function CardCanvas({
             implies. Named rather than reached for by position, because "the
             first child of the first child" is a fact about this file that the
             measuring code has no business knowing. */}
-        <div data-block-content style={blockContentStyle(block, layout)}>
+        <div
+          data-block-content
+          // The same floor a real card gives an empty block, so the space this
+          // canvas holds for one is the space that card will hold. Four of them
+          // draw a hint here and nothing there; see `.card-block--empty`, and
+          // `card-view.tsx` for why it sits on the content rather than the box.
+          className={
+            hasBlockContent(block.type, data, block)
+              ? undefined
+              : "card-block--empty"
+          }
+          style={blockContentStyle(block, layout)}
+        >
           <CardBlockContent block={block} data={data} />
         </div>
       </DesignerBlock>
@@ -250,10 +278,13 @@ export function CardCanvas({
       <CardZoneBox
         key={zone}
         zone={zone}
-        // The designer keeps every zone in the DOM, so it says "no padding"
-        // rather than dropping the box — see `zoneClass`.
-        padTop={zone === "top" && blocks.length > 0}
-        padBottom={zone === "bottom" && blocks.length > 0}
+        // Every zone stays in the DOM — here because it is a drop target and a
+        // thing to measure, and on the other two surfaces because the middle one
+        // is the `flex-1` that pins the bottom strip. An empty one says so and
+        // pays no padding. See `zoneClass`.
+        hasBlocks={blocks.length > 0}
+        padTop={zone === filled[0]}
+        padBottom={zone === filled[filled.length - 1]}
       >
         {/*
           * `mode="popLayout"` because a line no longer collapses its own height

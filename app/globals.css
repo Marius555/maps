@@ -394,25 +394,304 @@
 }
 
 /*
- * How tall the card may get before its body scrolls, written by the same hook
- * from the map frame's height. The fallback matters: the card is rendered in the
- * commit before the hook's first measurement, and an uncapped frame of that is a
- * flash of a card taller than the map.
+ * **The card is the size its owner designed it, not the size of what this
+ * location happens to have filled in.**
  *
- * And how short it may get, which is a separate fact and a newer one. The card
- * is content-sized, so a location holding nothing but its name opened seventy
- * pixels tall — a title, a button and no card around either. A floor gives it
- * the shape of the thing it is; the zone padding above it is what stops the
- * content sitting on the edges of that shape.
+ * It used to be content-sized between a floor and a cap, which meant the same
+ * saved design drew at a different size on every pin — and at no size the studio
+ * had ever shown, since the designer's canvas has always pinned the card at its
+ * full `maxHeight`. A location holding only a name opened seventy pixels tall.
+ * `--card-h` is that designed height, published by `cardVars`.
  *
- * `min()` and not a bare `min-height`, because `min-height` *beats*
- * `max-height` in CSS. On a short map frame the floor would otherwise win over
- * the cap the anchor hook just measured and push the card out of the viewport
- * it was measured against.
+ * `max-height` stays, and it is what makes this safe: it *beats* `height` in
+ * CSS, so a map frame too short for the card still shrinks it rather than
+ * letting it hang out of a frame that is `overflow-hidden`. The cap is written
+ * by `useMapAnchor` from the frame, which resizes without a React render; the
+ * fallback matters because the card is rendered in the commit before the hook's
+ * first measurement.
+ *
+ * There is deliberately no `min-height` any more. The floor existed for the
+ * seventy-pixel card, which cannot happen now, and `min-height` beating
+ * `max-height` is exactly how it would undo the clamp above.
  */
 .map-card {
-  min-height: min(8.75rem, var(--map-anchor-max-height, 24rem));
+  height: var(--card-h, 27.5rem);
   max-height: var(--map-anchor-max-height, 24rem);
+}
+
+/*
+ * A block this location filled in nothing for.
+ *
+ * It is still drawn — a card is the design its owner arranged, and a block that
+ * vanished took everything under it up the card with it (see `renderZone` in
+ * components/card/card-view.tsx). What it draws is nothing at all, so this is
+ * the floor that keeps that nothing the size of a line.
+ *
+ * One line is the *floor*, and `--card-empty-h` is the block's own answer when
+ * one line is not enough. That property is the whole fix for the case this rule
+ * got wrong: a Hours block with "Only today" unticked draws a summary row and
+ * seven days when it is filled, so holding 24px for it moved every block below
+ * it up the card. See `emptyBlockHeight` in packages/shared/card-layout.ts,
+ * which is where the numbers are and which all three renderers ask.
+ *
+ * It is applied on the canvas too, which is what makes the two agree: an empty
+ * Address, Description, Hours or Name draws the same nothing on either surface,
+ * so both hold exactly this and the blocks under them land on the same pixel.
+ *
+ * **The residual, measured rather than assumed:** four blocks draw a *hint* on
+ * the canvas instead of nothing — Tags/Category (an empty chip, 40.8px with the
+ * default chip padding), Links, Button (41px) and the retired More details. A
+ * real card has no hint to draw, so for those the studio's box is the taller of
+ * the two by about 17px. Nothing fixed will close that: a chip's height is the
+ * owner's to set (`chipPadding`), so a number here would be wrong for half the
+ * cards. It is the one place the two surfaces still disagree, and it only shows
+ * on a location that left that particular block empty.
+ *
+ * The embed keeps the same rule under `.lm-popup__block--empty`, reading its own
+ * `--lm-block-empty-h` written from the same shared function — so only the two
+ * property *names* are kept in step by hand, the way `--card-gap` and
+ * `--lm-card-gap` already are, rather than the arithmetic behind them.
+ */
+.card-block--empty {
+  min-height: var(--card-empty-h, 1.5rem);
+}
+
+/*
+ * A Logo block set strictly to Logo, on the designer's sample location, which
+ * has none.
+ *
+ * The card itself draws nothing there — that is the whole difference between
+ * Logo and Mixed, and `buildLogo` in embed/src/popup.ts returns null for it. But
+ * the sample is whichever location happened to be first, so on the canvas an
+ * invisible block reads as a broken control rather than as a missing logo. Same
+ * argument, and the same dashed vocabulary, as `.card-button--empty` and the
+ * gallery's own dropzone.
+ */
+.card-logo--empty {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border: 1px dashed var(--border);
+  border-radius: var(--card-radius, 0.5rem);
+  color: var(--muted);
+}
+
+/*
+ * The invitation drawn *in* an empty block, on the editor's card alone.
+ *
+ * A block that draws nothing is the right thing for a visitor and an invisible
+ * hole for the owner: the space above is held (`.card-block--empty`, and
+ * `--card-h` on the card itself), so a location with no photo and no hours opens
+ * a card with two mystery bands in it and nothing saying they are the owner's
+ * own design waiting to be filled in. This is what turns each of those bands
+ * into "+".
+ *
+ * It fills its block rather than sizing itself, because the whole promise is
+ * that the slot is exactly the box the content will occupy — press it, fill it
+ * in, and nothing else on the card moves. So every dimension comes from the
+ * block: `height: 100%` against the box `blockContentStyle` already stretches,
+ * and the 1.5rem floor from the class above.
+ *
+ * Written here rather than as utilities on the element for one reason: it is a
+ * HeroUI `Button`, and a `Button` arrives with its own ground, padding, height
+ * and hover. Unlayered CSS beats both Tailwind's `@layer utilities` and
+ * @heroui/styles, which is what lets these six declarations win without an
+ * `!important` between them — the same reason `.map-card` sets its height here.
+ *
+ * `--accent-soft` is `color-mix(accent 15%)`, so the hover tracks the accent for
+ * free and the slot cannot end up the one control in the app wearing a stale
+ * brand colour.
+ */
+.card-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 1.5rem;
+  padding: 0;
+  /*
+   * Not `--border`, which is the app's hairline for a *divider* — measured on
+   * the dark theme it is oklch(28%), and a dashed line that faint on a dark card
+   * reads as an artefact rather than as an outline. Mixed from `--muted`
+   * instead, which is the token that already has to stay legible as text on both
+   * grounds, at the strength that makes it an edge rather than a second border.
+   */
+  border: 1px dashed color-mix(in oklab, var(--muted) 55%, transparent);
+  /*
+   * The card's corner, not the app's.
+   *
+   * This was `--radius-md`, which is the dashboard chrome's rounding and has
+   * nothing to do with the thing being designed: a square card drew round
+   * dashed boxes inside it, and a very round one drew tight ones. `cardVars`
+   * publishes `--card-radius` for exactly this. `--card-slot-radius` is the
+   * per-block override, and only a Button ever sets one.
+   */
+  border-radius: var(--card-slot-radius, var(--card-radius, 0.5rem));
+  background: transparent;
+  color: var(--muted);
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.card-slot:hover,
+.card-slot[data-hovered],
+.card-slot[data-pressed],
+.card-slot[data-focus-visible],
+/* Open, so the block the popover is about stays marked while it is being filled
+   in — the popover is beside the card, not over the block. `data-open` is ours:
+   HeroUI's Button leaves `aria-expanded` false on a trigger whose popover is
+   open, measured in the browser. */
+.card-slot[data-open] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+
+/*
+ * Edit mode on a pin's own card: the block under the pointer, and the pencil
+ * that opens its settings.
+ *
+ * Unlayered for `.card-slot`'s reason — it has to beat both Tailwind's utilities
+ * and @heroui/styles with no `!important` between them.
+ *
+ * **Stretched over the block's content box, not laid beside it.** The outline is
+ * this element's own, so the hover state of the target *is* the hover state of
+ * the block, and there is no second element to keep in sync. It takes no room:
+ * `position: absolute` inside the content box `CardView` marks `relative`, so a
+ * card in edit mode is laid out exactly as the same card is out of it — turning
+ * edit mode on must not move anything, or the design being edited is not the one
+ * being looked at.
+ *
+ * `pointer-events: none` on the target and `auto` on the badge: the box exists
+ * to be hovered and outlined, and everything else on the block has to stay
+ * reachable underneath it — the dashed `+` that fills an empty block in, above
+ * all, which owns the whole box (see `CardEditTarget`).
+ */
+.card-edit-target {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  /*
+   * A one-cell grid, which is what places the badge -- see its own rule below.
+   * The overlay is `inset: 0` of the block's content box, so its grid area *is*
+   * the block's rect, and one declaration here puts the badge anywhere in it
+   * with no insets and no translate to get wrong.
+   */
+  display: grid;
+  place-items: start end;
+  border: 1px dashed transparent;
+  border-radius: var(--card-slot-radius, var(--card-radius, 0.5rem));
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.card-edit-target:hover,
+.card-edit-target[data-open] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/*
+ * The gallery's badge, and only the gallery's, moves out of the corner.
+ *
+ * The corner it would otherwise take is the one corner of the card that is not
+ * the layout's: `PlaceCardChrome` draws the close X and the Edit-location
+ * pencil at `top-1.5 right-1.5` at `z-10`, over the card rather than in it. The
+ * gallery is the block that reaches the top of the card on every design that
+ * has one, so its badge sat *underneath* a button that took the click. Measured
+ * rather than eyeballed: `elementFromPoint` at the badge's own centre answered
+ * "Close". Not a cosmetic overlap — a control that could not be pressed at all,
+ * and raising the overlay above the chrome only trades which of the two is
+ * unreachable.
+ *
+ * Just the gallery, on request, and the reason it generalises no further is
+ * that a picture is the one block content a badge can sit in the middle of
+ * without covering anything being read.
+ *
+ * **Two positions, because the empty gallery has neither of the other two
+ * corners free.** With a picture the middle is clear, so it goes there. With no
+ * picture the block is entirely filled by the dashed `+` that adds one, whose
+ * glyph is centred — and a badge on top of that is the two stacked press
+ * targets the badge exists as a badge to avoid, while the top-right is still
+ * the X. The bottom of the block is the one part of it neither owns. `CardView`
+ * is what knows a block is drawing a `+`; see `renderOverlay`.
+ */
+.card-edit-target--center {
+  place-items: center;
+}
+
+.card-edit-target--bottom {
+  place-items: end end;
+}
+
+/*
+ * The badge, in the corner rather than over the middle: a block is routinely a
+ * single line of text, and a pencil across the middle of it would cover the
+ * thing being described. Top-right, which is the corner the card's own chrome
+ * does not use *at block level* — the one block where it does is the gallery,
+ * and that one is centred instead (`.card-edit-target--center`).
+ *
+ * Faint until the block is hovered, then solid — visible enough that a card in
+ * edit mode reads as editable at a glance, quiet enough that six of them do not
+ * become the card. It never fades entirely: a control you can only find by
+ * sweeping the pointer over the card is one a touch user cannot find at all.
+ *
+ * **It shrinks to the block rather than overflowing it**, and that is a real bug
+ * fixed rather than a nicety. The block's outer box is `overflow-hidden`
+ * (`CardView`), and an address is routinely a single line about 16px tall — so a
+ * fixed 18px badge was cut off along its bottom edge on the one kind of block
+ * that is always short. `100%` still resolves against `.card-edit-target`, which
+ * is `inset: 0` of the content box and therefore exactly the block's own height,
+ * so `min()` gives a full-size badge everywhere there is room for one and a
+ * square one everywhere there is not. `position: relative` and not `absolute`:
+ * as a grid *item* of the overlay it is placed by that grid's `place-items`,
+ * which is what lets one declaration move a badge without a second set of
+ * insets to keep in step with the first.
+ */
+.card-edit-target__badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: min(1.125rem, 100%);
+  block-size: min(1.125rem, 100%);
+  min-width: 0;
+  padding: 0;
+  pointer-events: auto;
+  border-radius: 0.375rem;
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+  color: var(--muted);
+  opacity: 0.55;
+  transition:
+    opacity 0.15s,
+    background-color 0.15s,
+    color 0.15s;
+}
+
+/*
+ * HeroUI gives every icon in a `Button` a 2px block margin, which is right in a
+ * 40px button and is 4px this one does not have: a badge that has shrunk to a
+ * 14px block would hold a 12px pencil in 16px of box and lose the ends of it to
+ * the block's own `overflow: hidden`. The badge centres its own child.
+ */
+.card-edit-target__badge svg {
+  margin: 0;
+}
+
+.card-edit-target:hover .card-edit-target__badge,
+.card-edit-target__badge:hover,
+.card-edit-target__badge[data-hovered],
+.card-edit-target__badge[data-focus-visible],
+.card-edit-target__badge[data-open] {
+  opacity: 1;
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 /*
@@ -1797,6 +2076,34 @@ body.is-drop-remove .row-ghost {
 }
 
 /*
+ * The card studio's workspace while the card being designed is see-through.
+ *
+ * A glass card on the studio's one flat tone looks exactly like a solid one, so
+ * the Transparency control would appear to do nothing — the failure the card
+ * panel refuses everywhere else (a border width with no colour, a chip outline
+ * with no width). A checkerboard is the standard idiom and, unlike a fake
+ * basemap, it is honest: it says "there is nothing behind this", it does not
+ * pretend to be the map the card will really float over.
+ *
+ * One `repeating-conic-gradient` rather than the classic two crossed linear
+ * ones, and it is drawn *over* the workspace's `bg-default/40` rather than
+ * replacing it, so the box keeps the ground it has everywhere else. Kept very
+ * faint deliberately: this is a backdrop for judging a card, not a texture
+ * competing with it.
+ *
+ * `background-attachment: local` so the squares travel with the card when the
+ * workspace scrolls at `lg`, rather than sliding underneath it.
+ */
+.transparency-grid {
+  background-image: repeating-conic-gradient(
+    color-mix(in oklab, var(--border) 60%, transparent) 0% 25%,
+    transparent 0% 50%
+  );
+  background-size: 16px 16px;
+  background-attachment: local;
+}
+
+/*
  * The drag cursors — one hand at rest, the browser's fist while dragging.
  *
  * **`pointer`, not `grab`, and that is the whole of this rule.** The two are not
@@ -2215,6 +2522,37 @@ body.is-pin-dragging * {
 .button--icon-only[data-pending="true"]::after {
   width: 1em;
   height: 1em;
+}
+
+/*
+ * The publish preview's frame swap, crossfaded.
+ *
+ * That preview keeps two iframes and reveals a rebuilt document by bringing its
+ * frame to the front. Both are opaque and the outgoing one is still underneath
+ * at that moment, so fading the arriving frame in *is* a crossfade — no second
+ * opacity to manage, and the outgoing document is released once this has run.
+ *
+ * **Only the incoming frame is ever animated, and the standby is never faded.**
+ * A browser gives no animation frames to a document it is not rendering, and
+ * MapLibre paints on demand rather than in a loop, so a map that loads inside a
+ * hidden frame comes up half-drawn and stays that way. Occlusion is safe where
+ * `visibility`, `display` and a resting `opacity: 0` are not — this animation
+ * starts only once the frame has been swapped to the front, on a document that
+ * has already told us it has drawn (`data-lm-ready`).
+ *
+ * Caught by the blanket `prefers-reduced-motion` rule at the bottom of this file.
+ */
+@keyframes preview-frame-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.preview-frame-in {
+  animation: preview-frame-in 200ms ease-out;
 }
 
 /*

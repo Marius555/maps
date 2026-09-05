@@ -9,6 +9,7 @@ import {
 import { formatDistance, formatDuration, pathLengthM } from "@/packages/shared/geo";
 import { directionsUrl } from "@/packages/shared/directions";
 import { buttonTargetOf } from "@/packages/shared/card-button";
+import { overrideBlock } from "@/packages/shared/card-overrides";
 import {
   CARD_ZONES,
   blockBox,
@@ -19,6 +20,7 @@ import {
   justifyOf,
   defaultCardLayout,
   logoImageOf,
+  logoRadiusOf,
   detailsContents,
   leadBox,
   rowOffsetHolder,
@@ -105,10 +107,19 @@ export function buildPopup(
    */
   tagChips: readonly TagChip[] = [],
 ): HTMLElement {
-  // `--place`, because the floor that class carries belongs to a location card
-  // alone: a shape holds a name and a sentence and is meant to be smaller
+  // `--place`, because the fixed box that class carries belongs to a location
+  // card alone: a shape holds a name and a sentence and is meant to be smaller
   // (see `buildShapePopup`).
   const root = el("div", "lm-popup lm-popup--place");
+  /*
+   * `width`, not only `maxWidth`, and that one word is a real bug fixed.
+   *
+   * A popup is content-sized, so with a cap alone a location with a short
+   * address and one link drew at 133px — the same saved design at a different
+   * size on every pin, and at no size the studio ever showed. The cap stays
+   * beside it for the frame that is narrower than the card.
+   */
+  root.style.width = `${String(layout.width)}px`;
   root.style.maxWidth = `${String(layout.width)}px`;
 
   /*
@@ -152,18 +163,35 @@ export function buildPopup(
     const section = el("div", `lm-popup__zone lm-popup__zone--${zone}`);
 
     /*
-     * Built first, paired second.
+     * Every block the layout names, drawn or not.
      *
-     * A builder returning null is this renderer's version of `CardView`'s
-     * content filter, and pairing has to happen *after* it for the same reason:
-     * on an untagged location, the Name and the Address either side of the tags
-     * should share a line rather than leave a hole where the chips would have
-     * been. So the blocks that drew something are collected, and `cardRows`
-     * pairs those.
+     * A builder returning null used to drop the block, the way `CardView` used
+     * to filter — so a location that filled in less than the next one got a
+     * card whose blocks sat somewhere else, at positions its owner had never
+     * been shown. An empty block now keeps its box, its padding and the gap
+     * after it, and pairing runs over all of them, so the lines a visitor sees
+     * are the lines the studio drew. `renderZone` in
+     * components/card/card-view.tsx is the same change on the other side.
      */
     const built: { block: CardBlock; node: HTMLElement }[] = [];
 
-    for (const block of layout.zones[zone]) {
+    /*
+     * This location's own card, where it has one.
+     *
+     * `overrideBlock` hands the design's own block straight back for every
+     * location nobody singled out, which is nearly all of them, so a map with no
+     * overrides in it does exactly what it did before this existed. It runs
+     * here, on the pairing's own input, because a width or an overlap decides
+     * how blocks pair into lines -- overriding after `cardRows` below would draw
+     * a line the pairing never agreed to.
+     *
+     * What is published is already narrowed and clamped (`publishedCardBlocks`
+     * in lib/snapshot/build.ts), which is why the whole of the embed's side of
+     * this is one lookup.
+     */
+    for (const raw of layout.zones[zone]) {
+      const block = overrideBlock(raw, place.cardBlocks);
+
       /*
        * A type this build does not have a builder for.
        *
@@ -178,8 +206,10 @@ export function buildPopup(
       const build = BUILDERS[block.type] as BlockBuilder | undefined;
       if (!build) continue;
 
-      const node = build(context, block);
-      if (node) built.push({ block, node });
+      // The floor an empty block holds — see `.lm-popup__block--empty` in
+      // styles.css, and `.card-block--empty`, its opposite number.
+      const node = build(context, block) ?? el("div", "lm-popup__block--empty");
+      built.push({ block, node });
     }
 
     for (const row of cardRows(built.map((entry) => entry.block), layout)) {
@@ -217,9 +247,16 @@ export function buildPopup(
       section.append(row.shared ? wrapRow(row, layout, wrapped) : wrapped[0]);
     }
 
-    // An empty zone is not an empty box — it would still pay its own padding,
-    // which on a location with no photo is a gap above the name.
-    if (section.childElementCount > 0) root.append(section);
+    /*
+     * Every zone, including one this location fills in nothing for.
+     *
+     * The middle zone is the `flex: 1 1 0%` item, so it is what holds the
+     * bottom strip against the bottom of the card. Dropping it — which is what
+     * this line used to do — left a card whose owner had put a button at the
+     * bottom drawing that button halfway up. An empty zone draws nothing and
+     * pays no padding (`:not(:empty)` in styles.css, and the classes below).
+     */
+    root.append(section);
   }
 
   /*
@@ -233,13 +270,16 @@ export function buildPopup(
    * seventy pixels tall. With all three zones present these classes land on the
    * top and the bottom, which is why no populated card moves.
    *
+   * Every zone is in the DOM now, so "the zones that drew" is the ones with
+   * children in them rather than the ones that got appended.
+   *
    * The `--top` / `--bottom` classes stay exactly as they were: the bleed rules
-   * key off them, and a rendered top zone is always the first one anyway.
+   * key off them, and a zone with blocks in it is the first one anyway.
    */
-  const zones = root.children;
-  if (zones.length > 0) {
-    zones[0].classList.add("lm-popup__zone--pad-top");
-    zones[zones.length - 1].classList.add("lm-popup__zone--pad-bottom");
+  const drawn = [...root.children].filter((zone) => zone.childElementCount > 0);
+  if (drawn.length > 0) {
+    drawn[0].classList.add("lm-popup__zone--pad-top");
+    drawn[drawn.length - 1].classList.add("lm-popup__zone--pad-bottom");
   }
 
   return root;
@@ -447,6 +487,14 @@ function wrapBlock(
 
   if (box.textAlign) wrap.style.textAlign = box.textAlign;
 
+  // How much room to hold when this location filled the block in with nothing.
+  // Set on the wrapper and inherited by the empty node inside it — see
+  // `.lm-popup__block--empty` in styles.css and `emptyBlockHeight`, which is the
+  // one place the number is worked out for all three renderers.
+  if (box.emptyHeight) {
+    wrap.style.setProperty("--lm-block-empty-h", box.emptyHeight);
+  }
+
   // The class is what cancels the card's vertical padding at the very top and
   // bottom (see `--bleed` in styles.css); the inline margin is the horizontal
   // half, which is a number rather than the two states that class can express.
@@ -573,12 +621,23 @@ function buildLogo(
   pins: readonly CustomPinIcon[],
   /**
    * Absent for a snapshot published before the block could be asked which of
-   * its two drawings it is — which is the pin, exactly as `logoImageOf` reads
+   * its three drawings it is — which is the pin, exactly as `logoImageOf` reads
    * an absent `logoMode`.
    */
   block?: CardBlock,
-): HTMLElement {
+): HTMLElement | null {
   const pin = resolvePin(place.icon ?? "", pins);
+
+  /*
+   * The mark that is strictly a logo, on a location that has none.
+   *
+   * Null, so `buildPopup` draws the empty block and the space the owner
+   * designed is held — rather than quietly substituting a pin, which is what
+   * `logoMode: "mixed"` is for and is the whole difference between the two. See
+   * `logoImageOf`, and `hasBlockContent` in components/card/card-block.tsx,
+   * which reaches the same answer for the dashboard's twin of this card.
+   */
+  if (block?.logoMode === "image" && !place.logoUrl && !pin?.image) return null;
 
   /*
    * The uploaded logo on its own, when the owner asked for that and this
@@ -590,14 +649,19 @@ function buildLogo(
    * exactly the drift `packages/shared` exists to stop. An `img` `src` rather
    * than `innerHTML`, so the `data:` URI never goes near markup at all.
    */
-  const image = block ? logoImageOf(block, pin?.image ?? "") : null;
-  if (image) {
+  const image = block && logoImageOf(block, pin?.image ?? "", place.logoUrl);
+  if (block && image) {
     const node = el("div", "lm-popup__logo lm-popup__logo--image");
     const picture = el("img", "lm-popup__logo-image");
 
     picture.src = image;
     picture.alt = "";
     picture.draggable = false;
+    // The corner the owner chose, or nothing at all for the square every card
+    // published before the control existed draws. `logoRadiusOf` is the same
+    // function the dashboard's `Logo` asks, for `logoImageOf`'s reason.
+    const radius = logoRadiusOf(block);
+    if (radius) picture.style.borderRadius = radius;
     node.append(picture);
 
     return node;
@@ -676,8 +740,19 @@ function wrapRow(
  * phone, for seven pictures they may never look at — `loading="lazy"` does not
  * help, because by then the image is on screen.
  */
-function buildGallery(photos: string[]): HTMLElement | null {
-  if (photos.length === 0) return null;
+function buildGallery(photos: string[]): HTMLElement {
+  /*
+   * A place with no picture still gets the band, as a plain fill.
+   *
+   * The photo block is a thing the map's owner put on the card, not a thing this
+   * location filled in, so dropping it here made one saved design draw at a
+   * different height on every pin — and at a height the studio never showed,
+   * since its canvas keeps every block it was given. The twin of `Gallery`'s own
+   * empty half in components/card/card-block.tsx.
+   */
+  if (photos.length === 0) {
+    return el("div", "lm-popup__gallery lm-popup__gallery--empty");
+  }
 
   const root = el("div", "lm-popup__gallery");
   const image = el("img", "lm-popup__photo");

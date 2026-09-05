@@ -1,8 +1,9 @@
 import type { MapSnapshot, SnapshotPlace } from "@/packages/shared/snapshot";
-import { tagChipsOf } from "@/packages/shared/tags";
+import { pinCanvas } from "@/packages/shared/pin-raster";
 
 import { el, link } from "./dom";
 import { distanceKm, formatDistance, type Located } from "./geo";
+import { colorOf, colorsOf, pinsOf } from "./map";
 import { directionsUrl } from "@/packages/shared/directions";
 
 /**
@@ -15,6 +16,11 @@ import { directionsUrl } from "@/packages/shared/directions";
  * It renders the same set the map is showing — `visible()` in index.ts computes
  * it once and hands it to both — so a filter can never leave the two disagreeing
  * about what is on the map.
+ *
+ * What a row draws is the owner's to decide (`snapshot.settings`), and every one
+ * of those fields is read the §7 way: absent means what this list drew before
+ * the field existed, because a snapshot published a year ago is still live on
+ * somebody's site and is read exactly as it was written.
  */
 
 /**
@@ -28,6 +34,9 @@ import { directionsUrl } from "@/packages/shared/directions";
  * the hundred nearest, which is the whole question being asked.
  */
 const MAX_ROWS = 100;
+
+/** Drawn at twice the CSS size, so a row's pin is not soft on a retina screen. */
+const PIN_PIXEL_RATIO = 2;
 
 export type ListHandle = {
   element: HTMLElement;
@@ -44,18 +53,31 @@ export function createList(
   snapshot: MapSnapshot,
   onPick: (place: SnapshotPlace) => void,
 ): ListHandle {
-  /*
-   * Resolved once for the whole list rather than per row: `createList` redraws
-   * on every keystroke of the search box, and a map §6 allows 3,000 locations in
-   * would otherwise walk sixty tags per row per character.
-   */
-  const tagGroups = snapshot.tagGroups ?? [];
+  const settings = snapshot.settings;
 
-  const categories = new Map(
-    // Legacy, read-only: a snapshot published before categories became tags.
-    // Nothing writes this field any more (§7 keeps it readable forever).
-    (snapshot.categories ?? []).map((category) => [category.id, category]),
-  );
+  /*
+   * Absent means what a row drew before the setting existed — see the header.
+   * The three that were always drawn read as `!== false`; the pin, which is new,
+   * has to be asked for.
+   */
+  const showPin = settings.rowPin === true;
+  const showAddress = settings.rowAddress !== false;
+  const showDistance = settings.rowDistance !== false;
+  const showActions = settings.rowActions !== false;
+  const pinSize = settings.rowPinSize ?? 28;
+
+  /*
+   * Resolved once for the whole list rather than per row: `setPlaces` redraws on
+   * every keystroke of the search box, and a map §6 allows 3,000 locations in
+   * would otherwise walk sixty tags per row per character.
+   *
+   * These are the map's own two, imported rather than reimplemented. A row's pin
+   * and the pin it is a picture of must be the same colour, and the only way to
+   * guarantee that is for one function to answer both — including the legacy
+   * category fallback, which a second copy would be the first thing to drop.
+   */
+  const colors = colorsOf(snapshot);
+  const pins = pinsOf(snapshot);
 
   const root = el("div", "lm-list");
   const items = el("ul", "lm-list__items");
@@ -122,6 +144,36 @@ export function createList(
     row.scrollIntoView({ block: "nearest" });
   };
 
+  /**
+   * This location's pin, as pixels.
+   *
+   * A canvas rather than an `<img>`: `packages/shared/pin-raster.ts` explains
+   * why at length, and the short version is that a host page's CSP can refuse a
+   * data URI without anybody finding out. The pixels themselves are cached and
+   * shared by pin and colour, so a hundred rows of one brand copy one drawing.
+   */
+  function buildPin(place: SnapshotPlace): HTMLCanvasElement | null {
+    const source = pinCanvas(
+      place.icon ?? "",
+      colorOf(place, colors, pins),
+      pins,
+    );
+
+    if (!source) return null;
+
+    const node = el("canvas", "lm-list__pin");
+    const px = pinSize * PIN_PIXEL_RATIO;
+
+    node.width = px;
+    node.height = px;
+    // The row's name is the accessible one; the pin repeats the colour of a
+    // thing already on the map beside it.
+    node.setAttribute("aria-hidden", "true");
+    node.getContext("2d")?.drawImage(source, 0, 0, px, px);
+
+    return node;
+  }
+
   function buildRow(place: SnapshotPlace, origin: Located | null): HTMLElement {
     const item = el("li", "lm-list__item");
 
@@ -131,10 +183,22 @@ export function createList(
     const pick = el("button", "lm-list__row");
     pick.type = "button";
 
+    if (showPin) {
+      const pin = buildPin(place);
+      if (pin) pick.append(pin);
+    }
+
+    /*
+     * The text is its own column so the pin can sit beside all of it rather than
+     * beside the first line. Without it a two-line row centres the pin against
+     * the name and leaves the address hanging out to the left of nothing.
+     */
+    const text = el("span", "lm-list__text");
+
     const head = el("div", "lm-list__head");
     head.append(el("span", "lm-list__name", place.name));
 
-    if (origin) {
+    if (origin && showDistance) {
       head.append(
         el(
           "span",
@@ -144,53 +208,41 @@ export function createList(
       );
     }
 
-    pick.append(head);
+    text.append(head);
 
-    /*
-     * One chip, and it is the one the pin beside it is wearing.
-     *
-     * A row is for choosing between places, not for reading one — the popup is
-     * where the rest of a location's tags live. So the chip worth the width is
-     * the one that explains the pin, which is exactly what the category chip
-     * that used to sit here was.
-     *
-     * **The colour is what picks it, not the position**, and that is the whole
-     * of the §7 back-compatibility here. A snapshot published before categories
-     * became tags carries *both* — colourless `tagGroups` and a `category` — so
-     * taking `tags[0]` would put a grey "Bikes" where a live customer site has
-     * always shown an orange "Shops". The same precedence `colorOf` uses in
-     * map.ts, so the dot on the row and the pin on the map cannot disagree.
-     */
-    const chips = tagChipsOf(tagGroups, place.tags);
-    const legacy = categories.get(place.category ?? "");
-    const chip =
-      chips.find((candidate) => candidate.color) ??
-      (legacy ? { label: legacy.label, color: legacy.color } : chips[0]);
-
-    if (chip) {
-      const node = el("span", "lm-list__tag", chip.label);
-      if (chip.color) node.style.setProperty("--lm-tag-color", chip.color);
-      pick.append(node);
+    if (showAddress && place.address) {
+      text.append(el("span", "lm-list__address", place.address));
     }
 
-    if (place.address) {
-      pick.append(el("span", "lm-list__address", place.address));
-    }
-
+    pick.append(text);
     pick.addEventListener("click", () => onPick(place));
     item.append(pick);
 
-    const actions = el("div", "lm-list__actions");
-    actions.append(link("lm-list__link", "Directions", directionsUrl(place)));
+    /*
+     * There was a tag chip here, and it is gone with the filter chips it was the
+     * legend for. A row is for choosing between places, not for reading one, and
+     * the colour it carried is now the pin at the head of the row — which is the
+     * same answer to "which pin is this?" without a second coloured thing on the
+     * line competing with it.
+     */
 
-    // Tapping a number to call it is the second thing anyone does with a store
-    // locator on a phone. Everything else a place carries stays in the popup —
-    // a list row is for choosing between places, not for reading one.
-    if (place.phone) {
-      actions.append(link("lm-list__link", place.phone, `tel:${place.phone}`));
+    if (showActions) {
+      const actions = el("div", "lm-list__actions");
+      actions.append(link("lm-list__link", "Directions", directionsUrl(place)));
+
+      // Tapping a number to call it is the second thing anyone does with a store
+      // locator on a phone. Everything else a place carries stays in the popup —
+      // a list row is for choosing between places, not for reading one.
+      if (place.phone) {
+        actions.append(link("lm-list__link", place.phone, `tel:${place.phone}`));
+      }
+
+      item.append(actions);
+    } else {
+      // Without the links the row's own bottom padding is the only thing left
+      // between it and the next one's border.
+      item.classList.add("lm-list__item--bare");
     }
-
-    item.append(actions);
 
     return item;
   }

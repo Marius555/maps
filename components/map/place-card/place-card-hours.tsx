@@ -60,6 +60,15 @@ export function PlaceCardHours({
      * place this option changes under a live card is the designer's canvas,
      * where a checkbox that visibly did nothing would be the whole feature
      * failing. Remounting is free here: it is seven rows of text.
+     *
+     * **Freezing it on the designer's canvas was tried and taken back out.**
+     * The week is `flex: none` in a zone that packs at `flex-start`, so opening
+     * it does push the blocks under it *in that zone* down — but a click that
+     * does nothing is a broken control, and the answer to a block that must not
+     * move is the bottom zone, which is pinned and never moves whatever the
+     * middle does. `card-canvas.tsx` records the other attempt at this, a
+     * `useCardFits` that rewrote the layout to fit and walked every block below
+     * the week up the card and left it there. Neither is coming back.
      */
     <Disclosure key={String(isOpen)} defaultExpanded={isOpen}>
       <Disclosure.Heading>

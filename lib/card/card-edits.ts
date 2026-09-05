@@ -225,6 +225,13 @@ export function makeCardBlock(type: CardBlockType): CardBlock {
     ...(spec.defaultButtonFull && hasControl(type, "buttonStyle")
       ? { buttonFull: true as const }
       : {}),
+    // And, for the mark, the middle of its three answers: this location's own
+    // logo where it has one and the pin where it does not. Absent still means
+    // the pin, which is what every card published before this drew, so only a
+    // block dropped from here on gets the word written down (§7).
+    ...(spec.defaultLogoMode && hasControl(type, "logo")
+      ? { logoMode: spec.defaultLogoMode }
+      : {}),
   };
 }
 
@@ -599,13 +606,19 @@ export function resizeCardBlock(
      */
     chipBorder?: string;
     /*
-     * Which of the mark's two drawings this block is. Spelled out with `"pin"`
-     * in it rather than picked off `CardBlock`, where it is `"image" |
+     * Which of the mark's three drawings this block is. Spelled out with `"pin"`
+     * in it rather than picked off `CardBlock`, where it is `"image" | "mixed" |
      * undefined`: `undefined` already means "don't touch this" in this patch,
      * so the control needs a word for the state the field says by not being
      * there — exactly `fit`'s problem above.
      */
-    logoMode?: "pin" | "image";
+    logoMode?: "pin" | "image" | "mixed";
+    /*
+     * Its corners, carrying `"square"` for the same reason: absent is the square
+     * the mark has always been drawn as, and `undefined` is already taken by
+     * "leave it alone".
+     */
+    logoRadius?: "square" | "rounded" | "round";
     /*
      * "Show the whole thing", which is the absence of a line count. Zero rather
      * than `undefined` for the same reason: the checkbox has to be able to say
@@ -814,8 +827,13 @@ export function resizeCardBlock(
    * one way to say it and no card published before this existed changes.
    */
   if (patch.logoMode !== undefined && hasControl(type, "logo")) {
-    if (patch.logoMode === "image") next.logoMode = "image";
-    else delete next.logoMode;
+    if (patch.logoMode === "pin") delete next.logoMode;
+    else next.logoMode = patch.logoMode;
+  }
+
+  if (patch.logoRadius !== undefined && hasControl(type, "logo")) {
+    if (patch.logoRadius === "square") delete next.logoRadius;
+    else next.logoRadius = patch.logoRadius;
   }
 
   if (patch.bold !== undefined && hasControl(type, "text")) {
@@ -866,13 +884,26 @@ export function resizeCardBlock(
 
   if (patch.buttonLabel !== undefined && hasControl(type, "button")) {
     /*
-     * Trimmed here as well as in `readBlock`, and the reason is the panel
-     * rather than the store: a label of spaces is a button with no words on it,
-     * and it should read as *unset* — the action's own word back — the moment
-     * the box is emptied, not on the next reload.
+     * **The whitespace is tested, never written back**, and the difference is
+     * the whole of a bug that made this field unable to hold a space.
+     *
+     * This used to store `value.replace(/\s+/g, " ").trim()`, borrowed from
+     * `readBlock`'s `text()` on the argument that a label of spaces should read
+     * as *unset* — the action's own word back — the moment the box is emptied
+     * rather than on the next reload. That argument is still right; the place
+     * was wrong. `PropertyText` is a controlled input reading its value straight
+     * back off the block, and the designer commits every keystroke through here
+     * — and a space typed while composing a label is always a *trailing* space
+     * at that instant. So it was trimmed away and the box re-rendered one
+     * character short: `Book now` came out `Booknow`, and an interior space was
+     * reachable only by pasting.
+     *
+     * So the blank test stays and the normalisation goes. Nothing downstream
+     * loses it: `readBlock`'s `text()` collapses runs and trims on the way in,
+     * which is the moment a stored label is actually read.
      */
-    const label = patch.buttonLabel.replace(/\s+/g, " ").trim();
-    if (label) next.buttonLabel = label.slice(0, MAX_BUTTON_LABEL);
+    const label = patch.buttonLabel.slice(0, MAX_BUTTON_LABEL);
+    if (label.trim()) next.buttonLabel = label;
     else delete next.buttonLabel;
   }
 
