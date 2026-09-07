@@ -39,14 +39,53 @@ export type DirectionsTarget = {
   lng: number;
 };
 
-export function directionsUrl(place: DirectionsTarget): string {
+/**
+ * Where the route starts, when anything knows.
+ *
+ * Optional, and absent is the link this function has always returned — which is
+ * what keeps the dashboard's own card, the designer canvas and every published
+ * snapshot's markup unchanged.
+ *
+ * It exists because absent is *not* neutral at the other end. A Google Maps
+ * directions link with no `origin` is not "ask the visitor where they are": the
+ * page resolves a start point on its own, and where it has no location
+ * permission of its own to read it falls back to the IP address — which for
+ * anyone behind a mobile network or a VPN is tens of kilometres from where they
+ * are standing. The reported symptom was a route to a shop two streets away
+ * starting in a forest, and nothing on the page said so.
+ *
+ * Only ever the visitor's own position, never a place they searched for. See
+ * `me` in embed/src/index.ts, which is kept apart from the list's measuring
+ * origin for exactly this.
+ */
+export type DirectionsOrigin = {
+  lat: number;
+  lng: number;
+};
+
+export function directionsUrl(
+  place: DirectionsTarget,
+  from?: DirectionsOrigin | null,
+): string {
   const to = `${String(place.lat)},${String(place.lng)}`;
+  const start = from ? `${String(from.lat)},${String(from.lng)}` : "";
 
   if (isApplePlatform()) {
-    return `https://maps.apple.com/?daddr=${to}&q=${encodeURIComponent(place.name)}`;
+    // `saddr` is Apple's spelling of the same thing, and an empty one is not the
+    // same as none — it opens the panel with a blank start field — so the
+    // parameter is omitted rather than emptied.
+    return (
+      `https://maps.apple.com/?daddr=${to}` +
+      (start ? `&saddr=${start}` : "") +
+      `&q=${encodeURIComponent(place.name)}`
+    );
   }
 
-  return `https://www.google.com/maps/dir/?api=1&destination=${to}&travelmode=driving`;
+  return (
+    `https://www.google.com/maps/dir/?api=1&destination=${to}` +
+    (start ? `&origin=${start}` : "") +
+    `&travelmode=driving`
+  );
 }
 
 /**

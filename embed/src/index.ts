@@ -15,18 +15,23 @@ import {
   whenVisible,
   type EmbedConfig,
 } from "./config";
-import { button, el } from "./dom";
+import { el } from "./dom";
 import { createGazetteer } from "./gazetteer";
 import { nearestPlace, formatDistance, distanceKm, type Located } from "./geo";
+import { installDirectionsAsk, refreshDirections } from "./directions";
 import { createList, type ListHandle } from "./list";
 import { createMap, type MapHandle } from "./map";
 import { fetchSnapshot } from "./snapshot";
 import {
   buildSearchIndex,
   createNearestButton,
+  setNearestOn,
   createSearchField,
+  bestPosition,
+  betterFix,
   currentPosition,
   locationFailure,
+  type Fix,
   matchesSearch,
   searchNeedle,
 } from "./search";
@@ -190,10 +195,78 @@ async function render(
    * older snapshot, published before the setting existed, which must keep
    * rendering the bare map it has always rendered on their site.
    */
+  /**
+   * The visitor's *own* position, which is not the same question as `origin`.
+   *
+   * `origin` is whatever the distances are measured from, and a place picked out
+   * of the search box sets it — a town, a postcode, somewhere the visitor is
+   * not. This is only ever written from `navigator.geolocation`, because it has
+   * one job: it is the start point handed to `directionsUrl`, and routing
+   * somebody from a town they searched for is the bug this exists to fix, not a
+   * feature.
+   *
+   * Module-scope would be defensible — two maps on one page have one visitor
+   * between them — but it is per mount for the reason everything else here is:
+   * nothing in this file reaches across roots.
+   */
+  let me: Fix | null = null;
+
+  /**
+   * The one writer of `me`, and it keeps the **sharpest** reading of the
+   * session rather than the latest.
+   *
+   * Four things learn a position, and they are not equally good: the warm-up
+   * below and the map's geolocate control ask for a precise one, while the
+   * crosshair deliberately takes a cheap cached fix because it only has to
+   * sort a list by distance. Last-writer-wins therefore let the worst of them
+   * overwrite the best purely by arriving later, and the visible symptom is a
+   * route starting on the wrong street.
+   *
+   * The rule itself is `betterFix` in ./search.ts, which is where it can be
+   * tested — it reads the reading's *age* as well as its radius, because the
+   * crosshair's cached fix can be five minutes old and still claim the tightest
+   * accuracy of the session.
+   *
+   * **And it re-points the links already on screen**, which is the half that was
+   * missing for as long as this feature looked broken. Every renderer reads `me`
+   * when it draws, and the results panel draws once, synchronously, below —
+   * before any of the four writers can possibly have answered. So a visitor who
+   * pressed the map's own locate control, saw an accuracy circle around their
+   * street and then pressed Directions in the sidebar was still routed from
+   * their ISP's address. See `refreshDirections` in ./directions.ts.
+   */
+  const remember = (at: Fix) => {
+    const best = betterFix(me, at);
+
+    /*
+     * Identity, and it is the right test rather than a cheap one: `betterFix`
+     * hands back one of the two objects it was given, so `best === me` means the
+     * session's answer did not change and every link already carries it. A
+     * reading that ties on accuracy returns the newcomer — a different object,
+     * possibly different coordinates — so that one does refresh, and should.
+     */
+    if (best === me) return;
+
+    me = best;
+
+    /*
+     * `bestPosition` reports each reading as it arrives rather than the best one
+     * at the end, so this can run a handful of times across a settle window. It
+     * is a `querySelectorAll` over at most a hundred anchors and a string build
+     * each; the alternative is a link drawn before the answer that never learns
+     * it.
+     */
+    refreshDirections(root, best);
+  };
+
   let map: MapHandle | null = null;
 
   const list = snapshot.settings.list
-    ? createList(snapshot, (place) => map?.focusPlace(place))
+    ? createList(
+        snapshot,
+        (place) => map?.focusPlace(place),
+        () => me,
+      )
     : null;
 
   if (list) {
@@ -235,6 +308,8 @@ async function render(
     style,
     focusPlaceId: readFocusPlaceId(),
     onSelect: (placeId) => list?.select(placeId),
+    getMe: () => me,
+    onLocated: remember,
   });
 
   /*
@@ -249,7 +324,30 @@ async function render(
    */
   (root as HTMLElement & { lmMap?: MapHandle }).lmMap = map;
 
-  wireControls({ map, snapshot, toolbar, status, list });
+  wireControls({
+    map,
+    snapshot,
+    toolbar,
+    status,
+    list,
+    onLocated: remember,
+  });
+
+  /*
+   * A warm-up, not a gate: the press it listens for is never delayed by it.
+   *
+   * On the root rather than on each link — a card is rebuilt on every pin
+   * click and the results list on every keystroke, so a handler per Directions
+   * link is a subscription per row per redraw. See embed/src/directions.ts for
+   * why the press asks at all and why it must not wait for the answer.
+   *
+   * It writes `me` and deliberately **not** the list's `origin`: the distances
+   * in the panel are the visitor's own question, asked by pressing the
+   * crosshair, and re-sorting the whole list because somebody wanted directions
+   * to one shop is the map answering a question nobody asked. Every Directions
+   * link drawn after this does pick the origin up, because they all read `me`.
+   */
+  installDirectionsAsk(root, () => me, remember);
 }
 
 /**
@@ -357,12 +455,21 @@ function wireControls({
   toolbar,
   status,
   list,
+  onLocated,
 }: {
   map: MapHandle;
   snapshot: MapSnapshot;
   toolbar: HTMLElement;
   status: StatusHandle;
   list: ListHandle | null;
+  /**
+   * Report the visitor's own position upward, once the browser gives one.
+   *
+   * It is `render`'s to hold rather than this function's, because the two things
+   * that read it — the results list and the map's popups — are built there. See
+   * `me` in `render`.
+   */
+  onLocated: (at: Fix) => void;
 }): void {
   const showStatus = status.show;
 
@@ -381,41 +488,32 @@ function wireControls({
    * then, and the list keeps the owner's own order while it is.
    *
    * Two things set it — "Nearest to me" and a place picked out of the search —
-   * and both go through `setOrigin`, so the chip that says where the distances
-   * are measured from can never disagree with the distances themselves.
+   * and both go through `setOrigin`, so the control that says the distances are
+   * being measured from somewhere can never disagree with the distances
+   * themselves.
    */
   let origin: Located | null = null;
 
-  const nearby = el("div", "lm-origin");
-  nearby.hidden = true;
+  /**
+   * The find-nearest control, once there is one — it is optional per map.
+   *
+   * Held rather than only appended, because it is now the only thing on screen
+   * saying an origin is set, so `setOrigin` has to be able to reach it.
+   */
+  let nearest: HTMLButtonElement | null = null;
 
   /**
-   * Measure from here, and say so.
+   * Measure from here.
    *
-   * The chip is not decoration. Without it the list is silently ordered by a
-   * point the visitor can no longer see, and the only way back to the map's own
-   * order is to reload the page — which reads as the widget having got stuck.
+   * There was a `Near you · Clear` chip under the toolbar, on the argument that
+   * a list silently ordered by a point the visitor cannot see reads as stuck.
+   * That argument is answered by the button that set it: `setNearestOn` lights
+   * it, and pressing it while lit is what Clear was — one control, no row of
+   * text explaining another control (§8).
    */
-  const setOrigin = (next: Located | null, label?: string) => {
+  const setOrigin = (next: Located | null) => {
     origin = next;
-
-    if (!next) {
-      nearby.hidden = true;
-      nearby.replaceChildren();
-      apply();
-      return;
-    }
-
-    const clear = button("lm-origin__clear", "Clear");
-    clear.setAttribute("aria-label", "Stop measuring from here");
-    clear.addEventListener("click", () => setOrigin(null));
-
-    nearby.replaceChildren(
-      el("span", "lm-origin__label", `Near ${label ?? "you"}`),
-      clear,
-    );
-    nearby.hidden = false;
-
+    if (nearest) setNearestOn(nearest, next !== null);
     apply();
   };
 
@@ -452,7 +550,7 @@ function wireControls({
           needle = searchNeedle(value);
           apply();
         },
-        onPlace: (place) => setOrigin({ lat: place.lat, lng: place.lng }, place.label),
+        onPlace: (place) => setOrigin({ lat: place.lat, lng: place.lng }),
         gazetteer: createGazetteer(snapshot.gazetteer),
       }),
     );
@@ -461,7 +559,13 @@ function wireControls({
   if (snapshot.settings.nearest) {
     // The promise is handed back rather than voided, so the button can disable
     // itself for as long as the lookup actually takes.
-    toolbar.append(createNearestButton(() => goToNearest()));
+    //
+    // Lit, it is the Clear the chip under the toolbar used to be — so a press
+    // asks which of the two states it is in rather than always locating.
+    nearest = createNearestButton(() =>
+      origin ? setOrigin(null) : goToNearest(),
+    );
+    toolbar.append(nearest);
   }
 
   /*
@@ -482,6 +586,13 @@ function wireControls({
       const position = await currentPosition();
 
       /*
+       * The one place the visitor's own position is learnt. Reported before
+       * `setOrigin`, which re-renders the list — the rows' Directions links read
+       * it on the way past.
+       */
+      onLocated(position);
+
+      /*
        * The answer is the whole list re-ordered, not one pin.
        *
        * Flying to the single nearest place was all a map could say. With a list
@@ -490,24 +601,24 @@ function wireControls({
        * order they care about. The closest one is still opened, because that is
        * the question they asked.
        */
-      setOrigin(position, "you");
+      setOrigin(position);
 
-      const nearest = nearestPlace(position, visible());
+      const closest = nearestPlace(position, visible());
 
-      if (!nearest) {
+      if (!closest) {
         showStatus("No locations match.", true);
         return;
       }
 
-      map.focusPlace(nearest);
+      map.focusPlace(closest);
       /*
-       * Written after `setOrigin`, which runs `apply()` and blanks the pill —
+       * Written after `setOrigin`, which runs `apply()` and blanks the status —
        * and not sticky, because the answer is now on the map and in the list's
        * own order. Leaving it up meant a distance from a lookup several minutes
        * old sitting over someone's map until they searched for something.
        */
       showStatus(
-        `${nearest.name} — ${formatDistance(distanceKm(position, nearest))} away`,
+        `${closest.name} — ${formatDistance(distanceKm(position, closest))} away`,
       );
     } catch (error) {
       /*
@@ -531,10 +642,54 @@ function wireControls({
     }
   }
 
-  // Under the controls rather than beside them: it is the *result* of using one,
-  // and it appears and disappears, which inside a wrapping flex row would shuffle
-  // the chips every time the visitor pressed it.
-  toolbar.append(nearby);
+  /*
+   * Where the visitor is, when the browser will say so without asking.
+   *
+   * Directions used to hand Google a destination and no start point, so Google
+   * guessed one from the visitor's IP — which is how a route to a shop two
+   * streets away starts in a forest forty kilometres out. The fix is to send the
+   * real origin, and the only free source of one is the browser.
+   *
+   * **Nothing here may raise a prompt.** `permissions.query` answers `granted`
+   * only when this origin has already been allowed — pressing "Nearest to me"
+   * once, on a previous visit — so this is a read of a decision already taken,
+   * never a new question asked of somebody who only opened a map. A browser
+   * without the Permissions API (Safari) simply keeps today's behaviour, and so
+   * does a visitor who has never granted it: `me` stays null and the link is
+   * exactly the one that ships now.
+   *
+   * Fire and forget. A card opened before the answer lands keeps the link it was
+   * built with; the next one gets the origin.
+   */
+  void navigator.permissions
+    ?.query({ name: "geolocation" })
+    .then((permission) => {
+      const warm = () => {
+        if (permission.state !== "granted") return;
+
+        // Per reading, so the first Directions link drawn after this has an
+        // origin rather than waiting out the whole window for a sharper one.
+        void bestPosition(undefined, undefined, onLocated).catch(() => {
+          // Nothing within the window, or the grant withdrawn between the read
+          // and the lookup. No origin, and the link we always drew.
+        });
+      };
+
+      /*
+       * **A grant can arrive long after boot.** This read the state once and
+       * stopped, so a visitor who allowed the prompt raised by their first
+       * Directions press — the one gesture on this map that is about where they
+       * are — was never asked for a position afterwards, and the press that
+       * earned the permission was the only one that never benefited from it.
+       * Whichever control raised it, this is where the answer is picked up.
+       */
+      permission.addEventListener("change", warm);
+      warm();
+    })
+    .catch(() => {
+      // Safari does not know the `geolocation` name and rejects outright. That
+      // is today's behaviour: no origin, and the link we always drew.
+    });
 
   // The map builds itself from the snapshot; the list has to be told once.
   list?.setPlaces(snapshot.places, origin);

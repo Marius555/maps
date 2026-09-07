@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 import type {
   ColumnMapping,
@@ -17,20 +18,60 @@ import { IMPORT_FIELDS, type ImportField } from "@/lib/import/fields";
 import type { LoadedSource } from "@/lib/import/read-source";
 import { splitLatLngColumn } from "@/lib/import/split-latlng";
 import type { SourceKind } from "@/lib/import/sources/types";
+import { createImportStorage, RUN_MAX_AGE_MS } from "./import-persist";
 
 /**
- * The import wizard's state, and nothing that outlives it.
+ * The import wizard's state.
  *
  * Deliberately not in the query cache: none of this exists on the server until
  * the review step is confirmed. Zustand rather than Context because the review
  * step re-renders per row edit and a Context would re-render every row
  * (CLAUDE.md §3).
+ *
+ * **It outlives the page now, and that is the point.** Geocoding a real file is
+ * minutes of a metered upstream, and every one of those minutes used to be
+ * thrown away by a reload — the wizard held all of this in memory and reset on
+ * unmount. It is persisted to IndexedDB instead (`import-persist.ts`), so the
+ * run survives a refresh, a crash and a closed tab, and resuming costs nothing:
+ * `draftsNeedingGeocode` only ever returns rows still `pending`, so a restored
+ * run picks up at the first address that never got an answer.
+ *
+ * Two fields exist purely to decide whether a restored run is *this* run.
+ * `mapId` is which map it belongs to — one persisted key serves every map, and
+ * a run restored onto the wrong map would import one customer's file into
+ * another's map. `savedAt` is when it was last touched, so a run nobody came
+ * back to is discarded rather than offered a week later. `attachTo` is where
+ * both are checked; the wizard calls it on mount.
+ *
+ * `loaded` is deliberately **not** persisted. It is the raw grid the file was
+ * read from, kept only so the header row can be picked again, and it roughly
+ * doubles what has to be cloned on every write. Re-picking a header row happens
+ * in the first seconds of a flow; resuming happens ten minutes in. The mapping
+ * step already renders that control only when `loaded` is there, so a restored
+ * run simply does not offer it.
  */
 
 export type ImportStep = "source" | "mapping" | "geocoding" | "review";
 
 type ImportState = {
   step: ImportStep;
+
+  /**
+   * Which map this run belongs to, and when it was last written. Both null until
+   * a file is chosen. See the note above: they are what make a restored run
+   * safe to offer.
+   */
+  mapId: string | null;
+  savedAt: number | null;
+  /**
+   * True while the wizard is showing a run it picked up from a previous visit.
+   *
+   * In the store rather than in the component because `attachTo` is what decides
+   * it, and a component that had to call `setState` from an effect to mirror
+   * that decision is the cascading render the React Compiler lint rule is about.
+   * Deliberately not persisted: it describes this visit, not the run.
+   */
+  isResumed: boolean;
 
   sourceKind: SourceKind | null;
   fileName: string | null;
@@ -87,6 +128,14 @@ type ImportState = {
   geocodeError: string | null;
 
   setStep: (step: ImportStep) => void;
+  /**
+   * Claim the restored run for this map, or throw it away.
+   *
+   * Called once on mount, after the persisted run has finished loading. Sets
+   * `isResumed` rather than returning it, so the wizard reads the answer with a
+   * selector instead of mirroring it into component state from an effect.
+   */
+  attachTo: (mapId: string) => void;
   setSource: (source: LoadedSource) => void;
   setColumnField: (header: string, field: ImportField | undefined) => void;
   setCell: (rowIndex: number, header: string, value: string) => void;
@@ -95,10 +144,26 @@ type ImportState = {
   setDrafts: (result: BuildDraftsResult) => void;
   patchDraft: (key: string, patch: Partial<DraftPlace>) => void;
   removeDraft: (key: string) => void;
+  /**
+   * Drop a whole chunk of drafts at once.
+   *
+   * The commit writes 200 rows per request and has to forget each batch the
+   * moment it lands, so that a run resumed after a partial failure imports the
+   * remainder rather than the file. Two hundred separate `removeDraft` calls
+   * would each map over the whole array — quadratic on a three-thousand-row
+   * import, and two hundred renders of the list besides.
+   */
+  removeDrafts: (keys: string[]) => void;
   startGeocoding: (total: number) => void;
   advanceGeocoding: (by: number) => void;
   failGeocoding: (message: string) => void;
   reset: () => void;
+  /**
+   * Mark the run as touched, so its age is measured from real activity rather
+   * than from the moment the file was opened. Called by the geocode loop, which
+   * is the only thing that runs long enough for the difference to matter.
+   */
+  touch: () => void;
 };
 
 export type SplitNotice = {
@@ -110,6 +175,9 @@ export type SplitNotice = {
 
 const initialState = {
   step: "source" as ImportStep,
+  mapId: null as string | null,
+  savedAt: null as number | null,
+  isResumed: false,
   sourceKind: null,
   fileName: null,
   headers: [] as string[],
@@ -132,14 +200,42 @@ const initialState = {
   geocodeError: null,
 };
 
-export const useImportStore = create<ImportState>()((set) => ({
+export const useImportStore = create<ImportState>()(
+  persist(
+    (set, get) => ({
   ...initialState,
 
   setStep: (step) => set({ step }),
 
+  /**
+   * Decide whether what was restored from disk belongs to this page.
+   *
+   * Three ways a restored run is not ours, and all three end the same way: a
+   * run from another map, a run older than a day, and a run that never got past
+   * the file picker (nothing to resume, so nothing to say). Anything else is
+   * kept and reported, and the wizard shows the way out.
+   */
+  attachTo: (mapId) => {
+    const state = get();
+    const isOurs = state.mapId === mapId;
+    const isFresh =
+      state.savedAt !== null && Date.now() - state.savedAt < RUN_MAX_AGE_MS;
+
+    if (!isOurs || !isFresh) {
+      set({ ...initialState, mapId });
+      return;
+    }
+
+    set({ isResumed: state.step !== "source" });
+  },
+
   setSource: (source) =>
-    set({
+    set((state) => ({
       ...initialState,
+      // Kept across the reset: `setSource` is how a *new* file replaces an old
+      // one, and the run it starts belongs to the same map the last one did.
+      mapId: state.mapId,
+      savedAt: Date.now(),
       sourceKind: source.kind,
       fileName: source.label,
       headers: source.headers,
@@ -154,7 +250,7 @@ export const useImportStore = create<ImportState>()((set) => ({
       detection: source.detection.detail,
       suggestions: source.detection.byHeader,
       step: "mapping",
-    }),
+    })),
 
   /**
    * What one column of the file is.
@@ -294,6 +390,13 @@ export const useImportStore = create<ImportState>()((set) => ({
       drafts: state.drafts.filter((draft) => draft.key !== key),
     })),
 
+  removeDrafts: (keys) =>
+    set((state) => {
+      const gone = new Set(keys);
+
+      return { drafts: state.drafts.filter((draft) => !gone.has(draft.key)) };
+    }),
+
   startGeocoding: (geocodeTotal) =>
     set({ step: "geocoding", geocodeTotal, geocodedCount: 0, geocodeError: null }),
 
@@ -302,8 +405,82 @@ export const useImportStore = create<ImportState>()((set) => ({
 
   failGeocoding: (geocodeError) => set({ geocodeError }),
 
-  reset: () => set(initialState),
-}));
+  /**
+   * Throw the run away. Keeps `mapId`, so the next file started on this page is
+   * still recognised as belonging to this map.
+   */
+  reset: () => set((state) => ({ ...initialState, mapId: state.mapId })),
+
+  /** Stamp the run as touched now. Called by the writes that are worth resuming. */
+  touch: () => set({ savedAt: Date.now() }),
+    }),
+    {
+      name: "import-run",
+      storage: createImportStorage<PersistedImport>(),
+
+      /*
+       * What is worth carrying across a reload.
+       *
+       * `loaded` is the deliberate omission — see the note at the top of the
+       * file. `suggestions` and `detection` are in because the mapping step is
+       * unusable without them: the picker ranks itself from `suggestions`, and
+       * losing it would empty the ranked half of every menu on exactly the file
+       * whose column names were useless enough to need it.
+       *
+       * The actions are not listed and must not be: they are rebuilt by
+       * `create` on every load, and a persisted copy of a closure is both
+       * meaningless and a merge hazard.
+       */
+      partialize: (state) => ({
+        step: state.step,
+        mapId: state.mapId,
+        savedAt: state.savedAt,
+        sourceKind: state.sourceKind,
+        fileName: state.fileName,
+        headers: state.headers,
+        rows: state.rows,
+        truncated: state.truncated,
+        headersAreSynthetic: state.headersAreSynthetic,
+        skippedLeadingRows: state.skippedLeadingRows,
+        repeatedHeaderRows: state.repeatedHeaderRows,
+        headerRowIndex: state.headerRowIndex,
+        skippedBlankRows: state.skippedBlankRows,
+        droppedContacts: state.droppedContacts,
+        mapping: state.mapping,
+        detection: state.detection,
+        suggestions: state.suggestions,
+        splitNotice: state.splitNotice,
+        drafts: state.drafts,
+        geocodedCount: state.geocodedCount,
+        geocodeTotal: state.geocodeTotal,
+        geocodeError: state.geocodeError,
+      }),
+    },
+  ),
+);
+
+type PersistedImport = Omit<
+  ImportState,
+  | "loaded"
+  // Describes this visit rather than the run — see the field's own note.
+  | "isResumed"
+  | "setStep"
+  | "attachTo"
+  | "setSource"
+  | "setColumnField"
+  | "setCell"
+  | "splitLatLng"
+  | "swapLatLng"
+  | "setDrafts"
+  | "patchDraft"
+  | "removeDraft"
+  | "removeDrafts"
+  | "startGeocoding"
+  | "advanceGeocoding"
+  | "failGeocoding"
+  | "reset"
+  | "touch"
+>;
 
 /**
  * Which field a column currently feeds, if any.

@@ -53,17 +53,30 @@ export function ColumnTable() {
 
   return (
     <div className="space-y-2">
-      {/* The grid is wider than any phone and often wider than a laptop, so it
-          scrolls inside its own frame rather than the page scrolling sideways.
-          `border-separate` is what keeps the sticky header's own border painted
-          — a collapsed border belongs to the table, and scrolls away with it. */}
+      {/*
+       * The grid is wider than any phone and often wider than a laptop, so it
+       * scrolls inside its own frame rather than the page scrolling sideways.
+       * `border-separate` is what keeps the sticky header's own border painted
+       * — a collapsed border belongs to the table, and scrolls away with it.
+       *
+       * The frame stays now that the step has lost its `SectionPanel`, because
+       * it is a scroll region rather than a section: an edge is what says where
+       * the scrolling stops.
+       *
+       * **Every sticky cell in here is `bg-background`, not `bg-surface`.** A
+       * sticky cell has to be opaque or the rows slide visibly under it, so it
+       * has to name a colour — and with no white panel around the step, the
+       * colour it has to name is the page's. `bg-surface` would be lighter than
+       * the page it sits on, which is the elevation system pointing the wrong
+       * way.
+       */}
       <div className="max-h-[34rem] overflow-auto rounded-xl border border-border">
         <table className="w-full min-w-max border-separate border-spacing-0 text-left text-xs">
           <thead className="sticky top-0 z-20">
             <tr>
               <th
                 scope="col"
-                className="sticky left-0 z-10 border-b border-r border-border bg-surface-secondary px-2 py-2"
+                className="sticky left-0 z-10 border-b border-r border-border bg-background px-2 py-2"
               >
                 <span className="sr-only">Row</span>
               </th>
@@ -137,7 +150,7 @@ const TableRow = memo(function TableRow({
     <tr>
       <th
         scope="row"
-        className="sticky left-0 z-10 border-b border-r border-border bg-surface px-2 py-1.5 text-right align-middle text-xs font-normal tabular-nums text-muted"
+        className="sticky left-0 z-10 border-b border-r border-border bg-background px-2 py-1.5 text-right align-middle text-xs font-normal tabular-nums text-muted"
       >
         {rowIndex + 1}
       </th>

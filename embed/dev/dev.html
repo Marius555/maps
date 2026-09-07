@@ -42,11 +42,23 @@
       locations with an <code>icon</code> drawn as large balls with a white glyph
       and the rest as small ones, every pin centred on its own coordinate, the
       pair beside the flagship clusters at low zoom (mixing both sizes into one
-      bubble), clicking either one opens a popup clear of the pin, search narrows
+      bubble), clicking either one opens a popup clear of the pin <em>and clear
+      of the results panel</em>, search narrows
       by name or address, a no-match search says so, and OpenStreetMap
       attribution shows exactly once. Set <code>allowedDomains</code> to
       something other than localhost and the map should refuse to render, warning
       to the console only.
+    </p>
+    <p class="note">
+      <strong>The card is never under the panel, and never cut off.</strong> With
+      the panel floating on the right a card opens to the <em>left</em> of its
+      pin and the other way round on the left, because the placement measures the
+      room the panel leaves rather than the whole map frame; docked or switched
+      off, it lands where it always did. And the card is exactly as wide as the
+      popup that holds it &mdash; MapLibre&rsquo;s cap counts its own tip, so a
+      320px card in a 320px popup used to lose ~10px off its edge and jump
+      sideways by 4px whenever anything on it repainted. Hover the gallery arrows
+      and nothing on the card may move.
     </p>
     <p class="note">
       Every tag label is searchable: typing <code>depots</code> must narrow the
@@ -101,18 +113,28 @@
       (<code>hideDirections: true</code>), which is the reason those checkboxes
       exist: the button above it is already the way there, and the row would
       otherwise ask the same question twice. So the flagship&rsquo;s row shows
-      Phone, Website and the &ldquo;Book a fitting&rdquo; CTA and no Directions
+      Phone, the site and the &ldquo;Book a fitting&rdquo; CTA and no Directions
       link. Old town corner shows its email alone. A row with all four unticked
       must vanish entirely rather than leave an empty box with its own padding
       in it.
     </p>
     <p class="note">
+      <strong>Every row in it is a glyph and a label</strong>, at the card&rsquo;s
+      own small-print size and colour &mdash; not a blue link, and not the word
+      &ldquo;Website&rdquo;: a site reads as its host and path
+      (<code>example.com/gedimino</code>), which is what the card tool draws.
+      The two renderers are twins, so anything that looks different here from
+      the same card in <code>/maps/&hellip;/card</code> is a bug in one of them.
+    </p>
+    <p class="note">
       Gallery: the flagship carries three pictures with &lsaquo; &rsaquo; arrows
-      and a &ldquo;1 / 3&rdquo; counter that wraps in both directions; the
-      arrows must not pan the map underneath. The Naujamiestis depot has one
-      photo written the old way (<code>photoUrl</code> with no
-      <code>photoUrls</code>) and must show it with no arrows and no counter
-      &mdash; that is every snapshot published before galleries existed.
+      that wrap in both directions; the arrows must not pan the map underneath.
+      There is <em>no</em> counter over the picture &mdash; a visitor looking at
+      a shop&rsquo;s photos is not counting them, and the card tool has never
+      drawn one. The Naujamiestis depot has one photo written the old way
+      (<code>photoUrl</code> with no <code>photoUrls</code>) and must show it
+      with no arrows at all &mdash; that is every snapshot published before
+      galleries existed.
     </p>
     <p class="note">
       Shapes: a blue circle around the flagship and an orange polygon over the
@@ -140,6 +162,43 @@
       panel 40%, at both layouts. &ldquo;Nearest to me&rdquo; is a crosshair
       button &mdash; hover it for the name, and it must re-sort the whole list by
       distance rather than jumping to one pin.
+    </p>
+    <p class="note">
+      <strong>The crosshair lights while distances are being measured</strong>,
+      and pressing it lit stops measuring and puts the owner&rsquo;s own order
+      back. There is no <em>Near you &middot; Clear</em> chip under the toolbar
+      any more: it was a line of text and a second control explaining one button.
+      Picking a place out of the search box lights it too &mdash; the distances
+      are measured from somewhere either way.
+    </p>
+    <p class="note">
+      <strong>A Directions press must open instantly, and must never open a
+      blank tab.</strong> This is the one that has been broken twice. Nothing in
+      the embed may intercept the click: no <code>window.open</code>, no
+      <code>preventDefault</code>. The first press does start a location lookup
+      behind it &mdash; which may raise the permission prompt &mdash; but the tab
+      is Google&rsquo;s the whole time, and pressing a second link afterwards
+      must raise <em>no second prompt</em>.
+    </p>
+    <p class="note">
+      <strong>Whatever the browser says is what gets sent.</strong> Every
+      Directions link &mdash; the rows, the card&rsquo;s links row and a Button
+      block left on its default action &mdash; carries an
+      <code>&amp;origin=</code> as soon as anything knows where you are, however
+      vague. There used to be a 50-metre bar here on the theory that Google does
+      better unaided; it does not, unless Google has been given a location of its
+      own, and dropping a coarse fix turned a route that started on the wrong
+      street into one that started in another town.
+    </p>
+    <p class="note">
+      <strong>The sharpest reading wins, not the latest.</strong> Press the
+      crosshair (a cheap cached fix) and then the map&rsquo;s own
+      <em>Find my location</em> (a precise one) and the links must move to the
+      precise one &mdash; then press the crosshair again and they must
+      <em>not</em> move back. The accuracy circle that control draws is the
+      radius the browser is claiming, and it is the same number a route starts
+      from: what you see as the circle is the honest picture of how well this can
+      possibly work.
     </p>
     <p class="note">
       Location refused: block this site's location in the browser's own site

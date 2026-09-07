@@ -16,6 +16,14 @@ import { Button } from "@heroui/react";
  * A `Button` rather than a Chip, because it does something. A pressable Chip is a
  * control disguised as a label, which is how a keyboard user ends up tabbing onto
  * something with no idea it can be activated.
+ *
+ * **The label does not change when it is pressed**, and that is deliberate. It
+ * used to read `Showing 4 locations need attention` while active, which made the
+ * button change width on every press and shove the rest of the row around — the
+ * one control in the toolbar that resized itself as a side effect of being used.
+ * The state is told by the variant and by `aria-pressed`, which is what that
+ * attribute is for; the filtered count is said once, by the status line beside
+ * it, rather than twice in two different shapes.
  */
 export function AttentionBadge({
   count,
@@ -39,7 +47,7 @@ export function AttentionBadge({
       className="tabular-nums"
       onPress={onShow}
     >
-      {isActive ? `Showing ${label}` : label}
+      {label}
     </Button>
   );
 }

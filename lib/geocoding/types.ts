@@ -65,6 +65,20 @@ export type ReverseGeocodeQuery = {
 export type GeocodeProvider = {
   /** Identifies the provider in logs and in the review step's footnote. */
   readonly name: string;
+  /**
+   * Milliseconds this provider spaces its request *starts* by.
+   *
+   * Declared rather than inferred, because the one caller that needs it is an
+   * import telling a customer how long their three thousand addresses will take,
+   * and the honest number is the pacing we are actually holding — not a
+   * measurement of the first chunk, which is mostly network. It is on the
+   * provider because the pace is the provider's own: 1000ms on a public Photon,
+   * 0 on a self-hosted one, whatever the Geoapify plan allows on Geoapify.
+   *
+   * It leaves the boundary as a number of milliseconds and never as a provider
+   * name, so nothing outside /lib/geocoding learns which service answered.
+   */
+  readonly paceMs: number;
   search(query: GeocodeQuery): Promise<GeocodeCandidate[]>;
   /**
    * Coordinates → the address there, or null if the provider has nothing.

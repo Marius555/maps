@@ -16,6 +16,12 @@ export class ApiError extends Error {
     message: string,
     readonly status: number,
     readonly fields?: ApiFieldErrors,
+    /**
+     * What the server's own `Retry-After` said, in milliseconds, when it sent
+     * one. Undefined otherwise — a caller that wants to retry then picks its own
+     * backoff rather than inventing a number and calling it the server's.
+     */
+    readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = "ApiError";
@@ -71,8 +77,27 @@ async function unwrap<T>(response: Response): Promise<T> {
       error?.message ?? "Something broke on our side. Try again in a moment.",
       response.status,
       error?.fields,
+      retryAfterMs(response),
     );
   }
 
   return (body as { data: T }).data;
+}
+
+/**
+ * `Retry-After`, in milliseconds, when the header is a plain number of seconds.
+ *
+ * The HTTP-date form is legal and deliberately not read: it needs the client's
+ * clock to agree with the server's, and a skewed clock turns "wait two seconds"
+ * into "wait an hour" or into no wait at all. An unreadable header is simply
+ * absent, and the caller falls back to its own backoff.
+ */
+function retryAfterMs(response: Response): number | undefined {
+  const raw = response.headers.get("retry-after");
+  if (!raw) return undefined;
+
+  const seconds = Number(raw.trim());
+  if (!Number.isFinite(seconds) || seconds < 0) return undefined;
+
+  return seconds * 1000;
 }

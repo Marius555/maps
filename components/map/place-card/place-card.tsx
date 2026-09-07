@@ -74,6 +74,7 @@ export function PlaceCard({
   tagChips,
   pinIcons,
   slots,
+  theme,
   onClose,
   onEdit,
 }: {
@@ -110,6 +111,17 @@ export function PlaceCard({
    * the map rather than the location.
    */
   slots?: { map: AppMap };
+  /**
+   * `"light"` or `"dark"` for the card alone, from the *map's* basemap rather
+   * than from the dashboard's theme — see `cardThemeClass`. The class
+   * re-declares every colour token for this subtree (app/globals.css), which is
+   * what makes the studio a preview of a customer's site instead of a preview
+   * of the dashboard.
+   *
+   * Optional, and absent is the dashboard's own theme, which is what every
+   * caller got before this existed.
+   */
+  theme?: "light" | "dark";
   onClose: () => void;
   onEdit?: (placeId: string) => void;
 }) {
@@ -389,7 +401,9 @@ export function PlaceCard({
                 fields={fields}
                 tagChips={tagChips}
                 pinIcons={pinIcons}
-                className="map-card relative border border-border"
+                className={`map-card relative border border-border${
+                  theme ? ` ${theme}` : ""
+                }`}
                 // The slots say it per block, and better — see the docblock on
                 // `renderEmptyState`.
                 renderEmptyState={slots ? undefined : renderEmptyState}

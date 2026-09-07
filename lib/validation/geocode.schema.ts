@@ -5,11 +5,19 @@ import { latSchema, lngSchema } from "./common";
 /**
  * A single request per batch is capped deliberately.
  *
- * The provider is paced at roughly one request a second, so a 500-row CSV cannot
- * be one HTTP call — it would sit past every sensible request timeout. The client
- * walks the file in chunks and reports progress instead.
+ * A whole file cannot be one HTTP call — paced at the provider's own interval it
+ * would sit past every sensible request timeout — so the client walks the file
+ * in chunks and reports progress instead.
+ *
+ * **25, raised from 10.** Ten was chosen against Photon's one-request-a-second
+ * pace, where a chunk was already ten seconds of held-open function. At
+ * Geoapify's spacing a chunk of 25 is around six seconds, comfortably inside the
+ * 60s `maxDuration` the route now declares, and it cuts a three-thousand-row
+ * import from three hundred round trips to a hundred and twenty. The number is a
+ * function of the pace and the timeout, so moving `GEOAPIFY_MIN_INTERVAL_MS` a
+ * long way is the thing that should make anyone revisit it.
  */
-export const MAX_GEOCODE_BATCH = 10;
+export const MAX_GEOCODE_BATCH = 25;
 
 export const geocodeSearchSchema = z.object({
   address: z
@@ -59,6 +67,22 @@ export const geocodeBatchSchema = z.object({
     .min(1, "Nothing to geocode.")
     .max(MAX_GEOCODE_BATCH, `Send at most ${MAX_GEOCODE_BATCH} rows at a time.`),
   countryCode: z.string().trim().length(2).optional(),
+  /**
+   * How many locations this whole import intends to create — not how many rows
+   * are in *this* chunk.
+   *
+   * The plan check on this endpoint used to be `existing + rows.length > limit`,
+   * which for a chunk is a test almost nothing fails: a free map with ten empty
+   * slots has room for any ten rows, so all three thousand were geocoded and the
+   * refusal arrived at insert time with every request already spent. Checked
+   * against the run's total instead, the first chunk is refused.
+   *
+   * Still the client's own number, so it is not a bound on a hostile caller —
+   * that needs a durable per-user counter, which is the note left in the route
+   * handler. It is a bound on the ordinary case, which is the one that was
+   * spending real money.
+   */
+  runTotal: z.number().int().min(1).max(100_000).optional(),
 });
 
 export type GeocodeSearchInput = z.infer<typeof geocodeSearchSchema>;

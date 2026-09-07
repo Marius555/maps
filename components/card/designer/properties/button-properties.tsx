@@ -99,7 +99,7 @@ export function ButtonProperties({
               the normal state of a new account, and a picker with one entry
               reads as broken rather than as empty. */}
           {fields.length === 0 ? (
-            <p className="-mt-1 text-xs text-muted">
+            <p className="-mt-1 text-xs text-muted py-2">
               Add custom fields in Settings to give each location its own link.
             </p>
           ) : null}

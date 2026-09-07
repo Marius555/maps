@@ -358,6 +358,12 @@ export type SnapshotSettings = {
   panelBlur?: number;
   /** Pixels. Absent means square, which is what a docked column is. */
   panelRadius?: number;
+  /**
+   * `false` hides the results list's own scrollbar. Absent means shown — every
+   * published panel draws one, so this can only ever be written by an owner who
+   * turned it off and republished.
+   */
+  panelScrollbar?: boolean;
 
   /* One results row — absent is the row as it was before any of this. */
 

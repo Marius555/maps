@@ -22,6 +22,9 @@ const embedCorsHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Allow your local network IP to access the HMR/dev resources
+  allowedDevOrigins: ["192.168.1.212"],
+
   async headers() {
     return [
       { source: "/embed/:path*", headers: embedCorsHeaders },

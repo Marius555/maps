@@ -95,6 +95,24 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
             ]}
             onChange={(value, isSelected) => set(value, isSelected)}
           />
+
+          {/* Last, because a lone yes/no goes at the end of its fold — a boolean
+              interrupting a run of shape controls is the thing that rule exists
+              to stop. It is a switch on this panel's own terms: it applies to
+              the preview under the pointer rather than waiting for a Save.
+
+              On by default, and deliberately so: the bar is the only thing
+              telling a visitor the list continues below the fold. Off is the
+              answer for a short list, or for an owner who has designed the
+              panel down to its corners and does not want the browser's chrome
+              in the middle of it. */}
+          <PropertySwitches>
+            <PropertySwitch
+              label="Show the list's scrollbar"
+              isSelected={settings.panelScrollbar}
+              onChange={(value) => set("panelScrollbar", value)}
+            />
+          </PropertySwitches>
         </>
       ) : null}
     </div>

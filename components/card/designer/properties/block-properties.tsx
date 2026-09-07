@@ -8,10 +8,14 @@ import {
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd,
   AlignVerticalJustifyStart,
+  PanelBottom,
+  PanelTop,
+  Square,
 } from "lucide-react";
 
 import {
   CARD_BLOCKS,
+  CARD_ZONES,
   DEFAULT_CLAMP_LINES,
   defaultMarginOf,
   isNarrow,
@@ -21,6 +25,7 @@ import {
   type CardBlockType,
   type CardButtonHover,
   type CardButtonVariant,
+  type CardZone,
 } from "@/packages/shared/card-layout";
 import type { MapField, Place } from "@/lib/repositories/types";
 import { BLOCK_LABELS, zonesSentence } from "../block-labels";
@@ -197,6 +202,56 @@ const VALIGN_OPTIONS = [
   icon: React.ReactNode;
 }[];
 
+/**
+ * The fold a block is really selected for, where it is not the first one.
+ *
+ * Read only by `BlockProperties` below, to open it alongside the first
+ * non-empty group. Deliberately short: a type belongs here only when its own
+ * settings are what somebody opens the panel to change, which is true of the two
+ * types that carry a whole appearance of their own and of nothing else. Every
+ * other block is selected to be moved or resized, and that fold already opens.
+ */
+const SIGNATURE_GROUP: Partial<Record<CardBlockType, string>> = {
+  button: "button",
+  tags: "chips",
+  category: "chips",
+};
+
+/**
+ * The three bands of the card, narrowed to the ones this type is allowed in.
+ *
+ * Built from `spec.zones` rather than listed flat, so a control can never offer
+ * a band `acceptsBlock` would refuse — the same rule the drop targets obey, one
+ * layer up. `CARD_ZONES` orders them top → middle → bottom, which is the order
+ * they are on screen.
+ *
+ * Icons rather than words, on `PropertyChoice`'s own rule: a tile carrying a
+ * word gets about 36px across this column at three across, and "Middle" does not
+ * fit in it. Each glyph draws the band it names — a bar at the top, a filled
+ * middle, a bar at the bottom — and the word stays for a screen reader.
+ */
+function ZONE_OPTIONS(
+  zones: readonly CardZone[],
+): readonly { value: CardZone; label: string; icon: React.ReactNode }[] {
+  return CARD_ZONES.filter((zone) => zones.includes(zone)).map((zone) => ({
+    value: zone,
+    label: ZONE_LABELS[zone],
+    icon: ZONE_ICONS[zone],
+  }));
+}
+
+const ZONE_LABELS: Record<CardZone, string> = {
+  top: "Top",
+  middle: "Middle",
+  bottom: "Bottom",
+};
+
+const ZONE_ICONS: Record<CardZone, React.ReactNode> = {
+  top: <PanelTop aria-hidden className="size-3.5" />,
+  middle: <Square aria-hidden className="size-3.5" />,
+  bottom: <PanelBottom aria-hidden className="size-3.5" />,
+};
+
 const ALIGN_OPTIONS = [
   { value: "start", label: "Left", icon: <AlignLeft aria-hidden className="size-3.5" /> },
   { value: "center", label: "Centre", icon: <AlignCenter aria-hidden className="size-3.5" /> },
@@ -235,6 +290,8 @@ export function BlockProperties({
   mapId,
   chipPreview,
   onChipPreview,
+  zone,
+  onMoveZone,
   onChange,
 }: {
   block: CardBlock;
@@ -291,6 +348,27 @@ export function BlockProperties({
    */
   chipPreview?: number | null;
   onChipPreview?: (count: number | null) => void;
+  /** Which band of the card this block is in now. See `onMoveZone`. */
+  zone?: CardZone;
+  /**
+   * Move this block to another band of the card.
+   *
+   * **Optional, and its absence hides the control**, on `chipPreview`'s rule:
+   * the per-pin card menu stores a whole resolved *block* against an id
+   * (`overrideBlock`), so it can change what a block is and nothing about where
+   * the design puts it — offering a control that quietly did nothing there is
+   * the failure this panel exists to avoid. Studio only.
+   *
+   * It matters because the bottom band is the only thing on a card that pins.
+   * The middle one grows to fill whatever is left and packs its blocks from the
+   * top, so a block at the bottom *of the middle* is only at the bottom of the
+   * card for a location whose content happens to be as tall as the sample's —
+   * the same design drew its button flush on one pin and 37px short on the next.
+   * Dropping into the bottom band now works too (`lendToEndZones` in
+   * ../use-drop-bands.ts); this is the one-press way for a block already on the
+   * card, and the place somebody looks when a drag did not do what they meant.
+   */
+  onMoveZone?: (zone: CardZone) => void;
   onChange: (patch: BlockPatch) => void;
 }) {
   const spec = CARD_BLOCKS[block.type];
@@ -317,6 +395,15 @@ export function BlockProperties({
   const showMargin = has("margin") && !narrow;
 
   /*
+   * Where on the card this block sits — offered only where there is a choice to
+   * make and somewhere to write it. A type with one permitted zone (`spec.zones`
+   * of length one) has nothing to answer, and the per-pin menu passes no
+   * handler at all. See `onMoveZone`.
+   */
+  const zoneOptions = zone && onMoveZone ? ZONE_OPTIONS(spec.zones) : [];
+  const showZone = zoneOptions.length > 1;
+
+  /*
    * The same answers again, as a table — because the folds need them twice.
    *
    * Once to decide whether to render at all (`PropertyFold`'s `isEmpty`), and
@@ -325,6 +412,7 @@ export function BlockProperties({
    */
   const emptyGroups: Record<string, boolean> = {
     size:
+      !showZone &&
       !has("height") &&
       !has("fit") &&
       !has("width") &&
@@ -357,6 +445,28 @@ export function BlockProperties({
     ([, isEmpty]) => !isEmpty,
   )?.[0];
 
+  /*
+   * And the block's *own* fold beside it, which is a reported bug rather than a
+   * refinement.
+   *
+   * Declaration order puts "Size & position" first for almost every type, so on
+   * a Button the one fold that opened held Width and Alignment while the colour
+   * of the button — the thing somebody selects a Button block to change — sat
+   * shut, two folds below, under a heading reading "Button" inside a panel
+   * already headed "Button". It was reported as the control not existing at
+   * all, which is the right way to describe a control nobody can find.
+   *
+   * A table rather than a rule, because "the block's own group" is not derivable:
+   * a Tags block's is Chips, a Button's is the one named after it, and every
+   * other type has nothing that answers. `Accordion` is already
+   * `allowsMultipleExpanded`, so this opens *as well as* the first rather than
+   * instead of it — the geometry is still what most blocks are selected for.
+   */
+  const signature = SIGNATURE_GROUP[block.type];
+  const openKeys = [firstOpen, signature && !emptyGroups[signature] ? signature : undefined]
+    .filter((key): key is string => Boolean(key))
+    .filter((key, index, keys) => keys.indexOf(key) === index);
+
   return (
     /* `space-y-4` — `SectionPanel`'s own body rhythm, so this panel is spaced
        like every other panel in the app. It was `space-y-2.5`, squeezed to make
@@ -386,16 +496,36 @@ export function BlockProperties({
         than inheriting whatever was left open on the last one, whose folds are
         not even the same set.
       */}
-      <Accordion
-        key={block.id}
-        allowsMultipleExpanded
-        defaultExpandedKeys={firstOpen ? [firstOpen] : []}
-      >
+      <Accordion key={block.id} allowsMultipleExpanded defaultExpandedKeys={openKeys}>
         <PropertyFold
           id="size"
           title="Size & position"
           isEmpty={emptyGroups.size}
         >
+          {/*
+           * First in the fold, because it is the coarsest thing about a block's
+           * position and everything under it is a question *within* the band it
+           * names — and because "the button will not stay at the bottom" is
+           * answered here and nowhere else. See `onMoveZone`.
+           */}
+          {showZone && zone && onMoveZone ? (
+            <>
+              <PropertyChoice
+                label="Position"
+                value={zone}
+                options={zoneOptions}
+                onChange={onMoveZone}
+              />
+              {/* Said only for the band it is true of, and said as what the
+                  owner gets rather than as what the flexbox does (§8). */}
+              {zone === "bottom" ? (
+                <p className="-mt-1 text-xs text-muted">
+                  Pinned to the bottom edge on every location.
+                </p>
+              ) : null}
+            </>
+          ) : null}
+
           {has("height") ? (
             <PropertyScale
               label={HEIGHT_LABELS[block.type] ?? "Height"}
@@ -634,7 +764,10 @@ export function BlockProperties({
         {/* After the text, for the reason the Chips group is: a button is the
             box its label sits in, and the order here is what it says, then what
             it says it in, then what it is drawn on. */}
-        <PropertyFold id="button" title="Button" isEmpty={emptyGroups.button}>
+        {/* "Button style", not "Button": the panel above it is already headed
+            with the block's name, so a fold repeating it read as a second copy
+            of the heading rather than as where the colours are. */}
+        <PropertyFold id="button" title="Button style" isEmpty={emptyGroups.button}>
           {has("buttonStyle") ? (
             <ButtonStyleProperties block={block} onChange={onChange} />
           ) : null}

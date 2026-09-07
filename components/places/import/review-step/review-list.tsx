@@ -55,7 +55,11 @@ export function ReviewList({
         </label>
       ) : null}
 
-      <ul className="space-y-1.5">
+      {/* No `space-y` between rows any more: a row draws its own `border-t`
+          hairline, and a gap turns a continuous rule into thirty floating
+          lines. The last row has no rule under it, which is the same open
+          bottom edge the locations table has. */}
+      <ul>
         {/*
          * Rows fade out as they are removed, and as they leave the filtered set
          * when "only rows that need attention" is on — fixing a row and watching

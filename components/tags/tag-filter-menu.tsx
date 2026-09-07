@@ -73,9 +73,30 @@ export function TagFilterMenu({
 
   return (
     <Popover.Root isOpen={isOpen} onOpenChange={setIsOpen}>
-      <Button variant="secondary">
+      {/*
+       * **The visible label is always "Tags", whatever is selected.**
+       *
+       * It used to read `Tags · 3` once a filter was on, and the count was the
+       * problem rather than the separator: the button grew by two or three
+       * characters the moment anyone used it, and the toolbar it sits in is
+       * already tight enough that the growth pushed the row onto a second line.
+       * A control that resizes as a side effect of being used moves everything
+       * beside it, and it does so at exactly the moment the user is aiming at
+       * something else.
+       *
+       * So the state is told by the variant — the same `tertiary` → `secondary`
+       * pair `AttentionBadge` uses, so the two "a filter is on" signals on this
+       * page look like one idea — and the number is kept in the accessible name
+       * instead, where it costs no width. Not `aria-pressed`: this is a popover
+       * trigger and already owns `aria-expanded`, and a button claiming both is
+       * announced as two controls in one.
+       */}
+      <Button variant={selected.size > 0 ? "secondary" : "tertiary"}>
         <Filter aria-hidden="true" className="size-4" />
-        {selected.size === 0 ? "Tags" : `Tags · ${selected.size}`}
+        Tags
+        {selected.size > 0 ? (
+          <span className="sr-only">, {selected.size} selected</span>
+        ) : null}
       </Button>
 
       <Popover.Content placement="bottom start">
@@ -106,26 +127,28 @@ export function TagFilterMenu({
 
             {/* Its own fieldset under the questions, because it is not an answer
                 to any of them — it is the absence of every answer. */}
-            <fieldset className="space-y-1.5 border-t border-border pt-3">
-              <legend className="sr-only">Locations with no tags</legend>
+            <div className="flex flex-row gap-2 pt-3 align-items-start">
+              <fieldset className="flex flex-col gap-2">
+                <legend className="sr-only">Locations with no tags</legend>
 
-              <TagToggleChip
-                label="Untagged"
-                isOn={isUntagged}
-                onToggle={toggleUntagged}
-              />
-            </fieldset>
+                <TagToggleChip
+                  label="Untagged"
+                  isOn={isUntagged}
+                  onToggle={toggleUntagged}
+                />
+              </fieldset>
 
-            {selected.size > 0 ? (
-              <Button
-                size="sm"
-                variant="tertiary"
-                className="self-start"
-                onPress={() => onChange(new Set())}
-              >
-                Clear tags
-              </Button>
-            ) : null}
+              {selected.size > 0 ? (
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  className="self-start"
+                  onPress={() => onChange(new Set())}
+                >
+                  Clear tags
+                </Button>
+              ) : null}
+            </div>
           </div>
         </Popover.Dialog>
       </Popover.Content>

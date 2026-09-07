@@ -7,8 +7,9 @@ import {
   isOpenNow,
 } from "@/packages/shared/hours";
 import { formatDistance, formatDuration, pathLengthM } from "@/packages/shared/geo";
-import { directionsUrl } from "@/packages/shared/directions";
 import { buttonTargetOf } from "@/packages/shared/card-button";
+import { directionsLink } from "./directions";
+import type { Fix } from "./search";
 import { overrideBlock } from "@/packages/shared/card-overrides";
 import {
   CARD_ZONES,
@@ -106,6 +107,15 @@ export function buildPopup(
    * must keep rendering exactly the card it always did (CLAUDE.md §7).
    */
   tagChips: readonly TagChip[] = [],
+  /**
+   * Where the visitor is, for this card's Directions links.
+   *
+   * Defaulted for the reason `layout`, `pins` and `tagChips` above are: absent
+   * is the link every card has always drawn, so nothing published moves and the
+   * dashboard's own preview — which has no visitor to locate — needs no
+   * argument.
+   */
+  me: Fix | null = null,
 ): HTMLElement {
   // `--place`, because the fixed box that class carries belongs to a location
   // card alone: a shape holds a name and a sentence and is meant to be smaller
@@ -157,6 +167,7 @@ export function buildPopup(
     pinColor: pinColorOfChips(chips),
     pins,
     folded: detailsContents(layout),
+    me,
   };
 
   for (const zone of CARD_ZONES) {
@@ -312,6 +323,13 @@ type BlockContext = {
   pins: readonly CustomPinIcon[];
   /** What "More details" holds — whatever was not pulled onto the card itself. */
   folded: CardBlockType[];
+  /**
+   * Where the visitor is, if the browser has said — the start point for every
+   * Directions link on this card. Null is the link this card has always drawn,
+   * which is what a visitor who has granted nothing still gets. See `me` in
+   * index.ts for why this is not the list's measuring origin.
+   */
+  me: Fix | null;
 };
 
 /**
@@ -377,9 +395,9 @@ const BUILDERS: Record<CardBlockType, BlockBuilder> = {
   hours: (context, block) => buildHours(context.place, block),
   details: (context) => buildMore(context),
   actions: (context, block) =>
-    buildActions(context.place, context.fields, block),
+    buildActions(context.place, context.fields, block, context.me),
   button: (context, block) =>
-    block ? buildButton(context.place, context.fields, block) : null,
+    block ? buildButton(context.place, context.fields, block, context.me) : null,
   divider: () => el("div", "lm-popup__divider"),
   spacer: () => el("div", "lm-popup__spacer"),
 };
@@ -568,6 +586,9 @@ function wrapBlock(
   // narrowed photo wants both a height and a basis, so neither can be written
   // blind.
   if (box.flex) wrap.style.flex = box.flex;
+  // And the floor it may be squeezed to, which only the week has: `0 1 auto`
+  // shrinks nothing without it.
+  if (box.minHeight) wrap.style.minHeight = box.minHeight;
   if (box.overflowWrap) wrap.style.overflowWrap = box.overflowWrap;
 
   // The stylesheet already sets `box-sizing: border-box` on everything under
@@ -731,9 +752,13 @@ function wrapRow(
 /**
  * The gallery, as one image the visitor steps through.
  *
- * A strip of thumbnails would say how many there are at a glance and cost
- * another forty pixels of a card this rework exists to shorten, so the count is
- * a line of text over the picture instead.
+ * **No counter.** There was a `2 / 3` over the picture, on the argument that a
+ * strip of thumbnails would say the same thing and cost forty pixels of a card
+ * this rework exists to shorten. Both are answers to a question nobody asked: a
+ * visitor looking at a shop's photos is not counting them, and the chevrons
+ * already say there are more. It was also the one thing on the card the studio
+ * never drew — `Gallery` in components/card/card-block.tsx shows the first photo
+ * and nothing else — so removing it narrows the drift between the twins.
  *
  * Only the current `src` is ever assigned. A place with eight photos would
  * otherwise start eight downloads the moment its pin is clicked, on a visitor's
@@ -767,14 +792,12 @@ function buildGallery(photos: string[]): HTMLElement {
   if (photos.length === 1) return root;
 
   let at = 0;
-  const count = el("span", "lm-popup__count");
 
   const show = (next: number) => {
     // Wraps, so back from the first photo reaches the last rather than
     // dead-ending on a control that looks live.
     at = (next + photos.length) % photos.length;
     image.src = photos[at];
-    count.textContent = String(at + 1) + " / " + String(photos.length);
   };
 
   const step = (delta: number, side: string, path: string) => {
@@ -794,11 +817,7 @@ function buildGallery(photos: string[]): HTMLElement {
   };
 
   show(0);
-  root.append(
-    step(-1, "back", "M15 18 9 12l6-6"),
-    step(1, "on", "m9 18 6-6-6-6"),
-    count,
-  );
+  root.append(step(-1, "back", "M15 18 9 12l6-6"), step(1, "on", "m9 18 6-6-6-6"));
 
   return root;
 }
@@ -1050,11 +1069,24 @@ function buildButton(
   place: SnapshotPlace,
   fields: SnapshotField[],
   block: CardBlock,
+  /** Only read for a Directions button — see `buttonTargetOf`. */
+  me: Fix | null,
 ): HTMLElement | null {
-  const target = buttonTargetOf(block, place, fields);
+  const target = buttonTargetOf(block, place, fields, me);
   if (!target) return null;
 
-  const node = link("lm-popup__button", target.label, target.href);
+  /*
+   * A Directions button is the same link as the row's, so it goes through the
+   * same builder — otherwise the press that asks for a position would work on
+   * one of them and not the other, which is the harder half of the bug to
+   * notice. `buttonAction` is spelled as `"link"`, so absent is Directions: see
+   * `CardBlock.buttonAction`, and `buttonTargetOf`, which reads it the same way
+   * round.
+   */
+  const node =
+    block.buttonAction === "link"
+      ? link("lm-popup__button", target.label, target.href)
+      : directionsLink("lm-popup__button", target.label, place, me);
   const style = buttonStyleOf(block);
 
   if (block.buttonFull) node.classList.add("lm-popup__button--full");
@@ -1092,6 +1124,70 @@ function buildButton(
   return node;
 }
 
+/*
+ * The four glyphs the Links row wears, as path data.
+ *
+ * Lucide's own `phone`, `mail`, `globe` and `navigation` — the same four
+ * `Actions` imports in components/card/card-block.tsx, copied rather than
+ * imported because the embed must not ship a React icon package (§4). The two
+ * that lucide files as a `rect`, a `circle` and a `polygon` are written here as
+ * the equivalent path, since `icon()` draws paths and nothing else.
+ */
+const PHONE_ICON = [
+  "M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384",
+];
+
+const MAIL_ICON = [
+  "m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7",
+  "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+];
+
+const GLOBE_ICON = [
+  "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20",
+  "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20",
+  "M2 12h20",
+];
+
+const NAVIGATION_ICON = ["M3 11 22 2l-9 19-2-8-8-2z"];
+
+/**
+ * One way to reach the place: a glyph, then a label.
+ *
+ * The node is passed in already built, because `link()` is what decides whether
+ * a customer-supplied href is safe enough to be an anchor at all — a row whose
+ * scheme failed that test is a `<span>`, and it still gets its icon.
+ *
+ * The label is a child rather than the row's own text so it can `truncate`
+ * independently: a forty-character email must shorten itself rather than push
+ * the other three rows off a card 320px wide.
+ */
+function actionRow(node: HTMLElement, glyph: string[], label: string): HTMLElement {
+  node.textContent = "";
+  node.append(icon(glyph), el("span", "lm-popup__link-label", label));
+
+  return node;
+}
+
+/**
+ * What the Links row calls a website: its host and path, never the whole URL.
+ *
+ * `https://example.com/stores/bristol/` reads as `example.com/stores/bristol`,
+ * which is the studio's own expression (`Actions` in
+ * components/card/card-block.tsx) and the reason this is not simply the string
+ * the owner typed — forty characters of scheme and tracking parameters is not a
+ * label. Anything unparseable falls back to that string, because a row that
+ * says something imperfect beats a row that disappears.
+ */
+function siteLabel(url: string): string {
+  try {
+    const parsed = new URL(url, window.location.href);
+
+    return parsed.host + parsed.pathname.replace(/\/$/, "");
+  } catch {
+    return url;
+  }
+}
+
 function buildActions(
   place: SnapshotPlace,
   fields: SnapshotField[],
@@ -1102,6 +1198,8 @@ function buildActions(
    * before these four fields existed says, so nothing already live moves.
    */
   block?: CardBlock,
+  /** Where the visitor is, for the Directions row alone. */
+  me: Fix | null = null,
 ): HTMLElement | null {
   const actions = el("div", "lm-popup__actions");
 
@@ -1111,18 +1209,55 @@ function buildActions(
   const justify = justifyOf(block?.align);
   if (justify) actions.style.justifyContent = justify;
 
-  if (place.url && !block?.hideWebsite) {
-    actions.append(link("lm-popup__link", "Website", place.url));
-  }
+  /*
+   * Phone, email, website, Directions — the studio's order, which this row did
+   * not have.
+   *
+   * The two renderers drew genuinely different rows: this one led with a link
+   * labelled "Website", at 13px in a hard-coded link blue with no glyph, where
+   * `Actions` in components/card/card-block.tsx has always drawn icon-and-label
+   * pairs at 11px in the card's own text colour, phone first. An owner arranges
+   * the card in the studio, so the studio is what a customer's site now draws —
+   * which is a §7 exception taken knowingly, the same one the deleted tag chips
+   * are: the bundle is shared, so a map already published changes on the next
+   * deploy without its owner republishing.
+   */
   if (place.phone && !block?.hidePhone) {
-    actions.append(link("lm-popup__link", place.phone, `tel:${place.phone}`));
+    actions.append(
+      actionRow(
+        link("lm-popup__link", "", `tel:${place.phone}`),
+        PHONE_ICON,
+        place.phone,
+      ),
+    );
   }
   if (place.email && !block?.hideEmail) {
-    actions.append(link("lm-popup__link", "Email", `mailto:${place.email}`));
+    actions.append(
+      actionRow(
+        link("lm-popup__link", "", `mailto:${place.email}`),
+        MAIL_ICON,
+        "Email",
+      ),
+    );
+  }
+  if (place.url && !block?.hideWebsite) {
+    actions.append(
+      actionRow(
+        link("lm-popup__link", "", place.url),
+        GLOBE_ICON,
+        siteLabel(place.url),
+      ),
+    );
   }
 
   if (!block?.hideDirections) {
-    actions.append(link("lm-popup__link", "Directions", directionsUrl(place)));
+    actions.append(
+      actionRow(
+        directionsLink("lm-popup__link", "", place, me),
+        NAVIGATION_ICON,
+        "Directions",
+      ),
+    );
   }
 
   /*
@@ -1143,10 +1278,19 @@ function buildActions(
       const value = values[field.id];
       if (!value) continue;
 
-      const element = fieldValue(field, value, "lm-popup__link lm-popup__link--cta");
-      // The label, not the value: see above.
-      element.textContent = field.label;
-      actions.append(element);
+      /*
+       * The same row as the four above, where it used to be an outlined pill of
+       * its own (`--cta`). One row shape for one block: the studio draws these
+       * through the very same `ContactRow` it draws Directions with, and a card
+       * that changes shape depending on whether the link came from us or from a
+       * custom field is two designs wearing one name.
+       *
+       * `actionRow` clears the text `fieldValue` set, which is the value — the
+       * label is what goes on screen, for the reason above.
+       */
+      actions.append(
+        actionRow(fieldValue(field, value, "lm-popup__link"), GLOBE_ICON, field.label),
+      );
     }
   }
 

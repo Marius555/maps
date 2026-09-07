@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@heroui/react";
+import { Button, ScrollShadow } from "@heroui/react";
 import { RotateCcw } from "lucide-react";
 
 import {
@@ -142,8 +142,29 @@ export function BlockEditorForm({
       {/* `overflow-x-hidden` is written out beside it deliberately: a lone
           `overflow-y: auto` leaves the other axis `visible`, which CSS then
           computes to `auto` — so a scroller declaring one axis quietly gets
-          both, and a control one pixel too wide grows a horizontal bar. */}
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1">
+          both, and a control one pixel too wide grows a horizontal bar.
+
+          **The bar itself is hidden, and that is a layout fix rather than a
+          tidy-up.** A native scrollbar takes 15px out of the content box, and
+          React Aria recomputes this popover's `maxHeight` on every
+          `ResizeObserver` tick — so every fold that animates its height, and
+          every dropdown that opens over it, walked the content across the
+          overflow boundary and reflowed the whole 24rem column by 15px each
+          way. Measured on the Button block: 866px of controls in a 632px box,
+          `offsetWidth` 384 against `clientWidth` 369.
+
+          `ScrollShadow hideScrollBar` is the call `DesignerTabPanel` already
+          makes for the studio's own copy of these controls
+          (components/card/designer/card-designer-tabs.tsx) — and the two panels
+          draw the same `BlockProperties`, so a scroller that looks different
+          depending on which opened it is two scrollers. The fade stays: with the
+          bar gone it is the only thing saying the panel continues past the
+          fold. */}
+      <ScrollShadow
+        hideScrollBar
+        size={24}
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1"
+      >
         <BlockProperties
           block={found.block}
           fields={map.fields}
@@ -160,7 +181,7 @@ export function BlockEditorForm({
           mapId={map.id}
           onChange={apply}
         />
-      </div>
+      </ScrollShadow>
 
       {error ? <ErrorMessage error={error} /> : null}
 

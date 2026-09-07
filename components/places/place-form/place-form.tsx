@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button } from "@heroui/react";
+import { Button, Modal } from "@heroui/react";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
@@ -177,50 +177,87 @@ export function PlaceForm({
   });
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      {updatePlace.error ? <ErrorMessage error={updatePlace.error} /> : null}
-      {savePhotos.error ? <ErrorMessage error={savePhotos.error} /> : null}
-      {saveLogo.error ? <ErrorMessage error={saveLogo.error} /> : null}
+    /*
+     * The form is the dialog's body *and* its footer, which is what keeps the
+     * buttons still.
+     *
+     * They used to sit at the end of one `space-y-4` stack inside `Modal.Body`,
+     * and `Modal.Body` is the scroller: HeroUI's modal defaults to
+     * `scroll: "inside"`, so `.modal__body--scroll-inside` takes the overflow
+     * while `.modal__dialog` is held at `max-h-full` and centred by
+     * `sm:my-auto`. Closing the **last** fold — Media, the only one with the
+     * buttons directly beneath it — then did two ugly things in sequence.
+     * React Aria's `useDisclosure` collapse pins `--disclosure-panel-height` to
+     * the measured `scrollHeight`, forces a reflow and animates it to `0px`, so
+     * for 200ms the buttons were dragged up the scroller by the browser's own
+     * scroll anchoring; and the moment the content stopped overflowing, the
+     * scroller's `scrollTop` collapsed and the dialog re-centred, which is the
+     * jump at the end that no transition covered.
+     *
+     * Header, body and footer are siblings in a `flex-col` dialog held at
+     * `max-h-full`, so only the body — the one with `flex-1` — takes the
+     * overflow. That is the arrangement `components/map/pin-studio/pin-studio.tsx`
+     * already documents; the form has to *span* the two of them so submit still
+     * works from a button that is no longer inside the scrolling half, which is
+     * why it carries the dialog's own flex column rather than a `form=`
+     * attribute and a lifted `isSubmitting`.
+     *
+     * `mt-2` is what `.modal__header + .modal__body` used to give the body for
+     * free; with this element between them the adjacency no longer matches.
+     */
+    <form
+      onSubmit={onSubmit}
+      className="mt-2 flex min-h-0 flex-1 flex-col"
+      noValidate
+    >
+      <Modal.Body className="space-y-4">
+        {updatePlace.error ? <ErrorMessage error={updatePlace.error} /> : null}
+        {savePhotos.error ? <ErrorMessage error={savePhotos.error} /> : null}
+        {saveLogo.error ? <ErrorMessage error={saveLogo.error} /> : null}
 
-      <EssentialsSection
-        map={map}
-        place={place}
-        control={control}
-        errors={errors}
-        lat={lat}
-        lng={lng}
-        icon={icon}
-        onMove={setPosition}
-      />
-
-      {/* Collapsed by default, and forced open by an error in them — a message
-          nobody can see is the same as no message. */}
-      <div className="space-y-2">
-        {/* First of the folds, because it is the one that belongs to the map
-            directly above it — but folded, because it is the rare repair rather
-            than a field anybody fills in. */}
-        <CoordinatesSection lat={lat} lng={lng} onChange={setPosition} />
-
-        <ContactSection
+        <EssentialsSection
+          map={map}
+          place={place}
           control={control}
-          hasError={Boolean(errors.phone || errors.email || errors.url)}
+          errors={errors}
+          lat={lat}
+          lng={lng}
+          icon={icon}
+          onMove={setPosition}
         />
-        {/* Tags are not here any more: they moved up into Essentials, where the
-            Category select used to be. They are what says what kind of place
-            this is, and a fold is not where that question belongs. */}
-        <FieldsSection control={control} fields={map.fields} />
-        <HoursSection control={control} hasError={Boolean(errors.hours)} />
-        <MediaSection
-          logo={logo}
-          photos={photos}
-          control={control}
-          hasError={Boolean(errors.description)}
-          onLogoChange={setLogo}
-          onPhotosChange={setPhotos}
-        />
-      </div>
 
-      <div className="flex justify-end gap-2">
+        {/* Collapsed by default, and forced open by an error in them — a message
+            nobody can see is the same as no message. */}
+        <div className="space-y-2">
+          {/* First of the folds, because it is the one that belongs to the map
+              directly above it — but folded, because it is the rare repair
+              rather than a field anybody fills in. */}
+          <CoordinatesSection lat={lat} lng={lng} onChange={setPosition} />
+
+          <ContactSection
+            control={control}
+            hasError={Boolean(errors.phone || errors.email || errors.url)}
+          />
+          {/* Tags are not here any more: they moved up into Essentials, where
+              the Category select used to be. They are what says what kind of
+              place this is, and a fold is not where that question belongs. */}
+          <FieldsSection control={control} fields={map.fields} />
+          <HoursSection control={control} hasError={Boolean(errors.hours)} />
+          <MediaSection
+            logo={logo}
+            photos={photos}
+            control={control}
+            hasError={Boolean(errors.description)}
+            onLogoChange={setLogo}
+            onPhotosChange={setPhotos}
+          />
+        </div>
+      </Modal.Body>
+
+      {/* `.modal__footer` is already `flex flex-row items-center justify-end
+          gap-2`, and `.modal__body + .modal__footer` pays the 20px above it, so
+          the row keeps exactly the shape it had as a hand-built div. */}
+      <Modal.Footer>
         {onCancel ? (
           <Button variant="tertiary" onPress={onCancel}>
             Cancel
@@ -229,7 +266,7 @@ export function PlaceForm({
         <Button type="submit" isPending={isSubmitting}>
           Save changes
         </Button>
-      </div>
+      </Modal.Footer>
     </form>
   );
 }

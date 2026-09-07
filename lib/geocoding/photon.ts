@@ -96,12 +96,13 @@ export function createPhotonProvider(options?: {
   const userAgent =
     options?.userAgent ?? process.env.GEOCODER_USER_AGENT ?? DEFAULT_USER_AGENT;
 
-  const throttle = createThrottle(
-    options?.minIntervalMs ?? readInterval() ?? DEFAULT_MIN_INTERVAL_MS,
-  );
+  const paceMs =
+    options?.minIntervalMs ?? readInterval() ?? DEFAULT_MIN_INTERVAL_MS;
+  const throttle = createThrottle(paceMs);
 
   return {
     name: "photon",
+    paceMs,
 
     async search({ address, countryCode, limit = 5 }: GeocodeQuery) {
       const trimmed = address.trim();

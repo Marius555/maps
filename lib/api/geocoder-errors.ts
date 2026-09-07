@@ -23,10 +23,23 @@ export function geocoderFailure(error: unknown): NextResponse {
 
   if (error instanceof GeocoderError) {
     if (error.status === 429) {
+      /*
+       * With a `Retry-After`, because the client behind this is an import
+       * walking a file in a hundred and twenty chunks and it has to decide how
+       * long to back off. Left to guess it either gives up while the limiter is
+       * still holding it, or sits out a window that reset seconds ago.
+       *
+       * Two seconds is the shortest wait that clears a per-second limiter with
+       * room to spare. It is deliberately not the upstream's own `Retry-After`
+       * — we do not forward one, because the number that matters to our caller
+       * is when *our* pacing will let it through, not when a third party's will.
+       */
       return fail(
         "rate_limited",
         "The address lookup service is busy. Wait a moment and try again.",
         429,
+        undefined,
+        2,
       );
     }
 

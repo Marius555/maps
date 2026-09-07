@@ -1,10 +1,9 @@
 "use client";
 
-import { Button } from "@heroui/react";
+import { Button, Label, ProgressBar } from "@heroui/react";
 import { useMemo, useState } from "react";
 
 import { ErrorMessage } from "@/components/ui/error-message";
-import { SectionPanel } from "@/components/ui/section-panel";
 import { formatCount } from "@/lib/format/number";
 import {
   draftsNeedingReview,
@@ -14,6 +13,7 @@ import {
 import { hasBlockingIssue } from "@/lib/import/issues";
 import type { AppMap } from "@/lib/repositories/types";
 import { useImportStore } from "@/lib/stores/import-store";
+import type { ImportProgress } from "../import-wizard";
 import { ReviewList } from "./review-list";
 import { ReviewMap } from "./review-map";
 import { ReviewSummary } from "./review-summary";
@@ -47,6 +47,7 @@ export function ReviewStep({
   map,
   headroom,
   isImporting,
+  importProgress,
   importError,
   onImport,
   onBack,
@@ -54,6 +55,8 @@ export function ReviewStep({
   map: AppMap;
   headroom: { plan: string; limit: number; used: number };
   isImporting: boolean;
+  /** How far the confirmed write has got, or null when one isn't running. */
+  importProgress: ImportProgress | null;
   importError: unknown;
   onImport: () => void;
   onBack: () => void;
@@ -143,11 +146,22 @@ export function ReviewStep({
   };
 
   return (
-    <SectionPanel
-      title="Check before importing"
-      description={description}
-      footer={
-        <>
+    /*
+     * No `SectionPanel`, for the reason the other three steps lost theirs: a
+     * white card on a grey page, holding a map frame and a list of bordered
+     * boxes, was three surfaces deep for one screen. The step sits on the page.
+     *
+     * The actions come with the heading rather than sitting in a footer under
+     * the list. The list is as long as the file — on a three-thousand-row import
+     * a footer is thousands of pixels below the map you are working against, and
+     * the map is `lg:sticky` precisely because this screen is worked from the
+     * top.
+     */
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="min-w-0 flex-1 text-xs text-muted">{description}</p>
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <Button variant="tertiary" onPress={onBack}>
             Back to columns
           </Button>
@@ -159,9 +173,9 @@ export function ReviewStep({
             Import {formatCount(importable.length)}{" "}
             {importable.length === 1 ? "location" : "locations"}
           </Button>
-        </>
-      }
-    >
+        </div>
+      </div>
+
       <ReviewSummary
         drafts={drafts}
         importable={importable.length}
@@ -188,7 +202,11 @@ export function ReviewStep({
          * in a 40rem window leaves four rows visible, and the row being fixed
          * ends up permanently behind it.
          */}
-        <div className="h-64 overflow-hidden rounded-xl border border-border bg-surface sm:h-80 lg:sticky lg:top-4 lg:z-10 lg:h-[min(24rem,40vh)]">
+        {/* `bg-background`, not `bg-surface`: this is what shows for the frame
+            or two before MapLibre paints, and a white flash on a grey page is a
+            worse tell than the page's own colour. The border stays — a map has
+            an edge whatever it is sitting on. */}
+        <div className="h-64 overflow-hidden rounded-xl border border-border bg-background sm:h-80 lg:sticky lg:top-4 lg:z-10 lg:h-[min(24rem,40vh)]">
           <ReviewMap
             map={map}
             drafts={drafts}
@@ -224,7 +242,35 @@ export function ReviewStep({
         />
       </div>
 
+      {/*
+       * The write has its own progress, because it is not instant either.
+       *
+       * A three-thousand-row import is fifteen sequential requests of two
+       * hundred rows, and all the user had was a pending button — for long
+       * enough to look like a page that had stopped responding. It reports rows
+       * rather than requests for the same reason the address lookup does: the
+       * number has to mean something the user can see in their own file.
+       */}
+      {importProgress ? (
+        <ProgressBar
+          aria-label="Import progress"
+          className="w-full"
+          value={Math.round(
+            (importProgress.saved / Math.max(importProgress.total, 1)) * 100,
+          )}
+        >
+          <Label>
+            {formatCount(importProgress.saved)} of{" "}
+            {formatCount(importProgress.total)} locations saved
+          </Label>
+          <ProgressBar.Output />
+          <ProgressBar.Track>
+            <ProgressBar.Fill />
+          </ProgressBar.Track>
+        </ProgressBar>
+      ) : null}
+
       {importError ? <ErrorMessage error={importError} /> : null}
-    </SectionPanel>
+    </div>
   );
 }

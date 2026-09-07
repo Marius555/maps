@@ -2246,6 +2246,16 @@ export type CardBlockBox = {
    */
   flex?: string;
   /**
+   * The floor this block may be squeezed to, as a length. Absent leaves the
+   * flex algorithm's own automatic minimum, which is the block's content — and
+   * that is what every block but one wants.
+   *
+   * It travels beside `flex` because it is the other half of the same decision:
+   * `flex: 0 1 auto` alone shrinks nothing, since a flex item refuses to go
+   * below its content without this. See the `hours` case on `flex`.
+   */
+  minHeight?: string;
+  /**
    * How much to shrink the block's own content, as a `zoom` factor. Absent means
    * not at all, which is every block that is not a half.
    *
@@ -2502,6 +2512,27 @@ export function blockBox(
      * zone's `scrollHeight` matched its `clientHeight`, so it did not even think
      * it had anything to scroll. `0 0 auto` makes every block keep its content
      * height, the zone overflow, and the scroller do its job.
+     *
+     * **The week is the one exception, and it is one because it has a scroller
+     * of its own.** An open Hours block is a summary row plus seven days —
+     * about 154px, see `emptyBlockHeight` — and it is the only block on a card
+     * that is routinely taller than the card. Shrink the card's height a stop or
+     * two with a week in the middle of it and everything under that week was
+     * pushed out of the zone's visible area, with the bar hidden and nothing
+     * saying so; put those blocks in the bottom zone instead, which cannot
+     * shrink, and they were clipped off the card outright.
+     *
+     * So `hours` is `0 1 auto` with a floor of zero, which makes it the first
+     * full-width block the zone squeezes — and the rule above does not apply to
+     * it, because the week does not clip when it is squeezed: the list scrolls
+     * inside the block (`.card-hours` in app/globals.css,
+     * `.lm-popup__hours-list` in embed/src/styles.css) while the summary row
+     * stays where it is. "Open now" and today's times are what a visitor came
+     * for, and they are what a shortened card keeps.
+     *
+     * `minHeight` travels with it because `0 1 auto` on its own shrinks
+     * nothing: a flex item's automatic minimum size is its content, so without
+     * this the week holds its full height and the card is exactly as it was.
      */
     ...(narrow
       ? {
@@ -2511,7 +2542,9 @@ export function blockBox(
             : { contentZoom: NARROW_CONTENT_SCALE }),
           overflowWrap: "anywhere",
         }
-      : { flex: "none" }),
+      : block.type === "hours"
+        ? { flex: "0 1 auto", minHeight: "0" }
+        : { flex: "none" }),
     ...(block.padding ? { padding: `${String(block.padding)}px` } : {}),
     ...(offset === 0 ? {} : { marginInline: `${String(offset)}px` }),
     /*

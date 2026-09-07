@@ -17,6 +17,7 @@ import {
   type CardShadow,
   type CardZone,
 } from "@/packages/shared/card-layout";
+import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 
 /**
  * The same three values `embed/src/map.ts`'s own `CARD_SHADOWS` sets as a CSS
@@ -78,6 +79,29 @@ export function cardVars(layout: CardLayout): CSSProperties {
      */
     "--card-radius": `${String(layout.radius)}px`,
   } as CSSProperties;
+}
+
+/**
+ * The map's own accent, for the one thing on a card that has no colour of its
+ * own until somebody picks one: a Button nobody gave a Background.
+ *
+ * It is a *map* setting rather than part of the card design, which is why it is
+ * not in `cardVars` — the design is saved per account (§0) and the accent is
+ * per map, so this is written by whichever screen knows which map is on it and
+ * inherits down to every card inside. Where nothing writes it, the stylesheet's
+ * own fallback is the embed's `--lm-focus` default, so the studio still draws
+ * what a customer's site draws.
+ *
+ * Nothing is written when the owner chose no accent — an absent property leaves
+ * that fallback in charge, where a resolved literal would freeze today's default
+ * into every card drawn from now on.
+ */
+export function cardAccentVars(
+  settings: Record<string, unknown> | undefined,
+): CSSProperties {
+  const accent = settings ? readEmbedSettings(settings).colors?.accent : undefined;
+
+  return accent ? ({ "--card-accent": accent } as CSSProperties) : {};
 }
 
 /** The card's own box. */
@@ -186,6 +210,10 @@ export function blockStyle(
     // block sharing its line needs half the row instead. See `flex` on
     // `CardBlockBox` — a half gallery wants a height *and* a basis.
     ...(box.flex ? { flex: box.flex } : {}),
+    // The floor the one shrinkable block is allowed down to — see `minHeight` on
+    // `CardBlockBox`. Nothing at all for the other twelve, so their boxes are
+    // what they were.
+    ...(box.minHeight ? { minHeight: box.minHeight } : {}),
     ...(box.overflowWrap
       ? { overflowWrap: box.overflowWrap as "anywhere" }
       : {}),

@@ -23,6 +23,103 @@ import { MIN_BLOCK_HEIGHT, newBlockHeight } from "./card-space";
 import { canDrop, MIN_BAND, toCardDrag } from "./drop-bands";
 
 /**
+ * Room at the card's own edges for an end zone that has nothing in it yet.
+ *
+ * **The bottom zone is the only thing on a card that pins**, and until this it
+ * was the one place a block could not be dropped. A zone with no blocks is
+ * content-sized and therefore zero pixels tall (`CardZoneBox`'s `hasBlocks`), so
+ * it measured `top === bottom`; `dropSlots` emitted a zero-span run for it,
+ * `dropRegions` skipped it outright — nothing was drawn — and `dropBands` left it
+ * a `MIN_BAND` sliver at the very edge of the card that nobody could aim at. The
+ * middle zone's `flex-1` had meanwhile swallowed every leftover pixel, so the
+ * empty space a person sees in the lower half of a card *is the middle zone*, and
+ * every "put this at the bottom" gesture landed there — held down by a stored
+ * `offset`, which is space above a block and not a promise about the bottom. That
+ * is the whole of the reported bug: the same design drew its button flush on a
+ * location with a long description and 37px short on one with none.
+ *
+ * So an empty end zone borrows a block's worth of room from the middle. It is a
+ * loan and not a measurement: the pixels belong to the middle zone right now, and
+ * the moment something lands the zones really are this shape. Both halves are
+ * written, so nothing is offered twice and the marks cannot overlap.
+ *
+ * The padding is paid here because the zone will pay it the moment it holds a
+ * block (`zoneClass`: a bottom zone pays top *and* bottom, a top zone only its
+ * top), which is what makes the outline land where the block itself will.
+ *
+ * Nothing happens at all when there is less than `MIN_BAND` of free space to
+ * lend, which is a card whose middle zone is already full: there is no empty
+ * strip on screen to point at, and drawing a target over a block is worse than
+ * offering none.
+ */
+export function lendToEndZones(
+  zones: ZoneMeasure[],
+  layout: CardLayout,
+  drag: CardDrag | null,
+  blockHeight: number,
+): void {
+  const middle = zones.find((measure) => measure.zone === "middle");
+  if (!middle) return;
+
+  /*
+   * The middle zone's own blocks, minus the one in the hand.
+   *
+   * It is still on the card and still measures — the canvas draws it dimmed
+   * where it was — but its space is about to be freed, which is the same fact
+   * `dropSlots` reads through `freedBy`. Counted, a block dragged off the bottom
+   * of the middle zone reports that zone full, no room is lent, and the gesture
+   * that most needs the bottom band is the one that cannot reach it.
+   *
+   * Its *line* is what really survives, so this drops the block rather than the
+   * row: a block that shares its line leaves its partner behind, and that
+   * partner's own rect still holds the line where it is.
+   */
+  const parked = middle.blocks.filter(
+    (block) => !(drag?.kind === "move" && drag.id === block.id),
+  );
+
+  const pad = layout.padding;
+  const want = Math.max(MIN_BLOCK_HEIGHT, Math.round(blockHeight));
+  // Nothing to separate when the middle is empty, so no gap to pay for either.
+  const gap = parked.length > 0 ? layout.gap : 0;
+
+  const bottom = zones.find((measure) => measure.zone === "bottom");
+
+  if (bottom && layout.zones.bottom.length === 0) {
+    // The middle zone's last line, or its own top when it holds nothing.
+    const used = parked.reduce(
+      (edge, block) => Math.max(edge, block.bottom),
+      middle.top,
+    );
+    const lent = Math.min(want, middle.bottom - used - 2 * pad - gap);
+
+    if (lent >= MIN_BAND) {
+      bottom.bottom -= pad;
+      bottom.top = bottom.bottom - lent;
+      middle.bottom = bottom.top - pad;
+    }
+  }
+
+  const top = zones.find((measure) => measure.zone === "top");
+
+  if (top && layout.zones.top.length === 0) {
+    const used = parked.reduce(
+      (edge, block) => Math.min(edge, block.top),
+      middle.bottom,
+    );
+    // Only its own top padding: a filled top zone is the first zone drawn, never
+    // the last, so it never carries the card's bottom padding.
+    const lent = Math.min(want, used - middle.top - pad - gap);
+
+    if (lent >= MIN_BAND) {
+      top.top += pad;
+      top.bottom = top.top + lent;
+      middle.top = top.bottom;
+    }
+  }
+}
+
+/**
  * Every place on the card this drag could actually go — not one per gap between
  * blocks, but one per *block-sized piece of free space there is room for*.
  *

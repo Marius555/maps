@@ -71,6 +71,15 @@ export const embedSettingsSchema = z.object({
   panelOpacity: percentSchema,
   panelBlur: z.number().int().min(0).max(24),
   panelRadius: z.number().int().min(0).max(24),
+  /**
+   * Whether the results list draws its own scrollbar.
+   *
+   * `true` is the bar every published panel has drawn, so this is spelled as the
+   * shown state and not as `panelHideScrollbar` — absent has to mean the older
+   * behaviour on the way out (`packages/shared/snapshot.ts`), and a flag whose
+   * absence means "hidden" would rewrite every live map.
+   */
+  panelScrollbar: z.boolean(),
 
   rowPin: z.boolean(),
   rowPinSize: z.number().int().min(16).max(48),
@@ -119,6 +128,10 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   panelOpacity: 88,
   panelBlur: 10,
   panelRadius: 12,
+  // The native bar stays on by default: it is the only thing telling a visitor
+  // there are more locations below the fold, and a list is not a card whose
+  // every pixel its owner chose. Turning it off is a decision, not a tidy-up.
+  panelScrollbar: true,
 
   rowPin: true,
   rowPinSize: 28,
@@ -167,6 +180,7 @@ export function readEmbedSettings(
     panelOpacity: readNumber(settings.panelOpacity, 0, 100, d.panelOpacity),
     panelBlur: readNumber(settings.panelBlur, 0, 24, d.panelBlur),
     panelRadius: readNumber(settings.panelRadius, 0, 24, d.panelRadius),
+    panelScrollbar: readFlag(settings.panelScrollbar, d.panelScrollbar),
 
     rowPin: readFlag(settings.rowPin, d.rowPin),
     rowPinSize: readNumber(settings.rowPinSize, 16, 48, d.rowPinSize),

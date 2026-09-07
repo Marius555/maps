@@ -21,6 +21,7 @@ import type { NearestRoad } from "@/lib/map/nearest-road";
 import { registerPmtilesProtocol } from "@/lib/map/pmtiles";
 import { selectionBounds } from "@/lib/map/selection-bounds";
 import { effectiveCardLayout } from "@/lib/card/designer-status";
+import { cardThemeClass } from "@/lib/card/card-theme";
 import type { MapStyleKey } from "@/lib/map/style";
 import { configureMaplibreWorker } from "@/lib/map/worker";
 import type {
@@ -823,6 +824,10 @@ export default function MapCanvasImpl({
         <PlaceCard
           map={map}
           isReady={isReady}
+          /* The card draws in the basemap's light/dark, not the dashboard's —
+             the studio, this canvas and the customer's site are one picture.
+             See `cardThemeClass`. */
+          theme={cardThemeClass(style)}
           /*
            * Hidden while adding: the point of add mode is dropping several pins
            * in a row, and a card opening over the map after each one is in the

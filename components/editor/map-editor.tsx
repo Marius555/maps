@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { cardAccentVars } from "@/components/card/card-frame";
 import { useMapExport } from "@/components/export/use-map-export";
 import { GroupEditDialog } from "@/components/groups/group-form/group-edit-dialog";
 import { usePruneEmptyGroups } from "@/components/groups/use-prune-empty-groups";
@@ -1139,7 +1140,14 @@ export function MapEditor({
      * absolutely positioned and contributes no height. dvh, not vh, so mobile
      * browser chrome doesn't push the bottom of the panel out of reach.
      */
-    <div className="flex min-h-0 flex-1 flex-col gap-4 lg:h-[calc(100dvh-3rem)] lg:flex-none lg:flex-row">
+    <div
+      className="flex min-h-0 flex-1 flex-col gap-4 lg:h-[calc(100dvh-3rem)] lg:flex-none lg:flex-row"
+      /* The map's accent, inherited by every place card drawn inside — a Button
+         nobody gave a Background wears it, exactly as it does on the published
+         map. Here rather than on the card, because the card design is per
+         account and the accent is per map. See `cardAccentVars`. */
+      style={cardAccentVars(map.settings)}
+    >
       {/*
        * A framed panel rather than a slab bled to the window edges. dvh, not vh:
        * mobile browser chrome would clip the canvas otherwise.

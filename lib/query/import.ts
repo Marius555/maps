@@ -9,19 +9,31 @@ import type { CreateShapeInput } from "@/lib/validation/shape.schema";
 import { apiFetch } from "./fetcher";
 import { queryKeys } from "./keys";
 
-/** One chunk of an import's geocoding pass. */
+/**
+ * One chunk of an import's geocoding pass.
+ *
+ * Returns the envelope rather than just the results, because `paceMs` is how the
+ * wizard turns "this will take a while" into a number of minutes — see
+ * `estimateGeocodeMs`.
+ *
+ * No retry here, and that is on purpose even though a chunk is exactly the kind
+ * of request worth retrying: `mutations: { retry: 0 }` is set globally in
+ * `lib/query/client.ts` so a create can never fire twice, and the retry this
+ * needs is not React Query's anyway. It has to back off on the server's own
+ * `Retry-After`, give up on a chunk without giving up on the run, and count
+ * consecutive failures across chunks — which is `lib/import/geocode-run.ts`.
+ */
 export function useGeocodeBatch(mapId: string) {
   return useMutation({
     mutationFn: async (input: {
       rows: { key: string; address: string }[];
       countryCode?: string;
+      runTotal?: number;
     }) =>
-      (
-        await apiFetch<{ results: BatchGeocodeResult[] }>(
-          `/api/maps/${mapId}/geocode/batch`,
-          { method: "POST", body: JSON.stringify(input) },
-        )
-      ).results,
+      await apiFetch<{ results: BatchGeocodeResult[]; paceMs: number }>(
+        `/api/maps/${mapId}/geocode/batch`,
+        { method: "POST", body: JSON.stringify(input) },
+      ),
   });
 }
 

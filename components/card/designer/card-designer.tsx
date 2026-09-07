@@ -4,6 +4,8 @@ import { Button, toast } from "@heroui/react";
 import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { cardAccentVars } from "@/components/card/card-frame";
+import { cardThemeClass } from "@/lib/card/card-theme";
 import { RowDragProvider } from "@/components/groups/row-drag-context";
 import { IconButton } from "@/components/ui/icon-button";
 import {
@@ -373,7 +375,13 @@ export function CardDesigner({
        * `100dvh - 3rem` is exact rather than approximate — 3rem is `Container`'s
        * own `py-6`, and at `lg` there is nothing else above this.
        */}
-      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:h-[calc(100dvh-3rem)] lg:flex-none">
+      <div
+        className="flex min-h-0 flex-1 flex-col gap-3 lg:h-[calc(100dvh-3rem)] lg:flex-none"
+        /* The map's accent, so a Button nobody gave a Background is drawn in
+           the colour it will be drawn in on the published map rather than in
+           the dashboard's own. See `cardAccentVars`. */
+        style={cardAccentVars(initialMap.settings)}
+      >
         <p className="shrink-0 text-xs text-muted">
           This card design applies to every map in your account — changes here
           change what visitors see everywhere, not just on this one.
@@ -410,6 +418,9 @@ export function CardDesigner({
           >
             {sample ? (
               <CardCanvas
+                /* The basemap's light/dark, so the card being designed is the
+                   card a visitor gets — see `cardThemeClass`. */
+                theme={cardThemeClass(initialMap.style)}
                 layout={draft}
                 place={sample}
                 tagChips={tagChips}
@@ -499,6 +510,28 @@ export function CardDesigner({
                 onChipPreview={setChipPreview}
                 onCard={(patch) => commit({ ...draft, ...patch })}
                 onBlock={(id, patch) => commit(resizeCardBlock(draft, id, patch))}
+                /*
+                 * Through `dropCardBlock` and not a hand-written splice, on the
+                 * rule the per-pin menu already follows for patches: it is the
+                 * same function the drag ends in, so this inherits `acceptsBlock`
+                 * and every clamp behind it rather than growing a second opinion
+                 * about where a block may go.
+                 *
+                 * It lands at the end of the band it is sent to, with `offset: 0`
+                 * — a stored lead is empty space *above* a block, and the whole
+                 * reason for sending one to the bottom band is that it should
+                 * hang off the card's own edge rather than off whatever happens
+                 * to be above it. Null is a move the layout refused; there is
+                 * nothing to write for it.
+                 */
+                onMoveBlockZone={(id, zone) => {
+                  const next = dropCardBlock(
+                    draft,
+                    { kind: "move", id },
+                    { zone, index: draft.zones[zone].length, offset: 0 },
+                  );
+                  if (next) commit(next);
+                }}
               />
             }
           />

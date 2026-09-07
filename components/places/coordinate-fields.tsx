@@ -31,11 +31,21 @@ export function CoordinateFields({
   lat,
   lng,
   isDisabled,
+  className = "grid gap-3 sm:grid-cols-2",
   onChange,
 }: {
   lat: number | null;
   lng: number | null;
   isDisabled?: boolean;
+  /**
+   * The pair's own layout, for a caller whose row is not a half-and-half split.
+   *
+   * Defaulted to what every caller drew before this existed, so the place form
+   * is untouched. The import review row overrides it: a latitude is nine
+   * characters and its box does not need a quarter of a full-width table row,
+   * which is what a `sm:grid-cols-2` inside a `flex-1` gave it there.
+   */
+  className?: string;
   onChange: (coords: { lat: number; lng: number }) => void;
 }) {
   const [text, setText] = useState(() => ({
@@ -74,7 +84,7 @@ export function CoordinateFields({
   };
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className={className}>
       <CoordinateField
         label="Latitude"
         limit={90}

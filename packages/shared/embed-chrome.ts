@@ -82,6 +82,17 @@ export function chromeAttrs(
   return {
     "data-lm-side": settings.panelSide === "right" ? "right" : undefined,
     "data-lm-float": settings.panelFloat ? "1" : undefined,
+    /*
+     * An attribute rather than a custom property, and for once that is forced
+     * rather than merely consistent: hiding a bar takes `scrollbar-width` *and*
+     * a `::-webkit-scrollbar` rule, and a pseudo-element cannot be switched on
+     * by a variable. So the stylesheet branches, exactly as it does for the side
+     * and the placement.
+     *
+     * Only `false` writes anything. Absent is the bar, which is what every
+     * snapshot published before this field existed already draws (§7).
+     */
+    "data-lm-bar": settings.panelScrollbar === false ? "0" : undefined,
   };
 }
 
@@ -100,6 +111,7 @@ export const CHROME_SETTING_KEYS = [
   "panelOpacity",
   "panelBlur",
   "panelRadius",
+  "panelScrollbar",
   "rowPinSize",
   "colors",
 ] as const satisfies readonly (keyof SnapshotSettings)[];

@@ -130,50 +130,76 @@ export function PlacesManager({
         tagIds={tagIds}
         hasPlaces={places.length > 0}
         actions={
-          <>
-            <AttentionBadge
-              count={attention}
-              isActive={filter === "attention"}
-              onShow={() => setFilter(filter === "attention" ? "" : "attention")}
-            />
-            <PlaceCountBadge count={places.length} limit={placeLimit} />
-            <LinkButton
-              variant="secondary"
-              href={`/maps/${map.id}/places/import`}
-            >
-              Import locations
-            </LinkButton>
-          </>
+          <LinkButton variant="secondary" href={`/maps/${map.id}/places/import`}>
+            Import locations
+          </LinkButton>
         }
         onQueryChange={setQuery}
         onFilterChange={setFilter}
         onTagsChange={setTagIds}
       />
 
-      {isFiltered ? (
-        <p className="text-xs text-muted" role="status">
-          Showing {visible.length} of {places.length} locations.
-        </p>
-      ) : null}
+      {/*
+       * The list and the facts about it, as one block.
+       *
+       * `space-y-3` rather than the page's own `space-y-6`, because the footer
+       * row is a caption on the table above it and not a third section of the
+       * page — at 24px it floated between the two and belonged to neither.
+       */}
+      <div className="space-y-3">
+        {isFiltered && visible.length === 0 ? (
+          <EmptyState
+            size="sm"
+            icon={SearchX}
+            title="No matches"
+            description="No locations match those filters. Try a different search, or show all locations."
+          />
+        ) : (
+          <>
+            {/* One list, two shapes. The table needs the width to be a table at
+                all; below `lg` the stacked rows are still the right answer, and
+                they are the same component the editor sidebar uses. */}
+            <PlaceTable {...listProps} className="hidden lg:block" />
+            <div className="lg:hidden">
+              <PlaceList {...listProps} />
+            </div>
+          </>
+        )}
 
-      {isFiltered && visible.length === 0 ? (
-        <EmptyState
-          size="sm"
-          icon={SearchX}
-          title="No matches"
-          description="No locations match those filters. Try a different search, or show all locations."
-        />
-      ) : (
-        <>
-          {/* One list, two shapes. The table needs the width to be a table at
-              all; below `lg` the stacked rows are still the right answer, and
-              they are the same component the editor sidebar uses. */}
-          <PlaceTable {...listProps} className="hidden lg:block" />
-          <div className="lg:hidden">
-            <PlaceList {...listProps} />
+        {/*
+         * Under the table, not in the toolbar.
+         *
+         * These are both readings of the list rather than controls over it, and
+         * in the toolbar they were competing for the one row that has to hold
+         * the filters — between them they took about 320px, which is what made
+         * the search field and the Tags button wrap. Underneath, they read as
+         * the table's own footer: how full the map is, and how much of it wants
+         * a look.
+         *
+         * Only when there is a list. On an empty map `PlaceTable` draws an
+         * invitation to add the first location, and "0 of 3,000" under it is a
+         * limit nobody is near.
+         */}
+        {places.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <PlaceCountBadge count={places.length} limit={placeLimit} />
+
+            <AttentionBadge
+              count={attention}
+              isActive={filter === "attention"}
+              onShow={() => setFilter(filter === "attention" ? "" : "attention")}
+            />
+
+            {/* The one place a filtered count is said, now that the attention
+                button no longer says a second version of it in its own label. */}
+            {isFiltered ? (
+              <p className="ml-auto text-xs text-muted" role="status">
+                Showing {visible.length} of {places.length} locations.
+              </p>
+            ) : null}
           </div>
-        </>
-      )}
+        ) : null}
+      </div>
 
       <PlaceEditDialog
         map={map}

@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { detectColumns } from "./detect/score";
 import { buildDraftPlaces, importableDrafts } from "./draft-places";
+import { planGeocode } from "./geocode-plan";
 import { hasBlockingIssue, type RowIssue } from "./issues";
 import { draftToCreateInput } from "./draft-to-place";
 import { preflightProblem } from "./preflight";
@@ -393,5 +394,54 @@ describe("a file where the column names say nothing and the values are a mess", 
       "Museum",
       "Bar",
     ]);
+  });
+});
+
+/*
+ * The seam between drafting and spending money.
+ *
+ * Every stage above this one is judged on whether a row came out right. This one
+ * is judged on how many requests the file will cost, which is the number that
+ * decides whether a three-thousand-row import fits inside a day's quota.
+ */
+describe("a file that names the same address more than once", () => {
+  it("costs one lookup per building, not one per row", () => {
+    // A retail park: four tenants, one postal address, written four slightly
+    // different ways by four different people.
+    const { drafts } = csv(
+      "Name,Address,City,Postcode,Country\n" +
+        "Alpha,Torstr. 1,Berlin,10119,Germany\n" +
+        "Beta,torstr. 1,Berlin,10119,Germany\n" +
+        "Gamma,Torstr.  1 ,Berlin,10119,Germany\n" +
+        "Delta,Hafenweg 9,Hamburg,20457,Germany\n",
+    );
+
+    const plan = planGeocode(drafts);
+
+    expect(plan.rowCount).toBe(4);
+    expect(plan.lookupCount).toBe(2);
+    expect(plan.savedCount).toBe(2);
+
+    // And every row still gets an answer: the keys are carried, not dropped.
+    expect(plan.lookups.flatMap((lookup) => lookup.keys)).toHaveLength(4);
+    expect(plan.lookups[0].keys).toEqual(
+      drafts.slice(0, 3).map((draft) => draft.key),
+    );
+  });
+
+  it("leaves out the rows that already came with coordinates", () => {
+    // Half the file is placed already and half is not. Only the half that is
+    // not costs anything, however many times it repeats itself.
+    const { drafts } = csv(
+      "Name,Address,City,Latitude,Longitude\n" +
+        "Alpha,Torstr. 1,Berlin,52.5296,13.4064\n" +
+        "Beta,Torstr. 1,Berlin,,\n" +
+        "Gamma,Torstr. 1,Berlin,,\n",
+    );
+
+    const plan = planGeocode(drafts);
+
+    expect(plan.rowCount).toBe(2);
+    expect(plan.lookupCount).toBe(1);
   });
 });

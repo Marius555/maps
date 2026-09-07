@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 import { ErrorMessage } from "@/components/ui/error-message";
-import { SectionPanel } from "@/components/ui/section-panel";
 import { formatCount } from "@/lib/format/number";
 import { MAX_SOURCE_ROWS } from "@/lib/import/limits";
 import { finishSource, readFile, type LoadedSource } from "@/lib/import/read-source";
@@ -94,10 +93,22 @@ export function SourceStep({
     );
 
   return (
-    <SectionPanel
-      title="Where are your locations?"
-      description={`One row per location. Up to ${formatCount(MAX_SOURCE_ROWS)} rows.`}
-    >
+    /*
+     * No panel. The step is the control.
+     *
+     * This used to be a `SectionPanel` titled "Where are your locations?", which
+     * put a white card on a grey page and a grey dropzone inside the card —
+     * three grounds deep for one file picker, and the innermost of them
+     * (`--surface-secondary`, 96%) is actually *darker* than the page it was
+     * meant to echo (97.5%). The title said what `ImportSteps` already says
+     * directly above it, and the description is a fact about the file, so it
+     * belongs with the file picker rather than in a header.
+     *
+     * `max-w-2xl` matches the cap on the `Tabs` root in `source-tabs.tsx`, so
+     * the tab strip, the dropzone and the notes below them are one column by
+     * construction.
+     */
+    <div className="mx-auto w-full max-w-2xl space-y-4">
       <SourceTabs
         current={tab}
         onChange={setTab}
@@ -118,14 +129,17 @@ export function SourceStep({
 
       {/* Said here rather than at the end, because finding out after a
           ten-minute address lookup that the file was never going to fit is the
-          worst possible moment to learn it. */}
+          worst possible moment to learn it. The row cap moved here from the
+          panel description it used to sit in — same two facts about the file,
+          now on one line beside each other. */}
       <p className="text-xs text-muted">
+        One row per location, up to {formatCount(MAX_SOURCE_ROWS)} rows.{" "}
         {remaining === 0
           ? `Your ${headroom.plan} plan is full at ${formatCount(headroom.limit)} locations. Upgrade, or remove some before importing.`
           : `You can add ${formatCount(remaining)} more ${remaining === 1 ? "location" : "locations"} on your ${headroom.plan} plan.`}
       </p>
 
       {error ? <ErrorMessage error={error} /> : null}
-    </SectionPanel>
+    </div>
   );
 }

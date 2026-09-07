@@ -61,16 +61,27 @@ export function PlaceCardHours({
      * where a checkbox that visibly did nothing would be the whole feature
      * failing. Remounting is free here: it is seven rows of text.
      *
-     * **Freezing it on the designer's canvas was tried and taken back out.**
-     * The week is `flex: none` in a zone that packs at `flex-start`, so opening
-     * it does push the blocks under it *in that zone* down — but a click that
-     * does nothing is a broken control, and the answer to a block that must not
-     * move is the bottom zone, which is pinned and never moves whatever the
-     * middle does. `card-canvas.tsx` records the other attempt at this, a
-     * `useCardFits` that rewrote the layout to fit and walked every block below
-     * the week up the card and left it there. Neither is coming back.
+     * **Freezing it on the designer's canvas was tried and taken back out.** A
+     * click that does nothing is a broken control, and `card-canvas.tsx`
+     * records the other attempt at this — a `useCardFits` that rewrote the
+     * layout to fit and walked every block below the week up the card and left
+     * it there. Neither is coming back.
+     *
+     * What replaced both is `card-hours` below: the week gives way rather than
+     * pushing the blocks under it out of the zone, and it does it in CSS with
+     * nothing written back to the design. It used to be `flex: none` like every
+     * other block, which is right for a block that would clip and wrong for the
+     * one block that can scroll inside itself — see the `hours` case in
+     * `blockBox` for the whole argument, and `.card-hours` in app/globals.css
+     * for the rules. A class rather than utilities because it has to reach
+     * `.disclosure__content`, which is HeroUI's element and not one this
+     * component renders.
      */
-    <Disclosure key={String(isOpen)} defaultExpanded={isOpen}>
+    <Disclosure
+      key={String(isOpen)}
+      defaultExpanded={isOpen}
+      className="card-hours"
+    >
       <Disclosure.Heading>
         <Disclosure.Trigger className="flex w-full cursor-pointer items-baseline gap-1.5 text-left">
           <span

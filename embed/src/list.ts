@@ -4,7 +4,8 @@ import { pinCanvas } from "@/packages/shared/pin-raster";
 import { el, link } from "./dom";
 import { distanceKm, formatDistance, type Located } from "./geo";
 import { colorOf, colorsOf, pinsOf } from "./map";
-import { directionsUrl } from "@/packages/shared/directions";
+import { directionsLink } from "./directions";
+import type { Fix } from "./search";
 
 /**
  * The results panel beside the map.
@@ -52,6 +53,14 @@ export type ListHandle = {
 export function createList(
   snapshot: MapSnapshot,
   onPick: (place: SnapshotPlace) => void,
+  /**
+   * Where the visitor is, for the row's Directions link — read per row rather
+   * than taken as a value, because the answer can arrive after the list is
+   * drawn. Distinct from the `origin` `setPlaces` takes: that one may be a town
+   * somebody searched for, and routing them from it is the bug this exists to
+   * fix. See `me` in index.ts.
+   */
+  getMe: () => Fix | null = () => null,
 ): ListHandle {
   const settings = snapshot.settings;
 
@@ -228,7 +237,9 @@ export function createList(
 
     if (showActions) {
       const actions = el("div", "lm-list__actions");
-      actions.append(link("lm-list__link", "Directions", directionsUrl(place)));
+      actions.append(
+        directionsLink("lm-list__link", "Directions", place, getMe()),
+      );
 
       // Tapping a number to call it is the second thing anyone does with a store
       // locator on a phone. Everything else a place carries stays in the popup —

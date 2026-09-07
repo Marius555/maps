@@ -8,6 +8,7 @@ import {
   findBlock,
   type CardLayout,
   type CardShadow,
+  type CardZone,
 } from "@/packages/shared/card-layout";
 import { blockPanelFacts } from "@/lib/card/block-panel-facts";
 import { BlockProperties, type BlockPatch } from "./block-properties";
@@ -48,6 +49,7 @@ export function CardProperties({
   fields,
   onCard,
   onBlock,
+  onMoveBlockZone,
 }: {
   layout: CardLayout;
   selectedId: string | null;
@@ -81,6 +83,12 @@ export function CardProperties({
   fields: MapField[];
   onCard: (patch: Partial<CardLayout>) => void;
   onBlock: (id: string, patch: BlockPatch) => void;
+  /**
+   * Move a block to another band of the card — see `onMoveZone` in
+   * `BlockProperties`, which is what this reaches. The designer holds it because
+   * moving a block between zones is a `dropCardBlock`, not a `resizeCardBlock`.
+   */
+  onMoveBlockZone: (id: string, zone: CardZone) => void;
 }) {
   const selected = selectedId ? findBlock(layout, selectedId) : null;
 
@@ -109,6 +117,8 @@ export function CardProperties({
         mapId={mapId}
         chipPreview={chipPreview}
         onChipPreview={onChipPreview}
+        zone={selected.zone}
+        onMoveZone={(zone) => onMoveBlockZone(selected.block.id, zone)}
         onChange={(patch) => onBlock(selected.block.id, patch)}
       />
     );

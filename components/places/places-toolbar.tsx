@@ -58,11 +58,18 @@ export function PlacesToolbar({
     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
       {hasPlaces ? (
         <>
+          {/* A fixed 14rem, not `flex-1`. Greedy, it took every pixel the
+              other controls had not claimed, which on a 5xl page is around
+              460px of box to hold a name — and it was what pushed the Tags
+              button and the actions onto a second line. A search field is a
+              place to type twenty characters; it does not need to be the
+              widest thing on the page. `fullWidth` still applies below `sm`,
+              where the row is a column. */}
           <SearchField
             fullWidth
             value={query}
             onChange={onQueryChange}
-            className="sm:min-w-56 sm:flex-1"
+            className="sm:w-56 sm:flex-none"
           >
             <Label>Search locations</Label>
             <Input placeholder="Name or address" />

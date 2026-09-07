@@ -2,11 +2,15 @@
 
 import { Button, Input, Label, TextField } from "@heroui/react";
 import { Crosshair, X } from "lucide-react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 
 import { CoordinateFields } from "@/components/places/coordinate-fields";
 import { AddressSearchField } from "@/components/places/place-form/address-search-field";
 import { IconButton } from "@/components/ui/icon-button";
+import {
+  COLLAPSE_CLASS,
+  collapseMotion,
+} from "@/components/ui/list-row-motion";
 import type { DraftPlace } from "@/lib/import/draft-places";
 import { issuesFor } from "@/lib/import/issues";
 import { formatCoords, roundCoord } from "@/lib/map/geo";
@@ -89,8 +93,17 @@ export function ReviewRow({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15, ease: [0, 0, 0.2, 1] }}
-      className={`rounded-xl border px-2 py-1.5 transition-colors ${
-        isSelected ? "border-accent bg-surface-secondary" : "border-border"
+      /*
+       * A hairline between rows, not a box around each one.
+       *
+       * Thirty bordered, rounded cards stacked with a gap read as thirty objects
+       * to deal with. The locations table this step is a rehearsal for draws the
+       * same list as rows separated by a rule, and scanning is the job on both
+       * screens. Selection is a fill rather than an accent border for the same
+       * reason — it marks a row without adding an edge to count.
+       */
+      className={`border-t border-border px-2 py-1.5 transition-colors ${
+        isSelected ? "bg-accent-soft" : ""
       }`}
     >
       {/*
@@ -140,80 +153,146 @@ export function ReviewRow({
         </div>
       </div>
 
-      {isOpen ? (
-        <div className="space-y-3 px-1 pb-1 pt-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextField
-              fullWidth
-              value={draft.name}
-              onChange={(name) => onChange({ name })}
+      {/*
+       * Opening and closing is a fold, not a cut.
+       *
+       * It used to be a bare ternary, so pressing Fix replaced one line with a
+       * block of four fields in a single frame and every row below jumped down
+       * the page. On a list whose whole gesture is "fix this one, look at the
+       * next", that reads as the list reordering itself rather than as one row
+       * opening. `collapseMotion` is the app's own fold and the same pair
+       * `mapping-step.tsx` uses. `prefers-reduced-motion` needs no guard: the
+       * blanket rule in globals.css already clamps every transition to 0.01ms,
+       * and the open state is four fields on screen rather than something told
+       * only in motion.
+       *
+       * One stable `empty:hidden` wrapper around the whole `AnimatePresence`,
+       * with the gap carried as padding *inside* each block (`COLLAPSE_CLASS`) —
+       * a margin does not collapse with an animated height, so a block that left
+       * would take its height and leave its gap behind. Both branches are
+       * conditional rather than one being the other's `else`, so a tidy closed
+       * row renders nothing at all here and the wrapper really is empty.
+       */}
+      <div className="empty:hidden">
+        <AnimatePresence initial={false}>
+          {isOpen ? (
+            <motion.div
+              key="open"
+              {...collapseMotion()}
+              className={COLLAPSE_CLASS}
             >
-              <Label>Name</Label>
-              <Input />
-            </TextField>
+              {/*
+               * `pl-8` is the row's own indent. The `<li>`'s `px-2` (8px) plus
+               * the row number's `w-6` plus the `gap-x-2` beside it puts the
+               * location's name 40px in, and 8 + 32 lands on the same pixel. At
+               * the `px-1` this used to carry, every field started 28px to the
+               * left of the heading it belonged to — the closed row's issue list
+               * was already using this exact `pl-8`, which is why that half
+               * lined up and this half did not.
+               *
+               * `max-w-3xl` because Review runs the full width of the page: a
+               * two-column grid of that gives Name and Address around 900px each
+               * on a wide monitor, which is a paragraph-length box for a shop
+               * name.
+               */}
+              <div className="max-w-3xl space-y-3 pl-8 pr-1 pt-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <TextField
+                    fullWidth
+                    value={draft.name}
+                    onChange={(name) => onChange({ name })}
+                  >
+                    <Label>Name</Label>
+                    <Input />
+                  </TextField>
 
-            <AddressSearchField
-              mapId={mapId}
-              value={draft.address}
-              label="Address"
-              hint={null}
-              onChange={(address) => onChange({ address })}
-              onPick={(candidate) => {
-                // Chosen deliberately, so it stops being a geocoder guess and
-                // stops being flagged — the same rule the editor's form applies.
-                onChange({
-                  address: candidate.label || draft.address,
-                  lat: roundCoord(candidate.lat),
-                  lng: roundCoord(candidate.lng),
-                  matchedLabel: candidate.label,
-                  confidence: candidate.confidence,
-                  status: "manual",
-                });
-              }}
-            />
-          </div>
+                  <AddressSearchField
+                    mapId={mapId}
+                    value={draft.address}
+                    label="Address"
+                    hint={null}
+                    onChange={(address) => onChange({ address })}
+                    onPick={(candidate) => {
+                      // Chosen deliberately, so it stops being a geocoder guess
+                      // and stops being flagged — the same rule the editor's
+                      // form applies.
+                      onChange({
+                        address: candidate.label || draft.address,
+                        lat: roundCoord(candidate.lat),
+                        lng: roundCoord(candidate.lng),
+                        matchedLabel: candidate.label,
+                        confidence: candidate.confidence,
+                        status: "manual",
+                      });
+                    }}
+                  />
+                </div>
 
-          <RowIssues issues={[...issuesFor(draft.issues, "name"), ...placementIssues]} />
+                <RowIssues
+                  issues={[
+                    ...issuesFor(draft.issues, "name"),
+                    ...placementIssues,
+                  ]}
+                />
 
-          <RowAlternatives
-            candidates={draft.alternatives}
-            onPick={(candidate) =>
-              onChange({
-                lat: roundCoord(candidate.lat),
-                lng: roundCoord(candidate.lng),
-                matchedLabel: candidate.label,
-                confidence: candidate.confidence,
-                status: "manual",
-              })
-            }
-          />
+                <RowAlternatives
+                  candidates={draft.alternatives}
+                  onPick={(candidate) =>
+                    onChange({
+                      lat: roundCoord(candidate.lat),
+                      lng: roundCoord(candidate.lng),
+                      matchedLabel: candidate.label,
+                      confidence: candidate.confidence,
+                      status: "manual",
+                    })
+                  }
+                />
 
-          {/* The two coordinate boxes and the button that fills them from the
-              map belong on one line — they are three ways of answering the same
-              question, and stacking them read as three unrelated controls. */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="min-w-0 flex-1">
-              <CoordinateFields
-                lat={draft.lat}
-                lng={draft.lng}
-                onChange={(coords) => onChange({ ...coords, status: "manual" })}
-              />
-            </div>
+                {/*
+                 * The two coordinate boxes and the button that fills them from
+                 * the map belong on one line — they are three ways of answering
+                 * the same question, and stacking them read as three unrelated
+                 * controls.
+                 *
+                 * The pair is sized to what it holds rather than to the row.
+                 * `-122.4194` is nine characters; it had a `flex-1` half of a
+                 * full-width table row, split two ways, to show them in.
+                 */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <CoordinateFields
+                    className="grid shrink-0 grid-cols-2 gap-2 sm:w-[17rem]"
+                    lat={draft.lat}
+                    lng={draft.lng}
+                    onChange={(coords) =>
+                      onChange({ ...coords, status: "manual" })
+                    }
+                  />
 
-            <Button
-              className="shrink-0"
-              variant={isPlacing ? "secondary" : "tertiary"}
-              onPress={onTogglePlacing}
+                  <Button
+                    className="shrink-0"
+                    variant={isPlacing ? "secondary" : "tertiary"}
+                    onPress={onTogglePlacing}
+                  >
+                    {isPlacing ? "Click the map to place it" : "Place on map"}
+                  </Button>
+                </div>
+
+                <RowIssues issues={contactIssues} />
+              </div>
+            </motion.div>
+          ) : null}
+
+          {!isOpen && draft.issues.length > 0 ? (
+            <motion.div
+              key="closed"
+              {...collapseMotion()}
+              className={COLLAPSE_CLASS}
             >
-              {isPlacing ? "Click the map to place it" : "Place on map"}
-            </Button>
-          </div>
-
-          <RowIssues issues={contactIssues} />
-        </div>
-      ) : (
-        <RowIssues issues={draft.issues} className="mt-1 pl-8" />
-      )}
+              <RowIssues issues={draft.issues} className="pl-8 pt-1" />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
     </motion.li>
   );
 }

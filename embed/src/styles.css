@@ -263,6 +263,30 @@
   color: var(--lm-foreground);
 }
 
+/*
+ * Find-nearest, while an origin is set.
+ *
+ * The `Near you · Clear` chip that used to say this was a line of text and a
+ * second control explaining one button, in a panel that is a proportion of the
+ * embed rather than a fixed 320px (§8). The button says it instead — and
+ * pressing it lit is what Clear was, so nothing became unreachable.
+ *
+ * The accent's own vocabulary, the same three mixes `.lm-list__item--on` uses,
+ * so "on" reads the same way wherever the panel says it.
+ */
+.lm-button--on,
+/* Hover is `.lm-button:hover`, which is one class heavier than this and would
+   otherwise take the border back the moment a pointer settled on the control
+   that is trying to say it is on. */
+.lm-button--on:hover {
+  border-color: color-mix(in oklab, var(--lm-focus) 45%, var(--lm-border));
+  /* Mixed into the surface rather than into `transparent`: this button floats
+     over the basemap, and a see-through tint would be the map showing through a
+     control. The docked toolbar wants the opposite and says so below. */
+  background: color-mix(in oklab, var(--lm-focus) 12%, var(--lm-surface));
+  color: var(--lm-focus);
+}
+
 .lm-button:hover {
   border-color: #c9ced7;
 }
@@ -767,18 +791,6 @@
   right: 6px;
 }
 
-.lm-popup__count {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: rgba(16, 18, 22, 0.55);
-  color: #ffffff;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
 /*
  * The owner's own type, and why every rule below names its current value twice.
  *
@@ -841,12 +853,24 @@
      added rather than substituted, so nought is the pill this always drew. */
   padding: var(--lm-chip-pad, 0px) calc(6px + var(--lm-chip-pad, 0px));
   border-radius: 16px;
-  /* `--default-soft` is `color-mix(--default 50%)`; against the embed's own
-     neutrals this is the same weight of grey, and it tracks light and dark where
-     a literal could not. */
+  /*
+   * `--default-soft`, which is `color-mix(in oklab, --default 50%, transparent)`
+   * — and it is written that way here rather than approximated.
+   *
+   * This was 8% of `--lm-foreground`, described as "the same weight of grey".
+   * Measured side by side it is not: the studio draws a *lighter* pill than its
+   * card and the embed drew a darker one, because a light theme's `--default` is
+   * near-white (`oklch(94%)`) while `--lm-foreground` is near-black. On one
+   * screen that is the chip row visibly changing colour between the tool and the
+   * published map, which is the whole complaint this pass exists to answer.
+   *
+   * `--lm-border` is the embed's twin of `--default`: #e2e5ea against
+   * `oklch(94%)` in light, #2c2f35 against `oklch(27%)` in dark. Two neutrals
+   * two percent apart, tracking the theme where a literal could not.
+   */
   background: var(
     --lm-chip-bg,
-    color-mix(in oklab, var(--lm-foreground) 8%, transparent)
+    color-mix(in oklab, var(--lm-border) 50%, transparent)
   );
   /* Nothing by default — a zero-width transparent border is the pill every
      published card is already wearing, so this line changes no chip until its
@@ -865,7 +889,12 @@
 .lm-popup__description {
   margin: 0;
   font-family: var(--lm-card-font, inherit);
-  font-size: var(--lm-card-font-size, 13px);
+  /* 12px, which is `.card-text--body`'s own 0.75rem in app/globals.css. It was
+     13px, and that one pixel is the kind of drift this pair of files exists to
+     not have: the owner arranges the card in the studio at 12 and the customer's
+     site drew it at 13. Every `--lm-card-*` fallback here must equal its
+     `--card-*` twin. */
+  font-size: var(--lm-card-font-size, 12px);
   font-weight: var(--lm-card-font-weight, inherit);
   color: var(--lm-card-color, var(--lm-muted));
 }
@@ -943,16 +972,39 @@
    A <details>, so the seven rows cost nothing until asked for. The summary
    marker is removed on both engines — the row already reads as expandable, and
    the default triangle sits badly against a status word. */
+/*
+ * The twin of `.card-hours` in app/globals.css, and the other half of the
+ * `hours` case in `blockBox`.
+ *
+ * An open week is the one block routinely taller than the card, so it is the one
+ * full-width block that may be squeezed (`flex: 0 1 auto`) — and it may be
+ * squeezed only because the list inside it scrolls rather than clipping. The
+ * summary is `flex: none`: "Open now" and today's times are what a visitor came
+ * for, so the six other days are what gives way.
+ *
+ * `calc(100% - 6px)` rather than `100%` because the margin above is outside the
+ * box the percentage resolves against, and 6px of overflow on a card that is
+ * already out of room is exactly the bug this fixes. On a card with room the
+ * block is sized to its content and this comes out at the height it always drew.
+ */
 .lm-popup__hours {
   margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: calc(100% - 6px);
 }
 
 .lm-popup__hours-summary {
+  flex: none;
   display: flex;
   align-items: baseline;
   gap: 6px;
   font-family: var(--lm-card-font, inherit);
-  font-size: var(--lm-card-font-size, 13px);
+  /* `card-text--body`, which is what place-card-hours.tsx draws both the
+     summary row and the week in. The list below already answered 12px, so this
+     was the summary being a pixel larger than its own week. */
+  font-size: var(--lm-card-font-size, 12px);
   cursor: pointer;
   list-style: none;
 }
@@ -995,6 +1047,16 @@
   font-family: var(--lm-card-font, inherit);
   font-size: var(--lm-card-font-size, 12px);
   color: var(--lm-card-color, var(--lm-muted));
+  /* What the block gives way *into* — see `.lm-popup__hours` above. The bar is
+     hidden on `.lm-popup__zone--middle`'s argument, and both declarations for
+     its reason too. */
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.lm-popup__hours-list::-webkit-scrollbar {
+  display: none;
 }
 
 .lm-popup__hours-day {
@@ -1065,23 +1127,67 @@
   padding-top: 6px;
 }
 
+/*
+ * The ways to reach a location — the twin of `Actions` in
+ * components/card/card-block.tsx, down to the numbers.
+ *
+ * `12px 2px` is that row's `gap-x-3 gap-y-0.5`: the vertical gap is small on
+ * purpose, because these wrap onto a second line on a narrow card and a 10px
+ * gutter between two lines of 11px text reads as two separate blocks.
+ */
 .lm-popup__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  align-items: center;
+  gap: 2px 12px;
 }
 
+/*
+ * A glyph and a label, at the card's own small-print size and colour.
+ *
+ * This was a 13px link in a hard-coded `#1c7ed6` with no icon, and the studio
+ * has always drawn 11px icon-and-label pairs in `--foreground` — real drift
+ * between the twins, and the single thing that made a designed card read as an
+ * undesigned web page once it reached a customer's site. The studio is where
+ * the card is arranged, so the studio is what this now draws.
+ *
+ * A §7 exception taken knowingly: the bundle is shared, so a map published
+ * before this deploy changes without its owner republishing. The same trade the
+ * deleted tag filter chips are recorded under.
+ *
+ * `min-width: 0` plus the label's own `truncate` is what stops one long email
+ * pushing the other three rows off the card — a wrapped flex item's default
+ * `min-width: auto` refuses to shrink below its content.
+ */
 .lm-popup__link {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
   font-family: var(--lm-card-font, inherit);
-  font-size: var(--lm-card-font-size, 13px);
+  font-size: var(--lm-card-font-size, 11px);
   font-weight: var(--lm-card-font-weight, inherit);
-  /* Link blue until the owner says otherwise, and *not* link blue regardless —
-     which is what this was. The Links block offers a Colour like every other
-     text block, the studio draws it, and a colour that lands on one renderer
-     and not the other is two different cards for one design. The fallback is
-     the blue this has always drawn, so nothing published moves. */
-  color: var(--lm-card-color, #1c7ed6);
+  line-height: 1.5;
+  color: var(--lm-card-color, var(--lm-foreground));
   text-decoration: none;
+}
+
+/* Sized here rather than on the element, so the 18px `icon()` draws at the
+   studio's `size-3`. Quieter than the label rather than grey, so it follows a
+   colour the owner picked instead of staying muted beside their brand. */
+.lm-popup__link svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.lm-popup__link-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lm-popup__link:hover {
@@ -1122,11 +1228,17 @@
   /* One named ground, so a treatment sets it and a hover mixes it without
      either having to know what the other chose. See app/globals.css, the twin
      this file is kept in step with by hand. */
-  --lm-button-ground: var(--lm-button-bg, #1c7ed6);
+  /* The map's own accent, which the owner picks in Publish -> Colours, rather
+     than a literal. `--lm-focus` is that colour and its own default is this
+     exact blue, so a map that never set one draws what it always drew — and a
+     map that did finally draws it, instead of the studio's button and this one
+     being two different colours for one design. */
+  --lm-button-ground: var(--lm-button-bg, var(--lm-focus));
   background: var(--lm-button-ground);
   color: var(--lm-card-color, #fff);
   font-family: var(--lm-card-font, inherit);
-  font-size: var(--lm-card-font-size, 13px);
+  /* `.card-button`'s own `var(--card-font-size, 0.75rem)`, to the pixel. */
+  font-size: var(--lm-card-font-size, 12px);
   font-weight: var(--lm-card-font-weight, 500);
   line-height: 1.25;
   text-align: center;
@@ -1139,22 +1251,22 @@
 .lm-popup__button--outline {
   --lm-button-ground: transparent;
   border-width: var(--lm-button-border-width, 1.5px);
-  border-color: var(--lm-button-border, var(--lm-button-bg, #1c7ed6));
-  color: var(--lm-card-color, var(--lm-button-bg, #1c7ed6));
+  border-color: var(--lm-button-border, var(--lm-button-bg, var(--lm-focus)));
+  color: var(--lm-card-color, var(--lm-button-bg, var(--lm-focus)));
 }
 
 .lm-popup__button--soft {
   --lm-button-ground: color-mix(
     in oklab,
-    var(--lm-button-bg, #1c7ed6) 16%,
+    var(--lm-button-bg, var(--lm-focus)) 16%,
     transparent
   );
-  color: var(--lm-card-color, var(--lm-button-bg, #1c7ed6));
+  color: var(--lm-card-color, var(--lm-button-bg, var(--lm-focus)));
 }
 
 .lm-popup__button--ghost {
   --lm-button-ground: transparent;
-  color: var(--lm-card-color, var(--lm-button-bg, #1c7ed6));
+  color: var(--lm-card-color, var(--lm-button-bg, var(--lm-focus)));
 }
 
 .lm-popup__button:hover {
@@ -1358,6 +1470,16 @@
   background: color-mix(in oklab, var(--lm-foreground) 11%, transparent);
 }
 
+/* Lit, on a panel — the well above tinted with the accent instead of the
+   foreground. Both selectors are needed: the two rules above are each one class
+   heavier than `.lm-button--on` and come after it. */
+.lm-toolbar--docked .lm-button--on,
+.lm-toolbar--docked .lm-button--on:hover {
+  border-color: transparent;
+  background: color-mix(in oklab, var(--lm-focus) 18%, transparent);
+  color: var(--lm-focus);
+}
+
 /*
  * The search takes the row and "nearest to me" sits at the end of it.
  *
@@ -1383,6 +1505,26 @@
   /* iOS gives a nested scroller momentum only when it is told to. Without this
      a flick inside the list scrolls the customer's page instead. */
   -webkit-overflow-scrolling: touch;
+}
+
+/*
+ * The list's bar, turned off by the owner.
+ *
+ * `data-lm-bar="0"` and never `="1"`: absent is the bar, because that is what
+ * every snapshot published before this field existed draws (§7), and the
+ * attribute is only written when somebody has actually turned it off — see
+ * `chromeAttrs` in packages/shared/embed-chrome.ts.
+ *
+ * Both declarations, for the reason `.lm-popup__zone--middle` already gives:
+ * `scrollbar-width` alone leaves an older WebKit drawing the bar it was asked
+ * to hide. The list still scrolls; only the chrome goes.
+ */
+.lm-root[data-lm-bar="0"] .lm-list {
+  scrollbar-width: none;
+}
+
+.lm-root[data-lm-bar="0"] .lm-list::-webkit-scrollbar {
+  display: none;
 }
 
 .lm-list__items {
@@ -1547,12 +1689,6 @@
   color: var(--lm-focus);
 }
 
-.lm-root--dark .lm-popup__link {
-  /* The owner's colour first here too — this rule is more specific than the one
-     above, so without the var it would take the choice back on a dark map. */
-  color: var(--lm-card-color, var(--lm-focus));
-}
-
 /* Both are the panel talking about itself rather than about a place, so they are
    centred and quieter than a row — a left-aligned sentence at row rhythm reads
    as a result with no name. */
@@ -1665,21 +1801,6 @@
   }
 }
 
-/* Custom fields ---------------------------------------------------------- */
-
-/* The owner's own call to action — the reason custom fields exist — so it reads
-   as a button rather than as one more link in the row. */
-.lm-popup__link--cta {
-  padding: 4px 10px;
-  border: 1px solid currentcolor;
-  border-radius: 8px;
-}
-
-.lm-popup__link--cta:hover {
-  text-decoration: none;
-  background: color-mix(in oklab, currentcolor 12%, transparent);
-}
-
 /* Search results ---------------------------------------------------------- */
 
 /*
@@ -1729,40 +1850,4 @@
 .lm-search__option:hover,
 .lm-search__option--on {
   background: color-mix(in oklab, var(--lm-foreground) 8%, transparent);
-}
-
-/* Where we are measuring from ---------------------------------------------- */
-
-/*
- * Full width, so it sits on its own line under the controls rather than joining
- * the wrap. It appears and disappears, and inside the chip row that would
- * reshuffle every filter every time the visitor pressed it.
- */
-.lm-origin {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.lm-origin[hidden] {
-  display: none;
-}
-
-.lm-origin__label {
-  overflow: hidden;
-  color: var(--lm-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lm-origin__clear {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  text-decoration: underline;
 }

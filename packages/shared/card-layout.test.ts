@@ -1292,14 +1292,35 @@ describe("leadBox", () => {
   });
 
   it("shrinks far harder than any block, which is the whole ordering rule", () => {
-    // Flex shares the shortfall out by shrink factor times basis, and every
-    // block is `flex: none` — so the empty space goes first with no pass over
-    // the card deciding that it should.
-    const shrink = Number(leadBox(120, layout).flex.split(" ")[1]);
+    /*
+     * Flex shares the shortfall out by shrink factor times basis, so the empty
+     * space goes first with no pass over the card deciding that it should — and
+     * the week goes second, ahead of nothing else.
+     *
+     * The order is what this holds, not the literal strings: `hours` is
+     * deliberately the one block that gives way (it scrolls inside itself
+     * rather than clipping, see `blockBox`), and every other block still refuses
+     * to be compressed below its own content.
+     */
+    const shrinkOf = (flex: string) => Number(flex.split(" ")[1]);
+    const lead = shrinkOf(leadBox(120, layout).flex);
 
-    expect(shrink).toBeGreaterThan(1);
+    expect(lead).toBeGreaterThan(1);
+
     for (const type of Object.keys(CARD_BLOCKS) as CardBlockType[]) {
-      expect(blockBox({ id: "a", type }, layout).flex).toBe("none");
+      const { flex, minHeight } = blockBox({ id: "a", type }, layout);
+
+      if (type === "hours") {
+        expect(flex).toBe("0 1 auto");
+        // `0 1 auto` shrinks nothing on its own: a flex item's automatic
+        // minimum size is its content.
+        expect(minHeight).toBe("0");
+        expect(lead).toBeGreaterThan(shrinkOf(flex ?? ""));
+        continue;
+      }
+
+      expect(flex).toBe("none");
+      expect(minHeight).toBeUndefined();
     }
   });
 });

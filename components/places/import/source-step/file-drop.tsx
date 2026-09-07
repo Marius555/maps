@@ -33,10 +33,14 @@ export function FileDrop({
       // than a target — but the cap now lives on the `Tabs` root in
       // `source-tabs.tsx`, so the tab strip and this frame are one width by
       // construction instead of two that have to be kept equal by hand.
-      className={`flex w-full flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-10 text-center transition-colors ${
-        isOver
-          ? "border-primary bg-primary/5"
-          : "border-border bg-surface-secondary"
+      //
+      // Transparent at rest, so the frame is a dashed outline on the page
+      // rather than a filled well. It used to be `bg-surface-secondary`, which
+      // was a legible recess while this sat inside a white `SectionPanel` and
+      // became a grey patch on a grey page the moment the panel went. The
+      // dashed border is the whole affordance and needs no ground behind it.
+      className={`flex w-full flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-6 text-center transition-colors ${
+        isOver ? "border-primary bg-primary/5" : "border-border"
       }`}
       onDragOver={(event) => {
         event.preventDefault();
@@ -53,9 +57,9 @@ export function FileDrop({
     >
       <span
         aria-hidden="true"
-        className="grid size-11 place-items-center rounded-full bg-default text-muted"
+        className="grid size-9 place-items-center rounded-full bg-surface-secondary text-muted"
       >
-        <FileSpreadsheet className="size-5" />
+        <FileSpreadsheet className="size-4" />
       </span>
 
       <input
@@ -78,7 +82,7 @@ export function FileDrop({
         <p className="text-xs text-muted">or drag one here</p>
       </div>
 
-      <p className="max-w-xs text-pretty text-xs text-muted">
+      <p className="max-w-sm text-pretty text-xs text-muted">
         CSV, Excel (.xlsx) or XML. Your file is read in your browser — nothing is
         saved until you confirm.
       </p>

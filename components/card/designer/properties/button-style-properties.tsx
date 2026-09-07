@@ -82,8 +82,16 @@ export function ButtonStyleProperties({
       {/* First, because it is the first decision — see `ButtonPresets`. */}
       <ButtonPresets block={block} onChange={onChange} />
 
+      {/*
+       * "Colour", not "Background", because on three of the four treatments it
+       * is not one. Outline takes its line and its label from this swatch, Soft
+       * takes a wash of it and Ghost takes only the label — so the old name
+       * described one state in four and, on the Outline preset an owner is most
+       * likely to have picked, named something the control visibly does not do.
+       * "Border colour" below keeps its name and stays unambiguous.
+       */}
       <ColorPickerField
-        label="Background"
+        label="Colour"
         value={block.buttonBackground ?? ""}
         // Label above, so both colours sit on the rhythm of the selects under
         // them — see `labelPlacement`.

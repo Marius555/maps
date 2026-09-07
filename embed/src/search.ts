@@ -245,6 +245,14 @@ export function createSearchField({
  * The name is not lost, only unspelled: `aria-label` gives it to assistive tech
  * and `title` gives it to a pointer that hovers. An icon-only control without
  * both is a control nobody can identify (§8).
+ *
+ * **The control is also the indicator, and the way back.** There was a
+ * `Near you · Clear` chip under the toolbar saying where the distances were
+ * measured from; it was a line of text and a second control to explain one
+ * button, in a panel that is a proportion of the embed. The button lights
+ * instead (see `setNearestOn`), which is the one thing on screen that can say
+ * "this is on" without spending a row — and pressing it while lit is what Clear
+ * used to be, so nothing became unreachable.
  */
 export function createNearestButton(
   /**
@@ -255,14 +263,16 @@ export function createNearestButton(
    * which is most of what "it doesn't work" meant here. Disabling it for the
    * duration also stops a second click stacking a second request behind the
    * first.
+   *
+   * Called for both meanings — locate, and stop measuring — because which one a
+   * press means is a question about the origin, which lives with the list that
+   * reads it rather than here.
    */
   onNearest: () => Promise<void> | void,
 ): HTMLButtonElement {
   const control = button("lm-button lm-button--icon", "");
-  const label = "Nearest to me";
 
-  control.setAttribute("aria-label", label);
-  control.title = label;
+  setNearestOn(control, false);
   control.append(
     icon([
       "M2 12h3",
@@ -287,6 +297,23 @@ export function createNearestButton(
   });
 
   return control;
+}
+
+/**
+ * Lit, or not — and what a press means in each state.
+ *
+ * `aria-pressed` rather than a class alone: a control that has two states has to
+ * say so to something that cannot see the colour, and a toggle button is exactly
+ * what this now is. The name changes with it, because "Nearest to me" on a
+ * button that clears the origin is a control that lies about what it does.
+ */
+export function setNearestOn(control: HTMLButtonElement, on: boolean): void {
+  const label = on ? "Stop measuring from here" : "Nearest to me";
+
+  control.classList.toggle("lm-button--on", on);
+  control.setAttribute("aria-pressed", String(on));
+  control.setAttribute("aria-label", label);
+  control.title = label;
 }
 
 /**
@@ -316,7 +343,68 @@ export function locationFailure(error: unknown): LocationFailure {
 }
 
 /**
- * Geolocation, promisified.
+ * Where the browser says the visitor is, and how sure it is.
+ *
+ * `accuracy` is the radius in metres the browser claims, and it is carried
+ * because the two things that ask for a position want different answers about a
+ * vague one. Sorting a list by distance is useful from a city-level fix — the
+ * nearest of eight shops does not change over a kilometre — while a route's
+ * start wants the sharpest reading of the session, which is what `betterFix`
+ * below picks and `me` in ./index.ts holds.
+ *
+ * `timestamp` is the browser's own, straight off `GeolocationPosition`, and it
+ * is here because **a reading can be sharp and still be wrong**: `currentPosition`
+ * accepts a cached fix up to five minutes old, and without an age to compare
+ * against, one of those permanently outranks every fresh reading that follows it
+ * purely by claiming a smaller radius. See `betterFix`.
+ */
+export type Fix = {
+  lat: number;
+  lng: number;
+  accuracy: number;
+  timestamp: number;
+};
+
+/**
+ * Past this, a reading is describing where somebody *was*.
+ *
+ * It only has to be shorter than `currentPosition`'s `maximumAge` of five
+ * minutes, which is the one thing in this file that can hand back a fix old
+ * enough to be somewhere else entirely.
+ */
+const STALE_AFTER_MS = 60_000;
+
+/**
+ * Which of two readings a route should start from — the session's answer to
+ * "where is the visitor", decided one arrival at a time.
+ *
+ * **Fresh beats sharp, and that ordering is the whole point of this function.**
+ * Comparing on `accuracy` alone is what it used to do, and it has a failure that
+ * looks exactly like a correct answer: the crosshair takes a deliberately cheap
+ * cached fix (`currentPosition`, `maximumAge: 300_000`), so a reading taken five
+ * minutes and one commute ago can arrive claiming a tighter radius than the
+ * warm-up's live one — and then hold `me` for the rest of the session, sending
+ * every Directions link to a confidently wrong street.
+ *
+ * Among readings of comparable age the sharper one wins, and **ties go to the
+ * newcomer** so a visitor who has actually moved is followed.
+ */
+export function betterFix(current: Fix | null, next: Fix): Fix {
+  if (!current) return next;
+
+  const now = Date.now();
+  const nextIsFresh = now - next.timestamp <= STALE_AFTER_MS;
+  const currentIsFresh = now - current.timestamp <= STALE_AFTER_MS;
+
+  // Only when exactly one of them is fresh; if both are stale there is nothing
+  // better to be had and accuracy is still the best question to ask.
+  if (nextIsFresh !== currentIsFresh) return nextIsFresh ? next : current;
+
+  return next.accuracy <= current.accuracy ? next : current;
+}
+
+/**
+ * Geolocation, promisified — one reading, taken as it comes.
  *
  * Rejects rather than falling back to an IP lookup: an IP-derived position can
  * be a hundred kilometres out, and silently showing the wrong "nearest store"
@@ -326,34 +414,172 @@ export function locationFailure(error: unknown): LocationFailure {
  * origin, or a frame that was not granted the permission — so the guard below
  * catches only a browser without the API at all, and everything else arrives as
  * a real error with a code.
+ *
+ * **This is the cheap one, and it used to take a `precise` flag.** Both of its
+ * callers — the boot pre-warm and "Nearest to me" — want somewhere to *order a
+ * list* from, and over that question a network fix and a GPS fix give the same
+ * answer: the nearest of eight shops does not change over a few hundred metres.
+ * Waking a phone's GPS for it costs a second and a slice of battery for nothing,
+ * on every visitor who ever granted the permission whether they ask for a route
+ * or not. The one caller that needed better moved to `bestPosition`, so the flag
+ * is deleted rather than defaulted — a parameter with one meaning left is not a
+ * parameter.
  */
-export function currentPosition(): Promise<{ lat: number; lng: number }> {
+export function currentPosition(): Promise<Fix> {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
+    const geo = navigator.geolocation;
+
+    if (!geo) {
       reject(
         locationError("unsupported", "This browser can't share a location."),
       );
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) =>
-        resolve({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        }),
-      (error) =>
-        reject(
-          locationError(
-            error.code === error.PERMISSION_DENIED
-              ? "denied"
-              : error.code === error.TIMEOUT
-                ? "timeout"
-                : "unavailable",
-            error.message,
-          ),
-        ),
+    geo.getCurrentPosition(
+      (position) => resolve(toFix(position)),
+      (error) => reject(fromPositionError(error)),
+      // A cached fix is fine for a list of distances, and five minutes of one
+      // saves a lookup on every map load. It *can* reach a route's start —
+      // `goToNearest` reports every reading to `remember` — which is why a `Fix`
+      // carries the time it was taken and `betterFix` prefers a fresh reading
+      // over a sharper-sounding stale one.
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 },
     );
   });
+}
+
+/**
+ * How long to keep listening for a sharper reading.
+ *
+ * Nobody is ever blocked on this — both callers are fire-and-forget, which is
+ * the correction this number's whole existence came out of. It was once spent
+ * with a visitor watching an open blank tab, and three seconds of that is five
+ * seconds of a broken-looking product.
+ */
+const SETTLE_MS = 3000;
+
+/**
+ * Sharp enough that a better reading would change nothing anyone can see, so
+ * the watch stops rather than running out its window. A GPS fix is 5–20m.
+ */
+const SHARP_ENOUGH_M = 20;
+
+/**
+ * The *best* reading the browser can give within a window — the route's start.
+ *
+ * **`getCurrentPosition` resolves on the first reading that satisfies the
+ * options, and on a phone the first reading is the network fix.** The GPS one
+ * lands a second or two later and is ten times better, and nothing that calls
+ * `getCurrentPosition` ever sees it. That is the whole reason this exists:
+ * `watchPosition` is handed every refinement, so keeping the sharpest one for a
+ * couple of seconds is the one change that actually improves the number a
+ * visitor is routed from.
+ *
+ * Resolves early the moment a reading is good enough to be used as-is
+ * (`goodEnough`), because past that a better one changes nothing downstream and
+ * the caller is sitting on an open, blank tab while it waits.
+ *
+ * Two rules about failure, and both are the difference between this and a
+ * promisified `watchPosition`:
+ *
+ * - **A refusal ends it immediately.** Sitting out the window after a
+ *   `PERMISSION_DENIED` is three seconds of a blank tab for an answer already
+ *   given.
+ * - **Any other error is one failed reading, not the outcome.** A later reading
+ *   may still succeed, and one already taken is not undone by it — so it only
+ *   decides anything if the window closes with nothing to show.
+ */
+export function bestPosition(
+  withinMs = SETTLE_MS,
+  goodEnough = SHARP_ENOUGH_M,
+  /**
+   * Told about every reading the moment it arrives, sharp or not.
+   *
+   * Without it the caller learns nothing until the window closes, so a
+   * visitor pressing a second Directions link two seconds after the first
+   * still has no origin — the warm-up is running and has an answer it is
+   * sitting on. Safe to hand every reading to, because the one thing that
+   * consumes this (`remember` in ./index.ts) keeps the sharpest of them and
+   * a worse one arriving later changes nothing.
+   */
+  onReading?: (at: Fix) => void,
+): Promise<Fix> {
+  return new Promise((resolve, reject) => {
+    const geo = navigator.geolocation;
+
+    if (!geo) {
+      reject(
+        locationError("unsupported", "This browser can't share a location."),
+      );
+      return;
+    }
+
+    let best: Fix | null = null;
+    let failure: LocationError | null = null;
+    let watch: number | null = null;
+
+    const stop = () => {
+      if (watch !== null) geo.clearWatch(watch);
+      // Null rather than left set: `settle` can run from the timer and from a
+      // reading in the same tick, and clearing a watch id twice is a browser
+      // clearing somebody else's watch.
+      watch = null;
+      clearTimeout(timer);
+    };
+
+    const settle = () => {
+      stop();
+
+      if (best) resolve(best);
+      else reject(failure ?? locationError("timeout", "Locating timed out."));
+    };
+
+    // Below `stop`, which closes over it: the closure is only ever *called*
+    // after this line has run, so the reference resolves fine.
+    const timer = setTimeout(settle, withinMs);
+
+    watch = geo.watchPosition(
+      (position) => {
+        const fix = toFix(position);
+        onReading?.(fix);
+        if (!best || fix.accuracy < best.accuracy) best = fix;
+
+        if (best.accuracy <= goodEnough) settle();
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          stop();
+          reject(fromPositionError(error));
+          return;
+        }
+
+        failure ??= fromPositionError(error);
+      },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 },
+    );
+  });
+}
+
+function toFix(position: GeolocationPosition): Fix {
+  return {
+    lat: position.coords.latitude,
+    lng: position.coords.longitude,
+    accuracy: position.coords.accuracy,
+    // The browser's own, never `Date.now()`: a cached reading is handed back
+    // with the time it was *taken*, and that gap is the entire signal
+    // `betterFix` exists to read.
+    timestamp: position.timestamp,
+  };
+}
+
+function fromPositionError(error: GeolocationPositionError): LocationError {
+  return locationError(
+    error.code === error.PERMISSION_DENIED
+      ? "denied"
+      : error.code === error.TIMEOUT
+        ? "timeout"
+        : "unavailable",
+    error.message,
+  );
 }

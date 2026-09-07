@@ -9,7 +9,6 @@ import {
   COLLAPSE_CLASS,
   collapseMotion,
 } from "@/components/ui/list-row-motion";
-import { SectionPanel } from "@/components/ui/section-panel";
 import { formatCount } from "@/lib/format/number";
 import { validateColumnMapping } from "@/lib/import/column-mapping";
 import { looksSwapped } from "@/lib/import/coordinates";
@@ -104,80 +103,74 @@ export function MappingStep({ onContinue }: { onContinue: () => void }) {
   };
 
   return (
-    <SectionPanel
-      title="Check your columns"
-      description={describe({
-        fileName,
-        rowCount: rows.length,
-        truncated,
-        repeatedHeaderRows,
-      })}
-      footer={
-        <Button isDisabled={problems.length > 0} onPress={onNext}>
-          Continue
-        </Button>
-      }
-    >
-      {/* Stated in words rather than left implicit, because when the guess is
-          wrong this line is the only thing on screen that explains why every
-          column is headed with something nonsensical. */}
-      {loaded ? (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-          {headerRowIndex === null
-            ? "No header row found — we named the columns ourselves."
-            : `Using row ${headerRowIndex + 1} as your column names.`}
-          <Button
-            size="sm"
-            variant="ghost"
-            onPress={() => setIsPickingHeader(true)}
-          >
-            Change
-          </Button>
-        </p>
-      ) : null}
-
-      {/* Same shape as the header-row line above: a fact about the file, and the
-          single action on it. The button keeps its name into the notice it
-          leaves behind, so what you pressed is what you're told happened. */}
-      {splittable ? (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-          &ldquo;{splittable}&rdquo; holds both coordinates in one column.
-          <Button
-            size="sm"
-            variant="ghost"
-            onPress={() => splitLatLng(splittable)}
-          >
-            <Columns2 aria-hidden="true" className="size-3.5" />
-            Split into Latitude and Longitude
-          </Button>
-        </p>
-      ) : null}
-
-      {splitNotice ? (
-        <p role="status" className="text-xs text-muted">
-          Split into {splitNotice.latHeader} and {splitNotice.lngHeader}.
-          {splitNotice.unparsed > 0
-            ? ` ${formatCount(splitNotice.unparsed)} ${
-                splitNotice.unparsed === 1 ? "row" : "rows"
-              } couldn't be read — those cells are empty.`
-            : ""}
-        </p>
-      ) : null}
-
-      <ColumnTable />
+    /*
+     * No `SectionPanel`. The table is the step, and it used to sit inside a
+     * white card on a grey page with its own grey header strip inside that —
+     * three grounds for one table, the innermost of them darker than the page
+     * it was echoing. It now sits on the page the way the locations table does.
+     */
+    <div className="space-y-4">
+      <p className="text-xs text-muted">
+        {describe({
+          fileName,
+          rowCount: rows.length,
+          truncated,
+          repeatedHeaderRows,
+        })}
+      </p>
 
       {/*
-       * Warnings sit under the table, not over it.
+       * Continue sits above the table, not in a footer under it.
        *
-       * Above, they pushed the thing they were about off the screen and sat two
-       * scroll positions away from the Continue button they disable — so the
-       * user read the complaint, scrolled past it to fix the column, and then
-       * had nothing left on screen telling them whether it had worked. Here they
-       * are between the evidence and the button, which is where the decision is
-       * actually made.
+       * The table is as tall as the file, so a button beneath it was several
+       * screens below the thing it acts on: you read our reading of the columns,
+       * scrolled past three thousand rows, and pressed a button whose reason you
+       * could no longer see. On the header-row line it is beside the last fact
+       * you need before deciding.
+       */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Stated in words rather than left implicit, because when the guess is
+            wrong this line is the only thing on screen that explains why every
+            column is headed with something nonsensical. */}
+        {loaded ? (
+          <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+            {headerRowIndex === null
+              ? "No header row found — we named the columns ourselves."
+              : `Using row ${headerRowIndex + 1} as your column names.`}
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={() => setIsPickingHeader(true)}
+            >
+              Change
+            </Button>
+          </p>
+        ) : null}
+
+        {/* `ml-auto` rather than `justify-between`: with no header-row line to
+            sit opposite, `justify-between` would leave this at the left edge. */}
+        <Button
+          className="ml-auto"
+          isDisabled={problems.length > 0}
+          onPress={onNext}
+        >
+          Continue
+        </Button>
+      </div>
+
+      {/*
+       * Warnings sit with the button they disable.
+       *
+       * They used to be under the table, and the rule behind that has not
+       * changed: they belong between the evidence and the button, which is where
+       * the decision is actually made. The button has moved above the table, so
+       * they moved with it. What must not happen either way is the old failure —
+       * the complaint two scroll positions from the control it explains, so you
+       * fix a column and have nothing left on screen telling you whether it
+       * worked.
        *
        * One stable wrapper around the whole `AnimatePresence`, and the gap
-       * carried as padding inside each block: `SectionPanel`'s body is
+       * carried as padding inside each block: this column is
        * `space-y-4`, and a margin does not collapse with an animated height, so
        * a warning that left would take its height with it and leave its 1rem
        * behind. `empty:hidden` is what keeps that wrapper from claiming a
@@ -224,6 +217,37 @@ export function MappingStep({ onContinue }: { onContinue: () => void }) {
         </AnimatePresence>
       </div>
 
+      {/* Same shape as the header-row line above: a fact about the file, and the
+          single action on it. The button keeps its name into the notice it
+          leaves behind, so what you pressed is what you're told happened. */}
+      {splittable ? (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+          &ldquo;{splittable}&rdquo; holds both coordinates in one column.
+          <Button
+            size="sm"
+            variant="ghost"
+            onPress={() => splitLatLng(splittable)}
+          >
+            <Columns2 aria-hidden="true" className="size-3.5" />
+            Split into Latitude and Longitude
+          </Button>
+        </p>
+      ) : null}
+
+      {splitNotice ? (
+        <p role="status" className="text-xs text-muted">
+          Split into {splitNotice.latHeader} and {splitNotice.lngHeader}.
+          {splitNotice.unparsed > 0
+            ? ` ${formatCount(splitNotice.unparsed)} ${
+                splitNotice.unparsed === 1 ? "row" : "rows"
+              } couldn't be read — those cells are empty.`
+            : ""}
+        </p>
+      ) : null}
+
+      <ColumnTable />
+
+
       {loaded ? (
         <HeaderRowDialog
           cells={loaded.source.cells}
@@ -233,7 +257,7 @@ export function MappingStep({ onContinue }: { onContinue: () => void }) {
           onChoose={onChooseHeaderRow}
         />
       ) : null}
-    </SectionPanel>
+    </div>
   );
 }
 

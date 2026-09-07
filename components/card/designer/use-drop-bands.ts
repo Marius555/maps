@@ -15,6 +15,7 @@ import {
 import {
   blockedFaces,
   dropSlots,
+  lendToEndZones,
   sideSlots,
   vacatedSpace,
   type BlockedFace,
@@ -235,6 +236,10 @@ function measureCard(
   }
 
   const blockHeight = draggedHeight(layout, drag, movedHeight);
+
+  // An end zone with nothing in it measures zero, and a zone with no height has
+  // nowhere to drop into. See `lendToEndZones`.
+  lendToEndZones(zones, layout, drag, blockHeight);
 
   /*
    * Whether what is in the hand is a mark — a block drawn at a square size of

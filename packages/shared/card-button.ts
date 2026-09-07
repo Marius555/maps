@@ -15,7 +15,11 @@
  * `CardBlock.buttonSource`.
  */
 
-import { directionsUrl, type DirectionsTarget } from "./directions";
+import {
+  directionsUrl,
+  type DirectionsOrigin,
+  type DirectionsTarget,
+} from "./directions";
 import type { CardBlock } from "./card-layout";
 
 /**
@@ -68,12 +72,18 @@ export function buttonTargetOf(
   block: CardBlock,
   place: CardButtonPlace,
   fields: readonly CardButtonField[],
+  /**
+   * Where the visitor is, for the directions case alone. Optional and absent by
+   * default, which is the link this has always returned — the dashboard has no
+   * visitor to locate and passes nothing.
+   */
+  from?: DirectionsOrigin | null,
 ): CardButtonTarget | null {
   // Absent is directions — see `CardBlock.buttonAction` for why that is the way
   // round it is.
   if (block.buttonAction !== "link") {
     return {
-      href: directionsUrl(place),
+      href: directionsUrl(place, from),
       label: block.buttonLabel ?? DIRECTIONS_LABEL,
     };
   }

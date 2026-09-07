@@ -1,6 +1,10 @@
 import "server-only";
 
-import { GeoapifyError, geoapifyGet } from "@/lib/geoapify/client";
+import {
+  GeoapifyError,
+  geoapifyGet,
+  geoapifyPaceMs,
+} from "@/lib/geoapify/client";
 import { matchesRoad } from "@/lib/map/nearest-road";
 import type { AddressParts } from "@/lib/validation/place.schema";
 import { PRECISION_CONFIDENCE, confidenceFor, type Precision } from "./confidence";
@@ -39,6 +43,9 @@ import type {
 export function createGeoapifyGeocoder(): GeocodeProvider {
   return {
     name: "geoapify",
+    // The shared client's, not a second number here: geocoding and routing pace
+    // themselves out of one throttle because one account has one rate limit.
+    paceMs: geoapifyPaceMs(),
 
     async search({ address, countryCode, limit = 5 }: GeocodeQuery) {
       const trimmed = address.trim();

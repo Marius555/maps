@@ -30,6 +30,14 @@ const actions: CardBlock | undefined = [
 ].find((block) => block.type === "actions");
 
 const PHONE = "+37060000000";
+/*
+ * What the website row actually says.
+ *
+ * Not the word "Website": the Links row draws a site as its host and path, which
+ * is the studio's own label (`Actions` in components/card/card-block.tsx) and is
+ * what this row was changed to draw when the two renderers were reconciled.
+ */
+const SITE = "example.com";
 
 const base: SnapshotPlace = {
   id: "p1",
@@ -52,7 +60,7 @@ describe("buildPopup, per-place card overrides", () => {
 
     expect(text).toContain(PHONE);
     expect(text).toContain("Email");
-    expect(text).toContain("Website");
+    expect(text).toContain(SITE);
   });
 
   it("drops the links one place's own card turns off", () => {
@@ -69,7 +77,7 @@ describe("buildPopup, per-place card overrides", () => {
     expect(text).not.toContain("Email");
     // The one that was left on is still there — this is a narrowing, not a
     // wholesale replacement of the row.
-    expect(text).toContain("Website");
+    expect(text).toContain(SITE);
   });
 
   /*

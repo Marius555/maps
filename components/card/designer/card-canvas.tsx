@@ -85,6 +85,7 @@ export function CardCanvas({
   onResize,
   sampleImageUrl,
   onSampleImage,
+  theme,
 }: {
   layout: CardLayout;
   place: Place;
@@ -93,6 +94,17 @@ export function CardCanvas({
   fields: MapField[];
   /** The map's pins — what a Logo block draws. */
   pinIcons: CustomPinIcon[];
+  /**
+   * `"light"` or `"dark"` for the card alone, from the *map's* basemap rather
+   * than from the dashboard's theme — see `cardThemeClass`. The class
+   * re-declares every colour token for this subtree (app/globals.css), which is
+   * what makes the studio a preview of a customer's site instead of a preview
+   * of the dashboard.
+   *
+   * Optional, and absent is the dashboard's own theme, which is what every
+   * caller got before this existed.
+   */
+  theme?: "light" | "dark";
   selectedId: string | null;
   /**
    * The block that arrived from the palette on the last drop, if the settle
@@ -455,7 +467,9 @@ export function CardCanvas({
        * draws the same line and reflows nothing. `DesignerBlock` uses the same
        * trick on its selection ring, for the same reason.
        */
-      className="relative inset-ring inset-ring-border"
+      className={`relative inset-ring inset-ring-border${
+        theme ? ` ${theme}` : ""
+      }`}
       renderZone={renderZone}
       rootProps={frameDropProps}
     >
@@ -525,6 +539,8 @@ function splitOuterBox(
     zIndex,
     width,
     alignSelf,
+    flex,
+    minHeight,
     ...rest
   } = style;
 
@@ -537,7 +553,33 @@ function splitOuterBox(
       zIndex,
       width,
       alignSelf,
+      /*
+       * And the flex pair, which describes the **flex item** and therefore
+       * belongs on the wrapper too.
+       *
+       * It was on the block for as long as it did not matter: every full-width
+       * block is `flex: none`, which on a non-item is a no-op, and the wrapper's
+       * own `0 1 auto` with an automatic minimum of its content behaves
+       * identically. The week broke the tie — it is `0 1 auto` with a floor of
+       * zero, the one block that gives way (`blockBox`) — and left down here it
+       * gave way to nothing at all: the wrapper kept `min-height: auto`, refused
+       * to shrink below its content, and the studio drew an open week pushing
+       * the blocks under it straight out of the card while the editor's own card
+       * and the embed both handled it. Two surfaces out of three is the drift
+       * this whole file exists to avoid.
+       */
+      flex,
+      minHeight,
     },
-    rest,
+    /*
+     * A block that may be squeezed has to pass the squeeze down to whatever
+     * scrolls inside it, and only an unbroken chain of definite heights reaches
+     * that far: the wrapper above is the bounded flex item, this is the block,
+     * and `blockContentStyle` already stretches the element below it. Written
+     * for that one block alone, so every other block's box is what it was —
+     * `CardView` needs none of it, because there is no wrapper there and the
+     * block *is* the flex item.
+     */
+    rest: minHeight === undefined ? rest : { ...rest, height: "100%" },
   };
 }

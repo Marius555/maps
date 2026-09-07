@@ -59,7 +59,7 @@ export function ColumnHeader({
   return (
     <th
       scope="col"
-      className="min-w-44 border-b border-border bg-surface-secondary px-1 py-2 text-left align-top font-normal"
+      className="min-w-44 border-b border-border bg-background px-1 py-2 text-left align-top font-normal"
     >
       <div className="space-y-1">
         <InlineSelect

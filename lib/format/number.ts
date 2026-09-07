@@ -18,3 +18,26 @@ const LOCALE = "en-US";
 export function formatCount(value: number): string {
   return value.toLocaleString(LOCALE);
 }
+
+/**
+ * A rough duration, for telling someone how long a job will take.
+ *
+ * Coarse on purpose, and rounded *up*: this describes work whose real length
+ * depends on a third party's latency, so a number that reads as precise is a
+ * promise we cannot keep, and one that undershoots is the one people remember.
+ * "About 6 minutes" is honest; "5 minutes 47 seconds" is not.
+ */
+export function formatRoughDuration(ms: number): string {
+  const seconds = Math.ceil(ms / 1000);
+
+  if (seconds < 90) {
+    const rounded = Math.max(5, Math.ceil(seconds / 5) * 5);
+    return `${rounded} seconds`;
+  }
+
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+
+  const hours = Math.round((minutes / 60) * 10) / 10;
+  return `${hours} hour${hours === 1 ? "" : "s"}`;
+}

@@ -32,8 +32,17 @@ const ENDPOINT = "https://api.geoapify.com";
  * arming the route tool sweeps up to 200 pins, which would take 200 seconds.
  * Low enough to keep a sweep brisk, high enough that a burst does not trip the
  * plan's own per-second limit. `GEOAPIFY_MIN_INTERVAL_MS` moves it.
+ *
+ * **220ms, not the 120ms this was.** 120ms is 8.3 requests a second and
+ * Geoapify's free plan allows five, so the pacing that existed to stay under the
+ * plan's limit was over it — invisible at the two or three requests a pin drop
+ * makes, and a wall of 429s the moment an import walked a real file past it.
+ * 220ms is ~4.5/s, inside the free plan with room to spare, and still eight
+ * times the demo servers' pace. A paid plan allows far more: set
+ * `GEOAPIFY_MIN_INTERVAL_MS` rather than editing this, because the ceiling is a
+ * property of the account and not of the code.
  */
-const DEFAULT_MIN_INTERVAL_MS = 120;
+const DEFAULT_MIN_INTERVAL_MS = 220;
 
 const REQUEST_TIMEOUT_MS = 8000;
 
@@ -77,8 +86,17 @@ let throttle: Throttle | null = null;
  * constructed at first use and vitest imports their pure readers freely.
  */
 function getThrottle(): Throttle {
-  throttle ??= createThrottle(readInterval() ?? DEFAULT_MIN_INTERVAL_MS);
+  throttle ??= createThrottle(geoapifyPaceMs());
   return throttle;
+}
+
+/**
+ * The spacing this process is actually holding, for a caller that has to say how
+ * long something will take. Read from the same place the throttle reads it, so
+ * the two cannot drift.
+ */
+export function geoapifyPaceMs(): number {
+  return readInterval() ?? DEFAULT_MIN_INTERVAL_MS;
 }
 
 /**

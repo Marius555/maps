@@ -1,11 +1,15 @@
 "use client";
 
-import { toast } from "@heroui/react";
+import { Button, toast } from "@heroui/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
-import { stepMotion } from "@/components/ui/list-row-motion";
+import {
+  COLLAPSE_CLASS,
+  collapseMotion,
+  stepMotion,
+} from "@/components/ui/list-row-motion";
 import { formatCount } from "@/lib/format/number";
 import { importableDrafts } from "@/lib/import/draft-places";
 import { draftToCreateInput } from "@/lib/import/draft-to-place";
@@ -32,6 +36,9 @@ export type ImportHeadroom = {
   used: number;
 };
 
+/** How far a confirmed import has got. Null when one isn't running. */
+export type ImportProgress = { saved: number; total: number };
+
 /**
  * Owns the flow between steps and performs the confirmed import.
  *
@@ -57,6 +64,7 @@ export function ImportWizard({
   const step = useImportStore((state) => state.step);
   const setStep = useImportStore((state) => state.setStep);
   const reset = useImportStore((state) => state.reset);
+  const fileName = useImportStore((state) => state.fileName);
 
   /**
    * A row that can't be written, caught before the first request goes out.
@@ -67,8 +75,47 @@ export function ImportWizard({
    */
   const [preflightError, setPreflightError] = useState<string | null>(null);
 
-  // A stale wizard from a previous visit would otherwise reopen mid-flow.
-  useEffect(() => reset, [reset]);
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
+
+  /**
+   * True once a run left over from a previous visit has been picked up.
+   *
+   * The store restores itself from IndexedDB, so someone who reloaded during a
+   * ten-minute address lookup lands back where they were — which is right, and
+   * is also indistinguishable from a bug unless the page says so and offers the
+   * way out. `attachTo` is what decides the run is ours; see the store.
+   */
+  const isResumed = useImportStore((state) => state.isResumed);
+
+  const hydrated = useHasHydrated();
+
+  /**
+   * Throw the run away, on disk as well as in memory.
+   *
+   * `reset()` alone is not enough and the reason is the debounce: a state change
+   * only schedules a write, so pressing Start over and navigating away inside a
+   * second and a half left the *old* run sitting in IndexedDB — and the wizard
+   * dutifully offered it again on the next visit. Measured in the browser, which
+   * is the only place it shows: the store was empty and the page came back full.
+   *
+   * `clearStorage` goes through the adapter's `removeItem`, which cancels the
+   * pending write before deleting, so the discard cannot be undone by a write
+   * that was already queued. Discarding is a delete, not an update, and it is the
+   * one thing here that must not be eventually-consistent.
+   */
+  const startOver = () => {
+    reset();
+    void useImportStore.persist.clearStorage();
+  };
+
+  // Synchronising an external store with the page, which is what an effect is
+  // for: `attachTo` writes its answer into the store and the selector above
+  // reads it, so nothing here sets React state.
+  useEffect(() => {
+    if (!hydrated) return;
+
+    useImportStore.getState().attachTo(map.id);
+  }, [hydrated, map.id]);
 
   const finish = (saved: number, total: number, addedTags: number) => {
     const description = describeImport({ saved, total, addedTags });
@@ -122,6 +169,7 @@ export function ImportWizard({
     // out. A failure on chunk two would otherwise leave 200 locations saved and
     // a message that names neither the row nor the reason.
     const inputs = drafts.map((draft) => ({
+      key: draft.key,
       rowNumber: draft.rowNumber,
       input: draftToCreateInput(
         draft,
@@ -156,6 +204,8 @@ export function ImportWizard({
     let saved = 0;
     let addedTags = 0;
 
+    setProgress({ saved: 0, total: inputs.length });
+
     try {
       // Chunked to stay inside the endpoint's per-request cap. Each chunk
       // re-checks the plan limit server-side, so a limit hit stops the run with
@@ -168,6 +218,22 @@ export function ImportWizard({
         );
 
         saved += result.count;
+        setProgress({ saved, total: inputs.length });
+
+        /*
+         * **A landed chunk stops being a draft.**
+         *
+         * Without this, a run that failed on chunk eight of fifteen left all
+         * fifteen chunks in the store — so pressing Import again wrote the first
+         * fourteen hundred locations a second time, and the map ended up with
+         * every one of them twice. Nothing in the flow would have said so: the
+         * toast reports what this attempt saved, not what is on the map.
+         *
+         * Dropping them here means the store always holds exactly what is not
+         * yet imported, which is also what the persisted copy holds — so the
+         * same is true after a reload, not just within one press.
+         */
+        useImportStore.getState().removeDrafts(chunk.map((entry) => entry.key));
 
         // The vocabulary is written once the first chunk has actually landed.
         // Writing it up front — as this used to — left a map full of new tags
@@ -189,10 +255,16 @@ export function ImportWizard({
       // quiet about it would leave the user thinking nothing was imported and
       // re-running the whole file on top of itself. With nothing saved there is
       // nowhere to send them, and the mutation's own error is already on screen.
+      setProgress(null);
       if (saved > 0) finish(saved, drafts.length, addedTags);
       return;
     }
 
+    // Only a run that got all the way through throws the wizard away. A partial
+    // one keeps its remaining rows so the user can press Import again. Through
+    // `startOver` rather than `reset`, because `finish` navigates immediately and
+    // a debounced write would not survive it — see the note there.
+    startOver();
     finish(saved, drafts.length, addedTags);
   };
 
@@ -223,6 +295,43 @@ export function ImportWizard({
       }`}
     >
       <div className="relative space-y-6">
+        {/*
+         * Said out loud, with the way out beside it.
+         *
+         * Restoring the run is the right behaviour and a silent restore is not:
+         * someone arriving to import a new file would find themselves three
+         * steps into an old one with no explanation and no obvious way back.
+         * `empty:hidden` and `COLLAPSE_CLASS` for the reason every other fold in
+         * the app uses them — the wrapper must claim no `space-y` gap when there
+         * is nothing to say.
+         */}
+        <div className="empty:hidden">
+          <AnimatePresence initial={false}>
+            {isResumed ? (
+              <motion.div
+                key="resumed"
+                {...collapseMotion()}
+                className={COLLAPSE_CLASS}
+              >
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border px-4 py-3">
+                  <p className="min-w-0 flex-1 text-xs text-muted">
+                    Picking up the import you started
+                    {fileName ? ` — ${fileName}` : ""}. Nothing has been added to
+                    your map yet.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    onPress={startOver}
+                  >
+                    Start over
+                  </Button>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </div>
+
         <ImportSteps current={step} />
 
         {/*
@@ -265,6 +374,7 @@ export function ImportWizard({
                 map={map}
                 headroom={headroom}
                 isImporting={bulkCreate.isPending || updateMap.isPending}
+                importProgress={progress}
                 importError={preflightError ?? bulkCreate.error ?? updateMap.error}
                 onImport={() => void runImport()}
                 onBack={() => setStep("mapping")}
@@ -274,6 +384,28 @@ export function ImportWizard({
         </AnimatePresence>
       </div>
     </div>
+  );
+}
+
+/**
+ * Whether the persisted run has finished loading.
+ *
+ * IndexedDB is asynchronous, so the store is at its initial state for the first
+ * render or two and only then becomes the restored run. Anything that reads the
+ * store to *decide* something — `attachTo`, above — has to wait, or it decides
+ * against an empty store and then gets overwritten by the real one.
+ *
+ * Local to this component rather than exported from the store, because the store
+ * module is plain TypeScript imported by tests and by non-React code, and a hook
+ * in it would make that a React module.
+ */
+function useHasHydrated(): boolean {
+  return useSyncExternalStore(
+    (onChange) => useImportStore.persist.onFinishHydration(onChange),
+    () => useImportStore.persist.hasHydrated(),
+    // Never on the server: there is no IndexedDB there, so a server render that
+    // claimed the run was loaded would mismatch the first client render.
+    () => false,
   );
 }
 

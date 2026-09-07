@@ -7,9 +7,11 @@ import {
   type CardLayout,
 } from "@/packages/shared/card-layout";
 import { dropCardBlock } from "./card-edits";
+import { toCardDrag } from "./drop-bands";
 import {
   blockedFaces,
   dropSlots,
+  lendToEndZones,
   sideSlots,
   vacatedSpace,
   type DropSlot,
@@ -2979,5 +2981,116 @@ describe("a line whose survivor was only as tall as the block that left", () => 
         id === "logo" ? STRETCHED : fallback,
       ),
     ).toBeNull();
+  });
+});
+
+describe("lendToEndZones", () => {
+  /*
+   * The bug this answers, in numbers: on the default card the bottom zone is the
+   * only band that pins, and while it is empty it measures nothing at all — so
+   * `dropSlots` produced a zero-span run for it, `dropRegions` drew nothing, and
+   * every "put this at the bottom" gesture landed in the middle instead, held
+   * there by an `offset` that is space *above* a block rather than a promise
+   * about the card's edge.
+   *
+   * `defaultCardLayout()` is 440 tall with 12px of padding and an 8px gap. An
+   * empty end zone sits flush against the card's own content edge, which is why
+   * the measures below start life as `(440, 440)` and `(0, 0)`.
+   */
+  const card = cardWith({ middle: [{ id: "name", type: "name" }] });
+
+  /** The three zones of a card whose middle holds one 24px block at the top. */
+  const measured = () => [
+    zoneOf("top", 0, 0),
+    zoneOf("middle", 0, 440, [{ id: "name", top: 0, bottom: 24 }]),
+    zoneOf("bottom", 440, 440),
+  ];
+
+  const find = (zones: ZoneMeasure[], zone: ZoneMeasure["zone"]) =>
+    zones.find((measure) => measure.zone === zone) as ZoneMeasure;
+
+  it("gives an empty bottom zone a block's worth of room, at the card's edge", () => {
+    const zones = measured();
+    lendToEndZones(zones, card, null, 24);
+
+    // The band it will actually occupy: the card's own padding below it, then
+    // the block. 440 - 12 = 428, less the 24 it was lent.
+    expect(find(zones, "bottom").bottom).toBe(428);
+    expect(find(zones, "bottom").top).toBe(404);
+
+    // And the middle gives up exactly that, plus the padding between them, so
+    // the two cannot both offer the same strip.
+    expect(find(zones, "middle").bottom).toBe(392);
+  });
+
+  it("lends the top zone only its own padding, because it never pays the card's bottom", () => {
+    const zones = [
+      zoneOf("top", 0, 0),
+      zoneOf("middle", 0, 440, [{ id: "name", top: 200, bottom: 224 }]),
+      zoneOf("bottom", 440, 440),
+    ];
+    lendToEndZones(zones, card, null, 24);
+
+    expect(find(zones, "top").top).toBe(12);
+    expect(find(zones, "top").bottom).toBe(36);
+    expect(find(zones, "middle").top).toBe(36);
+  });
+
+  it("lends nothing to a zone the layout already fills", () => {
+    const filled = cardWith({
+      middle: [{ id: "name", type: "name" }],
+      bottom: [{ id: "actions", type: "actions" }],
+    });
+    const zones = [
+      zoneOf("top", 0, 0),
+      zoneOf("middle", 0, 400, [{ id: "name", top: 0, bottom: 24 }]),
+      zoneOf("bottom", 412, 428, [{ id: "actions", top: 412, bottom: 428 }]),
+    ];
+    lendToEndZones(zones, filled, null, 24);
+
+    expect(find(zones, "bottom").top).toBe(412);
+    expect(find(zones, "middle").bottom).toBe(400);
+  });
+
+  it("lends nothing when the middle has less than a band to spare", () => {
+    /*
+     * A card already full to its own bottom edge. There is no empty strip on
+     * screen to point at, and a target drawn over a block is worse than none —
+     * so this leaves the measurement exactly as it found it and the Position
+     * control in the panel is what moves the block instead.
+     */
+    const zones = [
+      zoneOf("top", 0, 0),
+      zoneOf("middle", 0, 440, [{ id: "name", top: 0, bottom: 438 }]),
+      zoneOf("bottom", 440, 440),
+    ];
+    lendToEndZones(zones, card, null, 24);
+
+    expect(find(zones, "bottom")).toEqual(zoneOf("bottom", 440, 440));
+    expect(find(zones, "middle").bottom).toBe(440);
+  });
+
+  it("discounts the block in the hand, which is the gesture that needs this most", () => {
+    /*
+     * Dragging a block off the bottom of the middle zone is exactly the move
+     * somebody makes when they want it pinned — and the block is still on the
+     * card, drawn dimmed where it was, so counted it reports the middle full and
+     * the bottom band never appears. `dropSlots` reads the same fact through
+     * `freedBy`; this reads it off the drag.
+     */
+    const zones = [
+      zoneOf("top", 0, 0),
+      zoneOf("middle", 0, 440, [
+        { id: "name", top: 0, bottom: 24 },
+        { id: "button", top: 392, bottom: 440 },
+      ]),
+      zoneOf("bottom", 440, 440),
+    ];
+    lendToEndZones(zones, card, toCardDrag(moveBlock("button")), 48);
+
+    // The line above the departing block ends at 24, so there is room for all
+    // 48px of it at the card's edge.
+    expect(find(zones, "bottom").top).toBe(380);
+    expect(find(zones, "bottom").bottom).toBe(428);
   });
 });

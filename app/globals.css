@@ -788,6 +788,54 @@
 }
 
 /*
+ * The week, on a card that is not tall enough for it.
+ *
+ * An open Hours block is a summary row plus seven days, about 154px, and it is
+ * the only block on a card routinely taller than the card itself: shorten the
+ * card a stop or two with a week in the middle of it and everything under that
+ * week left the zone's visible area, with the scrollbar hidden and nothing
+ * saying so. `blockBox` therefore gives this one block `flex: 0 1 auto` and a
+ * floor of zero — see the `hours` case there, which holds the argument for why
+ * it is the exception to `flex: none` — and these three rules are the other half
+ * of it: the block may be squeezed *because* the list inside it scrolls.
+ *
+ * The summary stays. It is the line a visitor actually reads — can I go there
+ * now, and what are today's hours — so it is `flex: none` and the six other days
+ * are what gives way. Sizing is `height: 100%` against the content box
+ * `blockContentStyle` already stretches, so an unsqueezed week is exactly the
+ * height it always was and nothing about a card with room on it moves.
+ *
+ * Unlayered, because `.disclosure__content` is `@heroui/styles`' own and carries
+ * `overflow: clip` and the `--disclosure-panel-height` that animates the fold;
+ * the height stays theirs, only the overflow becomes ours. The bar is hidden on
+ * `.map-card`'s argument — a scrollbar inside a card whose every other pixel its
+ * owner chose is chrome they did not design — which is what `hideScrollBar`
+ * already does for the zone one level up.
+ */
+.card-hours {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.card-hours > .disclosure__heading,
+.card-hours > .accordion__heading {
+  flex: none;
+}
+
+.card-hours > .disclosure__content {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.card-hours > .disclosure__content::-webkit-scrollbar {
+  display: none;
+}
+
+/*
  * A tag chip on a card, roomier than a chip is by default if its owner said so.
  *
  * Unlayered, so it beats `.chip`'s own `@apply px-1 py-0` — HeroUI's BEM sits in
@@ -827,10 +875,18 @@
  * nobody has styled draws the same button in the studio and on the customer's
  * site, and `buttonStyleOf` writing nothing is what keeps it that way.
  *
- * **The ground is the accent, and it is a token rather than a literal.** A
- * stored `#ffffff` would be a button that disappears the moment a visitor's map
- * is dark; leaving it unset is what lets the theme answer. Same argument the
- * pin's ring and the card's own background each carry.
+ * **The ground is the accent, and it is the *map's* accent — not the app's.**
+ * This read `var(--accent)`, which is the dashboard's own orange and a colour
+ * that does not exist on a customer's site: the same button drew orange in the
+ * studio and `#1c7ed6` blue on the published map, which is the one drift an
+ * owner could see without measuring anything. `--card-accent` is the colour
+ * they pick in Publish -> Colours, written by `cardAccentVars` from the map the
+ * card is being drawn for, and the literal behind it is exactly the embed's own
+ * `--lm-focus` default — so a map whose owner never chose an accent draws the
+ * same button in both places, and one who did gets what they chose.
+ *
+ * Still never a *stored* colour: absent is what a card published before any of
+ * this says, and the fallback chain is what answers for it (§7).
  *
  * `inline-flex` is load-bearing: it is what makes the block's Alignment control
  * work, because `align` arrives as `text-align` and `text-align` moves an
@@ -866,9 +922,9 @@
    * the case that broke the first draft, where "no hover effect" had to restore
    * a background it could not name for a ghost button.
    */
-  --card-button-ground: var(--card-button-bg, var(--accent));
+  --card-button-ground: var(--card-button-bg, var(--card-accent, #1c7ed6));
   background: var(--card-button-ground);
-  color: var(--card-color, var(--accent-foreground));
+  color: var(--card-color, #ffffff);
   font-size: var(--card-font-size, 0.75rem);
   font-weight: var(--card-font-weight, 500);
   line-height: 1.25;
@@ -896,22 +952,25 @@
   /* Not the shorthand: `.card-button` already set `border`, and a longhand
      after it is what lets the owner's own Border width still override this. */
   border-width: var(--card-button-border-width, 1.5px);
-  border-color: var(--card-button-border, var(--card-button-bg, var(--accent)));
-  color: var(--card-color, var(--card-button-bg, var(--accent)));
+  border-color: var(
+    --card-button-border,
+    var(--card-button-bg, var(--card-accent, #1c7ed6))
+  );
+  color: var(--card-color, var(--card-button-bg, var(--card-accent, #1c7ed6)));
 }
 
 .card-button--soft {
   --card-button-ground: color-mix(
     in oklab,
-    var(--card-button-bg, var(--accent)) 16%,
+    var(--card-button-bg, var(--card-accent, #1c7ed6)) 16%,
     transparent
   );
-  color: var(--card-color, var(--card-button-bg, var(--accent)));
+  color: var(--card-color, var(--card-button-bg, var(--card-accent, #1c7ed6)));
 }
 
 .card-button--ghost {
   --card-button-ground: transparent;
-  color: var(--card-color, var(--card-button-bg, var(--accent)));
+  color: var(--card-color, var(--card-button-bg, var(--card-accent, #1c7ed6)));
 }
 
 .card-button:hover {

@@ -24,6 +24,25 @@ export function fail(
   message: string,
   status: number,
   fields?: ApiFieldErrors,
+  /**
+   * Seconds to wait before trying again, sent as the standard `Retry-After`.
+   *
+   * Only the caller knows whether waiting is even the right response, so this is
+   * opt-in rather than derived from the status. It exists for the geocoder's
+   * 429: an import walks a file in a hundred and twenty chunks, and a client
+   * that has to guess how long to back off either gives up too early or sits out
+   * an outage that ended seconds ago.
+   */
+  retryAfterSeconds?: number,
 ): NextResponse {
-  return NextResponse.json({ error: { code, message, fields } }, { status });
+  return NextResponse.json(
+    { error: { code, message, fields } },
+    {
+      status,
+      headers:
+        retryAfterSeconds === undefined
+          ? undefined
+          : { "retry-after": String(Math.max(0, Math.ceil(retryAfterSeconds))) },
+    },
+  );
 }

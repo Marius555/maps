@@ -44,6 +44,15 @@ import type {
 import { pinColorOfTags, tagChipsOf } from "@/packages/shared/tags";
 
 import { buildPopup, buildShapePopup } from "./popup";
+import type { Fix } from "./search";
+import {
+  CARD_MARGIN,
+  cardBands,
+  chooseBand,
+  PIN_ROOM,
+  usableFrame,
+  type UsableFrame,
+} from "./card-place";
 import {
   pinImageId,
   registerPinImageBitmaps,
@@ -132,9 +141,6 @@ const AREA_ZOOM = 11;
 const DOT_POPUP_OFFSET = 14;
 const PIN_POPUP_OFFSET = 24;
 
-/** Air between an open card and the edge of the frame, in pixels. */
-const CARD_MARGIN = 10;
-
 /** No card is squeezed below this, however short the frame. */
 const MIN_CARD_HEIGHT = 120;
 
@@ -206,12 +212,32 @@ export type CreateMapOptions = {
    * step.
    */
   onSelect?: (placeId: string | null) => void;
+  /**
+   * Where the visitor is, for the Directions links on a card — asked each time a
+   * card is built rather than taken as a value, because the browser's answer can
+   * arrive long after the map is mounted.
+   *
+   * Deliberately not the results list's measuring origin, which a place picked
+   * out of the search box also sets: routing somebody from a town they searched
+   * for is the bug this exists to fix. See `me` in index.ts.
+   */
+  getMe?: () => Fix | null;
+  /**
+   * Told whenever the map's own geolocate control gets a position.
+   *
+   * Pressing that button is the plainest statement of "here I am" the map
+   * offers — the visitor asked for it by name — and it used to be discarded
+   * entirely, so a Directions link drawn one second later still had no
+   * origin. `me` in index.ts keeps the sharpest reading of the session, so
+   * this can only improve the answer or leave it alone.
+   */
+  onLocated?: (at: Fix) => void;
 };
 
 export function createMap(
   container: HTMLElement,
   snapshot: MapSnapshot,
-  { style, focusPlaceId = null, onSelect }: CreateMapOptions,
+  { style, focusPlaceId = null, onSelect, getMe, onLocated }: CreateMapOptions,
 ): MapHandle {
   const map = new MapLibreMap({
     container,
@@ -266,7 +292,32 @@ export function createMap(
   );
 
   if (snapshot.settings.geolocate !== false) {
-    map.addControl(new GeolocateControl({ trackUserLocation: false }), corner);
+    /*
+     * High accuracy, and not MapLibre's default of `enableHighAccuracy:
+     * false`, for one reason: the control draws an accuracy circle at the
+     * radius the browser reports, and that circle is the visitor's only
+     * picture of how well anything here knows where they are. Drawing the
+     * cheapest answer while routing from the best one would make it a
+     * picture of something else. **What they see as the circle is what a
+     * Directions link starts from.**
+     */
+    const locate = new GeolocateControl({
+      trackUserLocation: false,
+      positionOptions: { enableHighAccuracy: true, maximumAge: 0 },
+    });
+
+    if (onLocated) {
+      locate.on("geolocate", (event) => {
+        onLocated({
+          lat: event.coords.latitude,
+          lng: event.coords.longitude,
+          accuracy: event.coords.accuracy,
+          timestamp: event.timestamp,
+        });
+      });
+    }
+
+    map.addControl(locate, corner);
   }
 
   if (snapshot.settings.fullscreen) {
@@ -369,10 +420,26 @@ export function createMap(
   const cardTagGroups = snapshot.tagGroups ?? [];
   const popup = new Popup({
     closeButton: true,
-    // The owner's width, not a constant. MapLibre caps the popup itself, so a
-    // wider card needs this raised or it would be clipped by the shell rather
-    // than by anything the designer showed.
-    maxWidth: `${String(cardLayout.width)}px`,
+    /*
+     * **No cap here, because the card carries its own.**
+     *
+     * This was the owner's card width, on the reasonable-sounding argument that
+     * MapLibre caps the popup itself and a wide card would otherwise be clipped
+     * by the shell. What it missed is *which box* is capped: `.maplibregl-popup`
+     * is a flex row of the tip **and** the content, so a 320px cap on it leaves
+     * the content 310.4px — and `buildPopup` sets the card to 320px. Every card
+     * therefore overflowed an `overflow: hidden` box by exactly the tip's width,
+     * lost ~10px off its edge, and — the reported symptom — re-resolved its own
+     * position inside that box on any repaint: hovering the gallery's arrow
+     * moved the whole card, photo and icons included, 4px sideways.
+     *
+     * `none` lets the content box be the card's own width, which is where the
+     * owner's design already lives (`root.style.width` in embed/src/popup.ts).
+     * Nothing becomes unbounded: `.lm-popup` carries `max-width: 260px` in the
+     * stylesheet, which is what still sizes a shape's popup on this same
+     * instance.
+     */
+    maxWidth: "none",
     offset: DOT_POPUP_OFFSET,
   });
 
@@ -513,6 +580,7 @@ export function createMap(
           cardLayout,
           cardPins,
           tagChipsOf(cardTagGroups, place.tags),
+          getMe?.() ?? null,
         ),
       )
       .addTo(map);
@@ -555,12 +623,16 @@ export function createMap(
     },
 
     focusPlace: (place) => {
-      map.flyTo({
-        center: [place.lng, place.lat],
-        zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
-      });
-
+      /*
+       * The card first, then the flight — the reverse of what this was, and the
+       * whole of why the card no longer jumps. `flyToCard` measures the card
+       * that `showPopup` has just put on screen and folds the answer into the
+       * camera move; with the flight started first there would be nothing to
+       * measure and MapLibre would place the card itself, once per frame, all
+       * the way there.
+       */
       showPopup(place);
+      flyToCard(map, popup, [place.lng, place.lat]);
     },
 
     focusPoint: (lat, lng) => {
@@ -688,46 +760,6 @@ function resetCard(popup: Popup): void {
   if (card) card.dataset.lmOpen = String(Number(card.dataset.lmOpen ?? 0) + 1);
 }
 
-/**
- * The four sides a card can open on, and where the pin has to be for the whole
- * of it to fit on each.
- *
- * A band is `[anchor, minX, maxX, minY, maxY]` in the frame's own pixels: the
- * rectangle the pin may sit in for a card of this size to clear every edge by
- * `CARD_MARGIN`. Written this way round — the room the *pin* needs rather than
- * the room the card needs — because that is the form both questions want. "Does
- * it fit where the pin already is?" is a point-in-rectangle test, and "how far
- * would the map have to move for it to?" is the distance from the point to that
- * rectangle. A band whose min is past its max is a side this frame is simply too
- * small for.
- *
- * `left` and `right` name the edge of the *card* that is pinned, which is
- * MapLibre's convention and reads backwards until you have been caught by it
- * once: `left` puts the card to the right of the pin.
- */
-function cardBands(
-  width: number,
-  height: number,
-  frameWidth: number,
-  frameHeight: number,
-  gap: number,
-): [PositionAnchor, number, number, number, number][] {
-  const m = CARD_MARGIN;
-  const halfW = width / 2;
-  const halfH = height / 2;
-
-  return [
-    // Above the pin, centred on it. MapLibre's own preference, and the shape
-    // people expect a map popup to have, so it is asked about first.
-    ["bottom", halfW + m, frameWidth - halfW - m, height + gap + m, frameHeight - m],
-    // Below the pin.
-    ["top", halfW + m, frameWidth - halfW - m, m, frameHeight - height - gap - m],
-    // To the right of the pin, centred on it vertically.
-    ["left", m, frameWidth - width - gap - m, halfH + m, frameHeight - halfH - m],
-    // To its left.
-    ["right", width + gap + m, frameWidth - m, halfH + m, frameHeight - halfH - m],
-  ];
-}
 
 /**
  * Where an open card goes, and what it costs to put it there.
@@ -854,7 +886,7 @@ function placeCard(map: MapLibreMap, popup: Popup): void {
 
     card.style.removeProperty("--lm-popup-max");
 
-    const frame = map.getContainer();
+    const usable = usableFrame(map.getContainer());
     const point = map.project(at);
     /*
      * Numeric by construction — `showPopup` sets one of the two pin radii and
@@ -865,56 +897,16 @@ function placeCard(map: MapLibreMap, popup: Popup): void {
       typeof popup.options.offset === "number" ? popup.options.offset : 0;
 
     const height = card.offsetHeight;
-    const bands = cardBands(
-      card.offsetWidth,
-      height,
-      frame.clientWidth,
-      frame.clientHeight,
-      gap,
-    );
+    const bands = cardBands(card.offsetWidth, height, usable, gap);
+
+    const best = chooseBand(bands, point.x, point.y);
 
     /*
-     * The nearest point of the nearest viable band, and how far away it is.
-     *
-     * Strictly nearer, so a tie goes to the band asked about first — which is
-     * why `cardBands` is in the order it is: two sides that would both cost
-     * nothing should resolve to the one people expect, not to the last one
-     * tested.
-     */
-    let best: { anchor: PositionAnchor; x: number; y: number; move: number } | null =
-      null;
-
-    for (const [anchor, minX, maxX, minY, maxY] of bands) {
-      if (minX > maxX || minY > maxY) continue;
-
-      const x = Math.min(Math.max(point.x, minX), maxX);
-      const y = Math.min(Math.max(point.y, minY), maxY);
-      const move = Math.hypot(x - point.x, y - point.y);
-
-      if (!best || move < best.move) best = { anchor, x, y, move };
-    }
-
-    /*
-     * No band at all: the frame is smaller than the card on every side, so there
-     * is nothing to move towards and the card is capped instead. The roomier of
-     * above and below, since a card that has to be cut short should at least be
-     * cut as little as possible.
+     * No band at all: the usable rect is smaller than the card on every side, so
+     * there is nothing to move towards and the card is capped instead.
      */
     if (!best) {
-      const above = point.y - gap - CARD_MARGIN;
-      const below = frame.clientHeight - point.y - gap - CARD_MARGIN;
-
-      setAnchor(popup, above >= below ? "bottom" : "top");
-      card.style.setProperty(
-        "--lm-popup-max",
-        `${String(
-          Math.max(
-            Math.max(above, below) -
-              (height - content.getBoundingClientRect().height),
-            MIN_CARD_HEIGHT,
-          ),
-        )}px`,
-      );
+      capCard(popup, card, content, height, usable, point.y, gap);
       return;
     }
 
@@ -943,6 +935,188 @@ function placeCard(map: MapLibreMap, popup: Popup): void {
      */
     map.panBy([point.x - best.x, point.y - best.y]);
   });
+}
+
+
+/**
+ * Fly to a pin whose card is already open, and land with the card in place.
+ *
+ * **The bug this exists for.** `resetCard` clears `popup.options.anchor` on
+ * every open and `placeCard` refuses to measure while the camera is moving, so
+ * for the whole length of a flight MapLibre applied its own rule — *above the
+ * point if the card fits above, otherwise below* — re-evaluated every frame as
+ * the pin travelled across the frame. On a tall card that is bottom, then a
+ * side, then bottom again: the card visibly jumping around its own pin for the
+ * length of the animation, and then one more settle when `placeCard` finally
+ * measured at `moveend` and panned. Two moves and a flicker for one click.
+ *
+ * So the question is asked **before** the flight rather than after it. The
+ * destination is known — a `flyTo` with a `center` puts that coordinate in the
+ * middle of the frame — so the bands can be evaluated against the frame's own
+ * centre, the anchor fixed before MapLibre gets to guess, and the difference
+ * handed to `flyTo` as an `offset`, which is stated as where the target centre
+ * sits relative to the container centre when the animation ends. The pin
+ * therefore arrives already inside the band its card needs, in one motion, with
+ * nothing left to settle.
+ *
+ * **Measured synchronously**, which is the one thing here that looks wrong and
+ * is not: `offsetWidth` forces a reflow, so a popup appended this tick does have
+ * a box by the time it is read. It costs one layout per click. `placeCard`'s own
+ * pass defers a frame instead because it also runs from a `toggle` deep inside
+ * the card, where the thing that changed size has not been styled yet.
+ *
+ * **No band at all** — a frame smaller than the card whichever side it opens on
+ * — is not a zoom question either, though it looks like one. Nothing about
+ * zooming changes whether a 440px card fits a 257px frame. There the pin is put
+ * near the bottom of the frame instead, so the card is cut against everything
+ * above it rather than against half of it, and the cap takes the rest.
+ */
+function flyToCard(
+  map: MapLibreMap,
+  popup: Popup,
+  center: [number, number],
+): void {
+  const zoom = Math.max(map.getZoom(), FOCUS_ZOOM);
+  const card = popup.getElement();
+
+  if (!card) {
+    map.flyTo({ center, zoom });
+    return;
+  }
+
+  /*
+   * The cap the *last* card was given, cleared before this one is measured.
+   *
+   * One `Popup` serves every pin on the map, so the container arrives carrying
+   * whatever the previous card was squeezed to — and measuring against that
+   * would decide this card's side from a height that is not its own. Same line,
+   * and the same reason, as `placeCard`.
+   */
+  card.style.removeProperty("--lm-popup-max");
+
+  const frame = map.getContainer();
+  const usable = usableFrame(frame);
+  /* Numeric by construction — `showPopup` sets one of the two pin radii. See
+     `placeCard`, which reads it the same way. */
+  const gap = typeof popup.options.offset === "number" ? popup.options.offset : 0;
+
+  /*
+   * Where the pin lands with no offset, which is what a plain `flyTo` does.
+   *
+   * The **container's** centre and deliberately not the usable rect's: MapLibre
+   * defines `offset` as where the target sits relative to the centre of the map
+   * container, so a floating results panel changes where the card may go and
+   * changes nothing at all about this number. Mixing the two is how the camera
+   * would fly the panel's width too far.
+   */
+  const middleX = frame.clientWidth / 2;
+  const middleY = frame.clientHeight / 2;
+
+  const best = chooseBand(
+    cardBands(card.offsetWidth, card.offsetHeight, usable, gap),
+    middleX,
+    middleY,
+  );
+
+  if (!best) {
+    /*
+     * Nowhere for the card to go, so the card gives way rather than the camera —
+     * but the side it opens on is still decided **here**, before the flight.
+     *
+     * That is the whole point of this branch and the first version got it wrong
+     * by simply flying: with `options.anchor` left unset MapLibre placed the
+     * card itself, once per frame, and a tall card in a short frame is exactly
+     * the case where its rule keeps changing its mind. Measured on a 558x257
+     * frame with a 440px card: four anchors in one flight — left, top-left, top,
+     * bottom — which is the jumping this function exists to stop, in the shape
+     * most likely to provoke it.
+     *
+     * **The pin lands low rather than in the middle**, and that is two things at
+     * once. It is the better answer — a card that has to be cut short is cut
+     * against the whole frame above the pin instead of against half of it,
+     * which on that 558x257 frame is 120px of card against 217px. And it is
+     * what makes the choice *stable*: a centred pin leaves `above` and `below`
+     * equal to within a rounding error, so `placeCard`'s own pass at `moveend`
+     * would toss a coin on the same question and flip the card once more at the
+     * end of the flight. Measured before this line: exactly that, one flip in
+     * three flights.
+     *
+     * Capped here too, so the card is its final size before the camera moves,
+     * and `placeCard` re-measuring at rest reaches this same function with the
+     * same numbers — so it re-applies the same cap and `setAnchor` finds nothing
+     * to change.
+     */
+    const content = card.querySelector<HTMLElement>(".lm-popup");
+    const targetY = usable.bottom - CARD_MARGIN - PIN_ROOM;
+
+    if (content) {
+      capCard(popup, card, content, card.offsetHeight, usable, targetY, gap);
+    }
+
+    /*
+     * **Still zoomed**, which is the one thing in this function that was tried
+     * the other way and put back.
+     *
+     * "Don't zoom in so far when there is no room for the card" sounds like the
+     * fix and is not: zooming changes nothing about whether a 440px card fits a
+     * 257px frame. The room is bought by the offset above and, when there is
+     * none to buy, by the cap — and holding the camera at the zoom it happened
+     * to be at costs a real thing, because a phone is the frame that reaches
+     * this branch most often. A visitor tapping a shop in the list there would
+     * arrive at whatever the map was showing before, which is the whole of what
+     * tapping a row is for.
+     */
+    map.flyTo({ center, zoom, offset: [0, targetY - middleY] });
+    return;
+  }
+
+  setAnchor(popup, best.anchor);
+  map.flyTo({
+    center,
+    zoom,
+    offset: [best.x - middleX, best.y - middleY],
+  });
+}
+
+/**
+ * The last resort: a card taller than any side of the frame, cut to fit.
+ *
+ * The roomier of above and below, since a card that has to be cut short should
+ * at least be cut as little as possible. Whatever does not fit scrolls inside
+ * the card.
+ *
+ * The cap lands on the *content* and is worked out from the container, which is
+ * the difference the two boxes exist for: `full` is our card plus MapLibre's
+ * tip, and capping the container's height on the content would leave the chrome
+ * hanging over the edge by exactly the chrome's own size.
+ *
+ * Its own function because the settle and the flight both reach this case, and
+ * a second copy is how the two would come to cut the same card to two different
+ * heights.
+ */
+function capCard(
+  popup: Popup,
+  card: HTMLElement,
+  content: HTMLElement,
+  /** The container's height, tip included. */
+  full: number,
+  usable: UsableFrame,
+  pointY: number,
+  gap: number,
+): void {
+  const above = pointY - usable.top - gap - CARD_MARGIN;
+  const below = usable.bottom - pointY - gap - CARD_MARGIN;
+
+  setAnchor(popup, above >= below ? "bottom" : "top");
+  card.style.setProperty(
+    "--lm-popup-max",
+    `${String(
+      Math.max(
+        Math.max(above, below) - (full - content.getBoundingClientRect().height),
+        MIN_CARD_HEIGHT,
+      ),
+    )}px`,
+  );
 }
 
 /**
