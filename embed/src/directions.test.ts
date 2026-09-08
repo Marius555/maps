@@ -301,7 +301,7 @@ describe("installDirectionsAsk", () => {
   it("asks again after a window that produced nothing", async () => {
     const geo = stubGeolocation();
     const root = rootWithLink();
-    installDirectionsAsk(root, () => null, vi.fn());
+    installDirectionsAsk(root, () => null, vi.fn(), vi.fn());
 
     pointerDown(root);
     expect(geo.watchPosition).toHaveBeenCalledTimes(1);
@@ -315,7 +315,7 @@ describe("installDirectionsAsk", () => {
   it("never asks again once the visitor has refused", async () => {
     const geo = stubGeolocation();
     const root = rootWithLink();
-    installDirectionsAsk(root, () => null, vi.fn());
+    installDirectionsAsk(root, () => null, vi.fn(), vi.fn());
 
     pointerDown(root);
     geo.fail(failure(DENIED));
@@ -333,7 +333,7 @@ describe("installDirectionsAsk", () => {
   it("asks again after a fix that was merely unavailable", async () => {
     const geo = stubGeolocation();
     const root = rootWithLink();
-    installDirectionsAsk(root, () => null, vi.fn());
+    installDirectionsAsk(root, () => null, vi.fn(), vi.fn());
 
     pointerDown(root);
     geo.fail(failure(UNAVAILABLE));
@@ -347,7 +347,7 @@ describe("installDirectionsAsk", () => {
   it("does not start a second lookup while one is in flight", () => {
     const geo = stubGeolocation();
     const root = rootWithLink();
-    installDirectionsAsk(root, () => null, vi.fn());
+    installDirectionsAsk(root, () => null, vi.fn(), vi.fn());
 
     pointerDown(root);
     pointerDown(root);
@@ -358,7 +358,7 @@ describe("installDirectionsAsk", () => {
   it("does not ask at all when something already knows", () => {
     const geo = stubGeolocation();
     const root = rootWithLink();
-    installDirectionsAsk(root, () => fix(), vi.fn());
+    installDirectionsAsk(root, () => fix(), vi.fn(), vi.fn());
 
     pointerDown(root);
 
@@ -374,7 +374,7 @@ describe("installDirectionsAsk", () => {
   it("outlives bestPosition's own three-second settle", async () => {
     const geo = stubGeolocation();
     const root = rootWithLink();
-    installDirectionsAsk(root, () => null, vi.fn());
+    installDirectionsAsk(root, () => null, vi.fn(), vi.fn());
 
     pointerDown(root);
 
@@ -388,7 +388,7 @@ describe("installDirectionsAsk", () => {
   it("asks on a keyboard activation, which fires click and no pointer event", () => {
     const geo = stubGeolocation();
     const root = rootWithLink();
-    installDirectionsAsk(root, () => null, vi.fn());
+    installDirectionsAsk(root, () => null, vi.fn(), vi.fn());
 
     anchorOf(root).dispatchEvent(new Event("click", { bubbles: true }));
 
@@ -398,7 +398,7 @@ describe("installDirectionsAsk", () => {
   it("asks once for one press, not twice for pointerdown and then click", () => {
     const geo = stubGeolocation();
     const root = rootWithLink();
-    installDirectionsAsk(root, () => null, vi.fn());
+    installDirectionsAsk(root, () => null, vi.fn(), vi.fn());
 
     pointerDown(root);
     anchorOf(root).dispatchEvent(new Event("click", { bubbles: true }));
@@ -412,7 +412,7 @@ describe("installDirectionsAsk", () => {
     const other = document.createElement("a");
     other.href = "https://example.com/";
     root.append(other);
-    installDirectionsAsk(root, () => null, vi.fn());
+    installDirectionsAsk(root, () => null, vi.fn(), vi.fn());
 
     other.dispatchEvent(new Event("pointerdown", { bubbles: true }));
 
@@ -426,7 +426,7 @@ describe("installDirectionsAsk", () => {
   it("never touches the navigation", () => {
     stubGeolocation();
     const root = rootWithLink();
-    installDirectionsAsk(root, () => null, vi.fn());
+    installDirectionsAsk(root, () => null, vi.fn(), vi.fn());
 
     const event = new Event("pointerdown", { bubbles: true, cancelable: true });
     anchorOf(root).dispatchEvent(event);
@@ -443,7 +443,7 @@ describe("installDirectionsAsk", () => {
     const geo = stubGeolocation();
     const root = rootWithLink();
     const onLocated = vi.fn();
-    installDirectionsAsk(root, () => null, onLocated);
+    installDirectionsAsk(root, () => null, onLocated, vi.fn());
 
     pointerDown(root);
     geo.emit(position(400));

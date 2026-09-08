@@ -1397,3 +1397,65 @@ describe("buildSnapshot gazetteer", () => {
     expect(snapshot.gazetteer?.base).toBe("https://cdn.example.com/gazetteer");
   });
 });
+
+describe("buildSnapshot analytics", () => {
+  const COLLECT = "https://dash.example.com/api/collect";
+
+  it("is omitted on a map whose owner has not switched it on", () => {
+    // Absent is the whole contract on the embed's side: no field, no beacon, no
+    // listeners. It is also what every snapshot published before this existed
+    // carries, and those are still live on customers' sites.
+    const { snapshot } = buildSnapshot(
+      makeMap(),
+      [makePlace()],
+      [],
+      GENERATED_AT,
+      undefined,
+      null,
+      COLLECT,
+    );
+
+    expect(snapshot.analytics).toBeUndefined();
+  });
+
+  it("is written when the owner switched it on", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ settings: { analytics: true } }),
+      [makePlace()],
+      [],
+      GENERATED_AT,
+      undefined,
+      null,
+      COLLECT,
+    );
+
+    expect(snapshot.analytics).toEqual({ url: COLLECT });
+  });
+
+  it("is omitted when no collector URL is given, however the switch is set", () => {
+    // This is what keeps the publish preview silent: it renders the real embed
+    // bundle inside the dashboard and passes no URL, so the owner's own clicks
+    // on their own map are never filed as a visitor's.
+    const { snapshot } = buildSnapshot(
+      makeMap({ settings: { analytics: true } }),
+      [makePlace()],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.analytics).toBeUndefined();
+  });
+
+  it("still says so in settings when the endpoint is withheld", () => {
+    // The designer's switch shows the owner's answer either way; only the
+    // measurement is withheld.
+    const { snapshot } = buildSnapshot(
+      makeMap({ settings: { analytics: true } }),
+      [makePlace()],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.settings.analytics).toBe(true);
+  });
+});

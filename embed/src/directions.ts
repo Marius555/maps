@@ -43,6 +43,7 @@ import {
   type DirectionsTarget,
 } from "@/packages/shared/directions";
 import { link } from "./dom";
+import type { Track } from "./track";
 
 /**
  * What each link we built is a route *to*.
@@ -75,7 +76,13 @@ const targets = new WeakMap<HTMLAnchorElement, DirectionsTarget>();
 export function directionsLink(
   className: string,
   label: string,
-  place: DirectionsTarget,
+  /**
+   * A whole `SnapshotPlace` at all three call sites; typed as the narrower
+   * target plus an optional id because the routing rule genuinely needs only
+   * three fields, and the id is carried for one reason: the marker attribute
+   * below doubles as what the delegated listener reports.
+   */
+  place: DirectionsTarget & { id?: string },
   from: Fix | null,
 ): HTMLElement {
   const node = link(className, label, directionsUrl(place, from));
@@ -84,7 +91,15 @@ export function directionsLink(
   // this cannot currently miss — but the marker is what the delegated listener
   // below and `refreshDirections` recognise, and a span cannot carry a route.
   if (node instanceof HTMLAnchorElement) {
-    node.dataset.lmDir = "1";
+    /*
+     * The marker carries the place id rather than a bare "1".
+     *
+     * Both selectors that read it are `[data-lm-dir]` with no value test, so
+     * this changes nothing about who matches — and it is what lets the press
+     * listener report *which* location a visitor asked directions to without a
+     * second attribute, a second lookup or a wider `targets` value.
+     */
+    node.dataset.lmDir = place.id ?? "1";
     targets.set(node, place);
   }
 
@@ -166,6 +181,7 @@ export function installDirectionsAsk(
   root: HTMLElement,
   getMe: () => Fix | null,
   onLocated: (at: Fix) => void,
+  track: Track,
 ): void {
   /** A lookup is in flight. Guards concurrency, not a second question. */
   let asking = false;
@@ -214,7 +230,26 @@ export function installDirectionsAsk(
   };
 
   const press = (event: Event) => {
-    if ((event.target as HTMLElement | null)?.closest("a[data-lm-dir]")) ask();
+    const anchor = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+      "a[data-lm-dir]",
+    );
+    if (!anchor) return;
+
+    /*
+     * Reported on `click` only, though this handler runs for both events below.
+     *
+     * A mouse press fires `pointerdown` then `click`, so reporting on the first
+     * would count every directions press twice; and a `pointerdown` the visitor
+     * drags away from is not a press at all. `click` is the one event that fires
+     * exactly once per activation and fires for the keyboard too.
+     *
+     * `sendBeacon` inside a click handler is safe — it hands the payload to the
+     * browser and returns. Nothing here calls `preventDefault`, opens a window,
+     * or awaits anything, which is the rule embed/dev/dev.html:174-182 states.
+     */
+    if (event.type === "click") track("directions", { id: anchor.dataset.lmDir ?? "" });
+
+    ask();
   };
 
   /*

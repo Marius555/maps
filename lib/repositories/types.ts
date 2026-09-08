@@ -294,3 +294,83 @@ export type Page<T> = {
   nextCursor: string | null;
   total: number;
 };
+
+/* ------------------------------------------------------------------ *
+ * Visitor analytics
+ * ------------------------------------------------------------------ */
+
+/** Matches DEVICE_KINDS in scripts/appwrite-schema.mjs. */
+export const DEVICE_KINDS = ["desktop", "tablet", "mobile"] as const;
+export type DeviceKind = (typeof DEVICE_KINDS)[number];
+
+export type MapSessionRow = Models.Row & {
+  mapId: string;
+  startedAt: string;
+  day?: string | null;
+  country?: string | null;
+  city?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  ip?: string | null;
+  host?: string | null;
+  path?: string | null;
+  referrer?: string | null;
+  device?: string | null;
+  events?: string | null;
+  eventCount?: number | null;
+};
+
+/**
+ * One visitor's session on a published map.
+ *
+ * `events` is parsed here rather than handed on as text, because every consumer
+ * wants it parsed and a second `JSON.parse` in a component is how a malformed
+ * row becomes a crashed page instead of a skipped session.
+ */
+export type MapSession = {
+  id: string;
+  mapId: string;
+  /** ISO. When the map booted, per the visitor's own clock. */
+  startedAt: string;
+  /** UTC bucket key, `YYYY-MM-DD`. */
+  day: string;
+  country: string | null;
+  city: string | null;
+  lat: number | null;
+  lng: number | null;
+  /** Stored whole; `maskIp` is what the dashboard draws. */
+  ip: string | null;
+  /** The customer's own page — which site, and which page of it. */
+  host: string;
+  path: string;
+  /** Where the visitor was before the customer's page. */
+  referrer: string;
+  device: DeviceKind;
+  events: SessionEvent[];
+};
+
+/**
+ * One interaction inside a session.
+ *
+ * Deliberately open: `type` is whatever the embed called it, and the extra keys
+ * are whatever that type carries. The embed and this app deploy separately — the
+ * embed updates when a customer's visitor reloads their page — so a closed union
+ * here would turn "a newer embed sent an event we don't know" into a dropped
+ * session rather than a row with one unlabelled figure in it.
+ */
+export type SessionEvent = {
+  type: string;
+  /** Milliseconds after the map booted. */
+  at: number;
+  /** A location id, a search query, a match count, and so on. */
+  data: Record<string, string | number>;
+};
+
+export type MapDailyRow = Models.Row & {
+  mapId: string;
+  day: string;
+  sessions?: number | null;
+  views?: number | null;
+  interactions?: number | null;
+  totals?: string | null;
+};

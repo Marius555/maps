@@ -397,6 +397,23 @@ export type SnapshotSettings = {
   /* Colour. */
 
   colors?: SnapshotColors;
+
+  /* Measurement. */
+
+  /**
+   * Whether this map reports what its visitors do.
+   *
+   * The owner's switch, and it lives here because it is one of the embed's
+   * optional behaviours like every other key in this object. What the embed
+   * actually reads is `MapSnapshot.analytics`, which is written only when this
+   * is true — so a map with the switch off carries no endpoint at all rather
+   * than an endpoint it has been told not to use.
+   *
+   * Absent means **off**, which is what every map published before this existed
+   * did, and turning it on is a republish. That is deliberate: nothing may start
+   * measuring a stranger's visitors because we shipped a default.
+   */
+  analytics?: boolean;
 };
 
 /**
@@ -565,8 +582,31 @@ export type MapSnapshot = {
   cardLayout?: CardLayout;
   settings: SnapshotSettings;
   /**
+   * Where to report what visitors do, when the owner has asked us to.
+   *
+   * **Absent means no tracking at all** — the behaviour of every map published
+   * before this field existed, and of every map whose owner has left the switch
+   * off. The embed reads this and nothing else: no endpoint, no beacon, no
+   * listeners, no session id. `createTracker` returns a no-op and the call sites
+   * cost a function call each (embed/src/track.ts).
+   *
+   * It carries the URL rather than a bare boolean because the embed cannot
+   * derive one. It runs on a stranger's domain, so a relative path would post to
+   * *their* server; and `NEXT_PUBLIC_EMBED_SCRIPT_URL` may point at a CDN that
+   * is not the dashboard, so the script's own origin is not the answer either.
+   * Baking the absolute URL at publish time is what makes both cases work, and
+   * it is one field instead of two.
+   */
+  analytics?: SnapshotAnalytics;
+  /**
    * Hostnames allowed to embed this map. Empty means "anywhere".
    * Anti-abuse, not security — anyone can copy the snapshot URL (§7).
    */
   allowedDomains: string[];
+};
+
+/** Where the embed posts what it saw. See `MapSnapshot.analytics`. */
+export type SnapshotAnalytics = {
+  /** Absolute, because the embed runs on somebody else's origin. */
+  url: string;
 };

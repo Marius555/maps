@@ -4,6 +4,7 @@ import { admin } from "@/lib/appwrite/admin";
 import { TABLES } from "@/lib/appwrite/config";
 import { toRepositoryError } from "@/lib/appwrite/errors";
 import { env } from "@/lib/env";
+import { collectUrl } from "@/lib/analytics/collect-url";
 import { gazetteerBase } from "@/lib/gazetteer/config";
 import { buildSnapshot } from "@/lib/snapshot/build";
 import { uploadSnapshot } from "@/lib/snapshot/storage";
@@ -46,10 +47,11 @@ export async function publishMap(
   /**
    * The dashboard's own origin, from the request.
    *
-   * Only used to resolve the gazetteer base when `NEXT_PUBLIC_GAZETTEER_URL` is
-   * unset, which is what makes development and self-hosting work with no config
-   * — the same fallback `embedScriptUrl` uses. Threaded from the route rather
-   * than read here, because a repository has no request.
+   * Used to resolve the gazetteer base when `NEXT_PUBLIC_GAZETTEER_URL` is
+   * unset, and the collector URL when `NEXT_PUBLIC_COLLECT_URL` is — which is
+   * what makes development and self-hosting work with no config, the same
+   * fallback `embedScriptUrl` uses. Threaded from the route rather than read
+   * here, because a repository has no request.
    */
   origin: string,
 ): Promise<PublishResult> {
@@ -69,6 +71,7 @@ export async function publishMap(
     generatedAt,
     gazetteerBase(origin),
     effectiveCardLayout(cardDesign),
+    collectUrl(origin),
   );
 
   // Storage before the row. If the upload fails the map stays exactly as it was,

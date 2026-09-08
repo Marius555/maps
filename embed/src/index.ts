@@ -36,6 +36,7 @@ import {
   searchNeedle,
 } from "./search";
 import embedCss from "./styles.css?inline";
+import { createTracker, trackLinks, type Track } from "./track";
 import "./worker";
 
 /**
@@ -175,6 +176,14 @@ async function render(
     style = snapshot.styleUrl;
   }
 
+  /*
+   * Built before anything that could report, and a no-op unless the owner
+   * switched measurement on and republished (./track.ts). Everything downstream
+   * takes it unconditionally, which is why no call site has to ask whether this
+   * map is measured.
+   */
+  const track = createTracker(snapshot);
+
   const root = el("div", isDark ? "lm-root lm-root--dark" : "lm-root");
   root.style.height = "100%";
   applyChrome(root, snapshot);
@@ -264,7 +273,10 @@ async function render(
   const list = snapshot.settings.list
     ? createList(
         snapshot,
-        (place) => map?.focusPlace(place),
+        (place) => {
+          track("row", { id: place.id });
+          map?.focusPlace(place);
+        },
         () => me,
       )
     : null;
@@ -310,6 +322,7 @@ async function render(
     onSelect: (placeId) => list?.select(placeId),
     getMe: () => me,
     onLocated: remember,
+    track,
   });
 
   /*
@@ -331,6 +344,7 @@ async function render(
     status,
     list,
     onLocated: remember,
+    track,
   });
 
   /*
@@ -347,7 +361,8 @@ async function render(
    * to one shop is the map answering a question nobody asked. Every Directions
    * link drawn after this does pick the origin up, because they all read `me`.
    */
-  installDirectionsAsk(root, () => me, remember);
+  installDirectionsAsk(root, () => me, remember, track);
+  trackLinks(root, track);
 }
 
 /**
@@ -449,6 +464,18 @@ function createStatus(): StatusHandle {
   return { element, show };
 }
 
+/**
+ * How long the search box must settle before what was typed is reported.
+ *
+ * `onQuery` fires on every keystroke, because that is what filters the map. A
+ * report per keystroke would file "k", "ka", "kau", "kaun", "kauna", "kaunas"
+ * as six searches, five of which nobody performed — and the whole value of this
+ * measurement is the customer reading the words their visitors actually looked
+ * for. Long enough to outlast typing, short enough to survive someone reading
+ * the result and closing the tab.
+ */
+const SEARCH_REPORT_MS = 600;
+
 function wireControls({
   map,
   snapshot,
@@ -456,12 +483,14 @@ function wireControls({
   status,
   list,
   onLocated,
+  track,
 }: {
   map: MapHandle;
   snapshot: MapSnapshot;
   toolbar: HTMLElement;
   status: StatusHandle;
   list: ListHandle | null;
+  track: Track;
   /**
    * Report the visitor's own position upward, once the browser gives one.
    *
@@ -522,8 +551,28 @@ function wireControls({
       matchesSearch(searchIndex, place, needle),
     );
 
+  /**
+   * The settled search, with how many locations it found.
+   *
+   * The count is the half that makes this worth collecting. "Sixty people
+   * searched Kaunas" is a statistic; "sixty people searched Kaunas and found
+   * nothing" is the customer's next shop.
+   */
+  let searchTimer = 0;
+
+  const reportSearch = (query: string, matches: number) => {
+    clearTimeout(searchTimer);
+    if (!query) return;
+
+    searchTimer = window.setTimeout(
+      () => track("search", { q: query, n: matches }),
+      SEARCH_REPORT_MS,
+    );
+  };
+
   const apply = () => {
     const places = visible();
+    reportSearch(needle, places.length);
     map.setPlaces(places);
     // Before the empty check, not after: an empty result is exactly when the
     // list has something to say, and returning early would leave the last set
@@ -550,7 +599,20 @@ function wireControls({
           needle = searchNeedle(value);
           apply();
         },
-        onPlace: (place) => setOrigin({ lat: place.lat, lng: place.lng }),
+        onPlace: (place) => {
+          /*
+           * The name, not just the press — and it is the most valuable six
+           * bytes in this bundle.
+           *
+           * A visitor picks a town out of the gazetteer when the map had no
+           * location to offer them for it. So this is somebody saying "I want a
+           * shop in Kaunas", and a month of them is a ranked list of places
+           * with demand and no presence. Recorded as a bare count it said
+           * "picked a suggestion 37 times", which answers nothing.
+           */
+          track("pick", { q: place.label });
+          setOrigin({ lat: place.lat, lng: place.lng });
+        },
         gazetteer: createGazetteer(snapshot.gazetteer),
       }),
     );
@@ -562,9 +624,17 @@ function wireControls({
     //
     // Lit, it is the Clear the chip under the toolbar used to be — so a press
     // asks which of the two states it is in rather than always locating.
-    nearest = createNearestButton(() =>
-      origin ? setOrigin(null) : goToNearest(),
-    );
+    nearest = createNearestButton(() => {
+      // Two different presses on one control, and a customer reading "nearest
+      // pressed 40 times" should not be counting the 20 that cleared it.
+      if (origin) {
+        track("nearest_clear");
+        return setOrigin(null);
+      }
+
+      track("nearest");
+      return goToNearest();
+    });
     toolbar.append(nearest);
   }
 
@@ -610,6 +680,19 @@ function wireControls({
         return;
       }
 
+      /*
+       * How far the nearest location actually was.
+       *
+       * Rounded to whole kilometres, and that rounding is the point rather than
+       * tidiness: it is the one number here derived from the visitor's own
+       * position, and a distance to a known shop is a position if it is precise
+       * enough. Whole kilometres answer "are my visitors near my shops" without
+       * answering "which street is this person on".
+       */
+      track("nearest_found", {
+        km: Math.round(distanceKm(position, closest)),
+      });
+
       map.focusPlace(closest);
       /*
        * Written after `setOrigin`, which runs `apply()` and blanks the status —
@@ -629,6 +712,10 @@ function wireControls({
        * (§8).
        */
       const reason = locationFailure(error);
+
+      // Which of the four, because "nobody uses find-nearest" and "everybody
+      // denies find-nearest" are different problems with different fixes.
+      track("nearest_failed", { why: reason });
 
       showStatus(
         reason === "denied"

@@ -31,6 +31,16 @@ type Options = {
    * makes the first tile request the right one.
    */
   bounds?: ShapeBounds | null;
+  /**
+   * How far `bounds` may zoom in when the box is small.
+   *
+   * 14 is the editor's answer and stays the default, so nothing that does not
+   * pass this moves. The Analytics heatmap overrides it because its two layers
+   * cross-fade at a fixed zoom: a handful of locations a kilometre apart frame
+   * to zoom 13, which is past the fade, so the page would open showing dots and
+   * never draw the density map it exists for.
+   */
+  maxFitZoom?: number;
   style: MapStyleKey;
   /**
    * The map's stored `appearance` blob, straight off the row. Normalised here
@@ -148,6 +158,8 @@ export function useMaplibre(
        * once the map is up.
        */
       const opening = initial.current.bounds;
+      // Read once with the rest of the opening view. See `Options.maxFitZoom`.
+      const maxFitZoom = initial.current.maxFitZoom ?? DEFAULT_MAX_FIT_ZOOM;
 
       map = new MapLibreMap({
         container: element,
@@ -162,7 +174,7 @@ export function useMaplibre(
               ] as [[number, number], [number, number]],
               // A single pin is a zero-area box and would otherwise open at
               // maximum zoom — the same guard the imperative fit carries.
-              fitBoundsOptions: { padding: 48, maxZoom: 14, duration: 0 },
+              fitBoundsOptions: { padding: 48, maxZoom: maxFitZoom, duration: 0 },
             }
           : {}),
         // MapLibre defaults antialias to false, which leaves every road casing,
@@ -251,7 +263,7 @@ export function useMaplibre(
                 [opening.west, opening.south],
                 [opening.east, opening.north],
               ],
-              { padding: 48, maxZoom: 14, duration: 0 },
+              { padding: 48, maxZoom: maxFitZoom, duration: 0 },
             );
           }
         }
@@ -448,6 +460,9 @@ export function useMaplibre(
 
   return { map: mapRef, isReady };
 }
+
+/** What the editor has always framed at, and so what everything else gets. */
+const DEFAULT_MAX_FIT_ZOOM = 14;
 
 /** One comparable string for "what the canvas is showing". */
 function lookKey(styleUrl: string, appearance: MapAppearance | null): string {

@@ -29,6 +29,8 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 const OUT_DIR = join(process.cwd(), "public", "embed");
+/** Vite's `publicDir`. Whatever is in here is copied to OUT_DIR and never ships. */
+const HARNESS_DIR = join(process.cwd(), "embed", "dev");
 
 /**
  * Everything in the bundle that is ours: map.js plus the CSS inlined into it.
@@ -75,12 +77,28 @@ const isVendor = (name) => name.startsWith("maplibre-gl");
  * output directory but is never deployed, so counting it would inflate the
  * number that matters.
  *
- * A pattern rather than the two names it used to list: adding a second fixture —
- * `dev-legacy.json`, the pre-merge snapshot the §7 read path is checked against —
- * failed this budget by 2.2KB of a file no visitor will ever fetch, and the
- * obvious reading of that failure is "cut something from the embed".
+ * **Read from the harness directory rather than matched by name**, because a
+ * name pattern has now mis-classified a harness file twice. First it was two
+ * hard-coded names, and adding `dev-legacy.json` — the pre-merge snapshot the §7
+ * read path is checked against — failed the budget by 2.2KB of a file no visitor
+ * will ever fetch. That was replaced by `/^dev[.-]/`, which failed the same way
+ * the moment a harness page was added that is not called dev-something
+ * (`live.html`, which points the bundle at a real published snapshot).
+ *
+ * Both times the failure reads as "the embed grew, cut something", which is the
+ * expensive way to be wrong: the honest response to it is to shave real code
+ * that was never the problem. The directory listing cannot drift from the truth,
+ * because it *is* the thing Vite copies.
  */
-const isHarness = (name) => /^dev[.-]/.test(name);
+async function harnessNames() {
+  try {
+    return new Set(await readdir(HARNESS_DIR));
+  } catch {
+    // Not a checkout of this repo's embed source — measure everything rather
+    // than silently under-reporting.
+    return new Set();
+  }
+}
 
 const kb = (bytes) => `${(bytes / 1024).toFixed(1)}KB`;
 
@@ -94,8 +112,10 @@ async function main() {
     process.exit(1);
   }
 
+  const harness = await harnessNames();
+
   const files = entries
-    .filter((name) => !name.endsWith(".map") && !isHarness(name))
+    .filter((name) => !name.endsWith(".map") && !harness.has(name))
     .sort();
 
   if (files.length === 0) {

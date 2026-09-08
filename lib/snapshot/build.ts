@@ -104,6 +104,19 @@ export function buildSnapshot(
    * for the same reason `generatedAt` and `gazetteerBase` are injected above.
    */
   cardLayout?: CardLayout | null,
+  /**
+   * Absolute URL of the collector, or omitted for none.
+   *
+   * Injected for the same reason `gazetteerBase` is: only the caller knows the
+   * origin, and this function has to stay pure. Omitting it is how the publish
+   * *preview* stays silent — the preview renders the real embed bundle inside
+   * the dashboard, and a preview that reported events would file the owner's own
+   * clicks as a visitor's.
+   *
+   * A URL here is necessary but not sufficient: nothing is written unless the
+   * owner has also switched `settings.analytics` on.
+   */
+  collectUrl?: string,
 ): BuildSnapshotResult {
   const usable: Place[] = [];
   const skipped: Place[] = [];
@@ -167,6 +180,10 @@ export function buildSnapshot(
    */
   const publishedLayout = resolveCardLayout(cardLayout ?? {});
 
+  // Resolved once: the snapshot writes it, and the analytics field below asks it
+  // whether the owner switched measurement on.
+  const settings = readEmbedSettings(map.settings);
+
   return {
     snapshot: {
       version: 1,
@@ -213,7 +230,14 @@ export function buildSnapshot(
       ...appearanceField(map),
       ...cardLayoutField(publishedLayout),
       ...gazetteerField(gazetteerBase, usable),
-      settings: readEmbedSettings(map.settings),
+      settings: settings,
+      // Written only when the owner asked for it *and* the caller knows where to
+      // send it. Absent is the whole contract on the embed's side — no field, no
+      // beacon, no listeners, nothing (packages/shared/snapshot.ts) — so an
+      // unset endpoint has to omit the key rather than write an empty one.
+      ...(settings.analytics && collectUrl
+        ? { analytics: { url: collectUrl } }
+        : {}),
       allowedDomains: map.allowedDomains,
     },
     skipped,

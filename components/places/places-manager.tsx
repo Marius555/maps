@@ -28,17 +28,34 @@ export function PlacesManager({
   initialMap,
   initialPlaces,
   placeLimit,
+  initialFilter = "",
+  initialTagIds,
 }: {
   initialMap: AppMap;
   initialPlaces: Place[];
   placeLimit: number;
+  /**
+   * What the list opens filtered to, when something sent the visitor here to
+   * look at a subset — the Analytics table links every count it reports.
+   *
+   * Seeded state rather than controlled: the URL says where you arrived, and the
+   * toolbar owns it from then on. Making the filter a controlled prop would mean
+   * a navigation per click of a filter that is already instant.
+   *
+   * Validated by the page, so an unreadable value in the address bar becomes "no
+   * filter" rather than an empty list nobody can explain.
+   */
+  initialFilter?: PlaceFilter;
+  initialTagIds?: readonly string[];
 }) {
   const { data: map = initialMap } = useMap(initialMap.id, initialMap);
   const { data: places = [] } = usePlaces(initialMap.id, initialPlaces);
 
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<PlaceFilter>("");
-  const [tagIds, setTagIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [filter, setFilter] = useState<PlaceFilter>(initialFilter);
+  const [tagIds, setTagIds] = useState<ReadonlySet<string>>(
+    () => new Set(initialTagIds ?? []),
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
 
   /*

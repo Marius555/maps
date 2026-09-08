@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Live embed harness</title>
+    <style>
+      body {
+        margin: 0 auto;
+        padding: 32px 16px 64px;
+        max-width: 900px;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        color: #1b1d21;
+      }
+      code {
+        background: #f1f3f5;
+        padding: 1px 5px;
+        border-radius: 4px;
+        word-break: break-all;
+      }
+      .note {
+        color: #656b76;
+        font-size: 14px;
+      }
+      .warn {
+        border-left: 3px solid #e8590c;
+        padding-left: 12px;
+        color: #1b1d21;
+        font-size: 14px;
+      }
+      input {
+        width: 100%;
+        font: inherit;
+        padding: 8px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+      }
+      button {
+        font: inherit;
+        padding: 8px 14px;
+        margin-top: 8px;
+        border: 0;
+        border-radius: 6px;
+        background: #1b1d21;
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Live embed harness</h1>
+
+    <p class="note">
+      <code>/embed/dev.html</code> renders a <em>fixture</em>, which is what makes
+      it useful: no Appwrite, no login, no publish. That also means its map id is
+      not real, so the collector drops every beacon it sends and analytics can
+      never be checked there end to end. This page is the other half — it points
+      the same built bundle at a <strong>real published snapshot</strong>, so a
+      session recorded here lands in the real tables and shows up on the map's
+      Analytics tab.
+    </p>
+
+    <p class="warn">
+      <strong>This writes real rows.</strong> Anything done on this page is
+      recorded against that map exactly as a visitor's session would be, and
+      counts towards its monthly ceiling. Use a map you don't mind adding test
+      data to, and delete the rows afterwards.
+    </p>
+
+    <p class="note">
+      Paste the map's live snapshot URL — the <code>data-snapshot</code> value out
+      of the snippet on its Publish page — or pass it as
+      <code>?snapshot=&lt;url&gt;</code>.
+    </p>
+
+    <form id="form">
+      <input
+        id="url"
+        name="snapshot"
+        type="url"
+        placeholder="https://…/files/live-&lt;mapId&gt;/view?project=…"
+        required
+      />
+      <button type="submit">Load map</button>
+    </form>
+
+    <p class="note" id="status"></p>
+
+    <p class="note">
+      What to check, with the Network tab open and filtered to
+      <code>collect</code>: search, click a pin, open a card, press Directions —
+      <strong>no request appears while you do any of it</strong>. Switch to
+      another tab and exactly one <code>POST /api/collect</code> fires, answering
+      <code>204</code>. Reload the Analytics tab for that map and the session is
+      there. Measurement has to be switched on in the Publish designer
+      <em>and the map republished</em> before any of that happens — the endpoint
+      is baked into the snapshot, so a map published before you turned it on
+      carries no endpoint and correctly sends nothing.
+    </p>
+
+    <p class="note">
+      A <code>204</code> with no row behind it is the normal answer to every
+      dropped beacon and is deliberately indistinguishable from a stored one: an
+      unpublished map, measurement switched off, a host not on the allowlist, a
+      map over its ceiling. That is the contract in
+      <code>app/api/collect/route.ts</code> — a stranger's page learns nothing
+      from us — so debug it from the server log, never from the status code.
+    </p>
+
+    <script>
+      const form = document.getElementById("form");
+      const input = document.getElementById("url");
+      const status = document.getElementById("status");
+
+      /*
+       * Everything after `snapshot=` to the end of the string, deliberately not
+       * `URLSearchParams`. A live snapshot URL carries its own `?project=`, so
+       * pasting one in unencoded splits it into two params and the map id
+       * arrives without the project it belongs to — which fails as a 401 from
+       * storage, three layers away from the mistake. Taking the tail raw reads
+       * an encoded and an unencoded URL the same way.
+       */
+      const raw = location.search.match(/[?&]snapshot=(.+)$/);
+      const fromQuery = raw ? safeDecode(raw[1]) : null;
+      if (fromQuery) input.value = fromQuery;
+
+      function safeDecode(value) {
+        try {
+          return decodeURIComponent(value);
+        } catch {
+          return value;
+        }
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        load(input.value);
+      });
+
+      function load(snapshotUrl) {
+        if (!snapshotUrl) return;
+
+        form.hidden = true;
+        status.textContent = `Loading ${snapshotUrl}`;
+
+        /*
+         * The real snippet, built at runtime rather than written into the file —
+         * the URL is one account's map and has no business being committed.
+         *
+         * `boot()` in embed/src/index.ts scans for `script[data-snapshot]` when
+         * the module evaluates, so putting both attributes on this one tag is
+         * the same thing the snippet does; it just arrives a moment later.
+         */
+        const script = document.createElement("script");
+        script.type = "module";
+        script.src = "/embed/map.js";
+        script.dataset.snapshot = snapshotUrl;
+        script.dataset.eager = "";
+        script.dataset.height = "520";
+        status.after(script);
+      }
+
+      if (fromQuery) load(fromQuery);
+    </script>
+  </body>
+</html>

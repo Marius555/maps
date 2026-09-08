@@ -47,6 +47,9 @@ export const SHAPE_KINDS = ["circle", "polygon", "line"];
 // lib/validation/shape.schema.ts: this script is plain .mjs and cannot import TS.
 export const SHAPE_STROKE_STYLES = ["solid", "dashed", "dotted"];
 export const PLANS = ["free", "starter", "pro"];
+// Hand-copied from lib/validation/collect.schema.ts, the way SHAPE_KINDS is
+// copied from lib/validation/shape.schema.ts.
+export const DEVICE_KINDS = ["desktop", "tablet", "mobile"];
 export const SUBSCRIPTION_STATUSES = [
   "active",
   "past_due",
@@ -361,6 +364,111 @@ export const TABLES = [
     ],
     indexes: [
       { key: "idx_subs_userId", type: "unique", columns: ["userId"], orders: ["asc"] },
+    ],
+  },
+  {
+    // One row per visitor session on a published map — the raw material of the
+    // Analytics tab. Append-only: nothing ever updates or deletes a row here
+    // except the retention script.
+    //
+    // A row per *session* rather than per event, and that is the whole design.
+    // The embed queues every interaction in memory and flushes once, so a
+    // visitor who opens four locations and searches twice is one row and one
+    // write, not seven. That ratio is what keeps the per-visitor cost near zero
+    // and is the only reason a beacon is allowed past CLAUDE.md §2 at all
+    // (docs/notes/analytics.md carries the arithmetic).
+    //
+    // `events` is therefore a JSON array in a text column: read whole, never
+    // queried on, stored off-page so it cannot eat the 64KB row limit. Same
+    // argument `cardDesigns.cardLayout` makes.
+    //
+    // No `userId`. The writer is an anonymous visitor and the row belongs to
+    // the map, which belongs to an owner — see the head of
+    // lib/repositories/analytics.repository.ts for why this is the one table
+    // written on behalf of nobody.
+    id: "mapSessions",
+    name: "Map sessions",
+    columns: [
+      varchar("mapId", 36, { required: true }),
+      datetime("startedAt", { required: true }),
+      // The UTC bucket key the daily rollup groups on. A varchar rather than a
+      // datetime because it is only ever compared for equality — "2026-09-07"
+      // is a name, not an instant, and a date column would invite a timezone.
+      varchar("day", 10),
+      // ISO 3166-1 alpha-2, from whatever the host's edge put on the request.
+      varchar("country", 2),
+      varchar("city", 64),
+      // Where the visitor was, coarsely: the host's own geo headers when it
+      // sets them, otherwise the centroid of `country`. Never the browser's
+      // Geolocation API — that is the visitor's precise position and belongs to
+      // them, not to us.
+      float("lat"),
+      float("lng"),
+      // 45 is the longest possible IPv6 text form (an IPv4-mapped address).
+      // Stored whole; lib/analytics/collect/mask-ip.ts masks it at render.
+      varchar("ip", 45),
+      // Which page of the customer's own site the map is on. `host` answers
+      // "is someone else embedding this", `path` answers "which of my pages
+      // is it working on".
+      varchar("host", 255),
+      varchar("path", 255),
+      varchar("referrer", 255),
+      enumeration("device", DEVICE_KINDS),
+      text("events"),
+      integer("eventCount", { min: 0, xdefault: 0 }),
+    ],
+    indexes: [
+      {
+        key: "idx_mapsessions_map_time",
+        type: "key",
+        columns: ["mapId", "startedAt"],
+        orders: ["asc", "desc"],
+      },
+      {
+        key: "idx_mapsessions_map_day",
+        type: "key",
+        columns: ["mapId", "day"],
+        orders: ["asc", "asc"],
+      },
+    ],
+  },
+  {
+    // The daily rollup: one row per map per UTC day, holding everything the
+    // Analytics tab shows for a day that is over.
+    //
+    // It exists because Appwrite cannot count. There is no atomic increment and
+    // no aggregate query, so a 90-day range would otherwise mean paging every
+    // session row of every day on every page load. A completed day never
+    // changes, so it is counted once and read forever after.
+    //
+    // Written lazily, by the dashboard, on the first read of a range that
+    // contains an unrolled day — no cron and no scheduled function, because
+    // neither exists in this project yet (§12 notes Vercel Hobby caps cron at
+    // once daily). Today is never rolled up; it is counted live from
+    // `mapSessions` because it is still changing.
+    id: "mapDaily",
+    name: "Map analytics daily",
+    columns: [
+      varchar("mapId", 36, { required: true }),
+      varchar("day", 10, { required: true }),
+      integer("sessions", { min: 0, xdefault: 0 }),
+      integer("views", { min: 0, xdefault: 0 }),
+      integer("interactions", { min: 0, xdefault: 0 }),
+      // Per-event-type counts plus the day's top places, searches, countries,
+      // devices and referrers. Text for the same reason `events` is: read
+      // whole, never queried on.
+      text("totals"),
+    ],
+    indexes: [
+      // Unique, because the rollup is written from a read path that several
+      // dashboard requests can enter at once. The constraint is what makes a
+      // duplicate a 409 to swallow rather than a second row to double-count.
+      {
+        key: "idx_mapdaily_map_day",
+        type: "unique",
+        columns: ["mapId", "day"],
+        orders: ["asc", "asc"],
+      },
     ],
   },
 ];

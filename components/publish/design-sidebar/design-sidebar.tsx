@@ -13,6 +13,7 @@ import { PublishStatus } from "../publish-status";
 import { ShareDialog } from "../share-dialog/share-dialog";
 import { ColorsGroup } from "./colors-group";
 import { MapControlsGroup } from "./map-controls-group";
+import { MeasurementGroup } from "./measurement-group";
 import { PanelGroup } from "./panel-group";
 import { RowsGroup } from "./rows-group";
 import type { EmbedDesign } from "./use-embed-design";
@@ -116,6 +117,13 @@ export function DesignSidebar({
 
           <PropertyFold id="colors" title="Colours">
             <ColorsGroup {...design} />
+          </PropertyFold>
+
+          {/* Last, because it is the only group that is not about how the map
+              looks — and the only one whose consequences land on somebody other
+              than the owner. See its own header. */}
+          <PropertyFold id="measurement" title="Visitor analytics">
+            <MeasurementGroup {...design} />
           </PropertyFold>
         </Accordion>
       </ScrollShadow>

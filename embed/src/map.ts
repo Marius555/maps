@@ -45,6 +45,7 @@ import { pinColorOfTags, tagChipsOf } from "@/packages/shared/tags";
 
 import { buildPopup, buildShapePopup } from "./popup";
 import type { Fix } from "./search";
+import type { Track } from "./track";
 import {
   CARD_MARGIN,
   cardBands,
@@ -232,12 +233,28 @@ export type CreateMapOptions = {
    * this can only improve the answer or leave it alone.
    */
   onLocated?: (at: Fix) => void;
+  /**
+   * Where interactions are reported, or omitted for a map that reports nothing.
+   *
+   * Defaulted to a no-op below rather than tested at each call site: there are
+   * six of them in this file, and `if (track)` six times is six chances to add
+   * a seventh without one. See ./track.ts for why an unmeasured map costs a
+   * function call and nothing else.
+   */
+  track?: Track;
 };
 
 export function createMap(
   container: HTMLElement,
   snapshot: MapSnapshot,
-  { style, focusPlaceId = null, onSelect, getMe, onLocated }: CreateMapOptions,
+  {
+    style,
+    focusPlaceId = null,
+    onSelect,
+    getMe,
+    onLocated,
+    track = () => {},
+  }: CreateMapOptions,
 ): MapHandle {
   const map = new MapLibreMap({
     container,
@@ -365,6 +382,16 @@ export function createMap(
    */
   map.on("load", () => {
     map.getContainer().closest(".lm-root")?.setAttribute("data-lm-ready", "1");
+
+    /*
+     * One view per map that actually drew.
+     *
+     * On `load` rather than at mount, and the difference is the whole meaning of
+     * the number: `mount` fires when a lazily-mounted map scrolls into view, but
+     * a map whose style or tiles never arrived also mounts. Counting here means
+     * "views" is maps a visitor could see, not maps we started building.
+     */
+    track("view");
   });
 
   /*
@@ -465,6 +492,11 @@ export function createMap(
     if (openPlaceId === id) return;
 
     openPlaceId = id;
+    // Every route into a card converges here — pin, list row, shape, deep link,
+    // and a filter evicting the open one — so this single line is the whole of
+    // "which location did visitors look at". Instrumenting the four call sites
+    // instead is how one of them ends up uncounted.
+    if (id) track("open", { id });
     onSelect?.(id);
   };
 
@@ -514,9 +546,12 @@ export function createMap(
     });
 
     addLayers(map, snapshot);
-    wireInteractions(map, (place) => showPopup(place));
-    wireShapeInteractions(map, snapshot.shapes ?? [], (shape, at) =>
-      showShapePopup(shape, at),
+    wireInteractions(map, (place) => showPopup(place), track);
+    wireShapeInteractions(
+      map,
+      snapshot.shapes ?? [],
+      (shape, at) => showShapePopup(shape, at),
+      track,
     );
 
 
@@ -1345,6 +1380,7 @@ function wireShapeInteractions(
    * spanning the viewport, a card anchored to the middle can be off screen.
    */
   onSelect: (shape: SnapshotShape, at: LngLatLike) => void,
+  track: Track,
 ): void {
   if (shapes.length === 0) return;
 
@@ -1388,6 +1424,7 @@ function wireShapeInteractions(
     const shape = shapeAt(event.point);
     if (!shape) return;
 
+    track("shape", { id: shape.id });
     onSelect(shape, event.lngLat);
   });
 
@@ -1447,19 +1484,35 @@ function hitsAPlace(map: MapLibreMap, point: PointLike): boolean {
 function wireInteractions(
   map: MapLibreMap,
   onSelect: (place: SnapshotPlace) => void,
+  track: Track,
 ): void {
   for (const layer of [POINT_LAYER, PIN_LAYER]) {
     map.on("click", layer, (event) => {
       const feature = event.features?.[0];
       if (!feature) return;
 
-      onSelect(readPlace(feature));
+      const place = readPlace(feature);
+      /*
+       * Reported beside `open`, not instead of it.
+       *
+       * `setOpen` counts every card that opened however it was reached; this
+       * counts the ones reached by clicking the map itself. Both are wanted —
+       * the first is "which location do people look at", the second is "do they
+       * use the map or the list", and a customer whose visitors never touch the
+       * map should probably publish a taller panel.
+       */
+      track("pin", { id: place.id });
+      onSelect(place);
     });
   }
 
   map.on("click", CLUSTER_LAYER, (event) => {
     const feature = event.features?.[0];
     if (!feature) return;
+
+    // No id: a cluster is a number the map invented at this zoom, and it names
+    // nothing that survives the next one.
+    track("cluster");
 
     const clusterId = feature.properties?.cluster_id;
     if (typeof clusterId !== "number") return;

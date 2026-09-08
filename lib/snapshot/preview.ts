@@ -12,7 +12,7 @@ import { buildSnapshot } from "./build";
  * embed bundle. That is the whole point: the preview is not a reimplementation
  * of the embed, it is the embed, and so it cannot drift from what ships.
  *
- * Two deliberate differences from the published article:
+ * Three deliberate differences from the published article:
  *
  * `allowedDomains` is cleared. The list exists to stop the snippet working on
  * sites that aren't the customer's — and the dashboard is one of those sites.
@@ -28,6 +28,12 @@ import { buildSnapshot } from "./build";
  * a fresh timestamp on every call would make two otherwise identical previews
  * compare unequal — which is what the caller uses to decide whether to rebuild
  * the frame at all.
+ *
+ * No collector URL is passed, so the preview reports nothing however the owner
+ * has set `settings.analytics`. It is not an omission to fix: the preview is the
+ * real embed bundle running inside the dashboard, and a preview that reported
+ * would file the owner's own clicks on their own map as a visitor's. The switch
+ * still shows its state in the designer; only the measurement is withheld.
  */
 export function buildPreviewSnapshot(
   map: AppMap,

@@ -18,13 +18,25 @@ search and tag filters, per-location editing with search-on-submit geocoding and
 upload, tags with colours, custom pin icons, shapes (circles, polygons, lines), routes,
 sixteen basemap looks with label and layer controls, import from CSV / XLSX / XML / Google
 Sheets with column detection and a drag-to-fix review step, the card designer (saved per
-account, overridable per pin), the publish designer, and publish → static snapshot → embed
+account, overridable per pin), the publish designer, publish → static snapshot → embed
 bundle (clustering, cards, tag filters, client-side search, find-nearest) with the one-line
-snippet and the domain allowlist.
+snippet and the domain allowlist, and a per-map Analytics tab reporting what visitors did.
 
 **Routes were built out of order, knowingly.** §11 lists routing as out of scope for v1 and
 §10 says Week 4 is next; that call was made deliberately, against a rival shipping the
 feature, and is recorded here rather than quietly overriding either section.
+
+**Analytics is the second such call, and it bends both §11 and §2.** The tab reports what
+*visitors* to a published map did: search terms with their match counts, which locations
+they opened, which controls they pressed, where in the world they were. That needs a beacon
+on a customer's website, which §2 forbids by default — so the override is recorded rather
+than assumed. **The number that makes it survivable: one batched `sendBeacon` per session
+costs about $3 per million map sessions on Appwrite, against the $7-per-*thousand* §2 exists
+to beat.** Two things keep it there and must not be undone — the batching (one request per
+session, never per event) and the per-map monthly ceiling in `SESSION_LIMITS`. The content
+statistics this tab used to show are deleted; what was actionable in them was already a
+filter on the Locations page. Full reasoning, and the five blockers it had to answer, in
+`docs/notes/analytics.md`.
 
 **Not built yet, and next — all of Week 4:** pricing page, plan-limit UI, MoR billing +
 webhook, landing page, one platform page (Webflow first), docs with screenshots,
@@ -110,6 +122,11 @@ one exists: `docs/notes/environment.md`.
 - Server-only, optional: `SNAPSHOT_STORAGE_ID`, defaulting to `STORAGE_ID` — Appwrite
   Cloud's free plan allows one bucket per project, which is why `json` is in the assets
   bucket's allowed extensions.
+- Browser-safe, optional: `NEXT_PUBLIC_COLLECT_URL` — where a published map posts what its
+  visitors did. Unset means the dashboard's own origin, which is what makes development and
+  self-hosting work with no config. **Absolute, always**: the embed runs on a customer's
+  page, so a relative path would post to *their* server. Nothing is written into a snapshot
+  unless the owner has also switched measurement on.
 - Browser-safe, optional: `NEXT_PUBLIC_TILES_URL` (**unset means OpenFreeMap and is the
   current state**; it moves `STYLE_URLS` and the attribution together, and
   `npm run migrate:style-host` moves maps already published) and
@@ -155,7 +172,7 @@ Area-specific invariants live at the head of each file in the table below.
   it `retired` so it stops being offered and keeps being read.
 - **One writer per JSON blob column.** `updateMap` serialises `settings` whole, so two
   forms writing it is a lost update. `useEmbedDesign` is the only writer.
-- **The embed's own-code budget is 46KB and it currently sits at 42.7KB.** Run
+- **The embed's own-code budget is 46KB and it currently sits at 45.4KB.** Run
   `npm run build:embed` after any change under `/embed` or `/packages/shared` — `npm run
   check` does not. Do not raise the budget to get past it (§4).
 - **Adding to `EditorMode` something that is not a `ShapeKind` means auditing every
@@ -183,6 +200,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `lib/map/themes.ts`, `lib/map/style*.ts`, `packages/shared/style-tint.ts`, `scripts/tile-style.mjs` | `docs/notes/basemaps-and-tiles.md` |
 | `components/tags/**`, `packages/shared/tags.ts`, `packages/shared/pin-*.ts`, `components/map/pin-marker.ts` | `docs/notes/tags-and-pins.md` |
 | `components/editor/**`, `lib/import/**`, `lib/map/edge-autoscroll.ts`, any `loading.tsx`, `Container` sizes | `docs/notes/editor-and-layout.md` |
+| `components/analytics/**`, `lib/analytics/**`, `embed/src/track.ts`, `app/api/collect/**` | `docs/notes/analytics.md` |
 
 Self-hosting runbooks, unchanged: `docs/self-hosting-geocoding.md`,
 `docs/self-hosting-routing.md`, `docs/self-hosting-tiles.md`.
@@ -362,6 +380,18 @@ alone (`{lng,lat,radius}` or `{points}`), so there is no second copy to disagree
 with it. The domain type recombines them into the union in
 `packages/shared/shapes.ts`.
 
+### `mapSessions` / `mapDaily`
+Visitor analytics, and the only rows in this app written by somebody who is not signed in.
+`mapSessions` is one append-only row per *session* (not per event) — `mapId` · `startedAt` ·
+`day` · `country` · `city` · `lat` · `lng` · `ip` · `host` · `path` · `referrer` · `device` ·
+`events` (JSON) · `eventCount`. `mapDaily` is the rollup a completed day is folded into once
+and read from forever after, because Appwrite has no aggregate query and no atomic increment.
+
+Rows carry **no owner permission**: table permissions are empty with `rowSecurity: true`, so
+only the admin client reads them, and that client is only ever held by the dashboard. The
+write path takes no `RepoContext` and cannot — see the head of
+`lib/repositories/analytics.repository.ts` before touching it.
+
 ### `subscriptions`
 `userId` · `billingCustomerId` · `billingSubscriptionId` · `plan` · `status` · `currentPeriodEnd`
 
@@ -451,7 +481,7 @@ One deviation worth knowing: **the embed's search does not geocode.** It filters
 
 ## 11. Explicitly out of scope for v1
 
-Teams and permissions · public API · **turn-by-turn directions** (a route's line, distance and drive are in — see §0; step-by-step navigation is not, and we link out to a maps app for that) · analytics dashboards · custom styling beyond 3–4 presets · uploaded image/floor-plan maps · mobile apps · white-labelling · multi-language UI · autocomplete · SEO location pages.
+Teams and permissions · public API · **turn-by-turn directions** (a route's line, distance and drive are in — see §0; step-by-step navigation is not, and we link out to a maps app for that) · ~~analytics dashboards~~ (**built anyway, deliberately — §0 records the override and `docs/notes/analytics.md` the reasoning**) · custom styling beyond 3–4 presets · uploaded image/floor-plan maps · mobile apps · white-labelling · multi-language UI · autocomplete · SEO location pages.
 
 Each of these is a week not spent getting a paying customer. If one seems necessary, say why and ask first.
 

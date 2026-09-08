@@ -95,6 +95,17 @@ export const embedSettingsSchema = z.object({
   scrollZoom: z.boolean(),
 
   /*
+   * Whether this map reports what its visitors do.
+   *
+   * Required in the resolved shape like every other flag, and `false` in the
+   * defaults below — the one setting whose default must never flip, because
+   * turning it on starts collecting personal data belonging to somebody else's
+   * visitors. It reaches a customer's site only when its owner switches it on
+   * and republishes.
+   */
+  analytics: z.boolean(),
+
+  /*
    * The one that stays optional in the resolved shape too, because absent is a
    * real answer here rather than a missing one: no colour override means the
    * stylesheet's own token, which is what follows `.lm-root--dark`.
@@ -148,6 +159,12 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   // Held back deliberately: a map on someone's landing page must not swallow
   // the page scroll.
   scrollZoom: false,
+
+  // Off, and this is the one default in this table that is not a design
+  // opinion. Every other field here describes what a map looks like; this one
+  // decides whether we start recording strangers. An owner asks for that
+  // explicitly or it does not happen.
+  analytics: false,
 };
 
 /**
@@ -198,6 +215,7 @@ export function readEmbedSettings(
     fullscreen: readFlag(settings.fullscreen, d.fullscreen),
     scale: readFlag(settings.scale, d.scale),
     scrollZoom: readFlag(settings.scrollZoom, d.scrollZoom),
+    analytics: readFlag(settings.analytics, d.analytics),
 
     colors: readColors(settings.colors),
   };

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ChartColumn,
   LayoutTemplate,
   MapIcon,
   MapPin,
@@ -45,6 +46,9 @@ export function SidebarMapNav({
     // have to have some before designing what they show.
     { href: `/maps/${mapId}/card`, label: "Card", icon: LayoutTemplate },
     { href: `/maps/${mapId}/publish`, label: "Publish", icon: Share2 },
+    // After Publish, because it reports on the map rather than changing it —
+    // and before Settings, which is where you go to change how it works.
+    { href: `/maps/${mapId}/analytics`, label: "Analytics", icon: ChartColumn },
     { href: `/maps/${mapId}/settings`, label: "Settings", icon: Settings },
   ];
 

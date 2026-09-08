@@ -15,6 +15,37 @@ export const PLAN_LIMITS = {
   pro: { maps: 15, places: 3000, shapes: 250 },
 } as const;
 
+/**
+ * The analytics half of §6's table: how many visitor sessions a map may record
+ * in a calendar month, and how long they are kept.
+ *
+ * **Separate from `PLAN_LIMITS` because these are not the same kind of number.**
+ * Everything in that table is a thing the *owner* creates and can see; these two
+ * bound something strangers cause. A map that hits its ceiling is not a customer
+ * doing something wrong, so nothing here throws a `PlanLimitError` at anybody —
+ * the collector simply stops writing and the dashboard says so.
+ *
+ * §6's plan table already reads "unlimited (badge shown)" under Views, and that
+ * stays true: this caps rows we store, not maps a visitor may load. A map past
+ * its ceiling keeps working perfectly for every visitor; it just stops being
+ * measured until the month turns.
+ *
+ * **Not enforced against a real plan yet**, because everybody reads as `free`
+ * until Week 4 wires up billing — which would cap every map on the app at a
+ * thousand sessions. `SESSION_LIMITS.free` is therefore set where a free map
+ * genuinely sits, and the pricing pass is what tightens it. Provisioned now for
+ * the reason the `subscriptions` table was: so the code reaches its final shape
+ * before the plan does.
+ */
+export const SESSION_LIMITS = {
+  free: { sessionsPerMonth: 20_000, retentionDays: 30 },
+  starter: { sessionsPerMonth: 200_000, retentionDays: 180 },
+  pro: { sessionsPerMonth: 2_000_000, retentionDays: 365 },
+} as const satisfies Record<
+  PlanId,
+  { sessionsPerMonth: number; retentionDays: number }
+>;
+
 export type PlanId = keyof typeof PLAN_LIMITS;
 
 /**

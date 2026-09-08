@@ -121,6 +121,11 @@ export function buildPopup(
   // card alone: a shape holds a name and a sentence and is meant to be smaller
   // (see `buildShapePopup`).
   const root = el("div", "lm-popup lm-popup--place");
+  // Which location this card is for, for the one delegated listener that counts
+  // link presses across both the card and the results list (embed/src/track.ts).
+  // An attribute rather than a closure because that listener lives on the root
+  // and never sees the builder that made the row it was clicked in.
+  root.dataset.lmPlace = place.id;
   /*
    * `width`, not only `maxWidth`, and that one word is a real bug fixed.
    *

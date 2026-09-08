@@ -37,6 +37,30 @@ const nextConfig: NextConfig = {
       // again, and the failure without it is the same shape: labels and icons
       // that render perfectly on our domain and nowhere else.
       { source: "/tiles/:path*", headers: embedCorsHeaders },
+      /*
+       * The analytics collector, and the one place `/api` is opened up.
+       *
+       * Everything above is a static public file. This is a route handler that
+       * writes to the database, so the reasoning has to be made separately
+       * rather than inherited:
+       *
+       * - `*` is still correct, because *any* domain may legitimately post here.
+       *   A published map can be embedded anywhere its owner allows, and the
+       *   allowlist that decides which is checked inside the handler against the
+       *   browser-set `Origin` — not by refusing the response.
+       * - It grants nothing. The route reads no cookie, returns no body, and
+       *   answers 204 to everything it drops, so a permissive header lets a
+       *   stranger's page learn exactly what it could learn by getting no
+       *   response at all.
+       * - Without it the write still happens — a `sendBeacon` is delivered
+       *   whatever the response says — but the browser logs a CORS error on the
+       *   customer's own site, and a stranger's site must never sprout our
+       *   diagnostics (embed/src/index.ts).
+       *
+       * Scoped to the exact path. `/api/:path*` would open every authenticated
+       * route in the app to cross-origin reads.
+       */
+      { source: "/api/collect", headers: embedCorsHeaders },
     ];
   },
 };

@@ -185,6 +185,9 @@ export function createList(
 
   function buildRow(place: SnapshotPlace, origin: Located | null): HTMLElement {
     const item = el("li", "lm-list__item");
+    // See the same line in ./popup.ts — one delegated listener counts link
+    // presses on both surfaces and reads the location off the nearest ancestor.
+    item.dataset.lmPlace = place.id;
 
     // The whole card is the button, so the tap target is the row rather than
     // the name. Links live outside it — an <a> inside a <button> is neither

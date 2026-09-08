@@ -19,18 +19,23 @@ import {
   DEFAULT_SHAPE_COLOR,
   DEFAULT_SHAPE_OPACITY,
 } from "@/lib/validation/shape.schema";
-import type {
-  AppMap,
-  Group,
-  GroupRow,
-  MapCategory,
-  MapField,
-  MapTagGroup,
-  MapRow,
-  Place,
-  PlaceRow,
-  Shape,
-  ShapeRow,
+import {
+  DEVICE_KINDS,
+  type AppMap,
+  type DeviceKind,
+  type Group,
+  type GroupRow,
+  type MapCategory,
+  type MapField,
+  type MapSession,
+  type MapSessionRow,
+  type MapTagGroup,
+  type MapRow,
+  type Place,
+  type PlaceRow,
+  type SessionEvent,
+  type Shape,
+  type ShapeRow,
 } from "./types";
 
 /**
@@ -221,4 +226,78 @@ export function toPlace(row: PlaceRow): Place {
     createdAt: row.$createdAt,
     updatedAt: row.$updatedAt,
   };
+}
+
+/**
+ * A stored visitor session → the shape the dashboard reads.
+ *
+ * Same never-throw contract as every mapper above, and it matters more here than
+ * anywhere else: these rows are written by code running on somebody else's
+ * website, so "an older embed wrote this" is the *normal* case rather than the
+ * exceptional one. A session whose events will not parse comes back with none
+ * rather than taking the Analytics page down.
+ */
+export function toMapSession(row: MapSessionRow): MapSession {
+  return {
+    id: row.$id,
+    mapId: row.mapId,
+    // `$createdAt` is the fallback rather than the primary: `startedAt` is the
+    // visitor's own clock, which is what the offsets inside `events` are
+    // measured from, so the two have to come from the same place.
+    startedAt: row.startedAt || row.$createdAt,
+    day: row.day || row.startedAt.slice(0, 10),
+    country: row.country ?? null,
+    city: row.city ?? null,
+    lat: typeof row.lat === "number" ? row.lat : null,
+    lng: typeof row.lng === "number" ? row.lng : null,
+    ip: row.ip ?? null,
+    host: row.host ?? "",
+    path: row.path ?? "",
+    referrer: row.referrer ?? "",
+    device: toDeviceKind(row.device),
+    events: toSessionEvents(row.events),
+  };
+}
+
+function toDeviceKind(value: string | null | undefined): DeviceKind {
+  return DEVICE_KINDS.includes(value as DeviceKind)
+    ? (value as DeviceKind)
+    : "desktop";
+}
+
+/**
+ * The events array, with anything unrecognisable dropped rather than repaired.
+ *
+ * One malformed entry loses one interaction; the session keeps the rest. The
+ * alternative — rejecting the row — would silently lose a whole visitor because
+ * of one key, and the count on the dashboard would disagree with the row it is
+ * counting.
+ */
+function toSessionEvents(value: string | null | undefined): SessionEvent[] {
+  const raw = parseJson<unknown[]>(value, []);
+  if (!Array.isArray(raw)) return [];
+
+  const events: SessionEvent[] = [];
+
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+
+    const { t, o, ...rest } = entry as Record<string, unknown>;
+    if (typeof t !== "string" || !t) continue;
+
+    const data: Record<string, string | number> = {};
+
+    for (const [key, item] of Object.entries(rest)) {
+      if (typeof item === "string") data[key] = item;
+      else if (typeof item === "number" && Number.isFinite(item)) data[key] = item;
+    }
+
+    events.push({
+      type: t,
+      at: typeof o === "number" && Number.isFinite(o) ? o : 0,
+      data,
+    });
+  }
+
+  return events;
 }

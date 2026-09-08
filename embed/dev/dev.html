@@ -181,6 +181,23 @@
       must raise <em>no second prompt</em>.
     </p>
     <p class="note">
+      <strong>One beacon per session, and not one before the tab goes away.</strong>
+      This fixture carries an <code>analytics</code> block, so open the Network
+      tab and click a pin, type in the search box and press Directions: there
+      must be <em>no</em> request to <code>/api/collect</code> while you do it.
+      Then switch to another tab &mdash; exactly one <code>POST</code> appears,
+      and it answers <code>204</code>. A second flush must never follow it.
+      The fixture&rsquo;s map id is not a real one, so the collector drops the
+      row on purpose; 204 is the right answer either way, because a stranger&rsquo;s
+      page must learn nothing from us. The URL is hard-coded to port 3000 &mdash;
+      on another port the request fails, which is the harness being wrong rather
+      than the embed. <strong>So what this page proves is that the embed
+      <em>sends</em> correctly, never that anything was stored</strong> &mdash;
+      those are different halves and a 204 looks identical for both. For the
+      other half use <code>/embed/live.html</code>, which points the same bundle
+      at a real published snapshot and does write rows.
+    </p>
+    <p class="note">
       <strong>Whatever the browser says is what gets sent.</strong> Every
       Directions link &mdash; the rows, the card&rsquo;s links row and a Button
       block left on its default action &mdash; carries an
