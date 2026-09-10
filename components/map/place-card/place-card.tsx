@@ -304,25 +304,28 @@ export function PlaceCard({
     : undefined;
 
   /**
-   * The pencil over a block, once this card is in edit mode.
+   * The press target over a block, once this card is in edit mode.
    *
    * Every block gets one, filled in or not, which is the whole difference from
    * `renderSlot`: a slot appears where a location has nothing, and this is how
-   * the design of what it *does* have is reached. On an empty block the two sit
-   * together -- the dashed `+` is the block's content and this is a badge in its
-   * corner -- which is why the badge is a corner and not the whole box. Two
-   * press targets stacked on one 24px line is unusable, and the `+` is the one
-   * that has to keep the box.
+   * the design of what it *does* have is reached.
+   *
+   * On an empty block the two used to sit together -- the dashed `+` owning the
+   * box and a pencil badge in its corner -- and they no longer do. This one owns
+   * the block outright and everything under it is `inert` while edit mode is on,
+   * the `+` included, so the two gestures are separated by mode rather than by
+   * pixels: the card as it normally stands is where a location's *content* is
+   * filled in, and edit mode is where the *design* of a block is changed. See
+   * `CardEditTarget`, which holds the argument.
    */
   const renderOverlay =
     slots && isEditing
-      ? (block: CardBlock, hasSlot: boolean) => {
+      ? (block: CardBlock) => {
           if (!place) return null;
 
           return (
             <CardEditTarget
               block={block}
-              hasSlot={hasSlot}
               isOpen={openEditorId === block.id}
               onOpen={() =>
                 setOpenPanel({

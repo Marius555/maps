@@ -1,6 +1,5 @@
 "use client";
 
-import { Accordion } from "@heroui/react";
 
 import { ColorPickerField } from "@/components/ui/color-picker-field";
 import type { MapField, Place } from "@/lib/repositories/types";
@@ -25,6 +24,7 @@ import {
   RADIUS_STOPS,
 } from "./property-scales";
 import { PropertyFold } from "@/components/ui/properties/property-fold";
+import { PropertyFolds } from "@/components/ui/properties/property-folds";
 
 /**
  * The numbers behind the card, for the things a drag cannot say.
@@ -138,7 +138,7 @@ export function CardProperties({
           halves of this tab are one screen, and a flat column on one side
           against a stack of folds on the other would read as two different
           panels. See `PropertyFold`. */}
-      <Accordion allowsMultipleExpanded defaultExpandedKeys={["size"]}>
+      <PropertyFolds>
         <PropertyFold id="size" title="Size">
           <PropertyScale
             label="Width"
@@ -276,7 +276,7 @@ export function CardProperties({
             />
           ) : null}
         </PropertyFold>
-      </Accordion>
+      </PropertyFolds>
     </section>
   );
 }

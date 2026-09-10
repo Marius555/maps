@@ -22,13 +22,34 @@
  * pencil, the close X, `.card-slot`'s dashed boxes) flips with it, which is
  * correct: those sit *on* the card.
  *
+ * **Auto is the one style that has to ask somebody, and asking the wrong
+ * somebody is the second bug this file has had.** This used to read
+ * `window.matchMedia("(prefers-color-scheme: dark)")` directly, which is the
+ * *operating system's* preference — and the dashboard's theme is not that. HeroUI
+ * resolves localStorage first (`components/providers/theme-script.tsx`), so an
+ * owner whose OS is dark and who picked **Light** in the account menu got
+ * `<html class="light">`, a light basemap, and a card wearing `.dark` on top of
+ * it: `bg-surface` at `oklch(19% 0 0)`, a near-black card and a near-black dashed
+ * border on the gallery, in light mode. Worse, being a `typeof window` branch
+ * read *during render*, it made the server emit `light` and the client `dark` on
+ * the same element — the hydration mismatch React reported against
+ * `card-frame.tsx`.
+ *
+ * The answer therefore arrives as an argument, from `usePrefersDark()`, which
+ * reads the `.dark` class off `<html>` through `useSyncExternalStore`. That is
+ * the same source the basemap itself uses (`components/map/use-maplibre.ts`), so
+ * the card and the map under it can no longer disagree; it honours an explicit
+ * Light or Dark choice as well as "system"; it re-renders when the theme is
+ * toggled, which `matchMedia`-at-render never did; and it has a server snapshot,
+ * so there is nothing left to mismatch.
+ *
  * This deliberately mirrors `basemapFields` in lib/snapshot/build.ts and
  * `resolveTheme` in embed/src/index.ts rather than sharing code with either.
  * `basemapFields` is a snapshot writer and answers `autoDark: true` with no
  * theme at all, because Auto's answer belongs to a visitor's browser and not to
  * a publish; `resolveTheme` is the embed's, and /lib is closed to the embed
  * (CLAUDE.md §4). What is shared is the *rule*, and it is one line long: Auto
- * asks the browser, everything else asks the basemap.
+ * asks the viewer, everything else asks the basemap.
  */
 
 import {
@@ -41,25 +62,21 @@ import {
 /**
  * `"light"` or `"dark"`, to be put on the element wrapping a card.
  *
- * For an Auto map this reads the *browser's* colour scheme and not the
- * dashboard's chosen theme, and that difference is the whole point: an owner
- * working in dark mode on a map pinned to a light basemap must still see the
- * light card their visitors get. Auto is the one style where a visitor's own
- * preference decides, so it is the one style where the dashboard's window is a
- * fair stand-in for one.
+ * `prefersDark` is only consulted for Auto, and the caller reads it from
+ * `usePrefersDark()`. Everything else is what its owner pinned and looks the
+ * same for every viewer — an owner working in light mode on a map pinned to the
+ * Dark basemap must still see the dark card their visitors get, which is the
+ * whole difference between a pinned style and Auto.
  *
- * Guarded on `matchMedia`, which a server render does not have — this runs
- * during the first client render of components that are already `"use client"`,
- * and light is the answer every card had before this existed.
+ * The same two arguments in the same order as `shouldDarkenStyle`
+ * (lib/map/style.ts), which answers the neighbouring question about the basemap
+ * itself, on purpose.
  */
-export function cardThemeClass(style: MapStyleKey): "light" | "dark" {
-  if (isAutoMapStyle(style)) {
-    return typeof window !== "undefined" &&
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  }
+export function cardThemeClass(
+  style: MapStyleKey,
+  prefersDark: boolean,
+): "light" | "dark" {
+  if (isAutoMapStyle(style)) return prefersDark ? "dark" : "light";
 
   return isDarkMapStyle(resolveMapStyle(style)) ? "dark" : "light";
 }

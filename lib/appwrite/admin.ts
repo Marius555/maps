@@ -1,6 +1,6 @@
 import "server-only";
 
-import { Account, Client, Storage, TablesDB } from "node-appwrite";
+import { Account, Client, Storage, TablesDB, Users } from "node-appwrite";
 
 import { env } from "@/lib/env";
 import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID } from "./config";
@@ -24,4 +24,17 @@ export const admin = {
   account: new Account(client),
   tablesDB: new TablesDB(client),
   storage: new Storage(client),
+  /**
+   * The users service, which is the *other* half of auth and is not reachable
+   * from `account`.
+   *
+   * `account` always answers about whoever the client is acting as — with an API
+   * key that is nobody, which is why `authenticateUser` has to re-read the
+   * profile through a session client. `users` addresses an account by id without
+   * being it, and that is the only way to do the three things the email flows
+   * need: mint a token for someone who is not signed in, flip
+   * `emailVerification`, and set a password for a person who by definition
+   * cannot remember theirs.
+   */
+  users: new Users(client),
 } as const;

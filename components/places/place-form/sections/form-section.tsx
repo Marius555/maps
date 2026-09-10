@@ -1,7 +1,10 @@
 "use client";
 
 import { Disclosure } from "@heroui/react";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+
+import { revealFold } from "@/lib/ui/reveal-fold";
+import { useFormSectionGroup } from "./form-section-group";
 
 /**
  * A part of the form you can put away.
@@ -29,7 +32,9 @@ import { useState } from "react";
  *
  * `open` is forced when the section holds a validation error — a message nobody
  * can see is the same as no message, and a form that refuses to save without
- * saying why is the worst version of this.
+ * saying why is the worst version of this. It is also the one thing allowed to
+ * break the group's one-at-a-time rule: two errored sections both stay open,
+ * because the alternative is a form that hides half of what is wrong with it.
  */
 export function FormSection({
   title,
@@ -43,12 +48,47 @@ export function FormSection({
   hasError?: boolean;
   children: React.ReactNode;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const id = useId();
+  const group = useFormSectionGroup();
+  const [ownOpen, setOwnOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  const isOpen = group ? group.openId === id : ownOpen;
+  const isExpanded = isOpen || Boolean(hasError);
+
+  const setOpen = (open: boolean) => {
+    if (group) group.setOpenId(open ? id : null);
+    else setOwnOpen(open);
+  };
+
+  /*
+   * A lone section owns its own reveal; inside a group the group owns it.
+   *
+   * The split is not a preference. A group's reveal has to run on the *close* as
+   * well as the open (see `revealFold`), and a closing section's own effect cannot
+   * do that — by the time it runs, its answer is "nothing to reveal" and it returns.
+   * One effect on the set sees both sides of a switch and picks the fold that grew.
+   *
+   * Keyed on `isExpanded` rather than `isOpen`, which is the state actually
+   * rendered: a section forced open by a validation error otherwise never revealed,
+   * so the message it opened to show could sit off the bottom of the scroller. A
+   * message nobody can see is the same as no message — which is the whole reason
+   * `hasError` forces the section open at all.
+   */
+  useEffect(() => {
+    if (group || !isExpanded || !root.current) return;
+
+    return revealFold(
+      root.current,
+      root.current.querySelector<HTMLElement>(".disclosure__content"),
+    );
+  }, [group, isExpanded]);
 
   return (
     <Disclosure
-      isExpanded={isOpen || Boolean(hasError)}
-      onExpandedChange={setIsOpen}
+      ref={root}
+      isExpanded={isExpanded}
+      onExpandedChange={setOpen}
       className="rounded-lg border border-border"
     >
       <Disclosure.Heading>

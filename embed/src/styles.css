@@ -193,12 +193,82 @@
   position: absolute;
   z-index: 2;
   top: 10px;
-  left: 10px;
+  /*
+   * Logical, so the side rule below can move it without `auto` — and logical
+   * rather than `left` so a `dir="rtl"` host page gets the mirrored answer for
+   * free, the same argument `.lm-panel` already makes.
+   */
+  inset-inline-start: 10px;
   display: flex;
   max-width: calc(100% - 20px);
-  flex-wrap: wrap;
+  /*
+   * Never two rows.
+   *
+   * `wrap` dropped "Nearest to me" onto a line of its own below about 260px of
+   * embed width — measured — which is an ordinary sidebar map on a phone. It
+   * also made the toolbar's height a function of its contents, and the map
+   * controls below are pushed clear of a band that has to be a known size.
+   * `.lm-search` carries `min-width: 0` so the field shrinks instead of the row
+   * breaking.
+   */
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
+}
+
+/*
+ * The side the owner chose for the panel is still the side its controls belong
+ * on once the panel is gone.
+ *
+ * With the results list switched off the toolbar is the only chrome on the map,
+ * and it was pinned to the left however the panel had been designed — so turning
+ * the list off on a right-hand map threw the search box across to the other
+ * edge. `data-lm-side` is written from `panelSide` whether or not the list is on,
+ * which is what makes it the right thing to read here.
+ */
+.lm-root[data-lm-side="right"] .lm-toolbar {
+  inset-inline-start: auto;
+  inset-inline-end: 10px;
+}
+
+/*
+ * A floating toolbar owns the top band of the map, so MapLibre's own controls
+ * start below it.
+ *
+ * Measured before the fix: the toolbar's box is 36px tall at `top: 10px`, and
+ * `.maplibregl-ctrl-zoom-in` sat at exactly the same origin — (11, 11) against
+ * the search field's (11, 11). The zoom-in button was not mispositioned, it was
+ * simply underneath the search box, which is why the symptom reads as the zoom
+ * stack having grown a padding at the top rather than as one control being
+ * covered.
+ *
+ * `:has(> .lm-toolbar)` is exactly the floating case and needs no new state to
+ * say so: docked, the toolbar is a child of `.lm-panel` instead (`index.ts`
+ * appends it to the root only when there is no list). `:not(:empty)` because a
+ * map with both controls switched off still has the element, and
+ * `.lm-toolbar:empty` hides it.
+ *
+ * **Only the corner the toolbar actually covers.** Padding both was the first
+ * attempt and it recreated the reported symptom on the other side: a map with a
+ * right-hand toolbar drew its zoom stack 42px down the left edge, under a gap
+ * with nothing in it, which is precisely "the zoom buttons have a padding at the
+ * top". So the two branches name opposite corners and never both — which also
+ * means they cannot conflict, and the 480px rule below is free to add the far
+ * corner without having to out-specify anything.
+ *
+ * `:not([data-lm-side="right"])` rather than a bare `.lm-root` for the left
+ * case, so both selectors weigh the same and neither can quietly win.
+ *
+ * Where `:has` is unsupported the rule drops and the overlap is what it has
+ * always been. A `dir="rtl"` host flips `inset-inline-start` but not these
+ * physical corners; the panel's own RTL rule is the precedent for fixing that
+ * if a right-to-left customer ever appears.
+ */
+.lm-root:not([data-lm-side="right"]):has(> .lm-toolbar:not(:empty))
+  .maplibregl-ctrl-top-left,
+.lm-root[data-lm-side="right"]:has(> .lm-toolbar:not(:empty))
+  .maplibregl-ctrl-top-right {
+  padding-top: 42px;
 }
 
 .lm-search__input,
@@ -214,8 +284,17 @@
 .lm-search__input {
   width: 190px;
   max-width: 100%;
-  /* Room at the end for the magnifier sitting inside the field. */
-  padding: 7px 32px 7px 10px;
+  /*
+   * An input carries an intrinsic width of its own — roughly twenty characters —
+   * and `min-width: 0` on the wrapper does not reach through to it. Without this
+   * the field stopped shrinking at about 147px, which pushed "Nearest to me" out
+   * of a 200px embed by 6px. Rare, but a store locator in a narrow sidebar is a
+   * real shape and there is no reason to leave it broken.
+   */
+  min-width: 0;
+  /* Room at the end for whatever sits inside the field — the magnifier, or the
+     find-nearest button, which is the wider of the two. */
+  padding: 7px 38px 7px 10px;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -231,17 +310,26 @@
 }
 
 /*
- * A picture, not a button.
+ * The trailing end of the field, which holds one of two things.
  *
- * `pointer-events: none` so the whole field stays clickable through it — the
- * one thing that makes an icon inside an input worse than no icon is a dead
- * 18px patch at the end of the box a visitor is trying to click into.
+ * `.lm-search__icon` is the magnifier: a picture, not a button. `pointer-events:
+ * none` so the whole field stays clickable through it — the one thing that makes
+ * an icon inside an input worse than no icon is a dead 18px patch at the end of
+ * the box a visitor is trying to click into.
+ *
+ * `.lm-search__action` is find-nearest, drawn in the same place on a map that has
+ * it. That one *is* a button and wants its presses, so the two share a position
+ * and nothing else.
  */
-.lm-search__icon {
+.lm-search__icon,
+.lm-search__action {
   position: absolute;
   inset-inline-end: 9px;
   top: 50%;
   translate: 0 -50%;
+}
+
+.lm-search__icon {
   pointer-events: none;
   color: var(--lm-muted);
 }
@@ -289,6 +377,60 @@
 
 .lm-button:hover {
   border-color: #c9ced7;
+}
+
+/*
+ * A control inside a field is not a control on a toolbar, and it wears none of
+ * the toolbar's skin: `createNearestButton`'s variant *replaces* the `lm-button`
+ * classes rather than joining them.
+ *
+ * That is about specificity, not tidiness. `.lm-toolbar--docked .lm-button`
+ * paints every button on the panel with a 6% foreground well, at two classes,
+ * from a thousand lines further down this file — a weight one class up here
+ * cannot answer, wherever it sits in source order. Not wearing the class is the
+ * only answer that does not become a specificity race, and there was nothing to
+ * inherit anyway: a button inside a field wants no border, no ground and no
+ * shadow, because the field's own border is already the box.
+ *
+ * Everything `.lm-button` and `.lm-button--icon` were contributing that a button
+ * actually needs is therefore restated here.
+ */
+.lm-search__action {
+  inset-inline-end: 4px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  font: inherit;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--lm-muted);
+  cursor: pointer;
+}
+
+.lm-search__action:hover {
+  background: color-mix(in oklab, var(--lm-foreground) 8%, transparent);
+  color: var(--lm-foreground);
+}
+
+/*
+ * Lit, it says an origin is set and a press will clear it.
+ *
+ * Scoped through `.lm-search` for the weight rather than for the reach.
+ * `setNearestOn` is what puts `lm-button--on` on this element, and that class is
+ * also read by `.lm-toolbar--docked .lm-button--on` — two classes, and later in
+ * the file — so a bare pair here would lose the tie on a docked panel and paint
+ * the well this control exists not to have.
+ *
+ * Mixed into `transparent` rather than `--lm-surface`, because the field it sits
+ * in may itself be a tint on a see-through panel.
+ */
+.lm-search .lm-search__action.lm-button--on,
+.lm-search .lm-search__action.lm-button--on:hover {
+  background: color-mix(in oklab, var(--lm-focus) 16%, transparent);
+  color: var(--lm-focus);
 }
 
 .lm-root :focus-visible {
@@ -647,6 +789,13 @@
  * dashboard falls back to its theme variables and a snapshot has none, so the
  * fallbacks here are literals a stranger's page cannot change.
  *
+ * `--lm-pin` is the one exception, and it is what closed the gap rather than
+ * papering over it: a snapshot now *publishes* the colour the dashboard was
+ * resolving from `var(--accent)`, so the two agree by carrying the same answer
+ * instead of by coincidence. `applyChrome` writes it only when the file has one,
+ * which leaves `#7a828f` in charge on everything published before the field —
+ * the grey those cards have always drawn.
+ *
  * The drop shadow is not decoration: the ring is usually white, and a white ring
  * on a white card is invisible without an edge to be seen against. The two ship
  * together or neither does.
@@ -666,7 +815,7 @@
 }
 
 .lm-popup__logo .pin-svg__body {
-  fill: var(--pin-color, #7a828f);
+  fill: var(--pin-color, var(--lm-pin, #7a828f));
   stroke: var(--pin-ring, #fff);
   stroke-width: var(--pin-ring-width, 1.5);
   stroke-linejoin: round;
@@ -1346,6 +1495,9 @@
    * the one the compositor can do without touching layout, which is what makes
    * the side flip a slide instead of a jump.
    *
+   * The drawer's slide is the same property, deliberately — see its own rule
+   * near the foot of this file for why `translate` could not be used instead.
+   *
    * `.lm-root`'s reduced-motion rule above already covers all of it.
    */
   transition:
@@ -1481,11 +1633,13 @@
 }
 
 /*
- * The search takes the row and "nearest to me" sits at the end of it.
+ * The search takes the row.
  *
  * `.lm-search` has to be the flexible one rather than the input: the input is
  * inside it, and a wrapper sized to its own content leaves the field at 190px
- * with the button floating in the space after it.
+ * with whatever follows it floating in the space after. What follows it used to
+ * be "nearest to me"; that control is inside the field now, and on a narrow map
+ * it is the drawer's own trigger instead.
  */
 .lm-toolbar--docked .lm-search {
   flex: 1 1 auto;
@@ -1726,7 +1880,7 @@
    * what the docked layout has always done on a phone. `position: static` is
    * what undoes `--float`; the rest follows it back.
    */
-  .lm-panel {
+  .lm-root:not([data-lm-drawer]) .lm-panel {
     position: static;
     order: 0;
     transform: none;
@@ -1749,7 +1903,7 @@
    * the selector it is cancelling, and only the declarations that selector
    * actually sets.
    */
-  .lm-root[data-lm-float] .lm-panel {
+  .lm-root:not([data-lm-drawer])[data-lm-float] .lm-panel {
     position: static;
     flex: 1 1 auto;
     width: auto;
@@ -1760,17 +1914,29 @@
     backdrop-filter: none;
   }
 
-  .lm-root[data-lm-side="right"] .lm-panel {
+  .lm-root:not([data-lm-drawer])[data-lm-side="right"] .lm-panel {
     order: 0;
     border-left: 0;
   }
 
-  .lm-root[data-lm-float][data-lm-side="right"] .lm-panel,
-  [dir="rtl"] .lm-root[data-lm-float][data-lm-side="right"] .lm-panel {
+  .lm-root:not([data-lm-drawer])[data-lm-float][data-lm-side="right"] .lm-panel,
+  [dir="rtl"]
+    .lm-root:not([data-lm-drawer])[data-lm-float][data-lm-side="right"]
+    .lm-panel {
     transform: none;
   }
 
-  .lm-canvas {
+  /*
+   * Only when there is a panel to share the box with.
+   *
+   * This was a bare `.lm-canvas`, so a map with the results list switched off
+   * gave away 40% of its height to nothing — a phone-width embed drew the map in
+   * the top 60% and left the rest blank. `.lm-panel ~ .lm-canvas` says "a panel
+   * precedes me" exactly, and needs no `:has`: `index.ts` appends the panel
+   * first and the canvas second, which is the reading order the layout wants and
+   * the reason `order` rather than DOM position moves things here.
+   */
+  .lm-root:not([data-lm-drawer]) .lm-panel ~ .lm-canvas {
     /* The same 60/40 the side-by-side layout uses, so the balance does not
        change as the embed crosses the breakpoint. */
     flex: 0 0 60%;
@@ -1789,15 +1955,222 @@
   }
 }
 
+/*
+ * Drawer mode: the panel leaves the flow instead of becoming the bottom half.
+ *
+ * **768 here, where the block above says 640, and the two numbers are not a
+ * mistake.** The stacked layout up there is what a snapshot with no
+ * `panelDrawer` field draws, and those are live on customer sites — moving its
+ * breakpoint would edit maps already published (§7). A drawer is opt-in and new,
+ * so it is free to answer the wider question: a portrait tablet is a screen
+ * where a results column beside the map leaves neither of them room.
+ * `DRAWER_MAX_WIDTH` in `index.ts` carries the same 768 and has to — that
+ * constant decides where the toolbar lives and this query decides where the
+ * panel is drawn, so a disagreement is a search box docked into a panel that is
+ * off the edge of the map.
+ *
+ * **Every rule in the stacked block is gated on `:not([data-lm-drawer])`**,
+ * which is the whole reason this one is short. The two are complete answers to
+ * one width, and the alternative — letting both apply and cancelling the first
+ * property by property — is the trap that block's own comment documents.
+ * Opting out once is cheaper to read and cheaper to ship.
+ *
+ * A panel parked off the edge is still in the tab order, and with
+ * `.lm-root { overflow: hidden }` a focused row inside it scrolls the root and
+ * takes the map with it. **That is answered by `inert` in `installDrawer`, not
+ * by `visibility` here**, and the difference is not only tidiness: a
+ * `visibility` transition does not resolve to `visible` until the transition has
+ * actually started, so the `panel.focus()` that opening the drawer does silently
+ * failed and focus stayed on the button. `inert` takes the subtree out of the
+ * tab order *and* the accessibility tree, flips synchronously, and costs no CSS.
+ */
+@container lm (max-width: 768px) {
+  /*
+   * A drawer is the floating panel, parked off the edge — not a second skin.
+   *
+   * **Everything the owner designed about the panel survives being a drawer**:
+   * the transparency, the blur behind it, the corner radius and the width scale
+   * all come from the same custom properties the floating rule reads, so a map
+   * designed at Glass and Slim opens a glass, slim drawer. This rule sets where
+   * it is and how it gets there, and deliberately nothing else — the moment it
+   * starts restating `background` or `border-radius`, a designer control has an
+   * exception nobody can see from the sidebar.
+   *
+   * This block used to force `background: var(--lm-surface)` and
+   * `backdrop-filter: none`, on the theory that a translucent surface is what
+   * made the map look like the thing that was moving. It was not: that was
+   * `panel.focus()` scrolling the root, and it is fixed in `setOpen`. What is
+   * left of the theory is real but small — a `backdrop-filter` samples in the
+   * element's own coordinate space, so the blurred patch of basemap travels with
+   * the panel for the 180ms of the slide. Measured against the alternative of
+   * throwing away the map's own design language, it is not worth paying for.
+   *
+   * `backdrop-filter` is restated here rather than left to
+   * `.lm-root[data-lm-float] .lm-panel`, because a drawer is over the map at
+   * *either* placement. "Beside it" describes a layout this width does not have:
+   * there is no room to sit beside anything, so the panel is over the map and
+   * the glass has something behind it to be glass about.
+   */
+  .lm-root[data-lm-drawer] .lm-panel,
+  .lm-root[data-lm-drawer][data-lm-float] .lm-panel {
+    position: absolute;
+    /* Over the floating toolbar, which is 2. */
+    z-index: 3;
+    /* The same 10px gutter the floating panel keeps, so the drawer is visibly
+       the same object arriving rather than a panel that grew edge to edge. */
+    inset-block: 10px;
+    inset-inline: auto 10px;
+    /*
+     * The width scale, with a floor.
+     *
+     * `--lm-panel-w` is a percentage of the embed's own box, and the box is the
+     * reason it cannot be taken literally here: Slim is 25%, which is a readable
+     * column beside a 1200px map and 97px on a phone. So the setting widens the
+     * drawer and never narrows it past the width a name and an address need,
+     * and the 86% ceiling keeps a strip of basemap showing — that strip is what
+     * says the map is still behind this.
+     */
+    width: min(86%, max(var(--lm-panel-w, 40%), 300px));
+    min-width: 0;
+    border: 1px solid var(--lm-border);
+    border-radius: var(--lm-panel-radius, 0);
+    box-shadow: var(--lm-shadow);
+    /* Rounded corners clip the list only if something clips. The floating rule
+       has this already; a drawer at "Beside it" does not inherit it. */
+    overflow: hidden;
+    backdrop-filter: blur(var(--lm-panel-blur, 0));
+    /*
+     * `transform`, and every selector below is weighed against it by hand.
+     *
+     * **The `translate` property is not an option here, however much tidier it
+     * reads.** Written as `transform: none; translate: 100% 0`, Lightning CSS
+     * folds the pair into a single `transform: translate(100%)` on the way out —
+     * a correct optimisation for one rule in isolation, and it silently deletes
+     * the property the *open* rule was going to answer on. The drawer then never
+     * opens, with no error and nothing wrong in the source. Verified in the
+     * built bundle, not reasoned about: `grep transform public/embed/map.js`.
+     *
+     * So the weights are the mechanism, and they are written out at each rule.
+     * What has to be out-weighed is the *unqueried* floating side-flip further
+     * up this file, which a container query does nothing to weaken.
+     *
+     * The gutter is in the distance because the panel no longer starts at the
+     * edge: its own width alone leaves it 10px short of hidden, showing a sliver
+     * of glass against the corner.
+     */
+    transform: translateX(calc(100% + 10px));
+  }
+
+  /*
+   * The start edge is already the right one, so it parks the other way.
+   *
+   * Two selectors, mirroring the pair above for the same reason: the heavier one
+   * exists to beat `[dir="rtl"] .lm-root[data-lm-float][data-lm-side="right"]
+   * .lm-panel`, which is five and sits earlier in the file.
+   */
+  [dir="rtl"] .lm-root[data-lm-drawer] .lm-panel,
+  [dir="rtl"] .lm-root[data-lm-drawer][data-lm-float] .lm-panel {
+    transform: translateX(calc(-100% - 10px));
+  }
+
+  /*
+   * Open, in both directions and at either placement.
+   *
+   * **Neither selector names `[data-lm-float]`, and that is the fix for a real
+   * bug.** This rule used to, while the closed rule above did not — so a map
+   * with the panel placed *beside* the map rather than over it matched closed
+   * and never matched open: pressing the trigger dimmed the basemap, moved focus
+   * into a panel parked off the edge, and slid nothing.
+   *
+   * It needs no placement to win. Each selector ties the heaviest closed rule it
+   * competes with — four against four in LTR, five against five in RTL — and
+   * comes later, which is the whole of why they are in this order.
+   */
+  .lm-root[data-lm-drawer][data-lm-drawer-open] .lm-panel,
+  [dir="rtl"] .lm-root[data-lm-drawer][data-lm-drawer-open] .lm-panel {
+    transform: translateX(0);
+  }
+
+  /* Nothing here gives the canvas its height back, and nothing needs to: the
+     60/40 split is on the gated rule above, so with a drawer the map simply
+     keeps the `flex: 1 1 auto` its own base rule already gives it. */
+
+  /*
+   * What a press outside the open drawer lands on.
+   *
+   * An element rather than a listener on the root, because the map owns its own
+   * canvas events and a click that MapLibre has already handled never reaches a
+   * delegated handler above it. It doubles as the thing that stops a stray drag
+   * panning the map out from under an open drawer.
+   *
+   * It is in the DOM only while the drawer is open, which is why there is no
+   * closed state here to write.
+   */
+  .lm-root[data-lm-drawer] .lm-veil {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: rgb(0 0 0 / 0.28);
+  }
+}
+
 /* With no panel to dock into, the floating toolbar spans the top instead of
    covering the map's left half. */
 @container lm (max-width: 480px) {
-  .lm-toolbar {
-    right: 10px;
+  /*
+   * Both selectors, because the side rule above is an attribute heavier than a
+   * bare `.lm-toolbar` and would otherwise keep its `inset-inline-start: auto`
+   * here — leaving a right-hand toolbar shrink-wrapped in the corner on exactly
+   * the width this rule exists to spread it across.
+   *
+   * **And `:not(:empty)` is carrying a pseudo-class the base rule only grows
+   * during the build, which is the part no reading of the source can show you.**
+   * A logical inset compiles to a `:lang()` pair — the rule above ships as
+   * `.lm-root[data-lm-side="right"] .lm-toolbar:not(:is(:lang(ar), :lang(he),
+   * …))`, and `:not(:is(:lang()))` counts as a pseudo-class, so it is (0,4,0) by
+   * the time a browser sees it. This override sets both sides to the *same*
+   * value, which needs no direction, so it compiles to a bare selector at
+   * (0,3,0) and quietly lost to the rule it exists to cancel. `:not(:empty)`
+   * puts the missing weight back honestly rather than by repeating an attribute:
+   * an empty toolbar is `display: none` a few rules below, so the only toolbar
+   * this can fail to reach is one that is not drawn.
+   *
+   * Measured before the fix: the field sat at 202px on a 390px map however wide
+   * the toolbar around it was — the exact symptom this block already records
+   * having fixed once, silently reintroduced by the compiler. It was reachable
+   * only with the results list switched off until the drawer started floating a
+   * narrow map's toolbar with the list on, which is how it was found.
+   */
+  .lm-toolbar:not(:empty),
+  .lm-root[data-lm-side="right"] .lm-toolbar:not(:empty) {
+    inset-inline-start: 10px;
+    inset-inline-end: 10px;
+  }
+
+  /*
+   * The wrapper, and not only the field inside it.
+   *
+   * `.lm-search` is the flex item; the input is its child. A `width: 100%` on
+   * the input resolves against a wrapper that is still shrink-to-fit, so the
+   * field measured 202px on a 390px map however wide the toolbar around it was —
+   * the docked toolbar has carried the matching `flex: 1 1 auto` since it was
+   * written and this is its missing twin.
+   */
+  .lm-search {
+    flex: 1 1 auto;
   }
 
   .lm-search__input {
     width: 100%;
+  }
+
+  /* Spanning the width, the toolbar now covers the far corner too — so each
+     side gains the one the rule above left alone. */
+  .lm-root:not([data-lm-side="right"]):has(> .lm-toolbar:not(:empty))
+    .maplibregl-ctrl-top-right,
+  .lm-root[data-lm-side="right"]:has(> .lm-toolbar:not(:empty))
+    .maplibregl-ctrl-top-left {
+    padding-top: 42px;
   }
 }
 
@@ -1811,6 +2184,15 @@
  */
 .lm-search {
   position: relative;
+  /*
+   * So the field can shrink instead of the toolbar breaking onto two rows.
+   *
+   * A flex item's `min-width` is `auto`, which is its content — and an input's
+   * intrinsic width is wide. With the toolbar now `nowrap`, that floor is what
+   * would push "Nearest to me" out of the box rather than letting the search box
+   * give way, so the two changes are one change.
+   */
+  min-width: 0;
 }
 
 .lm-search__list {

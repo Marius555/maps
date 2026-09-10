@@ -63,6 +63,25 @@ const nextConfig: NextConfig = {
       { source: "/api/collect", headers: embedCorsHeaders },
     ];
   },
+
+  async redirects() {
+    return [
+      /*
+       * `/dashboard` is what most people type, and what every generic
+       * integration recipe assumes. This app's dashboard is `/maps`.
+       *
+       * A redirect rather than a page, so there is no second signed-in screen to
+       * keep in step with the real one. It needs no guard of its own: a
+       * signed-out visitor lands on `/maps`, which *is* in `proxy.ts`'s matcher,
+       * and gets `/login?next=/maps` from there.
+       *
+       * Not permanent. A 308 is cached by the browser essentially forever, and
+       * this is a convenience alias rather than a decision we want to be unable
+       * to reverse.
+       */
+      { source: "/dashboard", destination: "/maps", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -1,10 +1,10 @@
 "use client";
 
-import { Accordion } from "@heroui/react";
 import { GripVertical } from "lucide-react";
 
 import { useRowDragSource } from "@/components/groups/use-row-drag";
 import { PropertyFold } from "@/components/ui/properties/property-fold";
+import { PropertyFolds } from "@/components/ui/properties/property-folds";
 import { availableBlocks } from "@/lib/card/card-edits";
 import {
   CARD_BLOCKS,
@@ -64,14 +64,12 @@ export function BlockPalette({ layout }: { layout: CardLayout }) {
   })).filter((group) => group.types.length > 0);
 
   return (
-    /* All of them open. Folding here is for grouping, not for buying height —
-       the contrast with the publish sidebar, which opens on one. Nothing is
-       being compared across shelves, so there is no reason to make someone
-       open the one holding the block they came for. */
-    <Accordion
-      allowsMultipleExpanded
-      defaultExpandedKeys={BLOCK_GROUPS.map((group) => group.id)}
-    >
+    /* Shut, and one at a time, like every other fold in the app — see
+       `PropertyFolds`. This shelf used to open all of them on the grounds that
+       nothing is compared across shelves, which is still true and is no longer
+       enough: eleven blocks under four headings is the wall the shelves were
+       introduced to break up, and opening all four rebuilds it. */
+    <PropertyFolds>
       {shelves.map((group) => (
         <PropertyFold key={group.id} id={group.id} title={group.label}>
           <ul
@@ -89,7 +87,7 @@ export function BlockPalette({ layout }: { layout: CardLayout }) {
           </ul>
         </PropertyFold>
       ))}
-    </Accordion>
+    </PropertyFolds>
   );
 }
 

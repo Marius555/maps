@@ -289,4 +289,16 @@ describe("scrollableAncestor", () => {
 
     expect(scrollableAncestor(row)).toBeNull();
   });
+
+  it("takes a container that slack will push into overflowing", () => {
+    // `revealFold` asks one frame before the fold's panel grows, so the scroller
+    // it has to move is routinely not overflowing at the moment of the question.
+    const element = scroller({ content: 400 });
+    const row = document.createElement("li");
+    element.appendChild(row);
+
+    expect(scrollableAncestor(row)).toBeNull();
+    expect(scrollableAncestor(row, { slack: 200 })).toBe(element);
+  });
+
 });

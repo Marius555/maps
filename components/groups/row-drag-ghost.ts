@@ -95,6 +95,8 @@ export function mountRowGhost(
   copy.removeAttribute("data-drop-id");
   copy.removeAttribute("data-drop-target");
 
+  inheritContext(source, root);
+
   root.append(copy);
   moveRowGhost({ root, offset }, x, y);
   document.body.append(root);
@@ -118,4 +120,56 @@ export function moveRowGhost(ghost: RowGhost, x: number, y: number): void {
   ghost.root.style.transform = `translate3d(${Math.round(x - ghost.offset.x)}px, ${Math.round(
     y - ghost.offset.y,
   )}px, 0)`;
+}
+
+/**
+ * Carry down what the copy stopped inheriting when it left the tree.
+ *
+ * **The bug this exists for, and it drew the wrong colour rather than none.** A
+ * clone keeps its classes, so a `.card-button` in the ghost still matched every
+ * rule that styled it — but the two elements *declaring* the properties those
+ * rules read are ancestors the copy no longer has: `cardAccentVars` writes
+ * `--card-accent` on the designer column, and `cardStyle` writes `--card-pad`,
+ * `--card-gap`, `--card-radius`, `--card-slot-radius`, `--card-font*` and
+ * `--card-color` on the card root. On `document.body` the button therefore fell
+ * all the way to the end of `var(--card-button-bg, var(--card-accent, #1c7ed6))`
+ * and rendered in the embed's `--lm-focus` blue — a colour belonging to no part
+ * of this theme — while the block it was a copy of was orange two inches away.
+ * An Outline button's ghost took a blue border and label the same way, and the
+ * slot radius, the text sizes and an empty block's height were all quietly one
+ * fallback out.
+ *
+ * **Inline declarations only, and that is what makes it work everywhere.** Both
+ * of the declarations above are inline styles, and iterating an element's own
+ * `style` finds custom properties in every browser, where enumerating
+ * `getComputedStyle` does not. Nearest ancestor wins, which is what inheritance
+ * would have done.
+ *
+ * The theme class comes too. A card carries its own `.light`/`.dark`
+ * (`cardThemeClass`), so without it a block dragged out of a card on the Dark
+ * basemap would repaint itself in the *page's* theme mid-gesture.
+ */
+function inheritContext(source: HTMLElement, root: HTMLElement): void {
+  const seen = new Set<string>();
+
+  for (
+    let element: HTMLElement | null = source;
+    element;
+    element = element.parentElement
+  ) {
+    const { style } = element;
+
+    for (let i = 0; i < style.length; i++) {
+      const name = style[i];
+
+      if (!name.startsWith("--") || seen.has(name)) continue;
+
+      seen.add(name);
+      root.style.setProperty(name, style.getPropertyValue(name));
+    }
+  }
+
+  const themed = source.closest(".light, .dark");
+
+  if (themed) root.classList.add(themed.classList.contains("dark") ? "dark" : "light");
 }

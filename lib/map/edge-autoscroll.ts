@@ -47,8 +47,28 @@ export type EdgeAutoScroll = {
  * case it is in. `scrollHeight > clientHeight` is checked as well as the computed
  * overflow: an `auto` container with nothing to scroll would otherwise capture
  * the drag and then do nothing with it.
+ *
+ * **`slack` is that last check, and `lib/ui/reveal-fold.ts` is the one caller that
+ * needs it.** A drag needs a container overflowing *now*, because there is nowhere
+ * to pull to otherwise, and that is the default. A fold's reveal asks one frame
+ * before the panel grows, so the container it has to move is routinely not
+ * overflowing yet and will be by the time the answer is used — `slack` is how much
+ * taller the content is about to get. It is not a boolean because the distinction
+ * that matters is not "ignore the check" but "check against the height the content
+ * is going to have".
+ *
+ * It is not a complete answer and does not pretend to be. HeroUI's `ScrollShadow`
+ * is `overflow-y: auto` unconditionally, so below `lg` the card designer has one
+ * whose own height follows its content — it can never scroll, and no measurement
+ * taken before the growth can say so, because its `clientHeight` is about to grow
+ * by the same amount as its `scrollHeight`. `revealFold` covers that case at the
+ * other end instead, with one corrective `scrollIntoView` when the animation
+ * settles.
  */
-export function scrollableAncestor(from: HTMLElement): HTMLElement | null {
+export function scrollableAncestor(
+  from: HTMLElement,
+  { slack = 0 }: { slack?: number } = {},
+): HTMLElement | null {
   let element: HTMLElement | null = from.parentElement;
 
   while (element) {
@@ -56,7 +76,7 @@ export function scrollableAncestor(from: HTMLElement): HTMLElement | null {
 
     if (
       (overflowY === "auto" || overflowY === "scroll") &&
-      element.scrollHeight > element.clientHeight
+      element.scrollHeight + slack > element.clientHeight
     ) {
       return element;
     }

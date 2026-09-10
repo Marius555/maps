@@ -5,8 +5,10 @@ import { Button } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 
-import { FormTextField } from "@/components/ui/form-field";
+import { AuthDivider } from "@/components/auth/auth-divider";
+import { GoogleButton } from "@/components/auth/google-button";
 import { ErrorMessage } from "@/components/ui/error-message";
+import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
 import { useSignup } from "@/lib/query/auth";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { signupSchema, type SignupInput } from "@/lib/validation/auth.schema";
@@ -38,36 +40,45 @@ export function SignupForm() {
   const hasFieldError = Boolean(errors.name || errors.email || errors.password);
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      {signup.error && !hasFieldError ? <ErrorMessage error={signup.error} /> : null}
+    <div className="space-y-5">
+      {/* The same words as the login page, deliberately. CLAUDE.md §8: an action
+          keeps its name through the whole flow, and with Google there is no
+          difference between signing in and signing up — the first press makes
+          the account either way. */}
+      <GoogleButton />
 
-      <FormTextField
-        control={control}
-        name="name"
-        label="Name"
-        autoComplete="name"
-      />
+      <AuthDivider />
 
-      <FormTextField
-        control={control}
-        name="email"
-        label="Email"
-        type="email"
-        autoComplete="email"
-      />
+      <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        {signup.error && !hasFieldError ? <ErrorMessage error={signup.error} /> : null}
 
-      <FormTextField
-        control={control}
-        name="password"
-        label="Password"
-        type="password"
-        placeholder="At least 8 characters"
-        autoComplete="new-password"
-      />
+        <FormTextField
+          control={control}
+          name="name"
+          label="Name"
+          autoComplete="name"
+        />
 
-      <Button type="submit" fullWidth isPending={isSubmitting}>
-        Create account
-      </Button>
-    </form>
+        <FormTextField
+          control={control}
+          name="email"
+          label="Email"
+          type="email"
+          autoComplete="email"
+        />
+
+        <FormPasswordField
+          control={control}
+          name="password"
+          label="Password"
+          placeholder="At least 8 characters"
+          autoComplete="new-password"
+        />
+
+        <Button type="submit" fullWidth isPending={isSubmitting}>
+          Create account
+        </Button>
+      </form>
+    </div>
   );
 }

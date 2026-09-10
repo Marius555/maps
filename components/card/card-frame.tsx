@@ -88,13 +88,15 @@ export function cardVars(layout: CardLayout): CSSProperties {
  * It is a *map* setting rather than part of the card design, which is why it is
  * not in `cardVars` — the design is saved per account (§0) and the accent is
  * per map, so this is written by whichever screen knows which map is on it and
- * inherits down to every card inside. Where nothing writes it, the stylesheet's
- * own fallback is the embed's `--lm-focus` default, so the studio still draws
- * what a customer's site draws.
+ * inherits down to every card inside.
  *
- * Nothing is written when the owner chose no accent — an absent property leaves
- * that fallback in charge, where a resolved literal would freeze today's default
- * into every card drawn from now on.
+ * **The accent now resolves to `DEFAULT_EMBED_ACCENT` rather than to nothing**,
+ * so on any screen that knows its map this is always written and the studio
+ * draws the product's orange. The stylesheet's own `#1c7ed6` behind it is no
+ * longer the usual answer but it is still the right last resort: it is the
+ * embed's `--lm-focus` default, and it is what a card drawn with no map in hand
+ * — no `settings` at all — should show, because that is what a snapshot
+ * published before the default existed still renders (§7).
  */
 export function cardAccentVars(
   settings: Record<string, unknown> | undefined,
@@ -505,10 +507,23 @@ function zoneClass(
     hasBlocks && padBottom ? "pb-[var(--card-pad)]" : ""
   }`;
 
-  // The only scroller. The name and the actions are what the card is *for*, so
-  // they stay put while the description and the week move under them.
+  /*
+   * The only scroller. The name and the actions are what the card is *for*, so
+   * they stay put while the description and the week move under them.
+   *
+   * **And it scrolls in one direction only, said out loud.** `overflow-y: auto`
+   * alone computes the other axis to `auto` as well (CSS Overflow: a `visible`
+   * beside a non-`visible` becomes `auto`), which cost nothing while nothing
+   * here was ever wider than the card — and then the editor's hover lift arrived
+   * and a bled block growing 2% put three pixels of horizontal scroll range into
+   * the card. Measured, not guessed: `scrollWidth` 221 against a `clientWidth`
+   * of 218. Invisible, because `hideScrollBar` is on, and a trackpad swipe would
+   * still have slid the whole card's content sideways.
+   */
   const own =
-    zone === "middle" ? "min-h-0 flex-1 overflow-y-auto overscroll-contain" : "";
+    zone === "middle"
+      ? "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
+      : "";
 
   return `${own} ${pad}`;
 }

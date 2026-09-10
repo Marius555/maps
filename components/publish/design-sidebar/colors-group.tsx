@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 import { ColorPickerField } from "@/components/ui/color-picker-field";
+import { DEFAULT_EMBED_ACCENT } from "@/lib/validation/embed-settings.schema";
 import type { SnapshotColors } from "@/packages/shared/snapshot";
 import type { EmbedDesign } from "./use-embed-design";
 
@@ -19,6 +22,14 @@ import type { EmbedDesign } from "./use-embed-design";
  * `#ffffff` cannot, and a map whose owner set the surface white is a map with a
  * white panel on a midnight basemap. That is theirs to choose, but it has to be
  * chosen rather than arrived at.
+ *
+ * **The sixth field is not one of them, and that is why it is separate.** Default
+ * pin is `settings.pinColor`, a sibling key rather than a member of `colors`, and
+ * the reason is mechanical: `colors` is in `CHROME_SETTING_KEYS`, so those five
+ * are custom properties the preview writes onto the running map. A pin is not —
+ * the markers and the results rows are canvas images cached per
+ * `pinImageId(icon, color)`, so only a rebuild recolours them. It therefore goes
+ * through `PinColorField` below, which is the same control on a trailing timer.
  */
 export function ColorsGroup({ settings, set }: EmbedDesign) {
   const colors = settings.colors ?? {};
@@ -52,11 +63,105 @@ export function ColorsGroup({ settings, set }: EmbedDesign) {
           value={colors[key] ?? ""}
           fallback={fallback}
           onChange={(hex) => setColor(key, hex)}
-          onClear={colors[key] ? () => setColor(key, undefined) : undefined}
+          /* Clearing is offered only where it would do something. The accent
+             resolves to `DEFAULT_EMBED_ACCENT` whether or not it is stored, so
+             on a map wearing the default the button would delete a key and
+             redraw the identical swatch — a control that visibly does nothing.
+             The other four have no default, so present *is* overridden. */
+          onClear={
+            colors[key] && colors[key] !== fallbackDefault(key)
+              ? () => setColor(key, undefined)
+              : undefined
+          }
         />
       ))}
+
+      {/* Last, and under the five: it is the only colour here that is not a
+          token of the panel — it is what the map itself draws a location in when
+          the location says nothing. No `onClear`, for the accent's reason one
+          fold up: it always resolves, so clearing would delete a key and redraw
+          the identical swatch. */}
+      <PinColorField
+        value={settings.pinColor}
+        onChange={(hex) => set("pinColor", hex)}
+      />
     </div>
   );
+}
+
+/**
+ * Default pin, on a trailing timer.
+ *
+ * Every other field in this fold is free to drag: `colors` is a chrome key, so
+ * the preview writes the new value straight onto the running map and a
+ * pointer-move-per-frame costs nothing. `pinColor` is not and cannot be — pins
+ * are rasterised images, so the preview has to rebuild its document to recolour
+ * them — and `ColorPickerField` fires `onChange` per pointer move.
+ *
+ * React Aria's `onChangeEnd` would be the exact tool and this build of
+ * `react-aria-components` does not expose it on `ColorArea` or `ColorSlider`, so
+ * the timer stands in: the swatch tracks the pointer from local state, and the
+ * draft — and with it the preview — learns the answer once the drag settles.
+ * `EmbedPreview`'s one-navigation-at-a-time guard would have coalesced most of
+ * the churn anyway; this is what turns "most" into one.
+ */
+function PinColorField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (hex: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [seen, setSeen] = useState(value);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  /*
+   * An outside edit wins — Reset is the one that matters, and it lands here as
+   * a `value` that is not what this field last emitted. Adjusting state during
+   * render rather than in an effect, which is `ColorPickerField`'s own answer to
+   * the same question a few lines away.
+   */
+  if (value !== seen) {
+    setSeen(value);
+    if (value !== draft) setDraft(value);
+  }
+
+  // A drag that ends by unmounting the panel must still be saved.
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  return (
+    <ColorPickerField
+      label="Default pin"
+      value={draft}
+      fallback={DEFAULT_EMBED_ACCENT}
+      onChange={(hex) => {
+        setDraft(hex);
+        setSeen(hex);
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => {
+          onChange(hex);
+        }, COMMIT_DELAY_MS);
+      }}
+    />
+  );
+}
+
+/**
+ * Long enough that a drag is one rebuild, short enough that a single press feels
+ * immediate. The same order as `useEmbedDesign`'s own write timer, deliberately
+ * under it so the preview is never behind the save.
+ */
+const COMMIT_DELAY_MS = 250;
+
+/**
+ * What this token resolves to when nothing is stored for it.
+ *
+ * `undefined` for four of the five: absent means the stylesheet decides, which
+ * is what keeps an undesigned embed following its basemap into the dark.
+ */
+function fallbackDefault(key: keyof SnapshotColors): string | undefined {
+  return key === "accent" ? DEFAULT_EMBED_ACCENT : undefined;
 }
 
 /**
@@ -64,9 +169,11 @@ export function ColorsGroup({ settings, set }: EmbedDesign) {
  * surface first because it is most of what they see, then the text on it, then
  * the edges, then the one accent.
  *
- * `fallback` is the embed's own light-theme value — what the wheel opens on
- * when nothing is set, so the first drag starts from the colour on screen
- * rather than from red.
+ * `fallback` is what the swatch draws when nothing is stored, so the first drag
+ * starts from the colour already on screen rather than from red. For four of
+ * them that is the embed's own light-theme value; the accent's is the product
+ * default the settings now seed, which is the colour the map is actually
+ * wearing.
  */
 const FIELDS: readonly {
   key: keyof SnapshotColors;
@@ -77,5 +184,5 @@ const FIELDS: readonly {
   { key: "foreground", label: "Text", fallback: "#1b1d21" },
   { key: "muted", label: "Secondary text", fallback: "#656b76" },
   { key: "border", label: "Lines", fallback: "#e2e5ea" },
-  { key: "accent", label: "Accent", fallback: "#1c7ed6" },
+  { key: "accent", label: "Accent", fallback: DEFAULT_EMBED_ACCENT },
 ];

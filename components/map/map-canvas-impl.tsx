@@ -22,6 +22,7 @@ import { registerPmtilesProtocol } from "@/lib/map/pmtiles";
 import { selectionBounds } from "@/lib/map/selection-bounds";
 import { effectiveCardLayout } from "@/lib/card/designer-status";
 import { cardThemeClass } from "@/lib/card/card-theme";
+import { usePrefersDark } from "@/lib/theme/use-prefers-dark";
 import type { MapStyleKey } from "@/lib/map/style";
 import { configureMaplibreWorker } from "@/lib/map/worker";
 import type {
@@ -290,6 +291,10 @@ export default function MapCanvasImpl({
 }: MapCanvasProps) {
   const frame = useRef<HTMLDivElement>(null);
   const container = useRef<HTMLDivElement>(null);
+
+  // The card's light/dark for an Auto map — the same source `useMaplibre` reads
+  // for the basemap, so the two cannot disagree. See `cardThemeClass`.
+  const prefersDark = usePrefersDark();
 
   /**
    * The box the map is *born* framed on, decided before it exists.
@@ -824,10 +829,10 @@ export default function MapCanvasImpl({
         <PlaceCard
           map={map}
           isReady={isReady}
-          /* The card draws in the basemap's light/dark, not the dashboard's —
-             the studio, this canvas and the customer's site are one picture.
-             See `cardThemeClass`. */
-          theme={cardThemeClass(style)}
+          /* The card draws in the map's own light/dark — the studio, this
+             canvas and the customer's site are one picture. See
+             `cardThemeClass`. */
+          theme={cardThemeClass(style, prefersDark)}
           /*
            * Hidden while adding: the point of add mode is dropping several pins
            * in a row, and a card opening over the map after each one is in the

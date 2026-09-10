@@ -45,6 +45,15 @@ rewritten; it is the record of why this area is shaped as it is.
   map's list, `buildSnapshot` narrows them away, and the drawing helpers drop them.
 - `pinColorOfTags` **walks** rather than reading `tags[0]`, or a dangling id at the front
   leaves a pin grey while the card draws three chips.
+- **An untagged pin has three answers, not two, and only the last is a constant.** The
+  editor falls back to `var(--accent)`; a published map falls back to
+  `settings.pinColor`, which `DEFAULT_EMBED_SETTINGS` seeds from the same accent; and
+  `UNTAGGED_PIN_COLOR` is what is left for a snapshot written before that field, which is
+  every file already on a customer's site (§7). `colorOf` in `embed/src/map.ts` puts the
+  published colour *below* tags and below the legacy categories, so it only ever answers
+  for a place the map says nothing about. The card's Logo block reaches the same colour
+  through `--lm-pin` rather than through `colorOf`, because that one renderer is CSS and
+  the other two are canvas.
 - `newTagId` must never reuse or derive an id from a label — a label-derived id handed out
   twice resurrects a deleted tag onto every location that once wore it.
 - `components/tags/tag-picker.tsx` is the one control. Quick-add PATCHes the **whole**

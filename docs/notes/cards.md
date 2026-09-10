@@ -109,11 +109,12 @@ building the same card from the same functions in `packages/shared/`.
 - Which control a question gets is decided by **width**. A tile that *draws* what it is
   choosing costs no label width; a tile carrying a *word* gets ~36px and clips, so every
   `room()` scale is a `PropertyNumberSelect`.
-- The Modify tab folds (`PropertyFold`; `PropertyGroup` is deleted). **Which fold opens has
-  to be found, not named** — a hard-coded id lands on a spacer. `key={block.id}` on the
-  `Accordion` stops a new block inheriting the last one's open set.
-- `SIGNATURE_GROUP` names the fold a type is really selected for and opens it alongside the
-  first.
+- The Modify tab folds (`PropertyFold`; `PropertyGroup` is deleted). **Every fold in the
+  app starts shut and only one opens at a time** — `PropertyFolds` is the set, and the
+  three panels that each opened something (`["panel"]`, `["size"]`, every shelf) no longer
+  do. `key={block.id}` on it stops a new block inheriting the last one's open fold.
+- `SIGNATURE_GROUP` is **deleted**, with the `firstOpen` search beside it. Both existed to
+  decide what opens, and nothing opens.
 - A group with every control hidden renders nothing at all, heading included (`isEmpty`).
 - Booleans: one question on one line. Several answers → `PropertyToggles`; a single yes/no
   → `PropertyCheckbox`, and it sits at the **end** of its fold. A toggle that is on when
@@ -139,6 +140,13 @@ building the same card from the same functions in `packages/shared/`.
   resolved from the *basemap*), on the card element itself in `card-canvas.tsx` and
   `place-card.tsx` — **not** on the wrappers carrying `cardAccentVars`, which are the whole
   editor row and designer column.
+- **Auto asks `usePrefersDark()`, never `matchMedia` — and never at render.** The answer is
+  an argument, the same shape `shouldDarkenStyle` takes, because the OS preference and the
+  dashboard's theme are different questions and a `typeof window` branch in a render is a
+  hydration mismatch.
+- **A drag ghost is re-parented to `<body>`, so it must be handed its inherited custom
+  properties and the card's theme class** (`inheritContext` in `row-drag-ghost.ts`).
+  Without them a cloned block silently draws in `--card-accent`'s `#1c7ed6` fallback.
 - `.transparency-grid` is a checkerboard shown only while the card is see-through; the
   studio's flat `bg-default/40` workspace cannot otherwise tell glass from solid.
 
@@ -155,10 +163,41 @@ building the same card from the same functions in `packages/shared/`.
   press does not close the popover and the card under it. `.card-slot`'s open state is our
   own `data-open` — HeroUI leaves `aria-expanded` false.
 - `.card-slot` wears `--card-radius` / `--card-slot-radius`, not the app's `--radius-md`.
-- The pencil badge is `min(1.125rem, 100%)` on both axes — the block's box is
-  `overflow-hidden` and a one-line block is shorter than a fixed 18px square.
-- The gallery's badge is the one that leaves the corner (the card's close X sits over it at
-  `z-10`); all three placements are one `place-items` declaration on a one-cell grid.
+
+### Edit mode (editor only)
+
+- **The whole block is the press target, and everything under it is `inert`.** One gesture
+  per block, because there is one thing on it to press. Remove the `inert` and the target
+  becomes a transparent sheet over live links.
+- The `inert` wrapper is `display: contents`, so the card lays out identically in and out of
+  edit mode — a real box there would break the gallery image's `height: 100%` chain.
+- The target must render **outside** that wrapper. Inside it, it is inert too.
+- **Filling content in is not an edit-mode gesture.** The `+` slots are pressable on the
+  card as it normally stands; edit mode changes how a block is *drawn*. The two used to
+  share a block and could not both have its box.
+- **The mode moves, the pointer stops it.** Every block breathes
+  (`.card-block-editable`, `card-block-breathe`, 1.2% at 2.4s) for as long as edit mode is
+  on; the block under the pointer drops the animation and outlines itself in dashed accent.
+  Both halves are needed — the card is otherwise identical in and out of the mode, and an
+  affordance that only appears under the pointer is one you have to already be on to see.
+- Empty and filled blocks draw the **same** thing. This used to split on `isEmpty`, which is
+  why `renderOverlay` used to be handed one; it is not any more.
+- The scale is on the **block's box**, never its content: the box is `overflow: hidden`, so a
+  transform on the content grows straight into that clip.
+- Hover sets `animation: none` **and** keeps `transition: transform` on the base rule, so a
+  block interrupted mid-swell settles instead of snapping — removing an animation lets a
+  transition run from the value it was showing.
+- `prefers-reduced-motion` needs its own rule here, and it is the state that needs one most:
+  with nothing breathing there is no sign the card's blocks became buttons at all. Every
+  target wears a faint dashed rectangle at rest instead, and hover takes one to full accent
+  — verified by rewriting the media rule's condition to `all` in the live CSSOM.
+- The middle zone is `overflow-x: hidden` **because of the swell** — `overflow-y: auto` alone
+  computes the other axis to `auto`, and a bled block growing put three measured pixels of
+  horizontal scroll into the card. On the y axis the swell leaves 0.8px of scroll range at
+  the top of each cycle, measured; `data-bottom-scroll` never flips, so it is left alone.
+- An element that never stops moving is not "stable" to browser automation: DevTools' own
+  `hover` refuses a breathing block until its animation is paused. Worth knowing before
+  writing an E2E test against edit mode.
 
 ### Logo
 
@@ -170,6 +209,15 @@ building the same card from the same functions in `packages/shared/`.
   `"image"` = the logo always, empty block if there is none. **`"image"` must not fall back
   to the pin** or Mixed is a second word for something that already exists.
 - Both renderers had to learn this together — the first attempt was real twin drift.
+- **The two renderers' untagged fallback now agrees by default rather than by design, and
+  that is not the same as agreeing.** The embed reads `--lm-pin`, which `applyChrome`
+  writes from `settings.pinColor`; the dashboard's `PinPreview` reads `var(--accent)`
+  (`app/globals.css`). `DEFAULT_EMBED_SETTINGS.pinColor` is that same accent, so an
+  undesigned map draws the same colour on both sides — but an owner who changes **Default
+  pin** in the Colours fold moves only the published half, and the card designer keeps
+  previewing the orange. Left alone deliberately: the designer is an account-level tool
+  with no map in scope, so it has no per-map colour to read. If a Logo block ever needs the
+  real one, the seam is `PinPreview`'s `fallbackColor`, not a new token.
 
 ### Per-pin overrides
 
@@ -447,6 +495,48 @@ Transparency already made in this file, applied to the seven controls it had not
 been. Narrowing is safe on designs that already exist for the reason above:
 `nearestStop` lights the closest remaining option and writes nothing.
 
+**Every fold now starts shut and only one opens at a time, which reverses two
+more of this file's arguments and settles a third.** The publish sidebar opened on
+"Results panel" because comparing a panel setting against a colour is a real thing
+to be doing; the palette opened on all four shelves because nothing is compared
+across shelves and hiding the block you came for is a click for nothing; the Modify
+tab opened the first non-empty group and, via `SIGNATURE_GROUP`, the fold a Button
+or a Tags block is really selected for. Each of those is a good argument about one
+panel. What none of them survives is the two questions being asked together — *how
+many are open* and *how tall is the column* — because the answer to the first was
+"as many as you like" and the second is 20–24rem everywhere. A sidebar with three
+folds open is the wall folding was introduced to break up.
+
+So `PropertyFolds` owns the set: no `allowsMultipleExpanded` (react-aria's
+`DisclosureGroup` is single-open by default, and all four call sites were asking
+for the other behaviour), and `expandedKeys` starting empty. The Edit location
+dialog had this rule all along — `FormSection` was `useState(false)` from the day
+it stopped being a `<details>` — so three panels disagreeing with it was the actual
+inconsistency, and `FormSectionGroup` now gives the dialog the *one-at-a-time* half
+it was missing. A `useId` per section rather than a key derived from the title,
+because two sections sharing a word would open and close together and the symptom
+would read as a bug in the animation.
+
+`SIGNATURE_GROUP` is gone with it, and the bug it answered is worth keeping in
+view: a Button block opened "Size & position" while the button's colour sat shut
+two folds below under a heading reading "Button" inside a panel already headed
+"Button", and it was reported as the control not existing. Nothing open is not a
+regression of that — with every fold shut, all seven headings a block offers are on
+screen at once, so the one you want is one press away instead of one scroll and one
+press. The failure was a control below the fold, not a control behind a click.
+
+**Opening a fold now scrolls to what it opened** (`lib/ui/reveal-fold.ts`), which
+is the other half of the same complaint. Nothing did this before — `scrollIntoView`
+appeared twice in the tree and neither was a fold — so a fold near the bottom of a
+sidebar grew its panel off the end of the scroller and reading as not having opened
+at all. Measured: a 197px scroller with "Visitor analytics" 168px down: the panel's
+bottom landed 126px below the fold, and after the reveal the whole item sits inside.
+It waits for `transitionend` on `height` rather than scrolling on the press, because
+HeroUI animates the panel from `--disclosure-panel-height` over 200ms and a scroll
+against an 8px box lands nowhere; the timeout behind that is a guard, not a guess,
+for a transition that never starts. `block: "nearest"` so a fold already fully
+visible is left exactly where it is.
+
 **The Modify tab folds, which reverses an argument this file used to make.**
 `PropertyGroup` was always-open on the grounds that the panel already scrolls, so
 folding buys height that was never scarce and costs a click on the way to every
@@ -645,6 +735,50 @@ the embed's twin of `--default`, #e2e5ea against `oklch(94%)` in light and
 #2c2f35 against `oklch(27%)` in dark. All four move cards already published on
 the next `/embed` deploy, which is the tag-filter-chips exception taken again and
 is the entire point: the two renderers must agree.
+
+**And then it followed the wrong viewer, which is the second half of the same
+bug and cost three symptoms that looked unrelated.** `cardThemeClass` resolved
+Auto — and `DEFAULT_MAP_STYLE` is Auto, so this is most maps — by reading
+`window.matchMedia("(prefers-color-scheme: dark)")` at render. That is the
+*operating system's* preference, and the dashboard's theme is not it: HeroUI
+resolves localStorage first, so an owner whose OS is dark and who picked **Light**
+in the account menu got `<html class="light">`, a light basemap via
+`usePrefersDark`, and a card wearing `.dark` on top of both. Three reports came out
+of that one line and none of them named the theme: the card was black in light
+mode (`bg-surface` at `oklch(19%)`), the gallery's dashed border was black
+(`--border` at `oklch(28%)`), and React reported a hydration mismatch against
+`card-frame.tsx` — because a `typeof window` branch read during render makes the
+server say `light` and the client say `dark` on the same element. It was also
+non-reactive: toggling the dashboard theme never redrew the class.
+
+The answer arrives as an argument now, from `usePrefersDark()` — the `.dark` class
+off `<html>`, through `useSyncExternalStore`. That is the same source
+`use-maplibre.ts` reads for the basemap, so the card and the map under it cannot
+disagree; it honours an explicit Light or Dark as well as "system"; it re-renders on
+a toggle; and it has a server snapshot, so there is nothing left to mismatch. The
+signature deliberately mirrors `shouldDarkenStyle(style, prefersDark)`, which
+answers the neighbouring question about the basemap itself. **The product's own copy
+was right all along** and is worth quoting, because it is what settled which viewer
+Auto means: the appearance dialog says Auto matches "your theme here, each visitor's
+own setting on your site."
+
+**The drag ghost lost its variables, and drew a colour instead of nothing.**
+`mountRowGhost` clones the dragged block onto `document.body`, deliberately — a
+fixed ghost is clipped inside the panel. The clone keeps its classes, so every rule
+that styled it still matched, but the two elements *declaring* what those rules read
+are ancestors it no longer had: `cardAccentVars` writes `--card-accent` on the
+designer column and `cardStyle` writes `--card-pad`, `--card-gap`, `--card-radius`,
+`--card-slot-radius`, `--card-font*` and `--card-color` on the card root. So
+`.card-button` fell to the end of `var(--card-button-bg, var(--card-accent,
+#1c7ed6))` and the thing under the pointer was blue while the block it was a copy of
+was orange two inches away; an Outline button's ghost took a blue border and label,
+and the slot radius, the text sizes and an empty block's height were each one
+fallback out. `inheritContext` walks the ancestors copying their **inline** custom
+properties, nearest winning — inline is what makes it work in every browser, since
+iterating `el.style` finds custom properties where enumerating `getComputedStyle`
+does not, and both declarations above happen to be inline. The card's `.light` /
+`.dark` comes too, or a block dragged out of a card on the Dark basemap would
+repaint itself in the page's theme mid-gesture.
 
 **The dashboard's card carries its own colour context, because it was following
 the wrong theme.** A card's ground is a colour its owner picked — a stored
@@ -913,9 +1047,9 @@ location on every map, which is the right default and the wrong answer for a
 flagship store that should show its logo where the rest show a pin. Edit mode is
 the seam: the button at the **top left** of a place card (`PlaceCardChrome`, its
 own cluster away from the pair on the right, because those two are about the
-location and this one latches and is about the card) turns every block into
-something with a pencil in its corner, and the pencil opens **the designer's own
-properties panel** pointed at this location instead of at the account.
+location and this one latches and is about the card) turns every block into a
+press target of its own, and pressing one opens **the designer's own properties
+panel** pointed at this location instead of at the account.
 
 Reusing `BlockProperties` rather than building a second panel is the decision
 that made "everything the designer offers" affordable: it is already a walk over
@@ -963,12 +1097,109 @@ opposite, because what is being edited is what you are looking at. So
 `renderOverlay` draws inside the same box without displacing anything, and
 `.card-edit-target` is `position: absolute; inset: 0` over a content element
 `CardView` marks `relative` — turning edit mode on must move nothing, or the
-design being edited is not the one on screen. The pencil is a **corner badge and
-not the whole box**, which is not a style choice: an empty block already gives
-its entire box to the dashed `+` that fills it in, and two press targets stacked
-on a 24px line is a control nobody can hit on purpose. One rule for every block
-instead. The `+` slots are untouched by any of this and still work with edit mode
-off.
+design being edited is not the one on screen.
+
+**The target owns the whole block, and it took `inert` to make that safe.** It
+was a corner badge with a pencil in it, for an honest reason: an empty block
+gives its entire box to the dashed `+` that fills it in, and two press targets
+stacked on a 24px line is a control nobody can hit on purpose. What that cost was
+a card in edit mode wearing six pencils — the chrome became the card, on the one
+screen whose whole job is showing the design underneath it. And it was never only
+the `+`: a `tel:` link, the Links row and the week's fold were all live under the
+badge and all took presses meant for the block.
+
+So the stack is gone rather than worked around. `CardView` puts the block's
+content inside a wrapper marked `inert` whenever `renderOverlay` returns
+anything, which turns off every control the owner's own design put on the card
+for as long as edit mode is on, and leaves exactly one thing to press. Three
+things about that wrapper are load bearing:
+
+- It is `display: contents`, so it generates no box. The gallery's image resolves
+  `height: 100%` against the content box above (`blockContentStyle`), and the DOM
+  a card lays out is the same in both modes — measured: leaving edit mode returns
+  zero `.card-edit-target`, zero `[inert]` and zero `.contents` to the card.
+- **The target renders outside it.** `inert` on the content box itself would take
+  the target with it. That is the whole reason there is a wrapper rather than an
+  attribute.
+- `inert` also hides the content from assistive tech, which is the trade. The
+  card's own `role="dialog"` still names the location, and each target names its
+  block, so what is lost is reading the *values* while redesigning — and the card
+  out of edit mode is unchanged.
+
+**Filling content in moved out of edit mode with the badge.** The `+` slots are
+pressable on the card as it normally stands and inert inside it: the card as it
+stands is where a location's *content* is filled in, and edit mode is where the
+*design* of a block is changed. Two gestures separated by mode rather than by
+pixels, which is what freed the box.
+
+**The card breathes while the mode is on, and the pointer is what stops one
+block.** `.card-block-editable` runs `card-block-breathe` — 1 to 1.012 and back,
+2.4s, ease-in-out, on every block the overlay covers — and the block under the
+pointer drops the animation and outlines itself in a dashed accent rectangle with
+an `--accent-soft` tint under it.
+
+Both halves are the affordance, and the first one is the half that was missing.
+Edit mode is a state of the *card*, entered from one button in its corner, and
+everything under that button is deliberately unchanged: same blocks, same type,
+same picture, because what is being edited has to be what is being looked at. A
+card that says nothing until the pointer arrives says it one block at a time, to
+a pointer already on the block it is about — which is a way of telling somebody
+what they have already worked out. So the card says it up front, everywhere, and
+the pointer goes back to the job it is good at: picking one.
+
+**Empty and filled blocks draw the same thing now.** This split on `isEmpty` —
+an outline for a block that was already a dashed box, a lift for one with content
+in it — and that is why `renderOverlay` was handed one and `CardEditTarget` took
+one. The split answered "which affordance suits this block" when the question a
+pointer asks is "which block am I on"; a card in edit mode should read the same
+the whole way down whatever its owner happened to put on it. On an empty block
+the accent rectangle lands on the slot's own resting one, at the same box and the
+same radius, so it recolours that border rather than drawing a second beside it.
+The prop is gone from both, and `CardView` no longer computes emptiness for the
+overlay at all.
+
+Five mechanical notes, each of which was a bug waiting:
+
+- **It goes on the block's box, not its content.** The box is `overflow: hidden`
+  (`CardView`), so a transform on the content grows straight into that clip and
+  loses a percent of a photograph off every edge, on every pass. On the box, the
+  clip scales with it.
+- **Hover sets `animation: none` and the base rule keeps `transition: transform`.**
+  Removing an animation reverts the property to its base value, and a transition
+  on that property runs from the value the animation was showing — so a block
+  caught mid-swell settles rather than snapping back.
+- **`prefers-reduced-motion` needs its own rule, and here it needs a replacement
+  rather than a deletion.** The blanket rule at the bottom of app/globals.css
+  cuts `animation-duration` to 0.01ms, which does stop the swell and leaves a
+  card with no sign at all that its blocks became buttons — the invariant's own
+  failure case, a state told only in motion. So under that query every target
+  wears its dashed rectangle at rest at 40% accent, and hover takes one to full.
+  Verified by rewriting the media rule's `conditionText` to `all` in the live
+  CSSOM and re-measuring: five faint borders at rest, the hovered one solid.
+- **The middle zone is `overflow-x: hidden`.** `overflow-y: auto` alone computes
+  the other axis to `auto` (CSS Overflow: `visible` beside a non-`visible`
+  becomes `auto`), which cost nothing until a bled block could grow: `scrollWidth`
+  221 against a `clientWidth` of 218, invisible because `hideScrollBar` is on, and
+  a trackpad swipe would have slid the card's content sideways.
+- **On the y axis the swell is left alone, and that is a measurement rather than
+  an oversight.** The zone has to keep `overflow-y: auto`, so the last block's
+  growth does add scroll range — 0.8px at the top of each cycle, measured by
+  setting `scrollTop` to 999 across a full period. `data-bottom-scroll` never
+  flips over a cycle, so the `ScrollShadow` fade does not blink, and sub-pixel is
+  below what a wheel can express. Scaling *down* instead (0.988 → 1) would remove
+  it outright and was rejected for what it does to a bled photo band: a shrinking
+  full-bleed block shows slivers of card ground down both edges, where a growing
+  one is clipped by `CardFrame` and shows nothing.
+
+One thing worth knowing before writing an E2E test here: an element that never
+stops moving is not "stable" to browser automation. DevTools' own `hover` refused
+every target until the blocks' animations were paused through `getAnimations()`.
+
+The gallery's badge used to be the one that left the corner, because the card's
+close X sits over that corner at `z-10` and `elementFromPoint` answered "Close"
+at the badge's own centre. That whole exception is gone with the badge — measured
+again after: `elementFromPoint` at every block's centre now answers the target,
+the gallery's included, and all three chrome buttons stay reachable at theirs.
 
 **The panel paints through a preview channel and writes the row once, and that
 is a correctness fix rather than a saving.** `ColorPickerField` fires its
@@ -1000,9 +1231,11 @@ writes overlap anyway. **It is a behaviour change for every caller** — the pin
 drag included, which had the same latent bug and hit it far more rarely.
 
 Three smaller things about the panel, each a real bug rather than a nicety. The
-pencil badge is `min(1.125rem, 100%)` on both axes, because the block's box is
+pencil badge was `min(1.125rem, 100%)` on both axes, because the block's box is
 `overflow-hidden` and a one-line block is shorter than a fixed 18px square — the
-address row clipped it. The popover is a **bounded, clipping flex column**, so
+address row clipped it. (The badge is gone; the target is the whole block now.
+The rule it came from is still live everywhere else on this card, which is why
+the note stays.) The popover is a **bounded, clipping flex column**, so
 React Aria's own computed `maxHeight` reaches the form's scroller: the cap used
 to be a `dvh` on an element inside the dialog and `.popover` has no `overflow` of
 its own, so a tall panel overflowed a body-level absolutely positioned element
@@ -1039,7 +1272,7 @@ parents*, so crossing that threshold reparents the block, React unmounts the
 subtree, and the open dialog goes with it — `openPanel` still named the block, so
 a fresh one mounted open. Between 75% and 100% that fired every time.
 
-So `PlaceCard` owns the panel (`BlockEditorPopover`), the badge is a trigger and
+So `PlaceCard` owns the panel (`BlockEditorPopover`), the target is a trigger and
 nothing else, and the popover is anchored to the **card** by an explicit
 `triggerRef` — the fix `TagPicker` already documents for the milder version of
 the same failure, taken one step further because here the trigger does not merely
@@ -1056,7 +1289,9 @@ whole job is binding a trigger three components away inside the card, and with n
 pressable child it logs a `PressResponder` warning on every open. What that costs
 is HeroUI's slot classes, passed explicitly from `popoverVariants()`.
 
-**The gallery's badge is the one that leaves the corner**, because the gallery is
+**The gallery's badge was the one that left the corner** — superseded, and kept
+because the measurement in it is the one that stops the corner being reused.
+The gallery is
 the one block that reaches the card's own chrome: `PlaceCardChrome` draws the
 close X at `top-1.5 right-1.5` at `z-10`, over the card rather than in it, so the
 badge underneath it was not merely overlapped but unpressable —
@@ -1064,10 +1299,13 @@ badge underneath it was not merely overlapped but unpressable —
 an empty gallery has neither of the other corners free: with a picture the middle
 is clear, and with none the middle belongs to the dashed `+` that adds one while
 the corner is still the X, so the badge goes to the bottom. `.card-edit-target`
-is a one-cell grid and all three placements are one `place-items` declaration, so
-there is no second set of insets to keep in step. `CardView` is what knows a block
-is drawing a `+`, which is why `renderOverlay` is handed that fact rather than
-guessing at it. Every other block keeps the corner, where nothing is in its way.
+was a one-cell grid and all three placements were one `place-items` declaration,
+so there was no second set of insets to keep in step. `CardView` was what knew a
+block was drawing a `+`, and it kept handing `renderOverlay` that fact after the
+corners went — first to pick between a lift and a dashed outline, and then for
+nothing at all: the target draws the same thing on every block, so the argument is
+gone from the seam. Every other block kept the corner, where nothing was in its
+way.
 
 **A `PropertyCheckbox` is a label above its box, and `PropertyChecks` stacks
 them one per line.** Asked for directly, and applied in the studio too rather

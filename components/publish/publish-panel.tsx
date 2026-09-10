@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { EmbedPreview } from "@/components/preview/embed-preview";
 import { PageTitle } from "@/components/ui/page-title";
 import { useMap } from "@/lib/query/maps";
@@ -8,6 +10,7 @@ import { useShapes } from "@/lib/query/shapes";
 import type { AppMap, Place, Shape } from "@/lib/repositories/types";
 import { DesignSidebar } from "./design-sidebar/design-sidebar";
 import { useEmbedDesign } from "./design-sidebar/use-embed-design";
+import { DEFAULT_DEVICE, deviceWidth, type DeviceId } from "./preview-device/devices";
 
 /**
  * The Publish tab: the map as visitors will get it, and the controls that decide
@@ -51,6 +54,17 @@ export function PublishPanel({
   const design = useEmbedDesign(map);
   const isEmpty = places.length === 0 && shapes.length === 0;
 
+  /*
+   * Local, and deliberately not part of the design.
+   *
+   * Which width the owner is *looking* at is not something a visitor ever gets,
+   * so it has no business in `settings` — where it would also be a key in the
+   * blob `useEmbedDesign` writes whole, and would change `rebuildKey` and cost
+   * the preview a whole new document on every press.
+   */
+  const [device, setDevice] = useState<DeviceId>(DEFAULT_DEVICE);
+  const width = deviceWidth(device);
+
   return (
     <>
       <PageTitle>Publish</PageTitle>
@@ -93,16 +107,23 @@ export function PublishPanel({
               settings={design.settings}
               cardDesign={initialCardDesign}
               frame={false}
+              maxWidth={width ?? undefined}
               className="h-full w-full"
             />
           )}
         </div>
 
+        {/* The width tiles live in this column's header rather than over the
+            map — see `DeviceToggle`. They are the one control up there that is
+            not `design`, which is why the state stays here and comes back down
+            as props rather than joining the draft. */}
         <DesignSidebar
           map={map}
           places={places}
           shapes={shapes}
           design={design}
+          device={device}
+          onDeviceChange={setDevice}
         />
       </div>
     </>

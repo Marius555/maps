@@ -1,6 +1,16 @@
 "use client";
 
-import { FieldError, Input, Label, TextArea, TextField } from "@heroui/react";
+import {
+  Button,
+  FieldError,
+  Input,
+  InputGroup,
+  Label,
+  TextArea,
+  TextField,
+} from "@heroui/react";
+import { Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 import {
   Controller,
   type Control,
@@ -119,6 +129,89 @@ export function FormTextArea<T extends FieldValues>({
               className="min-h-24"
               placeholder={placeholder}
             />
+            {error ? <FieldError>{error}</FieldError> : null}
+          </TextField>
+        );
+      }}
+    />
+  );
+}
+
+/**
+ * A password field whose contents can be revealed.
+ *
+ * Its own component rather than a `showToggle` prop on `FormTextField`, because
+ * the markup genuinely differs: a suffix needs `InputGroup` wrapping
+ * `InputGroup.Input`, and threading that through the plain field would leave one
+ * component rendering two different anatomies depending on a boolean.
+ *
+ * Everything the doc comment at the top of this file says still applies — the
+ * value is React Aria's, so this binds through `Controller` exactly as its
+ * siblings do. The `type` here is *display* state and nothing else; the form's
+ * value is the same string either way.
+ *
+ * `type="button"` on the toggle is load-bearing. A `<button>` inside a `<form>`
+ * defaults to `type="submit"`, so without it, revealing your password submits
+ * the login form with whatever is in it — and React Aria's Button does not set
+ * one for you.
+ */
+export function FormPasswordField<T extends FieldValues>({
+  control,
+  name,
+  label,
+  placeholder,
+  autoComplete,
+  isDisabled,
+  autoFocus,
+}: FieldProps<T>) {
+  const [revealed, setRevealed] = useState(false);
+
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field, fieldState }) => {
+        const error = fieldState.error?.message;
+
+        return (
+          <TextField
+            fullWidth
+            type={revealed ? "text" : "password"}
+            isDisabled={isDisabled}
+            isInvalid={Boolean(error)}
+            value={field.value ?? ""}
+            onChange={field.onChange}
+            onBlur={field.onBlur}
+          >
+            <Label>{label}</Label>
+            <InputGroup>
+              <InputGroup.Input
+                ref={field.ref}
+                placeholder={placeholder}
+                autoComplete={autoComplete}
+                autoFocus={autoFocus}
+              />
+              <InputGroup.Suffix>
+                <Button
+                  type="button"
+                  isIconOnly
+                  size="sm"
+                  variant="ghost"
+                  isDisabled={isDisabled}
+                  // The label names what pressing it will do, not the current
+                  // state — "Password shown" would leave a screen-reader user
+                  // guessing what the control is for.
+                  aria-label={revealed ? "Hide password" : "Show password"}
+                  onPress={() => setRevealed((shown) => !shown)}
+                >
+                  {revealed ? (
+                    <EyeOff aria-hidden="true" className="size-4" />
+                  ) : (
+                    <Eye aria-hidden="true" className="size-4" />
+                  )}
+                </Button>
+              </InputGroup.Suffix>
+            </InputGroup>
             {error ? <FieldError>{error}</FieldError> : null}
           </TextField>
         );

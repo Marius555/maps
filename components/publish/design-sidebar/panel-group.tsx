@@ -15,12 +15,26 @@ import type { EmbedDesign } from "./use-embed-design";
  * The results panel: whether there is one, where it sits, and what it looks
  * like.
  *
- * Every control below the first is hidden when the panel is off, because they
- * all describe a thing that is not on the map — and a column of live-looking
- * controls that change nothing is worse than a shorter panel. The transparency
- * run goes one step further and hides unless the panel is *floating*: opacity on
- * a docked column reveals the page's own background, not the map, which is not
- * what anyone is asking for when they reach for it.
+ * Every control that describes the panel's *shape* is hidden when the panel is
+ * off, because they all describe a thing that is not on the map — and a column
+ * of live-looking controls that change nothing is worse than a shorter panel.
+ * The transparency run goes one step further and hides unless the panel is
+ * *floating*: opacity on a docked column reveals the page's own background, not
+ * the map, which is not what anyone is asking for when they reach for it.
+ *
+ * **Search and Nearest are the exception, and they used to be inside that
+ * branch.** They are not panel controls: with the list off the embed still draws
+ * both, floating over the map, so hiding their toggles left an owner looking at
+ * a search box on their map with no way in this panel to switch it off — and no
+ * way to switch it *on* for a bare map either. They sit outside the fold's
+ * conditional now, and the label no longer says "Above the results", which is
+ * only where they are when there are results.
+ *
+ * **The two switches at the foot are the panel's own yes/no questions**, and the
+ * second of them is the only control here that describes a width this preview
+ * may not be showing: a drawer replaces the stacked list below 768px of the
+ * embed's own box, which is what the tablet and phone tiles in the header exist
+ * to check.
  *
  * **Width and Transparency are selects; everything else is tiles.** Five words
  * across a 20rem column is about 60px each and none of them are readable, which
@@ -38,6 +52,18 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
           onChange={(value) => set("list", value)}
         />
       </PropertySwitches>
+
+      {/* Outside the branch below: these two exist whether or not the list
+          does. */}
+      <PropertyToggles
+        label="Search and nearest"
+        options={TOOLS}
+        selected={[
+          ...(settings.search ? (["search"] as const) : []),
+          ...(settings.nearest ? (["nearest"] as const) : []),
+        ]}
+        onChange={(value, isSelected) => set(value, isSelected)}
+      />
 
       {settings.list ? (
         <>
@@ -86,16 +112,6 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
             </>
           ) : null}
 
-          <PropertyToggles
-            label="Above the results"
-            options={TOOLS}
-            selected={[
-              ...(settings.search ? (["search"] as const) : []),
-              ...(settings.nearest ? (["nearest"] as const) : []),
-            ]}
-            onChange={(value, isSelected) => set(value, isSelected)}
-          />
-
           {/* Last, because a lone yes/no goes at the end of its fold — a boolean
               interrupting a run of shape controls is the thing that rule exists
               to stop. It is a switch on this panel's own terms: it applies to
@@ -111,6 +127,16 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
               label="Show the list's scrollbar"
               isSelected={settings.panelScrollbar}
               onChange={(value) => set("panelScrollbar", value)}
+            />
+            {/* "Narrow", not "mobile": the embed sizes off its own box, so a
+                360px map in a sidebar on a 1440px monitor gets this and a phone
+                held sideways may not. Inside the `list` branch because a drawer
+                is where the list goes, and there is no list to put anywhere with
+                the panel switched off. */}
+            <PropertySwitch
+              label="Use a drawer on narrow screens"
+              isSelected={settings.panelDrawer}
+              onChange={(value) => set("panelDrawer", value)}
             />
           </PropertySwitches>
         </>

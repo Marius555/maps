@@ -93,6 +93,7 @@ export function EmbedPreview({
   shapes,
   className,
   frame = true,
+  maxWidth,
   settings,
   cardDesign,
 }: {
@@ -119,6 +120,19 @@ export function EmbedPreview({
    * see, drawn around the one thing on the page that is meant to be honest.
    */
   frame?: boolean;
+  /**
+   * Hold the frame to this many pixels wide, centred, or `undefined` for the
+   * whole pane.
+   *
+   * This is the device preview, and it is a width and nothing else on purpose.
+   * Every responsive rule the embed has is a `@container` query against
+   * `.lm-root`'s own inline size, so a narrower box *is* the phone layout —
+   * there is no viewport to emulate and no second document to build. It is
+   * deliberately not part of `settings`: nothing here is published, and putting
+   * it there would change `rebuildKey` and throw the document away on every
+   * press.
+   */
+  maxWidth?: number;
   /**
    * The designer's uncommitted settings, when one is driving this.
    *
@@ -427,6 +441,25 @@ export function EmbedPreview({
     // does, which is the complement of `rebuildKey`.
   }, [chromeKey, visible, frameAt]);
 
+  /*
+   * A resized box is a map that has to be remeasured.
+   *
+   * MapLibre tracks its container by default, but it paints on demand rather
+   * than in a loop and the standby frame is behind an opaque one — so a width
+   * change can leave a canvas at the old size with nothing scheduled to correct
+   * it. Measured before this existed: switching the preview to 390px left the
+   * map a blank white box with the tiles still drawn at desktop width.
+   *
+   * Both frames, not just the visible one: the standby holds a live document
+   * between rebuilds and would otherwise be revealed at the wrong size.
+   * `repaintFrame` is documented as cheap and idempotent, which is what makes
+   * that affordable.
+   */
+  useEffect(() => {
+    repaintFrame(frameAt(0)?.contentDocument);
+    repaintFrame(frameAt(1)?.contentDocument);
+  }, [maxWidth, frameAt]);
+
   // The one moment the blobs are certainly dead: the component is going away, so
   // nothing is left that could still be reading one.
   useEffect(
@@ -554,6 +587,14 @@ export function EmbedPreview({
       className={`overflow-hidden bg-surface-secondary ${
         frame ? "rounded-xl border border-border" : ""
       } ${className ?? ""}`}
+      /*
+       * The cap goes on the outer box and everything under it is already
+       * `h-full w-full`, so the frames, the cover and the embed inside them all
+       * follow with no further plumbing. `margin: auto` centres the narrowed
+       * frame in the pane rather than leaving it against one edge, which would
+       * read as a broken layout rather than a phone.
+       */
+      style={maxWidth === undefined ? undefined : { maxWidth, margin: "0 auto" }}
     >
       {/*
        * Both frames stay mounted and stacked. Unmounting the outgoing one is

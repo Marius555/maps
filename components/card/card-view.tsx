@@ -96,7 +96,7 @@ export function CardView({
   blockOverrides?: CardBlockOverrides | null;
   /**
    * What to draw *over* a block, on top of whatever it already shows -- the
-   * hover outline and the pencil that open its menu in edit mode.
+   * press target that opens its own settings in edit mode.
    *
    * **An overlay, where `renderSlot` is a replacement**, and the two differ for
    * a reason rather than by accident. A slot's whole job is to *be* the content
@@ -106,15 +106,22 @@ export function CardView({
    * renders beside the content rather than instead of it, inside the same box so
    * it inherits the block's size and position without knowing either.
    *
-   * It is told whether the block is drawing a slot, which is the one thing
-   * about the block that only this component knows: `renderSlot` is asked here
-   * and its answer decides the box's whole content, so an overlay that has to
-   * keep clear of a centred `+` cannot work it out for itself.
+   * Returning anything at all also puts the block's own content behind `inert`
+   * and marks the box `card-block-editable`, which is what breathes for as long
+   * as the mode is on. Both are this component's to do rather than the caller's:
+   * one needs the element the content lives in, the other the element that owns
+   * the clip, and neither is reachable from an overlay rendered inside the box.
+   *
+   * Every block alike, whether it drew content or an invitation. This used to
+   * hand the caller an `isEmpty` so a target could outline an empty block and
+   * lift a filled one; the two affordances are now the mode and the pointer
+   * rather than two kinds of block, so nothing downstream needs to know — see
+   * `CardEditTarget`.
    *
    * Editor-only, on `renderSlot`'s terms one level down: the embed passes
    * nothing and has no idea it exists (CLAUDE.md §2, §4).
    */
-  renderOverlay?: (block: CardBlock, hasSlot: boolean) => React.ReactNode;
+  renderOverlay?: (block: CardBlock) => React.ReactNode;
   /** Chrome outside the layout — the close button, the Edit footer. */
   children?: React.ReactNode;
   /**
@@ -202,12 +209,16 @@ export function CardView({
      * went — see `upwardLiftOf` in packages/shared/card-layout.ts.
      */
     const blockView = (block: CardBlock, row: CardRow, onRow: boolean) => {
-      /*
-       * Asked once and read twice: it decides what the block draws *and* where
-       * the editor's badge sits. Calling it again for the second question would
-       * be a second answer waiting to disagree with the first.
-       */
       const slot = renderSlot?.(block) ?? null;
+
+      const overlay = renderOverlay?.(block) ?? null;
+
+      /*
+       * The content, as one node, because in edit mode it is rendered inside a
+       * wrapper and out of it it is not — and building it twice would be two
+       * subtrees React remounts between as edit mode is toggled.
+       */
+      const content = slot ?? <CardBlockContent block={block} data={data} />;
 
       return (
         <div
@@ -228,7 +239,15 @@ export function CardView({
           // rather than poke past it. Cheap insurance here specifically,
           // since nothing on this read-only path currently rounds a block's
           // own corners the way the designer's selection state does.
-          className="min-w-0 overflow-hidden"
+          //
+          // `card-block-editable` is the breathing every block does while edit
+          // mode is on, and it is on *this* element rather than on the content
+          // box because this is the element that owns the clip: a transform on
+          // the content would grow it into its own parent's `overflow: hidden`
+          // and be cut off on every pass (app/globals.css).
+          className={`min-w-0 overflow-hidden${
+            overlay ? " card-block-editable" : ""
+          }`}
         >
           {/* A second element only because a half shrinks its content and must
               not shrink its own flex basis with it. It is an empty style object
@@ -248,21 +267,37 @@ export function CardView({
             style={blockContentStyle(block, layout)}
           >
             {/* The slot, when this location left the block empty and the caller
-                offers one — see `renderSlot`. `??` and not a ternary: a caller
-                that offers nothing, and a block that is filled in, are the same
-                answer here and both draw the block. */}
-            {slot ?? <CardBlockContent block={block} data={data} />}
+                offers one — see `renderSlot`. Out of edit mode this is the whole
+                of what a block draws, exactly as it was before any of the
+                editing chrome existed.
 
-            {/* The editor's hover target, over whatever the block just drew --
+                In edit mode it goes inside an `inert` wrapper, and that is what
+                turns the block's own controls off while its design is being
+                edited: the phone `tel:` link, the Links row, the week's fold,
+                and the dashed `+` that fills an empty block in are all reachable
+                things sitting under a target that now owns the whole box, and a
+                press that lands on one of them is a press that did not open the
+                block. `display: contents` so the wrapper generates no box —
+                `height: 100%` on the gallery's image still resolves against the
+                content box above, and the DOM a card lays out is the same in
+                both modes. */}
+            {overlay ? (
+              <div className="contents" inert>
+                {content}
+              </div>
+            ) : (
+              content
+            )}
+
+            {/* The editor's press target, over whatever the block just drew --
                 see `renderOverlay`. Null for every caller that offers none, and
                 for every block when edit mode is off, so the DOM below is
                 untouched for all of them.
 
-                Told whether it is drawn over a slot, because that is the one
-                thing only this function knows and the overlay has to move for:
-                a `+` owns the whole box, so the badge goes back to the corner
-                rather than landing on its glyph. */}
-            {renderOverlay?.(block, slot !== null)}
+                **Outside the `inert` wrapper**, which is the whole reason that
+                wrapper is a wrapper rather than `inert` on this box: the target
+                has to stay pressable while everything it covers is not. */}
+            {overlay}
           </div>
         </div>
       );

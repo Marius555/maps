@@ -25,8 +25,10 @@ rewritten; it is the record of why this area is shaped as it is.
 - The Publish page **hides the app nav** (`hidesAppNav` in `lib/layout/app-nav.ts`), so the
   sidebar takes that 15rem and there is no `Container`. The back link in the sidebar header
   is the only way out — structure, not decoration.
-- The two-pane breakpoint is `lg`, because the embed's own container query is 640px **of its
-  own width** and 1024 − 320 leaves 704px. Below `lg` the page stacks.
+- The two-pane breakpoint is `lg`, because the embed's own stacking query is 640px **of its
+  own width** and 1024 − 320 leaves 704px. Below `lg` the page stacks. (The drawer query is
+  768px, so a `panelDrawer` map drawers at `lg` in the designer — that is the setting doing
+  what it says, not the pane being too narrow.)
 - **This page must have no `loading.tsx`.** With one, a navigation produced two large grey
   states for one click (the nav unmounting, `main` jumping 240px, eight `animate-pulse`
   boxes, then a second commit 550ms later). With none, the router awaits the payload and the
@@ -75,6 +77,141 @@ rewritten; it is the record of why this area is shaped as it is.
   control with no switch (§12); there is no traffic or satellite toggle (§2).
 - The Search placeholder and Nearest label were **deleted, not hidden** — they never reached
   a published snapshot, so §7 does not apply.
+- **The floating toolbar is the docked one's twin and four rules were missing.** It is
+  `inset-inline-start` and side-aware (`data-lm-side` is written from `panelSide` whether or
+  not the list is on, so turning the list off no longer throws the search box to the other
+  edge); it is `flex-wrap: nowrap`, with `min-width: 0` on both `.lm-search` and the input,
+  so the row shrinks instead of dropping Nearest onto a second line; and under 480px
+  `.lm-search` takes `flex: 1 1 auto` — `width: 100%` on a field inside a shrink-to-fit
+  wrapper resolves against the wrapper's own content and did nothing.
+- **A logical inset compiles to a `:lang()` pair, and that silently changed a specificity
+  tie.** The base `.lm-root[data-lm-side="right"] .lm-toolbar { inset-inline-start: auto }`
+  ships as `… .lm-toolbar:not(:is(:lang(ar), :lang(he), …))`, which counts a pseudo-class and
+  so is (0,4,0); the 480px override set both sides to the *same* value, needed no direction,
+  compiled to a bare selector at (0,3,0) and lost to the rule it exists to cancel. The field
+  was back at 202px on a 390px map — the exact symptom the 480px block records having already
+  fixed. `:not(:empty)` restores the weight honestly (an empty toolbar is `display: none`
+  anyway). **This one reaches live maps**, and it is a broken state becoming a working one
+  rather than a design changing under somebody, which is the same test the four fixes below
+  passed. It was reachable only with the list switched off until `panelDrawer` started
+  floating a narrow map's toolbar with the list on, which is how it was found.
+- **A floating toolbar reserves 42px at the top of the corner it covers, and only that
+  corner.** Padding both recreated the reported symptom on the far side. The two branches
+  name opposite corners so they cannot conflict, which is what lets the 480px query add the
+  other one without out-specifying anything; `:not([data-lm-side="right"])` keeps the two
+  selectors the same weight.
+- **`.lm-panel ~ .lm-canvas`, not `.lm-canvas`, carries the stacked 60%.** A map with the
+  list switched off was giving away 40% of its height to nothing. The sibling combinator says
+  "a panel precedes me" exactly and needs no `:has`.
+- **`panelDrawer` is structural, not chrome.** Below the stylesheet's own drawer
+  container query it takes the results panel out of the flow and parks it off the
+  edge, and the toolbar has to *move* — out of the panel and onto the root — or the
+  search box goes off the edge with it. No stylesheet can do that (`.lm-panel` is
+  the containing block for its own absolutely-positioned children), so
+  `installDrawer` runs a `ResizeObserver` and the setting stays out of
+  `CHROME_SETTING_KEYS`: one rebuild per press, exactly what `list` and `panelSide`
+  cost. `data-lm-drawer` is written in `render()` rather than by `chromeAttrs`, so
+  that table still means exactly `CHROME_SETTING_KEYS`. **Absent is the stacked
+  layout**, and every narrow rule it would fight is gated `:not([data-lm-drawer])`
+  rather than cancelled property by property — two complete answers to one width,
+  not one answer patching the other.
+- **The drawer answers at 768px and the stacked layout at 640px, in two separate
+  container queries.** Stacking is what a snapshot with no `panelDrawer` draws, and
+  those are live on sites we do not control, so its breakpoint cannot move (§7); a
+  drawer is opt-in and new, so it is free to cover a portrait tablet, which is the
+  width where a results column beside the map leaves neither of them room.
+  `DRAWER_MAX_WIDTH` in `embed/src/index.ts` carries the same 768 and has to — it
+  decides where the toolbar lives while the query decides where the panel is drawn.
+  The Tablet preview tile is 768px, so it lands inside the drawer's range by the
+  root's own 1px border; that is what the tile is now for.
+- **"The drawer doesn't slide in, the map behind it does" was `panel.focus()`, and
+  the fix is `{ preventScroll: true }`.** At the instant focus lands the panel is
+  still parked at `translateX(100%)`, so the browser scrolls the nearest scrollable
+  ancestor to reveal it — that is `.lm-root`, whose `overflow: hidden` is still
+  scrollable programmatically, and the map is inside it. Measured in the browser:
+  `root.scrollLeft` jumped to 212 and decayed 212 → 78 → 19 → 0 across the 180ms,
+  with the basemap dragged exactly that far under a drawer that looked stationary.
+  After: `scrollLeft` stays 0 and the map's offset does not change by a pixel while
+  the panel travels 340 → 0. The stylesheet's note about a focused *row* doing this
+  is the same trap from the other side, and `inert` answers that one.
+- **A drawer is the floating panel parked off the edge, and it overrides nothing
+  the owner designed.** Transparency, blur, corner radius and the width scale all
+  come from the same `--lm-panel-*` properties the floating rule reads, so a map
+  designed at Glass (60%) and Slim (25%) — which is what `DEFAULT_EMBED_SETTINGS`
+  ships — opens a glass, slim drawer. The drawer rule sets position, width and the
+  transform and deliberately nothing else: the moment it restates `background` or
+  `border-radius`, a control in the publish sidebar has an exception invisible from
+  the sidebar. That is exactly what it did for one revision, and the complaint that
+  found it was "it doesn't share glass theme that we run by default and slim
+  profile". Two consequences worth knowing. `backdrop-filter` and `border-radius`
+  *are* restated — not to override, but because `.lm-root[data-lm-float] .lm-panel`
+  is where they otherwise live and a drawer is over the map at **either**
+  placement; "Beside it" describes a layout this width does not have. And the width
+  is `min(86%, max(var(--lm-panel-w, 40%), 300px))`: the percentage is of the
+  embed's own box, so Slim is a readable column beside a 1200px map and 97px on a
+  phone — the setting widens the drawer and never narrows it below what a name and
+  an address need, while the 86% ceiling keeps the strip of basemap that says the
+  map is still back there.
+- **The blur does travel with the slide, and that is the accepted cost.** A
+  `backdrop-filter` is sampled in the element's own coordinate space, so a
+  10px-blurred panel carries its patch of basemap along for the 180ms. The
+  drawer was opaque for one revision on the theory that this was the reported
+  "the map slides, not the panel" — it was not; that was `panel.focus()`, the
+  entry above. Weighed against discarding the map's own design language, the
+  artifact is not worth paying for. If it ever has to go, the fix is to drop the
+  filter for the length of the transition, not to hard-code a surface.
+- **The drawer's open rule must not name `[data-lm-float]`, and `translate` is not
+  available to make that easy.** The open state has to out-weigh both the closed
+  rule and the *unqueried* floating side-flip, which a container query does nothing
+  to weaken; done by stacking attributes, the open rule picked up `[data-lm-float]`
+  that the closed rule does not have, so a map with the panel placed **beside** the
+  map matched closed and never matched open — the trigger dimmed the basemap, moved
+  focus into a panel off the edge, and slid nothing. The tidy answer is the
+  `translate` property, which nothing else sets on `.lm-panel`. **It does not
+  survive the build:** written `transform: none; translate: 100% 0`, Lightning CSS
+  folds the pair into one `transform: translate(100%)` and deletes the property the
+  open rule was going to answer on, with no error anywhere. So it stays `transform`
+  and every selector is weighed by hand — each open selector ties the heaviest
+  closed rule it competes with, four against four in LTR and five against five in
+  RTL, and comes later. Check the built bundle, not the source, after touching any
+  of it.
+- **Find-nearest lives inside the search field.** The magnifier there was a picture
+  (`pointer-events: none`) while the one live control beside it spent 34px of a row
+  that runs out of width first on exactly the maps the drawer is for; at 390px the
+  floating toolbar is now the field and the drawer trigger. `createSearchField`
+  takes an `action`, and with none it draws the magnifier as before — a map with
+  Nearest switched off still has to read as a search box. **The in-field control
+  wears `lm-search__action` *instead of* `lm-button lm-button--icon`, not beside
+  it**: `.lm-toolbar--docked .lm-button` paints a 6% well at two classes from a
+  thousand lines further down, which one class cannot answer at any source
+  position. `setNearestOn` is unchanged, so the lit rule still has to out-weigh
+  `.lm-toolbar--docked .lm-button--on` and is scoped through `.lm-search` to do it.
+- **`pinColor` is structural for the same kind of reason, and the reason is
+  rasters.** Map markers and results rows are canvas images cached per
+  `pinImageId(icon, color)`, so a custom property cannot recolour them — only a
+  rebuild can, which is why it is a sibling of `colors` and not a sixth key inside
+  it. The one renderer that *is* CSS, the card's Logo block, reads `--lm-pin`,
+  written by `applyChrome` only when the snapshot carries the field; absent leaves
+  the stylesheet's `#7a828f` in charge, which is what every live snapshot draws.
+  `ColorPickerField` fires per pointer move and this build of
+  `react-aria-components` exposes no `onChangeEnd`, so `PinColorField` in
+  `colors-group.tsx` commits on a 250ms trailing timer instead.
+- **The device preview is a width and nothing else, and it is local state.** Every
+  responsive rule the embed has is a `@container` query against `.lm-root`'s own inline
+  size, so capping the frame *is* the phone layout — no emulation, no second document. It
+  lives in `useState` in `publish-panel.tsx` rather than in `settings`, because a key there
+  would change `rebuildKey` and throw the document away on every press. `EmbedPreview`
+  repaints **both** frames on a width change: MapLibre paints on demand, and the standby
+  frame would otherwise be revealed at the old size. **It sits in the sidebar header
+  now, not over the map** — `DeviceToggle`'s own docblock keeps the old placement
+  reasoning, because the argument against the header was that a 20rem row already held a
+  truncating map name, and turning the back link into an icon is what removed it. It kept
+  its translucent pill only for as long as it was on the map.
+- **The accent has a default and the other four colours do not.** `DEFAULT_EMBED_ACCENT`
+  seeds `DEFAULT_EMBED_SETTINGS.colors`, so `readColors` always resolves an accent and every
+  new publish writes one. `--lm-focus` in the stylesheet stays `#1c7ed6`, because that is
+  what live snapshots were published against (§7). The four remaining tokens stay absent so
+  `.lm-root--dark` can still redefine them.
 
 ## Notes
 
@@ -264,6 +401,23 @@ translucent floating panel was an opaque patch in a see-through box), and the
 selected row wears an inset bar because a 10% tint over a basemap is invisible.
 The whole pass cost 0.1KB: the dead `.lm-list__tag` rules and the two deleted
 text settings paid for it.
+
+**The four toolbar and layout fixes above reach live maps, and that is the tag-chip
+trade taken deliberately a second time.** The bundle is shared, so a map published today
+picks them up on the next deploy of `/embed` without its owner republishing: a right-hand
+map with the list off moves its search box to the right, a narrow one stops wrapping and
+stops hiding its own zoom-in button under the search field, and a panel-less narrow one
+fills the height it was already given. Every one of those is a broken state becoming a
+working one rather than a design changing under somebody, which is the distinction that
+makes it worth doing — the colour default, which *is* a design change, was routed through
+`DEFAULT_EMBED_SETTINGS` instead precisely so it could not.
+
+Measured before the fix, in the publish preview at 390px with the list off:
+`.maplibregl-ctrl-zoom-in` sat at (11, 11) and `.lm-search__input` sat at (11, 11) — the
+zoom button was not mispositioned, it was underneath. The field measured 202px at every
+width from 480px down, and Nearest wrapped to a second row below 260px. After: the field
+runs 418 → 130px across that range, nothing wraps down to a 180px embed, and the zoom stack
+starts at y=53.
 
 **The tag filter chips are gone from the embed, and that one is not free.** The
 bundle is shared, so a map published with chips loses them on the next deploy of

@@ -248,8 +248,8 @@
     "list": true,
     "panelSide": "right",
     "panelFloat": true,
-    "panelWidth": 34,
-    "panelOpacity": 88,
+    "panelWidth": 25,
+    "panelOpacity": 60,
     "panelBlur": 10,
     "panelRadius": 12,
     "rowPin": true,
@@ -262,7 +262,9 @@
     "geolocate": true,
     "fullscreen": false,
     "scale": false,
-    "scrollZoom": false
+    "scrollZoom": false,
+    "panelDrawer": true,
+    "pinColor": "#f54600"
   },
   "allowedDomains": [],
   "tagGroups": [

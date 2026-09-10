@@ -553,38 +553,39 @@
 }
 
 /*
- * Edit mode on a pin's own card: the block under the pointer, and the pencil
- * that opens its settings.
+ * Edit mode on a pin's own card: every block saying it can be changed, and the
+ * target that opens one block's settings.
  *
  * Unlayered for `.card-slot`'s reason — it has to beat both Tailwind's utilities
- * and @heroui/styles with no `!important` between them.
+ * and @heroui/styles with no `!important` between them, and this one is a
+ * `<button>`, which arrives with a ground, a border, a font and a padding of the
+ * user agent's own.
  *
- * **Stretched over the block's content box, not laid beside it.** The outline is
- * this element's own, so the hover state of the target *is* the hover state of
- * the block, and there is no second element to keep in sync. It takes no room:
- * `position: absolute` inside the content box `CardView` marks `relative`, so a
- * card in edit mode is laid out exactly as the same card is out of it — turning
- * edit mode on must not move anything, or the design being edited is not the one
- * being looked at.
+ * **Stretched over the block's content box, not laid beside it.** It takes no
+ * room: `position: absolute` inside the content box `CardView` marks `relative`,
+ * so a card in edit mode is laid out exactly as the same card is out of it —
+ * turning edit mode on must not move anything, or the design being edited is not
+ * the one being looked at.
  *
- * `pointer-events: none` on the target and `auto` on the badge: the box exists
- * to be hovered and outlined, and everything else on the block has to stay
- * reachable underneath it — the dashed `+` that fills an empty block in, above
- * all, which owns the whole box (see `CardEditTarget`).
+ * **And it is pressable across the whole block**, where the pencil badge it
+ * replaces was a 18px square in the corner. What that buys is one press target
+ * per block instead of two, which is only safe because everything underneath is
+ * `inert` while edit mode is on — see `renderOverlay` in card-view.tsx. Without
+ * that, this would be a transparent sheet swallowing presses meant for a `tel:`
+ * link, the Links row, the week's fold and the dashed `+`.
  */
 .card-edit-target {
   position: absolute;
   inset: 0;
   z-index: 5;
-  pointer-events: none;
-  /*
-   * A one-cell grid, which is what places the badge -- see its own rule below.
-   * The overlay is `inset: 0` of the block's content box, so its grid area *is*
-   * the block's rect, and one declaration here puts the badge anywhere in it
-   * with no insets and no translate to get wrong.
-   */
-  display: grid;
-  place-items: start end;
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  appearance: none;
+  background: transparent;
   border: 1px dashed transparent;
   border-radius: var(--card-slot-radius, var(--card-radius, 0.5rem));
   transition:
@@ -592,106 +593,125 @@
     background-color 0.15s;
 }
 
+/*
+ * The block under the pointer: a dashed accent rectangle and a faint tint —
+ * which is exactly what `.card-slot` has always drawn for an empty block about
+ * to be filled in, so edit mode borrows a shape this card already uses rather
+ * than inventing a second one.
+ *
+ * **The card breathes and the pointer stops it.** The two are one message split
+ * in half: everything moving says "all of these can be changed", and the one
+ * block that goes still under an outline says "this is the one that will open".
+ * A block still breathing inside an outline says neither, which is why the rule
+ * below turns the animation off rather than layering a border over it.
+ *
+ * Empty and filled blocks draw the same thing here. It used to split — an
+ * outline for a block that was already a dashed box, a lift for one with content
+ * in it — and that answered "which affordance suits this block" when the
+ * question a pointer asks is "which block am I on". One answer, so a card in
+ * edit mode reads the same the whole way down whatever its owner put on it. On
+ * an empty block the accent rectangle lands on the slot's own resting one, at
+ * the same box and the same radius: it recolours that border rather than drawing
+ * a second beside it.
+ */
 .card-edit-target:hover,
+.card-edit-target:focus-visible,
+/* Open, so the block the panel is about stays marked while it is being edited —
+   the panel is beside the card, not over the block. `data-open` is ours: HeroUI
+   leaves `aria-expanded` false on a trigger whose popover is open, measured in
+   the browser, and this trigger is not a `Popover.Root`'s at all. */
 .card-edit-target[data-open] {
   border-color: var(--accent);
   background: var(--accent-soft);
 }
 
-/*
- * The gallery's badge, and only the gallery's, moves out of the corner.
- *
- * The corner it would otherwise take is the one corner of the card that is not
- * the layout's: `PlaceCardChrome` draws the close X and the Edit-location
- * pencil at `top-1.5 right-1.5` at `z-10`, over the card rather than in it. The
- * gallery is the block that reaches the top of the card on every design that
- * has one, so its badge sat *underneath* a button that took the click. Measured
- * rather than eyeballed: `elementFromPoint` at the badge's own centre answered
- * "Close". Not a cosmetic overlap — a control that could not be pressed at all,
- * and raising the overlay above the chrome only trades which of the two is
- * unreachable.
- *
- * Just the gallery, on request, and the reason it generalises no further is
- * that a picture is the one block content a badge can sit in the middle of
- * without covering anything being read.
- *
- * **Two positions, because the empty gallery has neither of the other two
- * corners free.** With a picture the middle is clear, so it goes there. With no
- * picture the block is entirely filled by the dashed `+` that adds one, whose
- * glyph is centred — and a badge on top of that is the two stacked press
- * targets the badge exists as a badge to avoid, while the top-right is still
- * the X. The bottom of the block is the one part of it neither owns. `CardView`
- * is what knows a block is drawing a `+`; see `renderOverlay`.
- */
-.card-edit-target--center {
-  place-items: center;
-}
-
-.card-edit-target--bottom {
-  place-items: end end;
+.card-edit-target:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 /*
- * The badge, in the corner rather than over the middle: a block is routinely a
- * single line of text, and a pencil across the middle of it would cover the
- * thing being described. Top-right, which is the corner the card's own chrome
- * does not use *at block level* — the one block where it does is the gallery,
- * and that one is centred instead (`.card-edit-target--center`).
+ * The breathing: every block, the whole time edit mode is on.
  *
- * Faint until the block is hovered, then solid — visible enough that a card in
- * edit mode reads as editable at a glance, quiet enough that six of them do not
- * become the card. It never fades entirely: a control you can only find by
- * sweeping the pointer over the card is one a touch user cannot find at all.
+ * **Because edit mode is a state of the card and the card does not otherwise
+ * change.** It is entered from one button in a corner and everything under that
+ * button stays exactly as it was — same blocks, same type, same picture, by
+ * design, since what is being edited has to be what is being looked at. So
+ * something has to say the card is now a row of controls, and saying it on hover
+ * alone says it one block at a time, to a pointer already on the block it is
+ * about. The card says it up front instead, and the pointer goes back to picking
+ * one.
  *
- * **It shrinks to the block rather than overflowing it**, and that is a real bug
- * fixed rather than a nicety. The block's outer box is `overflow-hidden`
- * (`CardView`), and an address is routinely a single line about 16px tall — so a
- * fixed 18px badge was cut off along its bottom edge on the one kind of block
- * that is always short. `100%` still resolves against `.card-edit-target`, which
- * is `inset: 0` of the content box and therefore exactly the block's own height,
- * so `min()` gives a full-size badge everywhere there is room for one and a
- * square one everywhere there is not. `position: relative` and not `absolute`:
- * as a grid *item* of the overlay it is placed by that grid's `place-items`,
- * which is what lets one declaration move a badge without a second set of
- * insets to keep in step with the first.
+ * **On the block's box and not on its content**, which is the one placement that
+ * works: the box is `overflow: hidden` (`CardView`), so a transform on the
+ * content would grow it into that clip and shave a percent off a photograph on
+ * every pass. Transforming the box takes its clip with it, so what moves is the
+ * whole block, picture and border and all.
+ *
+ * 1.2%, which on a 320px card is under four pixels at the top of the swell, and
+ * 2.4s, which is slow enough to read as breathing rather than as a throb. Both
+ * numbers are deliberately under what a corner badge cost: this runs on six
+ * blocks at once for as long as the mode is on, so it is a movement you notice
+ * and not one you have to look away from.
+ *
+ * Transform-only, so it composites and never lays out — `blockContentStyle`'s
+ * `zoom` is the one that changes a flex basis, and this is not that.
  */
-.card-edit-target__badge {
+@keyframes card-block-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.012);
+  }
+}
+
+.card-block-editable {
+  animation: card-block-breathe 2.4s ease-in-out infinite;
+  /* So arriving with the pointer settles rather than snaps. Removing an
+     animation reverts the property to its base value, and a transition on that
+     property runs from the value the animation was showing when it went. */
+  transition: transform 0.2s ease;
+}
+
+.card-block-editable:hover,
+.card-block-editable:has(.card-edit-target:focus-visible),
+.card-block-editable:has(.card-edit-target[data-open]) {
+  animation: none;
+  transform: none;
+  /* Above the block's own `raised` layer (1) and below the card's chrome (10),
+     so the outlined block is painted over the neighbours still swelling beside
+     it rather than under the next one along. */
   position: relative;
-  display: grid;
-  place-items: center;
-  inline-size: min(1.125rem, 100%);
-  block-size: min(1.125rem, 100%);
-  min-width: 0;
-  padding: 0;
-  pointer-events: auto;
-  border-radius: 0.375rem;
-  background: color-mix(in oklab, var(--surface) 80%, transparent);
-  color: var(--muted);
-  opacity: 0.55;
-  transition:
-    opacity 0.15s,
-    background-color 0.15s,
-    color 0.15s;
+  z-index: 6;
 }
 
 /*
- * HeroUI gives every icon in a `Button` a 2px block margin, which is right in a
- * 40px button and is 4px this one does not have: a badge that has shrunk to a
- * 14px block would hold a 12px pencil in 16px of box and lose the ends of it to
- * the block's own `overflow: hidden`. The badge centres its own child.
+ * Reduced motion: nobody breathes, so the thing the breathing says has to be
+ * said standing still — CLAUDE.md's invariant, that a state told only in motion
+ * is told to nobody, and this is the state it is most true of, since the card
+ * looks identical in and out of edit mode without it.
+ *
+ * Every target wears its dashed rectangle at rest, faint, and the pointer takes
+ * one to full accent with the tint under it. Same two messages, same shapes,
+ * neither of them moving.
+ *
+ * **An opt-out the blanket rule at the bottom of this file cannot give.** That
+ * one cuts `animation-duration` to 0.01ms, which does stop the swell — but it
+ * says nothing about what replaces it, and what replaced it here was a card with
+ * no sign at all that its blocks had become buttons.
  */
-.card-edit-target__badge svg {
-  margin: 0;
-}
+@media (prefers-reduced-motion: reduce) {
+  .card-block-editable {
+    animation: none;
+    transform: none;
+  }
 
-.card-edit-target:hover .card-edit-target__badge,
-.card-edit-target__badge:hover,
-.card-edit-target__badge[data-hovered],
-.card-edit-target__badge[data-focus-visible],
-.card-edit-target__badge[data-open] {
-  opacity: 1;
-  background: var(--accent);
-  color: var(--accent-foreground);
+  .card-edit-target {
+    border-color: color-mix(in oklab, var(--accent) 40%, transparent);
+  }
 }
 
 /*
@@ -2647,5 +2667,129 @@ body.is-pin-dragging * {
   .button[data-pending="true"]::after {
     animation-duration: 1.6s !important;
     animation-iteration-count: infinite !important;
+  }
+}
+/*
+ * The drawn panel beside the login and signup forms —
+ * see components/auth/auth-visual.tsx.
+ *
+ * Plain unlayered CSS for the reason `.tree-branch` and `.card-slot` are: these
+ * are keyframes and a gradient, neither of which is a class list, and the scrim
+ * needs to beat @heroui/styles without an `!important`.
+ *
+ * **Both animations end where they start on a reduced-motion machine, and that
+ * is the whole design constraint.** `prefers-reduced-motion` collapses every
+ * animation in this app to a single 0.01ms pass, so anything a motion tells you
+ * is told to nobody. The route's static state is the fully drawn line and the
+ * halo's is a visible ring — the movement adds emphasis and carries no
+ * information, which is the only kind of animation allowed to exist here.
+ */
+
+/*
+ * The wash under the copy.
+ *
+ * The drawing runs the full height of the panel, so the words sit on top of a
+ * grid, a block edge or a route depending on the viewport. This makes the bottom
+ * of the panel resolve to the page's own ground regardless — a guarantee, rather
+ * than a hope that the diagram stays quiet in the right places.
+ *
+ * `--surface-secondary` and not a hardcoded colour, so it follows the theme
+ * crossfade with everything else.
+ */
+.auth-visual__scrim {
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in oklab, var(--surface-secondary) 82%, transparent) 28%,
+    var(--surface-secondary) 62%
+  );
+}
+
+/*
+ * The route draws itself in once.
+ *
+ * `stroke-dasharray` is already set on the element (6 7, the dashed look), so
+ * this animates the *offset* rather than the array — animating the array would
+ * fight the dashes it is meant to reveal. 520 is comfortably longer than the
+ * path, which only means the line finishes arriving slightly early.
+ */
+.auth-visual__route {
+  animation: auth-route-draw 1.4s var(--ease-out, ease-out) both;
+}
+
+@keyframes auth-route-draw {
+  from {
+    stroke-dashoffset: 520;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* The halo around the open pin. Never fades to nothing: at its quietest it is
+   still the ring that says which pin the card belongs to. */
+.auth-visual__pulse {
+  transform-origin: 238px 238px;
+  animation: auth-pin-pulse 3.2s var(--ease-out, ease-out) infinite;
+}
+
+@keyframes auth-pin-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.25;
+  }
+  50% {
+    transform: scale(1.9);
+    opacity: 0.08;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-visual__route,
+  .auth-visual__pulse {
+    animation: none;
+  }
+}
+
+/*
+ * Folds: the collapse, and why it stuttered on the last one in a scroller.
+ *
+ * Plain unlayered CSS for the reason `.tree-branch` and `.card-slot` are — it
+ * has to beat @heroui/styles without an `!important`.
+ *
+ * **Scroll anchoring is the bug.** React Aria's collapse pins
+ * `--disclosure-panel-height` to the measured `scrollHeight`, forces a reflow and
+ * animates it to `0px`. For those 200ms the panel is a shrinking box inside a
+ * scroller, so the browser picks something below it as a scroll anchor and drags
+ * the content to keep that anchor still — against a height that is changing every
+ * frame. `components/places/place-form/place-form.tsx` records the same failure
+ * in the edit dialog, where it was fixed structurally by moving the buttons out
+ * of the scroller; the design sidebars on /card and /publish had no such move
+ * available, and closing their last fold jumped.
+ *
+ * `overflow-anchor: none` takes the fold's whole subtree out of the running as an
+ * anchor, which is exactly the opt-out that property exists for.
+ *
+ * **`will-change` has to outlast the animation.** HeroUI declares it only under
+ * `[data-expanded="true"]`, so react-aria flips the attribute off and *then*
+ * animates to zero — the hint is dropped at precisely the moment the closing
+ * transition needs it. Declared here on the panel itself, unconditionally. There
+ * are five of these in a sidebar, not five hundred.
+ */
+.accordion,
+.disclosure {
+  overflow-anchor: none;
+}
+
+.accordion__panel,
+.disclosure__content {
+  will-change: height;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accordion__panel,
+  .disclosure__content {
+    will-change: auto;
   }
 }

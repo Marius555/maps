@@ -140,10 +140,11 @@ export type TagChip = { id: string; label: string; color?: string };
  * a deleted tag off the places wearing it, so drawing one would put
  * `tag-3f9a1c04` on a customer's card.
  *
- * A tag with no colour of its own is returned with none rather than a guess. The
- * renderers each have a fallback that is right for where they draw — an editor
- * pin falls back to the theme accent, a published one to a flat grey — and a
- * colour invented here would override both.
+ * A tag with no colour of its own is returned with none rather than a guess, and
+ * each renderer answers for itself: the editor's pin falls back to `--accent`,
+ * and a published one to `settings.pinColor` — or, on a file written before that
+ * field existed, to the flat `UNTAGGED_PIN_COLOR`. A colour invented here would
+ * override all three.
  */
 export function tagChipsOf(
   groups: readonly SnapshotTagGroup[],

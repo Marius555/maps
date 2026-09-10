@@ -21,6 +21,7 @@ import { ContactSection } from "./sections/contact-section";
 import { CoordinatesSection } from "./sections/coordinates-section";
 import { EssentialsSection } from "./sections/essentials-section";
 import { FieldsSection } from "./sections/fields-section";
+import { FormSectionGroup } from "./sections/form-section-group";
 import { HoursSection } from "./sections/hours-section";
 import { MediaSection } from "./sections/media-section";
 
@@ -226,9 +227,9 @@ export function PlaceForm({
           onMove={setPosition}
         />
 
-        {/* Collapsed by default, and forced open by an error in them — a message
-            nobody can see is the same as no message. */}
-        <div className="space-y-2">
+        {/* Collapsed by default, one open at a time, and forced open by an error
+            in them — a message nobody can see is the same as no message. */}
+        <FormSectionGroup className="space-y-2">
           {/* First of the folds, because it is the one that belongs to the map
               directly above it — but folded, because it is the rare repair
               rather than a field anybody fills in. */}
@@ -251,7 +252,7 @@ export function PlaceForm({
             onLogoChange={setLogo}
             onPhotosChange={setPhotos}
           />
-        </div>
+        </FormSectionGroup>
       </Modal.Body>
 
       {/* `.modal__footer` is already `flex flex-row items-center justify-end

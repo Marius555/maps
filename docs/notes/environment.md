@@ -23,6 +23,21 @@ this is why each one exists.
   per process when it is on. **Delete it with the pricing work.**
 - Optional, server-only: `SNAPSHOT_STORAGE_ID`, defaulting to `STORAGE_ID`. **Appwrite Cloud's free plan allows one bucket per project**, so published snapshots share the assets bucket, which is why `json` is in its allowed extensions. On a paid plan, point this at a dedicated bucket and add a second entry to `BUCKETS` in `scripts/appwrite-schema.mjs`; nothing else changes.
 - Optional, browser-safe: `NEXT_PUBLIC_TILES_URL`. Where the basemaps are served from. **Unset means OpenFreeMap and is the current state**; setting it moves `STYLE_URLS` *and* the attribution together, because both come from one pair in `lib/map/style.ts`. Changing it does not move maps that are already published — `styleUrl` is baked into each snapshot at publish time, which is what makes the switch a republish rather than a redeploy of every customer's embed. `npm run migrate:style-host` is what moves them, in either direction.
+- Optional, server-only: `RESEND_API_KEY`, `RESEND_FROM` and `APP_URL` — transactional email.
+  **All three are optional and the app boots without any of them**, which is not laziness:
+  every message we send is on the tail of something that has already succeeded, so a missing
+  key must degrade to "the email did not arrive", never to a failed signup. `lib/email/resend.ts`
+  warns once per process and no-ops. `RESEND_FROM` defaults to `onboarding@resend.dev`, which is
+  the sender Resend accepts before you verify a domain — it can only deliver to your own account
+  address, so it is right for development and wrong the moment a real customer signs up.
+  **`APP_URL` is the one that matters and the one with a security argument.** It is the origin
+  every emailed link is built from, and it is configured rather than read off the request's
+  `Host` header on purpose: forgot-password takes an attacker-supplied address and mails a
+  single-use token to it, so a link whose origin came from a header the caller controls would let
+  a spoofed `Host` mint a working reset link pointing at the attacker's own server. Set it per
+  environment; it is not browser-safe and does not need to be, since nothing on the client
+  composes a link.
+
 - Optional, browser-safe: `NEXT_PUBLIC_EMBED_SCRIPT_URL`. Set it to the CDN origin in production. Unset, the embed snippet points at the dashboard's own origin, which is what makes development and self-hosting work with no config.
 
 `STORAGE_ID` never reaches the browser: photo URLs are composed on the server in `lib/storage/photo-url.ts` and handed to clients as `place.photoUrl`. If you need a bucket id in a component, that's the signal you're building it in the wrong layer.

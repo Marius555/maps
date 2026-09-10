@@ -54,12 +54,19 @@ export const GLYPH_SOURCE_BOX = 24;
 export const CUSTOM_PIN_PREFIX = "custom:";
 
 /**
- * What a place with no tags and no pin colour of its own is drawn in.
+ * What a place with no tags and no pin colour of its own is drawn in, when
+ * nothing else has an answer.
  *
- * A fixed grey rather than the dashboard's `--accent`, because the two renderers
- * that need it have no theme to read: a published snapshot is looked at by
- * strangers, and an exported image is a file that outlives the tab. Both need a
- * colour that is decided once and written down.
+ * A fixed grey rather than the dashboard's `--accent`, because the renderers
+ * that reach here have no theme to read: an exported image is a file that
+ * outlives the tab, and a snapshot published before `settings.pinColor` existed
+ * carries no colour at all. Both need one decided once and written down.
+ *
+ * It is the **last** link now rather than the only one. A map published from
+ * here on names its own untagged colour, which is what lets the Publish tab draw
+ * the same map the editor next door draws; this stays underneath it, unchanged,
+ * because every file already on a customer's site resolves to exactly this and
+ * must keep doing so (§7).
  */
 export const UNTAGGED_PIN_COLOR = "#7a828f";
 

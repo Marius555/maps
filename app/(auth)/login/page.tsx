@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { AuthCard } from "@/components/auth/auth-card";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginForm } from "@/components/auth/login-form";
 import { safeRedirect } from "@/lib/utils/safe-redirect";
 
@@ -11,7 +11,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
   const { next } = await props.searchParams;
 
   return (
-    <AuthCard
+    <AuthShell
       title="Log in"
       description="Pick up where you left off."
       footer={
@@ -24,6 +24,6 @@ export default async function LoginPage(props: PageProps<"/login">) {
       }
     >
       <LoginForm redirectTo={safeRedirect(next)} />
-    </AuthCard>
+    </AuthShell>
   );
 }

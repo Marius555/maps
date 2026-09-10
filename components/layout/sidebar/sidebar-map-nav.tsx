@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@heroui/react";
 import {
   ChartColumn,
   LayoutTemplate,
@@ -54,11 +55,28 @@ export function SidebarMapNav({
 
   return (
     <div>
-      {/* No placeholder label while the name loads — a flash of "Loading…" that
-          becomes the map name is worse than the label simply appearing. */}
-      {map ? (
-        <SidebarGroupLabel isCollapsed={isCollapsed}>{map.name}</SidebarGroupLabel>
-      ) : null}
+      {/*
+        The label is always rendered, even with nothing to put in it.
+
+        Not rendering it at all is what this used to do, on the grounds that a
+        flash of "Loading…" that becomes the map name is worse than the label
+        simply appearing — still true, and still why there is no word in here.
+        What it missed is that the box is ~28px tall (`max-h-6` + `pb-1`), so its
+        arrival shoved all six nav items down the sidebar, on every cold load of
+        a map. `AppShell` renders the sidebar before `<main>`, so this observer
+        creates the `maps.detail` query without the `initialData` the page
+        already holds, and there is a real round trip to wait through.
+
+        A bar rather than a blank, because the space is reserved either way and a
+        bar says the name is coming.
+      */}
+      <SidebarGroupLabel isCollapsed={isCollapsed}>
+        {map ? (
+          map.name
+        ) : (
+          <Skeleton className="inline-block h-3 w-28 max-w-full rounded-lg align-middle" />
+        )}
+      </SidebarGroupLabel>
 
       <ul className="space-y-0.5">
         {items.map((item) => (

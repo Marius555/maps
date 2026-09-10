@@ -25,6 +25,29 @@ rewritten; it is the record of why this area is shaped as it is.
   `mt-2`, which is what `.modal__header + .modal__body` gave the body before an element sat
   between them. `pin-studio.tsx` is the older statement of the same rule. Verified: the
   footer holds at one pixel for the whole 200ms collapse.
+- **The general form of that bug is scroll anchoring, and the general answer is
+  `overflow-anchor: none`.** Moving the footer fixed the dialog, but the design sidebars on
+  `/card` and `/publish` have no such move available — their folds are *inside* a
+  `ScrollShadow` and closing the last one shrinks the content under the browser's own
+  anchor correction. `.accordion` and `.disclosure` carry `overflow-anchor: none` in
+  app/globals.css, and the panel keeps `will-change: height` unconditionally, because
+  HeroUI declares it only under `[data-expanded="true"]` — dropped at exactly the moment
+  the closing transition needs it. Measured after: 64 frames, **zero direction reversals**,
+  a clean ease-out from 9.6px to 0.8px a frame. Single-open folds help on their own, by
+  leaving far less `scrollTop` to clamp.
+- **A `<div>` inside a `<p>` is a hydration error, not a lint nit.** `SidebarGroupLabel`
+  was a `<p>` and holds a `Skeleton` (a div) while the map name loads; the parser closes
+  the paragraph early, the DOM is not the one React rendered, and the whole subtree
+  regenerates. It is React's own "invalid HTML tag nesting" bullet, and the error names the
+  component rather than the tag.
+- **The sidebar's map name reserves its box before it has one.** `SidebarMapNav` rendered
+  nothing until `useMap` resolved, then popped in a ~28px label and pushed all six nav items
+  down on every cold load. It waits on a real request even though the page already has the
+  object: `AppShell` renders the sidebar before `<main>`, so this observer creates the
+  `maps.detail` query *without* the `initialData` `map-editor.tsx` passes, and react-query
+  will not retro-fill a query that already exists. The label is now always rendered, holding
+  a skeleton bar. Measured: 241 frames across a cold load, the nav list at exactly 64px in
+  every one.
 - `app/(dashboard)/maps/[id]/(editor)/loading.tsx` repeats all three strings verbatim and
   has to keep doing so.
 - **Every `loading.tsx` must pass the same `Container` `size` as its page**, or the skeleton

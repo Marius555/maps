@@ -15,7 +15,7 @@ import {
   whenVisible,
   type EmbedConfig,
 } from "./config";
-import { el } from "./dom";
+import { button, el, icon } from "./dom";
 import { createGazetteer } from "./gazetteer";
 import { nearestPlace, formatDistance, distanceKm, type Located } from "./geo";
 import { installDirectionsAsk, refreshDirections } from "./directions";
@@ -270,11 +270,22 @@ async function render(
 
   let map: MapHandle | null = null;
 
+  /**
+   * Shuts the drawer, when there is one open. See `installDrawer`.
+   *
+   * Assigned below rather than passed in, because the list is built before the
+   * drawer that holds it — picking a location is the third way out of it, after
+   * the veil and Escape, and the one that matters most: the whole reason to
+   * press a row is to see its pin.
+   */
+  let closeDrawer: (() => void) | undefined;
+
   const list = snapshot.settings.list
     ? createList(
         snapshot,
         (place) => {
           track("row", { id: place.id });
+          closeDrawer?.();
           map?.focusPlace(place);
         },
         () => me,
@@ -288,6 +299,10 @@ async function render(
 
     const panel = el("div", "lm-panel");
     panel.append(toolbar, list.element);
+
+    if (snapshot.settings.panelDrawer) {
+      closeDrawer = installDrawer(root, panel, toolbar);
+    }
 
     /*
      * One source order, whichever edge the panel ends up on.
@@ -382,6 +397,190 @@ function applyChrome(root: HTMLElement, snapshot: MapSnapshot): void {
   for (const [name, value] of Object.entries(chromeAttrs(snapshot.settings))) {
     if (value) root.setAttribute(name, value);
   }
+
+  /*
+   * The untagged pin's colour, for the one renderer that is CSS rather than
+   * canvas.
+   *
+   * Written here and not in `chromeVars`, because that table is exactly
+   * `CHROME_SETTING_KEYS` — the keys the publish preview repaints on a running
+   * map without rebuilding it — and a pin colour cannot honestly join it: the
+   * markers and the results rows are rasterised images cached per
+   * `pinImageId(icon, color)`, so a custom property reaches the card's Logo
+   * block and nothing else. `colorOf` is what answers for the other two, and a
+   * change to this rebuilds the preview.
+   *
+   * Unwritten when the snapshot has no answer, which is what leaves the
+   * stylesheet's own `#7a828f` in charge on every file published before the
+   * field existed (§7).
+   */
+  if (snapshot.settings.pinColor) {
+    root.style.setProperty("--lm-pin", snapshot.settings.pinColor);
+  }
+}
+
+/**
+ * The width, in CSS pixels of the embed's own box, below which the results panel
+ * becomes a drawer.
+ *
+ * The same 768 the stylesheet's drawer container query uses, and it has to be:
+ * this decides where the toolbar lives and the query decides where the panel is
+ * drawn, so a disagreement is a search box docked into a panel that is off the
+ * edge of the map.
+ *
+ * **Not the 640 the stacked layout uses, and the gap is deliberate.** Stacking
+ * is what a snapshot with no `panelDrawer` field draws on live customer sites,
+ * so its breakpoint cannot move (§7); a drawer is opt-in and new, and a portrait
+ * tablet is a width where a results column beside the map leaves neither of them
+ * room. The stylesheet says the same at its own two queries.
+ */
+const DRAWER_MAX_WIDTH = 768;
+
+/**
+ * The results panel as a drawer, on a narrow map.
+ *
+ * Returns the function that shuts it, or `undefined` when the snapshot did not
+ * ask for one — absent means the stacked layout every published map draws today
+ * (§7), so nothing here runs for a file written before the setting existed.
+ *
+ * **The toolbar moves, and it has to be JavaScript that moves it.** Shut, the
+ * drawer is off the edge, and a search box inside it is a search box a visitor
+ * cannot reach — so at narrow widths the toolbar comes out of the panel and
+ * floats over the map, which is the arrangement a list-less map already uses. No
+ * stylesheet can do that: `.lm-panel` is the containing block for its own
+ * absolutely-positioned children, so a toolbar inside it travels with the
+ * translate however it is positioned. Hence the observer, which is also the only
+ * honest way to ask a container query's question from script.
+ *
+ * A `ResizeObserver` on the root rather than a `matchMedia`, for the reason
+ * written at the top of the stylesheet: this widget is a div on somebody else's
+ * page, and a 360px map on a 1440px monitor is narrow.
+ */
+function installDrawer(
+  root: HTMLElement,
+  panel: HTMLElement,
+  toolbar: HTMLElement,
+): () => void {
+  root.setAttribute("data-lm-drawer", "1");
+
+  // Lines, because the thing it opens is a list. Drawn rather than written for
+  // the room: this shares a row with the search field at 390px.
+  const trigger = button("lm-button lm-button--icon", "");
+  trigger.setAttribute("aria-label", "Show the locations");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.append(icon(["M4 6h16", "M4 12h16", "M4 18h16"]));
+
+  const veil = el("div", "lm-veil");
+
+  /*
+   * The panel takes focus when it opens, rather than its first row.
+   *
+   * A row is a button that moves the map, so landing on one puts a visitor one
+   * stray Enter from a place they did not pick. The panel itself is only
+   * focusable programmatically (`-1`), which is what lets it be the landing
+   * point without joining the tab order.
+   */
+  panel.tabIndex = -1;
+
+  let open = false;
+
+  const setOpen = (next: boolean, moveFocus: boolean) => {
+    if (next === open) return;
+
+    open = next;
+    trigger.setAttribute("aria-expanded", String(next));
+    /*
+     * What actually keeps a shut drawer out of reach.
+     *
+     * Parked off the edge it is still tabbable, and `.lm-root`'s `overflow:
+     * hidden` means focusing a row inside it scrolls the root and drags the map
+     * sideways. `inert` takes the whole subtree out of the tab order and the
+     * accessibility tree, and — unlike the `visibility` this replaced — it flips
+     * synchronously, so the `focus()` below lands instead of silently failing
+     * against a style the transition has not applied yet.
+     */
+    panel.inert = !next;
+
+    if (next) {
+      root.setAttribute("data-lm-drawer-open", "1");
+      // Before the toolbar in source, so the trigger stays pressable over it —
+      // both are z-index 2 on the same parent, so the later one paints on top.
+      root.prepend(veil);
+    } else {
+      root.removeAttribute("data-lm-drawer-open");
+      veil.remove();
+    }
+
+    /*
+     * Only when a person did this. The observer below shuts the drawer on its
+     * way to the wide layout, and stealing focus for a resize would take it off
+     * whatever the visitor was actually using.
+     *
+     * **`preventScroll` is what stops the map sliding, and without it this whole
+     * animation reads backwards.** At the instant focus lands the panel is still
+     * parked at `translateX(100%)`, so the browser does what it does for any
+     * focused element outside its scroll port: it scrolls the nearest scrollable
+     * ancestor to reveal it. That is `.lm-root`, which is `overflow: hidden` —
+     * hidden is still scrollable programmatically — and the map is inside it, so
+     * `root.scrollLeft` jumped the panel's full width and then decayed back to 0
+     * over the slide. Measured in the browser: 212 → 78 → 19 → 0 across the
+     * 180ms, with the basemap dragged the same distance under a drawer that
+     * looked stationary. The panel is about to arrive under its own transform;
+     * nothing needs scrolling to it.
+     *
+     * The stylesheet's note about a focused *row* doing this is the same trap
+     * from the other side, and `inert` is what answers that one.
+     */
+    if (moveFocus) (next ? panel : trigger).focus({ preventScroll: true });
+  };
+
+  trigger.addEventListener("click", () => {
+    setOpen(!open, true);
+  });
+  veil.addEventListener("click", () => {
+    setOpen(false, true);
+  });
+  root.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setOpen(false, true);
+  });
+
+  /*
+   * `null` rather than `false`, so the first callback always lands: an observer
+   * fires once on observe, and that first run is what builds the narrow layout
+   * on a map that boots narrow.
+   */
+  let narrow: boolean | null = null;
+
+  new ResizeObserver(() => {
+    const next = root.clientWidth <= DRAWER_MAX_WIDTH;
+    if (next === narrow) return;
+
+    narrow = next;
+
+    if (next) {
+      toolbar.classList.remove("lm-toolbar--docked");
+      toolbar.append(trigger);
+      // On the root, where the list-less map already puts it, and after the
+      // layout so it paints over the map.
+      root.append(toolbar);
+      // Set here as well as in `setOpen`, which returns early when the state
+      // has not changed — arriving narrow, the drawer is already shut.
+      panel.inert = !open;
+      return;
+    }
+
+    setOpen(false, false);
+    trigger.remove();
+    // Back in the flow and reachable again: `inert` belongs to the drawer, not
+    // to the panel.
+    panel.inert = false;
+    toolbar.classList.add("lm-toolbar--docked");
+    panel.prepend(toolbar);
+  }).observe(root);
+
+  return () => {
+    setOpen(false, false);
+  };
 }
 
 /**
@@ -592,6 +791,30 @@ function wireControls({
     if (needle) map.fitTo(places);
   };
 
+  if (snapshot.settings.nearest) {
+    // The promise is handed back rather than voided, so the button can disable
+    // itself for as long as the lookup actually takes.
+    //
+    // Lit, it is the Clear the chip under the toolbar used to be — so a press
+    // asks which of the two states it is in rather than always locating.
+    nearest = createNearestButton(
+      () => {
+        // Two different presses on one control, and a customer reading "nearest
+        // pressed 40 times" should not be counting the 20 that cleared it.
+        if (origin) {
+          track("nearest_clear");
+          return setOrigin(null);
+        }
+
+        track("nearest");
+        return goToNearest();
+      },
+      // Inside the search field when there is one — see below. Left to its
+      // default, it is the toolbar control it has always been.
+      snapshot.settings.search ? "lm-search__action" : undefined,
+    );
+  }
+
   if (snapshot.settings.search) {
     toolbar.append(
       createSearchField({
@@ -614,27 +837,21 @@ function wireControls({
           setOrigin({ lat: place.lat, lng: place.lng });
         },
         gazetteer: createGazetteer(snapshot.gazetteer),
+        /*
+         * Find-nearest lives *in* the field, where a magnifier that did nothing
+         * used to be.
+         *
+         * The glyph was a picture and the control beside it was the live thing,
+         * which is the wrong way round in a row that runs out of width first on
+         * exactly the maps the drawer exists for: at 390px the floating toolbar
+         * is now the field and the drawer's own trigger, rather than three
+         * controls fighting over 370px.
+         */
+        action: nearest ?? undefined,
       }),
     );
-  }
-
-  if (snapshot.settings.nearest) {
-    // The promise is handed back rather than voided, so the button can disable
-    // itself for as long as the lookup actually takes.
-    //
-    // Lit, it is the Clear the chip under the toolbar used to be — so a press
-    // asks which of the two states it is in rather than always locating.
-    nearest = createNearestButton(() => {
-      // Two different presses on one control, and a customer reading "nearest
-      // pressed 40 times" should not be counting the 20 that cleared it.
-      if (origin) {
-        track("nearest_clear");
-        return setOrigin(null);
-      }
-
-      track("nearest");
-      return goToNearest();
-    });
+  } else if (nearest) {
+    // No field to sit in, so it is a control on the toolbar as it always was.
     toolbar.append(nearest);
   }
 

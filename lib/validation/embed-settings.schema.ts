@@ -50,6 +50,26 @@ export const CONTROL_CORNERS = [
 /** 0–100, whole numbers. The panel's width and opacity are both percentages. */
 const percentSchema = z.number().int().min(0).max(100);
 
+/**
+ * The accent a map wears until its owner picks another one.
+ *
+ * This is the app's own `--accent` (`app/globals.css`, oklch(64.37% 0.2195
+ * 36.18)) resolved to sRGB, and it lives here rather than in the embed's
+ * stylesheet on purpose. `--lm-focus` stays `#1c7ed6`, because that is what
+ * every snapshot already sitting on a customer's site was published against and
+ * §7 says a missing token has to keep meaning what it meant. Seeding the
+ * *default settings* instead changes only what the next publish writes: a map
+ * republished from here on carries the accent explicitly and renders orange, and
+ * one that is never republished keeps rendering exactly what it renders today.
+ *
+ * A single value rather than the stylesheet's light/dark pair
+ * (`#1c7ed6`/`#4dabf7`), because a stored colour cannot follow
+ * `.lm-root--dark` — the trade `ColorsGroup` already documents for the other
+ * four tokens. Orange carries on both grounds, which is what makes the accent
+ * the one token worth spending that trade on.
+ */
+export const DEFAULT_EMBED_ACCENT = "#f54600";
+
 export const embedColorsSchema = z.object({
   surface: hexColorSchema.optional(),
   foreground: hexColorSchema.optional(),
@@ -80,6 +100,18 @@ export const embedSettingsSchema = z.object({
    * absence means "hidden" would rewrite every live map.
    */
   panelScrollbar: z.boolean(),
+  /**
+   * Whether a narrow map opens its list in a drawer instead of stacking it.
+   *
+   * Only ever read below the embed's own 768px drawer query — above it the
+   * panel is the panel and this changes nothing. That is a wider width than the
+   * 640px the stacked layout answers at, deliberately: stacking is what live
+   * snapshots draw and its breakpoint cannot move, while a drawer is opt-in and
+   * free to cover a portrait tablet too. Spelled as the drawer being on rather
+   * than as `panelStack`, because absent has to keep meaning the stacked layout
+   * every published map draws today (`packages/shared/snapshot.ts`).
+   */
+  panelDrawer: z.boolean(),
 
   rowPin: z.boolean(),
   rowPinSize: z.number().int().min(16).max(48),
@@ -116,6 +148,22 @@ export const embedSettingsSchema = z.object({
    * text boxes in a column where every other control is one line.
    */
   colors: embedColorsSchema.optional(),
+
+  /*
+   * What a location with no tag and no pin of its own is drawn in.
+   *
+   * Required in the resolved shape, unlike `colors` — absent in a *snapshot*
+   * means the flat grey the embed has always drawn, but a stored map always has
+   * an answer, and the answer is a colour rather than "the stylesheet decides"
+   * because a pin is a canvas raster with no stylesheet to ask.
+   *
+   * It sits beside `colors` rather than in it for a mechanical reason, not a
+   * taxonomic one: every key in `colors` is a CSS custom property the preview
+   * repaints live (`CHROME_SETTING_KEYS`), and a pin colour cannot be delivered
+   * that way — the images are rasterised once and cached per
+   * `pinImageId(icon, color)`, so only a rebuild recolours them.
+   */
+  pinColor: hexColorSchema,
 });
 
 export type EmbedSettings = z.output<typeof embedSettingsSchema>;
@@ -133,16 +181,28 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   // A see-through panel over the right of the map is the design. The embed still
   // reads absent as the docked left column it always drew, so this reaches a
   // customer's site only when its owner publishes.
+  //
+  // The width and the transparency are the Slim and Glass stops of the two
+  // scales `PanelGroup` offers — the narrowest column a result row still reads
+  // in, and the most of the map you can see through it. The subject of this
+  // widget is the map, and the two settings that decide how much of it survives
+  // the panel now start at the answer that leaves the most.
   panelSide: "right",
   panelFloat: true,
-  panelWidth: 34,
-  panelOpacity: 88,
+  panelWidth: 25,
+  panelOpacity: 60,
   panelBlur: 10,
   panelRadius: 12,
   // The native bar stays on by default: it is the only thing telling a visitor
   // there are more locations below the fold, and a list is not a card whose
   // every pixel its owner chose. Turning it off is a decision, not a tidy-up.
   panelScrollbar: true,
+  // On, so a narrow map is a map. Stacked, the list takes 40% of a box that is
+  // already small and the thing the widget is for gets the rest; a drawer gives
+  // the map all of it and puts the list one press away, beside the search box a
+  // visitor is already looking at. Absent stays the stacked layout, so this
+  // reaches a live site only on its owner's next publish.
+  panelDrawer: true,
 
   rowPin: true,
   rowPinSize: 28,
@@ -165,6 +225,16 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   // decides whether we start recording strangers. An owner asks for that
   // explicitly or it does not happen.
   analytics: false,
+
+  // The one colour with a default. The other four stay absent so an undesigned
+  // embed follows its basemap from light to dark on its own — see `readColors`.
+  colors: { accent: DEFAULT_EMBED_ACCENT },
+
+  // The same orange, and that is the point: the editor draws an untagged pin in
+  // `var(--accent)` and a published map had no way to know what that was, so it
+  // drew the flat grey instead and the Publish tab showed a different map from
+  // the one next door. Publishing the colour is what closes that.
+  pinColor: DEFAULT_EMBED_ACCENT,
 };
 
 /**
@@ -198,6 +268,7 @@ export function readEmbedSettings(
     panelBlur: readNumber(settings.panelBlur, 0, 24, d.panelBlur),
     panelRadius: readNumber(settings.panelRadius, 0, 24, d.panelRadius),
     panelScrollbar: readFlag(settings.panelScrollbar, d.panelScrollbar),
+    panelDrawer: readFlag(settings.panelDrawer, d.panelDrawer),
 
     rowPin: readFlag(settings.rowPin, d.rowPin),
     rowPinSize: readNumber(settings.rowPinSize, 16, 48, d.rowPinSize),
@@ -218,6 +289,7 @@ export function readEmbedSettings(
     analytics: readFlag(settings.analytics, d.analytics),
 
     colors: readColors(settings.colors),
+    pinColor: readHex(settings.pinColor, d.pinColor),
   };
 }
 
@@ -245,21 +317,50 @@ function readChoice<T extends string>(
 }
 
 /**
- * Only the colours that parse, and nothing at all when none do.
+ * One `#rrggbb`, or the default.
  *
- * An empty object would be a key in every snapshot saying nothing, and the
- * embed reads a missing token and a missing `colors` identically.
+ * The single-value twin of `readColors` below, and it exists for the one colour
+ * that is never absent. `hexColorSchema` rather than a regex here, so a stored
+ * value is held to exactly what the designer is allowed to write — this column
+ * is free-form JSON that an older build or a console edit may have put anything
+ * in.
+ */
+function readHex(value: unknown, fallback: string): string {
+  const parsed = hexColorSchema.safeParse(value);
+
+  return parsed.success ? parsed.data : fallback;
+}
+
+/**
+ * Only the colours that parse, laid over the one colour that has a default.
+ *
+ * The accent is seeded from `DEFAULT_EMBED_ACCENT` so a map nobody has coloured
+ * still publishes the product's own orange instead of the embed stylesheet's
+ * blue. The other four stay absent, because absent is what lets
+ * `.lm-root--dark` redefine them and a stored `#ffffff` could not follow a
+ * basemap into the dark.
+ *
+ * So this is the one key that is always written, and that is the intended price
+ * of the default: a value in every *new* snapshot, in exchange for changing the
+ * colour without touching what the embed reads a missing token as — which would
+ * repaint maps that are already live (§7).
+ *
+ * A stored colour equal to the default is indistinguishable from an unset one,
+ * deliberately: clearing the accent in the designer deletes the key and lands
+ * back here, which is what "clear" should mean once the default is a colour
+ * somebody chose rather than a library's blue.
  */
 function readColors(value: unknown): SnapshotColors | undefined {
-  if (!value || typeof value !== "object") return undefined;
+  const colors: SnapshotColors = { ...DEFAULT_EMBED_SETTINGS.colors };
 
-  const parsed = embedColorsSchema.safeParse(value);
-  if (!parsed.success) return undefined;
+  if (value && typeof value === "object") {
+    const parsed = embedColorsSchema.safeParse(value);
 
-  const colors: SnapshotColors = {};
-
-  for (const [key, hex] of Object.entries(parsed.data)) {
-    if (hex) colors[key as keyof SnapshotColors] = hex;
+    if (parsed.success) {
+      for (const [key, hex] of Object.entries(parsed.data)) {
+        if (hex) colors[key as keyof SnapshotColors] = hex;
+      }
+    }
   }
 
   return Object.keys(colors).length > 0 ? colors : undefined;

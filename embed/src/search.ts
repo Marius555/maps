@@ -50,6 +50,20 @@ export type SearchFieldOptions = {
   onPlace: (hit: GazetteerHit) => void;
   /** Looks names and postcodes up. Always resolves; never rejects. */
   gazetteer: Gazetteer;
+  /**
+   * A control to sit inside the field, at its trailing end — in practice
+   * find-nearest, when the map ships one.
+   *
+   * The slot it takes used to hold a magnifier that did nothing (`pointer-events:
+   * none`, a picture), while the one live control next to it spent a whole 34px
+   * of a toolbar that is short of room at exactly the widths the drawer exists
+   * for. A field that says "search" by having a search control in it says more
+   * than one that says it with a drawing.
+   *
+   * Absent, the magnifier is drawn instead: a map with Nearest switched off
+   * still has to read as a search box rather than a bare text input.
+   */
+  action?: HTMLElement;
 };
 
 /**
@@ -72,6 +86,7 @@ export function createSearchField({
   onQuery,
   onPlace,
   gazetteer,
+  action,
 }: SearchFieldOptions): HTMLElement {
   const wrapper = el("div", "lm-search");
 
@@ -94,18 +109,25 @@ export function createSearchField({
   list.hidden = true;
 
   /*
-   * Inside the field, at the end of it.
+   * Inside the field, at the end of it — a control if the caller passed one,
+   * and otherwise a magnifier.
    *
-   * A magnifier is what makes a bordered box read as a search box rather than a
-   * text input, and at the end rather than the start because the placeholder is
-   * a sentence: a leading glyph pushes it far enough right that a narrow panel
-   * truncates it. `pointer-events: none` in the stylesheet keeps the whole
-   * field clickable through it — it is a picture, not a button.
+   * Either way it is at the *end* rather than the start, because the placeholder
+   * is a sentence and a leading glyph pushes it far enough right that a narrow
+   * panel truncates it.
+   *
+   * The magnifier is a picture, not a button: `pointer-events: none` in the
+   * stylesheet keeps the whole field clickable through it, since the one thing
+   * worse than no icon in an input is a dead patch at the end of the box
+   * somebody is trying to click into. A real control does not want that, which
+   * is why the two share a position and not a class.
    */
-  const glyph = icon(["M21 21l-4.3-4.3", "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16"]);
-  glyph.classList.add("lm-search__icon");
+  const trailing =
+    action ??
+    icon(["M21 21l-4.3-4.3", "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16"]);
+  if (!action) trailing.classList.add("lm-search__icon");
 
-  wrapper.append(label, input, glyph, list);
+  wrapper.append(label, input, trailing, list);
 
   let hits: GazetteerHit[] = [];
   let active = -1;
@@ -269,8 +291,20 @@ export function createNearestButton(
    * reads it rather than here.
    */
   onNearest: () => Promise<void> | void,
+  /**
+   * The skin, for when this is drawn *inside* the search field rather than
+   * beside it — see `createSearchField`'s `action`.
+   *
+   * It **replaces** the toolbar classes rather than joining them, which the
+   * stylesheet explains at `.lm-search__action`: `.lm-toolbar--docked .lm-button`
+   * is two classes and would otherwise paint a well inside the field, and a
+   * one-class rule cannot out-weigh it. The state, the name and both meanings of
+   * a press are identical either way, so it is a class rather than a second
+   * constructor.
+   */
+  variant = "lm-button lm-button--icon",
 ): HTMLButtonElement {
-  const control = button("lm-button lm-button--icon", "");
+  const control = button(variant, "");
 
   setNearestOn(control, false);
   control.append(

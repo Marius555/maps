@@ -1,15 +1,18 @@
 "use client";
 
-import { Accordion, Button, ScrollShadow } from "@heroui/react";
+import { Button, ScrollShadow, Tooltip } from "@heroui/react";
 import { ChevronLeft, RotateCcw } from "lucide-react";
 import Link from "next/link";
 
 import { ErrorMessage } from "@/components/ui/error-message";
 import { PropertyFold } from "@/components/ui/properties/property-fold";
+import { PropertyFolds } from "@/components/ui/properties/property-folds";
 import type { AppMap, Place, Shape } from "@/lib/repositories/types";
 import { hasUnpublishedChanges } from "@/lib/snapshot/staleness";
 import { PublishAction } from "../publish-action";
 import { PublishStatus } from "../publish-status";
+import { DeviceToggle } from "../preview-device/device-toggle";
+import type { DeviceId } from "../preview-device/devices";
 import { ShareDialog } from "../share-dialog/share-dialog";
 import { ColorsGroup } from "./colors-group";
 import { MapControlsGroup } from "./map-controls-group";
@@ -45,28 +48,49 @@ export function DesignSidebar({
   places,
   shapes,
   design,
+  device,
+  onDeviceChange,
 }: {
   map: AppMap;
   places: Place[];
   shapes: Shape[];
   design: EmbedDesign;
+  /** Which width the preview is capped to. Local to the page, never published
+      — see `PublishPanel`. */
+  device: DeviceId;
+  onDeviceChange: (value: DeviceId) => void;
 }) {
   const isEmpty = places.length === 0 && shapes.length === 0;
 
   return (
     <aside className="order-2 flex max-h-[60dvh] min-h-0 shrink-0 flex-col overflow-hidden border-t border-border bg-surface lg:order-1 lg:max-h-none lg:w-80 lg:border-t-0 lg:border-r">
       <header className="flex min-h-14 shrink-0 items-center gap-1 border-b border-border px-2">
-        {/* The nav is gone on this page, so this is the way back. It carries the
-            map's name rather than saying "Back", because the one thing worth
-            confirming on a full-bleed page with no chrome is which map you are
-            designing. */}
-        <Link
-          href={`/maps/${map.id}`}
-          className="flex min-w-0 flex-1 items-center gap-1 rounded-lg px-1.5 py-1 text-sm font-semibold tracking-tight text-foreground hover:bg-default"
-        >
-          <ChevronLeft aria-hidden="true" className="size-4 shrink-0 text-muted" />
-          <span className="truncate">{map.name}</span>
-        </Link>
+        {/* The nav is gone on this page, so this is the way back.
+
+            It used to carry the map's name, on the argument that the one thing
+            worth confirming on a full-bleed page with no chrome is which map you
+            are designing. That is still worth confirming and it is still here —
+            as the link's accessible name and its tooltip — but it is no longer
+            worth a truncating half of a 20rem header row. The width it was
+            spending is what the preview-width tiles now sit in. */}
+        <Tooltip delay={0}>
+          <Link
+            href={`/maps/${map.id}`}
+            aria-label={`Back to ${map.name}`}
+            className="flex shrink-0 items-center rounded-lg p-1.5 text-foreground hover:bg-default"
+          >
+            <ChevronLeft aria-hidden="true" className="size-4 text-muted" />
+          </Link>
+          <Tooltip.Content placement="bottom">{map.name}</Tooltip.Content>
+        </Tooltip>
+
+        {/* Between the two controls that are about the page rather than about
+            the map. `flex-1` so it centres in whatever the chevron and Reset
+            leave, and `min-w-0` so it is the tiles that give way first if a
+            long-labelled Reset ever needs the room. */}
+        <div className="flex min-w-0 flex-1 justify-center">
+          <DeviceToggle value={device} onChange={onDeviceChange} />
+        </div>
 
         <Button
           variant="ghost"
@@ -88,18 +112,18 @@ export function DesignSidebar({
         ) : null}
 
         {/*
-          An accordion rather than the card designer's Modify panel's flat
-          divided column, and the difference is the shape of the two. That one
-          is a fixed-height tab about a single selected block, where folding
-          buys height that was never scarce. This is a full-height column
-          holding four unrelated questions — where the panel goes, what a row
-          says, what is on the map, what colour it all is — and a wall of thirty
-          controls is one nobody reads down. Multiple open at once, because
-          comparing a panel setting against a colour is a real thing to be
-          doing. (The card designer's *palette* folds for this reason too, and
-          shares `PropertyFold` with it.)
+          A full-height column holding five unrelated questions — where the
+          panel goes, what a row says, what is on the map, what colour it all
+          is, and whether visitors are counted — so a wall of thirty controls is
+          one nobody reads down.
+
+          It used to open on "Results panel" and allow several at once, the
+          argument being that comparing a panel setting against a colour is a
+          real thing to be doing. It is, and it lost to the more common case:
+          five open folds in a 20rem column is the wall again. `PropertyFolds`
+          is the one answer every panel in the app now gives.
         */}
-        <Accordion allowsMultipleExpanded defaultExpandedKeys={["panel"]}>
+        <PropertyFolds>
           <PropertyFold id="panel" title="Results panel">
             <PanelGroup {...design} />
           </PropertyFold>
@@ -125,7 +149,7 @@ export function DesignSidebar({
           <PropertyFold id="measurement" title="Visitor analytics">
             <MeasurementGroup {...design} />
           </PropertyFold>
-        </Accordion>
+        </PropertyFolds>
       </ScrollShadow>
 
       {/* Outside the scroller on purpose: a long column of controls must not be

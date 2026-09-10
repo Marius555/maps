@@ -364,6 +364,22 @@ export type SnapshotSettings = {
    * turned it off and republished.
    */
   panelScrollbar?: boolean;
+  /**
+   * Below the embed's own 768px drawer query, open the list in a drawer instead
+   * of stacking it under the map.
+   *
+   * Absent means **stacked**, which is what every published map does on a phone
+   * today: the list comes back into the flow and takes the bottom 40% of the
+   * box — and it does so below 640px, its own narrower breakpoint, because
+   * moving that one would edit maps already on customer sites. Growing a drawer
+   * over somebody's live site without them republishing is the same thing `list`
+   * refuses to do, for the same reason.
+   *
+   * Read only below that width. Above it this is not consulted at all — the
+   * panel is the panel, and the side, placement and width settings are what
+   * describe it.
+   */
+  panelDrawer?: boolean;
 
   /* One results row — absent is the row as it was before any of this. */
 
@@ -397,6 +413,22 @@ export type SnapshotSettings = {
   /* Colour. */
 
   colors?: SnapshotColors;
+
+  /**
+   * What a location with no tag and no pin colour of its own is drawn in.
+   *
+   * Absent means `UNTAGGED_PIN_COLOR`, the flat grey in
+   * `packages/shared/pin-icons.ts` — which is what every snapshot published
+   * before this field drew, and must keep drawing.
+   *
+   * It exists because that grey was the *only* answer a published map had. The
+   * editor draws the same pin in `var(--accent)` and a snapshot has no theme to
+   * read, so the Publish tab showed a grey version of the map the editor next
+   * door showed in colour. Publishing the colour is what lets the two agree —
+   * `colorOf` in `embed/src/map.ts` reads it, and it is the last link before the
+   * grey rather than the first, so a tag still wins.
+   */
+  pinColor?: string;
 
   /* Measurement. */
 

@@ -2,11 +2,14 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@heroui/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 
-import { FormTextField } from "@/components/ui/form-field";
+import { AuthDivider } from "@/components/auth/auth-divider";
+import { GoogleButton } from "@/components/auth/google-button";
 import { ErrorMessage } from "@/components/ui/error-message";
+import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
 import { useLogin } from "@/lib/query/auth";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { loginSchema, type LoginInput } from "@/lib/validation/auth.schema";
@@ -38,30 +41,51 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
   });
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      {login.error && !errors.email && !errors.password ? (
-        <ErrorMessage error={login.error} />
-      ) : null}
+    <div className="space-y-5">
+      {/* Above the form, because for anyone who has one it is the shorter path
+          and putting it underneath makes it the thing you find after failing. */}
+      <GoogleButton />
 
-      <FormTextField
-        control={control}
-        name="email"
-        label="Email"
-        type="email"
-        autoComplete="email"
-      />
+      <AuthDivider />
 
-      <FormTextField
-        control={control}
-        name="password"
-        label="Password"
-        type="password"
-        autoComplete="current-password"
-      />
+      <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        {login.error && !errors.email && !errors.password ? (
+          <ErrorMessage error={login.error} />
+        ) : null}
 
-      <Button type="submit" fullWidth isPending={isSubmitting}>
-        Log in
-      </Button>
-    </form>
+        <FormTextField
+          control={control}
+          name="email"
+          label="Email"
+          type="email"
+          autoComplete="email"
+        />
+
+        <div className="space-y-1.5">
+          <FormPasswordField
+            control={control}
+            name="password"
+            label="Password"
+            autoComplete="current-password"
+          />
+
+          {/* Under the field rather than beside its label: React Aria owns the
+              label row, and a link inside it would be read out as part of the
+              field's accessible name. */}
+          <div className="flex justify-end">
+            <Link
+              href="/forgot-password"
+              className="text-xs text-muted underline transition-colors hover:text-foreground"
+            >
+              Forgot password?
+            </Link>
+          </div>
+        </div>
+
+        <Button type="submit" fullWidth isPending={isSubmitting}>
+          Log in
+        </Button>
+      </form>
+    </div>
   );
 }

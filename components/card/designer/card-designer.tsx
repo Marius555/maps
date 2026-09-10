@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cardAccentVars } from "@/components/card/card-frame";
 import { cardThemeClass } from "@/lib/card/card-theme";
+import { usePrefersDark } from "@/lib/theme/use-prefers-dark";
 import { RowDragProvider } from "@/components/groups/row-drag-context";
 import { IconButton } from "@/components/ui/icon-button";
 import {
@@ -89,6 +90,9 @@ export function CardDesigner({
   initialCardDesign: Record<string, unknown>;
 }) {
   const { data: places = [] } = usePlaces(initialMap.id, initialPlaces);
+  // Only Auto consults this, and it is the dashboard's resolved theme rather
+  // than the OS's preference — see `cardThemeClass`.
+  const prefersDark = usePrefersDark();
   const { data: design = initialCardDesign } = useCardDesign(initialCardDesign);
   const updateCardDesign = useUpdateCardDesign();
 
@@ -418,9 +422,9 @@ export function CardDesigner({
           >
             {sample ? (
               <CardCanvas
-                /* The basemap's light/dark, so the card being designed is the
-                   card a visitor gets — see `cardThemeClass`. */
-                theme={cardThemeClass(initialMap.style)}
+                /* The map's own light/dark, so the card being designed is
+                   the card a visitor gets — see `cardThemeClass`. */
+                theme={cardThemeClass(initialMap.style, prefersDark)}
                 layout={draft}
                 place={sample}
                 tagChips={tagChips}

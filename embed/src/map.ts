@@ -1546,6 +1546,13 @@ export type PinColors = {
   tagGroups: SnapshotTagGroup[];
   /** Legacy, read-only: category id → hex, for pre-merge snapshots. */
   categories: Map<string, string>;
+  /**
+   * What an untagged place is drawn in, when the owner has published an answer.
+   *
+   * Absent on every snapshot written before the field existed, which is why the
+   * grey below is still the last word rather than this.
+   */
+  pin?: string;
 };
 
 export function colorsOf(snapshot: MapSnapshot): PinColors {
@@ -1557,6 +1564,7 @@ export function colorsOf(snapshot: MapSnapshot): PinColors {
         category.color,
       ]),
     ),
+    pin: snapshot.settings.pinColor,
   };
 }
 
@@ -1600,6 +1608,12 @@ export function pinsOf(snapshot: MapSnapshot): CustomPinIcon[] {
  * beside them: a file carries one vocabulary or the other, so on an old snapshot
  * `pinColorOfTags` finds nothing and this answers, and on a new one it never
  * runs. Deleting it would turn every already-published map grey.
+ *
+ * `colors.pin` is the owner's own answer for a place that has none of the above,
+ * and it is second to last for the same reason the categories are third: it must
+ * not out-rank anything the map actually says about a place. `UNTAGGED_PIN_COLOR`
+ * stays under it because a snapshot published before the field carries no answer,
+ * and grey is what it drew.
  */
 export function colorOf(
   place: SnapshotPlace,
@@ -1610,6 +1624,7 @@ export function colorOf(
     resolvePin(place.icon, pins)?.color ??
     pinColorOfTags(colors.tagGroups, place.tags) ??
     colors.categories.get(place.category ?? "") ??
+    colors.pin ??
     UNTAGGED_PIN_COLOR
   );
 }

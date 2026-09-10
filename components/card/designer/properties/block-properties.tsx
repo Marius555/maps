@@ -1,6 +1,5 @@
 "use client";
 
-import { Accordion } from "@heroui/react";
 import {
   AlignCenter,
   AlignLeft,
@@ -52,6 +51,7 @@ import {
   widthStops,
 } from "./property-scales";
 import { PropertyFold } from "@/components/ui/properties/property-fold";
+import { PropertyFolds } from "@/components/ui/properties/property-folds";
 import { TextProperties } from "./text-properties";
 
 /** What a control on this panel can change about the selected block. */
@@ -201,21 +201,6 @@ const VALIGN_OPTIONS = [
   label: string;
   icon: React.ReactNode;
 }[];
-
-/**
- * The fold a block is really selected for, where it is not the first one.
- *
- * Read only by `BlockProperties` below, to open it alongside the first
- * non-empty group. Deliberately short: a type belongs here only when its own
- * settings are what somebody opens the panel to change, which is true of the two
- * types that carry a whole appearance of their own and of nothing else. Every
- * other block is selected to be moved or resized, and that fold already opens.
- */
-const SIGNATURE_GROUP: Partial<Record<CardBlockType, string>> = {
-  button: "button",
-  tags: "chips",
-  category: "chips",
-};
 
 /**
  * The three bands of the card, narrowed to the ones this type is allowed in.
@@ -432,41 +417,6 @@ export function BlockProperties({
     preview: !has("chips") || !onChipPreview,
   };
 
-  /*
-   * One fold open, and it has to be found rather than named.
-   *
-   * The publish designer can write `defaultExpandedKeys={["panel"]}` because its
-   * four folds are always all there. These are not: which controls a block
-   * offers is the block's own business, so a hard-coded id lands on a spacer
-   * with Size & position hidden and opens nothing at all — a panel of shut
-   * drawers, which is the failure this whole arrangement exists to avoid.
-   */
-  const firstOpen = Object.entries(emptyGroups).find(
-    ([, isEmpty]) => !isEmpty,
-  )?.[0];
-
-  /*
-   * And the block's *own* fold beside it, which is a reported bug rather than a
-   * refinement.
-   *
-   * Declaration order puts "Size & position" first for almost every type, so on
-   * a Button the one fold that opened held Width and Alignment while the colour
-   * of the button — the thing somebody selects a Button block to change — sat
-   * shut, two folds below, under a heading reading "Button" inside a panel
-   * already headed "Button". It was reported as the control not existing at
-   * all, which is the right way to describe a control nobody can find.
-   *
-   * A table rather than a rule, because "the block's own group" is not derivable:
-   * a Tags block's is Chips, a Button's is the one named after it, and every
-   * other type has nothing that answers. `Accordion` is already
-   * `allowsMultipleExpanded`, so this opens *as well as* the first rather than
-   * instead of it — the geometry is still what most blocks are selected for.
-   */
-  const signature = SIGNATURE_GROUP[block.type];
-  const openKeys = [firstOpen, signature && !emptyGroups[signature] ? signature : undefined]
-    .filter((key): key is string => Boolean(key))
-    .filter((key, index, keys) => keys.indexOf(key) === index);
-
   return (
     /* `space-y-4` — `SectionPanel`'s own body rhythm, so this panel is spaced
        like every other panel in the app. It was `space-y-2.5`, squeezed to make
@@ -489,14 +439,21 @@ export function BlockProperties({
         folding buys height that was never scarce and costs a click on the way to
         every control. What it did not weigh is that a block can offer seven
         groups and around twenty controls at 24rem, and a column that long is one
-        nobody reads down — the same thing the Blocks palette and the publish
-        designer both concluded, and this is now the third panel to agree.
+        nobody reads down.
 
-        `key={block.id}` so picking a different block re-opens the default rather
-        than inheriting whatever was left open on the last one, whose folds are
-        not even the same set.
+        They start shut — see `PropertyFolds`. This panel used to open the first
+        non-empty group and, for a Button or a Tags block, the fold that block is
+        really selected for. That second one answered a real report (the button's
+        colour sat shut under a heading reading "Button" inside a panel already
+        headed "Button") and the fix for it is now the shorter list itself: with
+        nothing open, every heading a block offers is on screen at once and the
+        one you want is one press away instead of one scroll and one press.
+
+        `key={block.id}` so picking a different block starts shut rather than
+        inheriting whatever was left open on the last one, whose folds are not
+        even the same set.
       */}
-      <Accordion key={block.id} allowsMultipleExpanded defaultExpandedKeys={openKeys}>
+      <PropertyFolds key={block.id}>
         <PropertyFold
           id="size"
           title="Size & position"
@@ -781,7 +738,7 @@ export function BlockProperties({
             <PreviewProperties count={chipPreview ?? null} onCount={onChipPreview} />
           ) : null}
         </PropertyFold>
-      </Accordion>
+      </PropertyFolds>
     </section>
   );
 }
