@@ -31,7 +31,11 @@ export function ContactSection({
       summary={filledSummary([phone, email, url])}
       hasError={hasError}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* `@md:`, not `sm:`. The container is the dialog body (place-form.tsx),
+          so the row splits when there is room for two columns rather than when
+          the *window* is wide — which used to give a 448px dialog two columns on
+          every desktop, and a phone in landscape one. */}
+      <div className="grid gap-4 @md:grid-cols-2">
         <FormTextField control={control} name="phone" label="Phone" type="tel" />
         <FormTextField control={control} name="email" label="Email" type="email" />
       </div>

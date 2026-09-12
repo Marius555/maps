@@ -60,7 +60,9 @@ export function SelectionBar({
           exit={{ opacity: 0, y: 4 }}
           // Matches --duration-fast / --ease-out from globals.css.
           transition={{ duration: 0.15, ease: [0, 0, 0.2, 1] }}
-          className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-3"
+          // `ps-12` for MapHintBar's reason: it shares this strip, and
+          // MapLibre's controls stack up the bottom-left corner.
+          className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-3 ps-12"
         >
           <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-surface py-1 pe-1 ps-3 shadow-sm">
             <span className="text-xs whitespace-nowrap text-foreground" role="status">

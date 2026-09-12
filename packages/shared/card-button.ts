@@ -88,6 +88,19 @@ export function buttonTargetOf(
     };
   }
 
+  /*
+   * A link typed out for this one location beats everything the design points
+   * at — it is only ever written on a per-pin override, so there is exactly one
+   * card it can be about. `null` rather than a fall-through when it will not
+   * parse: an owner who typed a link meant *that* link, and quietly drawing the
+   * location's website instead is a button that goes somewhere nobody chose.
+   */
+  if (block.buttonHref) {
+    const href = safeHref(block.buttonHref);
+
+    return href ? { href, label: block.buttonLabel ?? WEBSITE_LABEL } : null;
+  }
+
   // Absent is the location's own website, which is why this is a `find` over
   // the id rather than a lookup that has to be told about a sentinel first.
   if (!block.buttonSource) {

@@ -135,11 +135,14 @@ export function CardDesignerTabs({
 /**
  * There is something to save, and it is saved from the other tab.
  *
- * A dot rather than a count or a word: the sentence above the card already says
- * "You have unsaved changes", so this only has to point at *where* — and a tab
- * label is not somewhere a sentence fits. It carries `sr-only` text because a
- * 6px circle says nothing to a screen reader, and `aria-hidden` on the circle
- * itself so the two are not read as two things.
+ * A dot rather than a count or a word, because a tab label is not somewhere a
+ * sentence fits — this only has to point at *where*. It used to be the second
+ * half of a pair: a line above the card said "You have unsaved changes" in
+ * words and this said which tab. That line is gone, so the two things saying it
+ * now are this and the Save button under the palette, which is dead until there
+ * is something to save. It carries `sr-only` text because a 6px circle says
+ * nothing to a screen reader, and `aria-hidden` on the circle itself so the two
+ * are not read as two things.
  *
  * `bg-accent` and not a warning colour: unsaved work is the normal state of a
  * designer, not a fault.

@@ -67,10 +67,12 @@ export function EssentialsSection({
         onChange={onMove}
       />
 
-      {/* One field per row. They shared a line while the address needed a button
-          beside it; the lookup is a magnifier inside the box now, and a search
-          field that returns a list of matches wants the full width for them. */}
-      <div className="grid gap-4 sm:grid-cols-1">
+      {/* One field per row, at every width. They shared a line while the address
+          needed a button beside it; the lookup is a magnifier inside the box now,
+          and a search field that returns a list of matches wants the full width
+          for them. The `sm:grid-cols-1` that used to be here said nothing a
+          one-column grid was not already saying. */}
+      <div className="grid gap-4">
         <FormTextField control={control} name="name" label="Name" />
 
         <Controller

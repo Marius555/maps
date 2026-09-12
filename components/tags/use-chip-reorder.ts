@@ -35,11 +35,16 @@ import {
  *   an element wrapping a button is never called. It fails silently.
  * - **`touch-action: pan-y`, not `none`.** `none` hands every swipe to us,
  *   including the one someone meant as a scroll of the dialog these chips sit in.
- *   `pan-y` leaves vertical panning to the browser, and we take it back with
- *   `preventDefault()` on the first move *after* the hold fires — which only
- *   works because movement cancels the hold. The browser commits to a pan once
- *   the finger travels and ignores `preventDefault` from then on, so a drag has
- *   to begin from a finger that has not moved.
+ *   `pan-y` leaves vertical panning to the browser and refuses the horizontal
+ *   pan outright, and **the horizontal axis is the whole of why this gesture has
+ *   always worked on a phone while its vertical twin did not.** A chip is dragged
+ *   *across* a row, on the axis `pan-y` already declined, so there is never a pan
+ *   to take back. `use-row-drag.ts` believed it took its own back by calling
+ *   `preventDefault()` on the first `pointermove` after the hold — which the
+ *   Pointer Events spec defines as a no-op — and that file now binds a
+ *   non-passive `touchmove` for it. Nothing of the kind is needed here, and that
+ *   is the reason, not an oversight: add one only if a chip ever has to move
+ *   vertically.
  *
  * There is no ghost. A ghost exists so the thing being dragged stays visible when
  * it would otherwise be hidden under the pointer or clipped by a scroller;
@@ -66,7 +71,10 @@ const DRAG_THRESHOLD = 8;
 /** How long a finger rests on a chip before it is a drag rather than a scroll. */
 const TOUCH_HOLD_MS = 250;
 
-/** See the docblock — `pan-y` rather than `none`, and it is load-bearing. */
+/**
+ * See the docblock — `pan-y` rather than `none`, and it is load-bearing. It is
+ * also sufficient on its own here, which is not true of `use-row-drag.ts`.
+ */
 const CHIP_STYLE: CSSProperties = { touchAction: "pan-y" };
 
 /**
@@ -217,9 +225,18 @@ export function useChipReorder({
         begin();
       }
 
-      // Stops the gesture also selecting the labels it passes over, and on touch
-      // this is what takes the pan back from the browser.
-      event.preventDefault();
+      /*
+       * Stops the gesture also selecting the labels it passes over, and on touch
+       * this is what takes the pan back from the browser.
+       *
+       * Guarded for `use-row-drag.ts`'s reason: once the browser has committed
+       * to a pan every move is non-cancelable and this logs a warning per
+       * sample. Rare here — chips are reordered *across* a row and `pan-y` never
+       * gave the horizontal axis away, which is why this gesture works on a
+       * phone while the vertical ones did not — but the guard costs nothing and
+       * keeps the console readable when a finger does drift.
+       */
+      if (event.cancelable) event.preventDefault();
 
       const over = chipAt(event.clientX, event.clientY);
       target.current = over === from.id ? null : over;

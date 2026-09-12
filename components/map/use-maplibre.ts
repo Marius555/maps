@@ -43,6 +43,23 @@ type Options = {
   maxFitZoom?: number;
   style: MapStyleKey;
   /**
+   * Whether the zoom stack carries a compass as well as the two zoom buttons.
+   *
+   * The one thing that varies, and off by default, because three of the four
+   * maps built on this hook are small — the pin field in the Edit location form
+   * is 160px tall, and a third button is clutter on it. The editor's canvas asks
+   * for it; the review map, the pin field and the Analytics heatmap do not.
+   *
+   * There is deliberately nothing else here. Locate, fullscreen and the scale
+   * ruler were all offered for a while and are all gone: on the dashboard they
+   * are furniture over a map the owner is *editing*, and the corner they stacked
+   * in is worth more than they are. The **embed** still offers all of them,
+   * because there the visitor is only looking — see `SnapshotSettings` and
+   * `components/publish/design-sidebar/map-controls-group.tsx`, which is where
+   * that choice belongs.
+   */
+  showCompass?: boolean;
+  /**
    * The map's stored `appearance` blob, straight off the row. Normalised here
    * rather than by each caller so a map with nothing stored, a map created
    * before the column existed and a map whose JSON was hand-edited all mean the
@@ -204,7 +221,26 @@ export function useMaplibre(
         attributionControl: { compact: true },
       });
 
-      map.addControl(new NavigationControl(), "top-right");
+      /*
+       * Bottom-left, and it is the only control this map has.
+       *
+       * Left rather than right because the right-hand corner is already spoken
+       * for twice over: MapLibre's own attribution is built by the constructor
+       * and sits there, and the shape/route card docks above it
+       * (components/map/shapes/shape-card/shape-card.tsx). Nothing of ours is in
+       * the bottom-left, so the stack lands on empty ground and the two corners
+       * cannot collide.
+       *
+       * Top-right, where this used to be, is where the floating toolbar wraps
+       * to — which is why `map-toolbar.tsx` carried a `pr-12` for as long as the
+       * zoom buttons lived there.
+       */
+      map.addControl(
+        new NavigationControl({
+          showCompass: initial.current.showCompass === true,
+        }),
+        "bottom-left",
+      );
 
       const instance = map;
 

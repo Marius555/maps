@@ -184,8 +184,8 @@ Area-specific invariants live at the head of each file in the table below.
   it `retired` so it stops being offered and keeps being read.
 - **One writer per JSON blob column.** `updateMap` serialises `settings` whole, so two
   forms writing it is a lost update. `useEmbedDesign` is the only writer.
-- **The embed's own-code budget is 47KB and it currently sits at 46.2KB.** The
-  binding number is the **total**, 319.4KB of a 320KB ceiling. Run
+- **The embed's own-code budget is 47KB and it currently sits at 46.6KB.** The
+  binding number is the **total**, 319.8KB of a 320KB ceiling. Run
   `npm run build:embed` after any change under `/embed` or `/packages/shared` — `npm run
   check` does not. Do not raise the budget to get past it (§4).
 - **Adding to `EditorMode` something that is not a `ShapeKind` means auditing every
@@ -196,6 +196,12 @@ Area-specific invariants live at the head of each file in the table below.
   a value the user already moved off gets saved.
 - **Verify UI behaviour in the browser against the real DOM.** Fixtures in this project
   have hidden real defects; measure the thing on screen.
+- **`preventDefault()` on a pointer event does not stop a scroll.** The spec defines it as
+  a no-op for panning, so a gesture that has to keep a finger from scrolling needs
+  `touch-action` (declarative) or a non-passive `touchmove` (imperative) — and React
+  registers `touchmove` at its root *passively*, so that one must be `addEventListener`,
+  bound before the gesture starts. Believing otherwise cost `use-row-drag.ts` a grip icon on
+  every draggable row; `docs/notes/editor-and-layout.md` has the post-mortem.
 - **`prefers-reduced-motion` cuts every animation to a single 0.01ms pass**, so a state
   told only in motion is told to nobody. Give it a static form too.
 
@@ -301,9 +307,9 @@ The embed must **never** import React, HeroUI, Motion, TanStack Query, Zustand, 
 
 Target: **under 250KB gzipped including MapLibre.** If a change pushes it over, flag it.
 
-**Measured, that target is unreachable with MapLibre v6** — its own dist files are 273.2KB gzipped (`maplibre-gl.mjs` 136.4 + `maplibre-gl-shared.mjs` 131.0 + the worker 5.8), minified already, with no slim build. Actual total is **319.4KB**, of which ours is 46.2KB. `npm run build:embed` enforces a 47KB budget on our code and a 320KB ceiling on the total; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 46.2KB.
+**Measured, that target is unreachable with MapLibre v6** — its own dist files are 273.2KB gzipped (`maplibre-gl.mjs` 136.4 + `maplibre-gl-shared.mjs` 131.0 + the worker 5.8), minified already, with no slim build. Actual total is **319.8KB**, of which ours is 46.6KB. `npm run build:embed` enforces a 47KB budget on our code and a 320KB ceiling on the total; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 46.6KB.
 
-The own-code budget has been raised three times — 42 → 46 → 47KB — and each raise is argued in `scripts/check-embed-size.mjs` rather than merely recorded. It **must not be raised to get past a binding budget**: it exists to catch the MapLibre duplication regression above, and a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam. **The ceiling below it is now the number with the least room** — 0.6KB — and that one is not editable: if the total is what binds, it is a §3 conversation about the map library. Reasoning in `scripts/check-embed-size.mjs` and `docs/notes/publish-and-embed.md`.
+The own-code budget has been raised three times — 42 → 46 → 47KB — and each raise is argued in `scripts/check-embed-size.mjs` rather than merely recorded. It **must not be raised to get past a binding budget**: it exists to catch the MapLibre duplication regression above, and a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam. **The ceiling below it is now the number with the least room** — 0.2KB — and that one is not editable: if the total is what binds, it is a §3 conversation about the map library. Reasoning in `scripts/check-embed-size.mjs` and `docs/notes/publish-and-embed.md`.
 
 `/packages/shared` is the **only** directory both targets may import from. `@/lib`, `@/components` and `@/app` are closed to the embed, and `eslint.config.mjs` enforces both halves of that.
 

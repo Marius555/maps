@@ -9,6 +9,7 @@ import {
   MAX_BLOCK_MARGIN,
   MAX_BLOCK_PADDING,
   MAX_BUTTON_BORDER_WIDTH,
+  MAX_BUTTON_HREF,
   MAX_BUTTON_LABEL,
   MAX_BUTTON_PADDING,
   MAX_BUTTON_RADIUS,
@@ -566,6 +567,11 @@ export function resizeCardBlock(
      * already taken by "leave it alone".
      */
     buttonSource?: string;
+    /*
+     * A link typed out in full, per-pin only. `""` clears it and hands the
+     * button back to `buttonSource` — see `CardBlock.buttonHref`.
+     */
+    buttonHref?: string;
     buttonLabel?: string;
     buttonBackground?: string;
     buttonBorder?: string;
@@ -872,6 +878,7 @@ export function resizeCardBlock(
     else {
       delete next.buttonAction;
       delete next.buttonSource;
+      delete next.buttonHref;
     }
   }
 
@@ -880,6 +887,19 @@ export function resizeCardBlock(
     // and no sentinel a field id could ever collide with.
     if (patch.buttonSource) next.buttonSource = patch.buttonSource;
     else delete next.buttonSource;
+  }
+
+  if (patch.buttonHref !== undefined && hasControl(type, "button")) {
+    /*
+     * Stored exactly as the control hands it over, scheme included and nothing
+     * trimmed — the label field below explains at length why normalising a
+     * controlled input on every keystroke breaks typing, and a link is written a
+     * character at a time the same way. `safeHref` decides whether it is
+     * reachable, at draw time, in both renderers.
+     */
+    const href = patch.buttonHref.slice(0, MAX_BUTTON_HREF);
+    if (href.trim()) next.buttonHref = href;
+    else delete next.buttonHref;
   }
 
   if (patch.buttonLabel !== undefined && hasControl(type, "button")) {

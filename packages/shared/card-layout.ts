@@ -1125,6 +1125,25 @@ export type CardBlock = {
    */
   buttonSource?: string;
   /**
+   * A link typed out in full, for **one location**. `button` blocks only, and
+   * only in link mode.
+   *
+   * The exception `buttonSource` exists to make unnecessary, and it is only safe
+   * because of where it is allowed to be set: a per-pin override stores a whole
+   * resolved block against one place (`overrideBlock`), so a URL there points one
+   * card at one page. The account design is a different object drawn for every
+   * location on every map, which is why the control is hidden in the studio — see
+   * `ButtonProperties`, and `buttonSource` above for the rule it is the exception
+   * to.
+   *
+   * Absent is `buttonSource`'s answer, which is what every card published before
+   * this field existed already says. It wins over the source when present, so a
+   * pin that has been given its own link keeps it whatever the design points at.
+   * Stored with its scheme; the control strips `https://` for display only,
+   * because nobody types it.
+   */
+  buttonHref?: string;
+  /**
    * What the button says. `button` blocks only.
    *
    * Absent is the action's own word — "Directions", "Website", or the custom
@@ -1484,6 +1503,15 @@ export const MAX_BUTTON_LABEL = 40;
  * meaningful limit.
  */
 export const MAX_BUTTON_SOURCE = 64;
+
+/**
+ * The longest a typed-out button link may be.
+ *
+ * Generous rather than tight: a booking link with campaign parameters on it is
+ * routinely 200 characters, and this is a bound on abuse of a JSON column that
+ * every visitor to the customer's site downloads, not a judgement about URLs.
+ */
+export const MAX_BUTTON_HREF = 512;
 
 /**
  * The ceiling on a block's `offset`, for the schema that bounds the column.
@@ -2020,10 +2048,10 @@ function readBlock(
    * "directions" somebody might reasonably write, leaves the field absent,
    * which *is* directions. Same shape as `logoMode` above.
    *
-   * The source and the label are only read in link mode and only as far as they
-   * mean anything: a `buttonSource` on a directions button names a field the
-   * button will never read, and carrying it would leave a stale answer waiting
-   * to surprise whoever switches the action back months later.
+   * The source, the typed link and the label are only read in link mode and only
+   * as far as they mean anything: a `buttonSource` on a directions button names a
+   * field the button will never read, and carrying it would leave a stale answer
+   * waiting to surprise whoever switches the action back months later.
    */
   if (spec.controls.includes("button")) {
     if (raw.buttonAction === "link") {
@@ -2031,6 +2059,9 @@ function readBlock(
 
       const source = text(raw.buttonSource, MAX_BUTTON_SOURCE);
       if (source) block.buttonSource = source;
+
+      const href = text(raw.buttonHref, MAX_BUTTON_HREF);
+      if (href) block.buttonHref = href;
     }
 
     const label = text(raw.buttonLabel, MAX_BUTTON_LABEL);

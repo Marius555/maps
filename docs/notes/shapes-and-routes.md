@@ -122,6 +122,18 @@ rewritten; it is the record of why this area is shaped as it is.
   those four lines would be two chances to forget the profile.
 - **A dotted outline is a `symbol` layer, not a dash pattern.** A zero-length dash
   under a round cap draws a circle *only at integer zooms* — see below.
+- **A dotted layer must declare `text-size: 1`, and it is not about text.**
+  MapLibre floors `symbol-spacing` at the icon image's own *raw* pixel width times
+  `text-size / 24`; at the default 16 that is 21.3px, so every spacing this product
+  asks for was silently replaced. `DOT_TEXT_SIZE` in `packages/shared/dot-line.ts`.
+- **There is one dotted layer per integer stroke width**, because `symbol-spacing`
+  is a layout property and cannot be data-driven. `SHAPE_DOTTED_LINE_LAYERS` in
+  both renderers, and **every one of them belongs in the hit-test list** — leaving
+  dotted out of the embed's list made a published dotted shape unclickable.
+- **Symbols placed along a line do not hold their spacing between zoom levels**,
+  and no expression can fix it: the layout runs once per tile at that tile's
+  integer zoom and the tile is then scaled, so spacing on screen runs from the
+  asked-for value to double it. `DOT_SPACING_RATIO` is tuned for the tight end.
 - **Route-stop rows are the one place this panel is two levels deep.** `TreeRail`
   draws the ancestor's line with no elbow; `continues: false` draws a gap of the
   same width, because a rail running past the group's last member points at nothing.
@@ -153,15 +165,66 @@ along the line: `symbol-placement: "line"`, one SDF disc from
 every colour on the map, and `icon-size` data-driven off the feature's own width.
 `icon-allow-overlap` and `icon-ignore-placement` are both on because this is not a
 label — collision detection would drop dots wherever a route passes a place name,
-and a dotted line with gaps in it reads as a line that stops.
+and a dotted line with gaps in it reads as a line that stops. The image is shared
+rather than per-renderer, because the publish preview draws the real embed bundle
+against the same map the editor is drawing — two dot images that agree today is
+exactly the drift `packages/shared` exists to prevent.
 
-Two things it costs, and both are the right way round. `symbol-spacing` is a
-layout property and cannot be data-driven, so the spacing no longer follows the
-stroke: it is a flat 14px, which makes a heavy dotted line read as a denser row of
-dots than a hairline. And the image is shared rather than per-renderer, because
-the publish preview draws the real embed bundle against the same map the editor is
-drawing — two dot images that agree today is exactly the drift `packages/shared`
-exists to prevent.
+**Then the dots were reported as far too sparse, and the number in the source was
+not the number on the screen.** The first version of this asked for a flat 14px,
+on the reasoning that `symbol-spacing` is a *layout* property and so cannot be
+data-driven — true, and it meant the spacing could not follow the stroke. What it
+did not account for is that MapLibre then ignored the 14 as well. Two separate
+mechanisms sit between the asked-for number and the drawn one, and both had to be
+dealt with.
+
+**The label-length floor, which is the whole of the reported bug.** `getAnchors`
+refuses to place symbols closer together than the label they carry: if
+`spacing − labelLength × boxScale < spacing / 4`, it replaces the spacing with
+`labelLength × boxScale + spacing / 4`. For an icon-only symbol `labelLength` is
+the image's **raw pixel width** — 32 here, `icon-size` ignored entirely — and
+`boxScale` is `tilePixelRatio × text-size / 24`. At the default `text-size` of 16
+that is 32 × 16/24 = 21.3px, so *every* spacing below about 28px came out as
+`21.3 + asked/4`. Asking for 14 drew 24.8; asking for 6 drew 22.8. Measured in the
+browser by reading the bucket's own `symbolInstances` on a 6px route at z17 —
+anchors 365.5 tile units apart against a `tilePixelRatio` of 16. The layers now
+declare `text-size: 1` (`DOT_TEXT_SIZE`), which puts the floor at 1.3px where
+nothing can reach it; the same measurement then read 11.96px for a request of 12.
+It is a layer with no text on it at all, so nothing else reads the property.
+
+**The tile-scale swing, which is inherent and is not a bug.** A tile's symbols are
+laid out once, in tile units, at that tile's integer zoom, and the tile is then
+scaled — so the on-screen spacing is what was asked for at an integer zoom and up
+to *twice* that just below the next one. Measured asking for 12px: 11.96 at z17,
+17.0 at z17.5, 22.4 at z17.9, 12.0 again at z18. Layout properties are evaluated
+at the bucket's zoom, which is that same integer, so a zoom expression cannot
+correct it. `DOT_SPACING_RATIO` is therefore chosen for the *tight* end — 1.5
+widths centre to centre, so half a dot of gap at an integer zoom opening to two —
+rather than being right in the middle and sparse for most of a zoom level.
+
+With the floor gone the spacing does follow the stroke after all, at the cost of
+**one symbol layer per integer stroke width**: twelve of them, the whole range
+`MIN_STROKE_WIDTH`..`MAX_STROKE_WIDTH`, each with its own constant
+`symbol-spacing` and a filter (`dotWidthFilter`) matching that width. Exact match
+rather than a handful of buckets, because twelve needs no argument about where a
+boundary should sit, and a layer no shape on the map matches builds no bucket at
+all. The filter rounds and clamps rather than comparing straight: an unmatched
+feature is a dotted shape that draws *nothing*, which looks like one somebody
+deleted. `MIN_STROKE_WIDTH` and `MAX_STROKE_WIDTH` moved into
+`packages/shared/shapes.ts` for this — `lib/validation/shape.schema.ts`
+re-exports them and is still the only thing that enforces them — because the
+embed cannot import `/lib` and now needs to know how many layers there are.
+
+**A dotted shape in a published map could not be clicked at all, and that was the
+same commit's doing.** `embed/src/map.ts` hit-tests `OUTLINE_LAYERS`, and dotted
+left that table when it stopped being a line layer — so the comment above the
+query still promised all three markings while the query tested two. The twelve
+symbol layers are listed there now. A zero-opacity line over the same geometry was
+built first and then deleted: out of ~2,400 sample points on a 4px area edge and a
+6px route at z15 it answered where the dots did not **zero** times with `TAP_SLOP`
+applied and three times without, which is what the tight spacing buys, and the
+embed has 0.2KB of headroom (§4) rather than bytes to spend on a layer that agrees
+with the one above it.
 
 **Routes became a container in the sidebar, and the membership was already
 there.** `LineGeometry.route.stops` is ordered, is what the engine is re-sent, and

@@ -354,6 +354,19 @@ export const DEFAULT_LINE_STROKE_WIDTH = 4;
 export const DEFAULT_AREA_STROKE_WIDTH = 2;
 
 /**
+ * The range the thickness control offers, and the range a renderer must cover.
+ *
+ * Here rather than beside the schema that enforces it, because the *renderers*
+ * need it now: a dotted outline is one symbol layer per integer width (see
+ * `dot-line.ts`), so both halves have to agree on how many there are. `/lib` may
+ * import this directory and the embed may not import `/lib`, so this is the only
+ * end of that pair the number can live at. `lib/validation/shape.schema.ts`
+ * re-exports it and is still what rejects anything outside it.
+ */
+export const MIN_STROKE_WIDTH = 1;
+export const MAX_STROKE_WIDTH = 12;
+
+/**
  * The width a shape is actually drawn at.
  *
  * `stored` is 0 for every row written before the column existed, and null for a

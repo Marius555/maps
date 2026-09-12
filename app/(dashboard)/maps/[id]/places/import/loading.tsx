@@ -11,6 +11,11 @@ import { SectionPanelSkeleton } from "@/components/ui/skeletons";
  * import-wizard.tsx), so a skeleton that filled the content width would widen the
  * page and then narrow it the moment the real thing arrived.
  *
+ * The vertical centring is repeated here for the same reason the width is —
+ * `flex flex-col` on the `Container` and `my-auto` on the column, matching
+ * `page.tsx`, or the skeleton sits at the top and the real thing drops into the
+ * middle of the screen as it arrives.
+ *
  * It used to be one 156px box standing in for a 460px panel, which meant the
  * swap dropped everything below it by 300px. The body below mirrors the real
  * one: the two-up tab strip and the dashed dropzone, both at the `max-w-2xl`
@@ -18,8 +23,8 @@ import { SectionPanelSkeleton } from "@/components/ui/skeletons";
  */
 export default function ImportLoading() {
   return (
-    <Container size="content">
-      <div className="mx-auto w-full max-w-5xl">
+    <Container size="content" className="flex flex-col">
+      <div className="mx-auto my-auto w-full max-w-5xl">
         <div className="space-y-6">
           {/* Source → Columns → Addresses → Review, as four words and three
               arrows rather than one solid bar. */}

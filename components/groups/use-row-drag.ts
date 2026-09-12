@@ -72,15 +72,49 @@ const TOUCH_HOLD_MS = 250;
  * `pan-y`, not `none`.
  *
  * `none` hands every gesture to us, including the swipe someone meant as a
- * scroll. `pan-y` lets the browser take vertical panning, and we take it back
- * for a real drag by calling `preventDefault()` on the first `pointermove`
- * after the hold fires. That only works because the hold is cancelled by
- * movement: the browser commits to a scroll once the finger travels, and a
- * `preventDefault` after that point is ignored. A drag therefore always begins
- * from a finger that has not moved, which is exactly when it is still ours to
- * claim.
+ * scroll — every row would be a dead spot and the panel could not be scrolled by
+ * finger at all. `pan-y` promises the browser the vertical pan, and the hold
+ * above is what decides who gets this one: movement first is a scroll, stillness
+ * first is a drag.
+ *
+ * **What takes the pan back is not this property.** `touch-action` is resolved
+ * at the start of a touch sequence and cannot be renegotiated mid-gesture, so
+ * the claim is made by a non-passive `touchmove` instead — see `rowRef`, which
+ * also records the long-standing mistake this sentence replaces.
  */
-const ROW_STYLE: CSSProperties = { touchAction: "pan-y" };
+const ROW_STYLE: CSSProperties = {
+  touchAction: "pan-y",
+  /*
+   * And `user-select: none` with it, which is not cosmetic.
+   *
+   * A row is mostly text, and on Android a long press on selectable text raises
+   * the OS selection callout — which the browser announces by firing
+   * `pointercancel`. That lands at roughly 500ms, a quarter of a second *after*
+   * the hold above has started a drag, so the press that most obviously was one
+   * is the press that died. `body.style.userSelect` was already being set, but
+   * only from `begin()` onwards, which is far too late to retract something the
+   * browser decided at `pointerdown`.
+   *
+   * `designer-block.tsx` has carried `select-none` for exactly this reason since
+   * it was written. This is that rule, finally applied to the rows as well.
+   *
+   * The cost is that an address in the editor sidebar can no longer be selected
+   * with a mouse. The Locations *tab* is untouched — `canDrag` is false there,
+   * so none of this style is applied at all.
+   */
+  userSelect: "none",
+  WebkitUserSelect: "none",
+  /*
+   * And `-webkit-touch-callout` with both of them, because it refuses the other
+   * half of the same long press: not the text selection above but the
+   * press-and-hold preview menu. Either one firing ends in `pointercancel`.
+   *
+   * A property rather than the window `contextmenu` listener further down,
+   * because that one is only bound for the length of a drag — and the press this
+   * has to survive is the 250ms *before* there is a drag to bind it from.
+   */
+  WebkitTouchCallout: "none",
+};
 
 /**
  * What is in the air.
@@ -165,6 +199,15 @@ export function useRowDragSource({
   const origin = useRef<{ x: number; y: number } | null>(null);
   const latest = useRef({ x: 0, y: 0 });
   const started = useRef(false);
+  /**
+   * What the pointer was last over, as a ref rather than as the state below.
+   *
+   * `pointercancel` has to decide whether the drag it is ending had a promise on
+   * screen, and the window listeners are bound once — reading `overId` from the
+   * context there would read whatever it was when they were bound. This is
+   * written in the same breath as `setOverId`, so the two cannot disagree.
+   */
+  const lastOver = useRef<string | null>(null);
   const ghost = useRef<RowGhost | null>(null);
   const autoScroll = useRef<EdgeAutoScroll | null>(null);
 
@@ -226,7 +269,8 @@ export function useRowDragSource({
    * gets here from the hold timer *without having moved at all*. That asymmetry
    * is deliberate — see `ROW_STYLE`. Starting the touch drag from the timer
    * rather than from the next move is what keeps the browser's pan unclaimed
-   * until we are ready to `preventDefault` it.
+   * until `rowRef`'s `touchmove` is ready to refuse it: `started` is what that
+   * listener reads, and it is set here.
    *
    * Defined below `state` rather than beside `clearHold`, and the React Compiler
    * is right to insist: a ref read inside a hook must not be written after that
@@ -277,6 +321,15 @@ export function useRowDragSource({
 
       clearHold();
 
+      /*
+       * The whole row is the drag source on every device, and touch is the only
+       * one that has to wait.
+       *
+       * There was a grip here for a while — a glyph carrying `touch-action:
+       * none`, which skipped this hold — and it was a workaround for a bug that
+       * is fixed in `rowRef` instead. A row is what the user is aiming at, so a
+       * row is what picks up.
+       */
       if (event.pointerType === "touch") {
         // `onPointerMove` cancels this if the finger travels first, which is
         // what lets a swipe scroll the panel instead of dragging a row.
@@ -336,10 +389,20 @@ export function useRowDragSource({
         begin();
       }
 
-      // Stops the gesture from also scrolling the panel or selecting text. On
-      // touch this is what takes the pan back from the browser, and it only
-      // lands because the hold cancelled itself on any earlier movement.
-      event.preventDefault();
+      /*
+       * Stops the gesture also selecting text and raising the mouse-compatibility
+       * events behind it.
+       *
+       * **It is not what stops the panel scrolling**, and reading it as though it
+       * were cost this file a great deal — a pointer event's default action
+       * cannot be prevented for a pan, on any engine. `rowRef` is where that
+       * happens.
+       *
+       * Guarded, because once the browser has committed to a pan it marks every
+       * move non-cancelable and logs a warning per sample — sixty a second, in
+       * the one console you most need to read while diagnosing a lost drag.
+       */
+      if (event.cancelable) event.preventDefault();
       latest.current = { x: event.clientX, y: event.clientY };
       if (ghost.current) moveRowGhost(ghost.current, event.clientX, event.clientY);
 
@@ -355,16 +418,19 @@ export function useRowDragSource({
        * `pointer-events: none` in CSS, which is what keeps `elementFromPoint`
        * seeing the row underneath.
        */
-      state.current.setOverId(targetAt(event.clientX, event.clientY));
+      const over = targetAt(event.clientX, event.clientY);
+      lastOver.current = over;
+      state.current.setOverId(over);
     };
 
-    const finish = (event: PointerEvent, drop: boolean) => {
+    const finish = (x: number, y: number, drop: boolean) => {
       clearHold();
       if (!origin.current) return;
 
       const wasDragging = started.current;
       origin.current = null;
       started.current = false;
+      lastOver.current = null;
       setIsDragging(false);
 
       const { self: dragged, setDragged, setOverId, find, onDroppedOutside } =
@@ -374,7 +440,7 @@ export function useRowDragSource({
 
       if (!wasDragging || !drop) return;
 
-      const id = targetAt(event.clientX, event.clientY);
+      const id = targetAt(x, y);
       if (!id) {
         onDroppedOutside?.();
         return;
@@ -384,8 +450,37 @@ export function useRowDragSource({
       if (target?.accepts(dragged)) target.onDrop(dragged);
     };
 
-    const onPointerUp = (event: PointerEvent) => finish(event, true);
-    const onPointerCancel = (event: PointerEvent) => finish(event, false);
+    const onPointerUp = (event: PointerEvent) =>
+      finish(event.clientX, event.clientY, true);
+
+    /**
+     * A cancelled pointer, and what it means depends on whether a drag had begun.
+     *
+     * *Before* one, it is the browser taking a swipe it was always allowed to
+     * take — a scroll. There is nothing to undo and nothing to land.
+     *
+     * *After* one it is an interruption rather than a decision: a system
+     * edge-swipe, an incoming call, or an OS callout that got through the
+     * refusals above. Throwing the gesture away there throws away aim the user
+     * had already taken, so a cancel **over a lit target** completes as a drop —
+     * the highlight was the promise, and it was drawn from this same coordinate
+     * — while a cancel over nothing abandons, which is what releasing over
+     * nothing already does.
+     *
+     * Its own coordinates are not trusted: `pointercancel` is spec'd to carry
+     * the last known position, and engines disagree about what that means.
+     * `latest` is ours and is written on every move.
+     *
+     * It always *ends* the gesture either way. No further move or up is
+     * delivered for a cancelled pointer, so a drag kept alive here would be a
+     * ghost stuck under a finger that has already left the glass.
+     */
+    const onPointerCancel = () =>
+      finish(
+        latest.current.x,
+        latest.current.y,
+        started.current && lastOver.current !== null,
+      );
 
     /** Escape abandons a drag in progress, matching every other gesture here. */
     const onKeyDown = (event: KeyboardEvent) => {
@@ -394,6 +489,7 @@ export function useRowDragSource({
       clearHold();
       origin.current = null;
       started.current = false;
+      lastOver.current = null;
       setIsDragging(false);
       state.current.setDragged(null);
       state.current.setOverId(null);
@@ -454,6 +550,19 @@ export function useRowDragSource({
     // while the user is aiming at a row further down.
     picked.element.classList.add("row-lifted");
 
+    /*
+     * Android raises its selection callout about 500ms after a finger lands and
+     * announces it by cancelling the pointer — which used to end a drag that had
+     * begun 250ms earlier. Refusing the menu is what stops the cancel.
+     *
+     * On the window and only for the length of the gesture, so a right-click
+     * anywhere else in the app still opens the browser's own menu. The 250ms
+     * before there is a drag to bind this from is covered declaratively instead,
+     * by `-webkit-touch-callout` in `ROW_STYLE`.
+     */
+    const onContextMenu = (event: Event) => event.preventDefault();
+    window.addEventListener("contextmenu", onContextMenu);
+
     const { body } = document;
     const previousUserSelect = body.style.userSelect;
     body.classList.add("is-row-dragging");
@@ -465,16 +574,86 @@ export function useRowDragSource({
       autoScroll.current?.stop();
       autoScroll.current = null;
       picked.element.classList.remove("row-lifted");
+      window.removeEventListener("contextmenu", onContextMenu);
       body.classList.remove("is-row-dragging");
       body.style.userSelect = previousUserSelect;
     };
   }, [isDragging]);
 
+  /**
+   * The row element, carrying the one listener that can actually stop a scroll.
+   *
+   * **`preventDefault()` on a pointer event does not prevent panning.** The
+   * Pointer Events spec says so outright, and this hook believed otherwise for a
+   * long time: the 250ms hold was written to claim the pan by preventing the
+   * first `pointermove` after it fired, which is a no-op on every engine. On
+   * Android the compositor then took the scroll `pan-y` had promised it, marked
+   * every later move `cancelable: false`, and finished with a `pointercancel` —
+   * and the symptom was "the row does not move", with nothing in the console.
+   *
+   * A grip carrying `touch-action: none` was the first answer, and it did work —
+   * it just answered a narrower question than the one being asked, by moving the
+   * gesture onto 32px of glyph instead of fixing the row. Two sibling hooks are
+   * the tell that the lever was always declarative: `use-chip-reorder.ts` has the
+   * identical hold and has never had this bug, because a chip drags
+   * *horizontally* and `pan-y` refuses that axis outright; `use-drag-to-add.ts`
+   * has never had it either, because it is `touch-action: none` with no hold.
+   *
+   * `touch-action` is the only declarative lever and a non-passive `touchmove` is
+   * the only imperative one. So the pan is claimed here, and three things about
+   * how follow from the platform rather than from taste:
+   *
+   * - **`addEventListener`, not React's `onTouchMove`.** React registers
+   *   `touchstart`, `touchmove` and `wheel` at its root *passively*, so a JSX
+   *   handler cannot call `preventDefault` at all.
+   * - **Bound at mount, not when the drag begins.** Chrome decides whether a
+   *   scroll may go straight to the compositor by looking for blocking listeners
+   *   at hit-test time, so one added mid-gesture does not apply to the gesture
+   *   already running. It cannot live in the drag effect above.
+   * - **Only where `canDrag`.** A blocking listener costs the first move of every
+   *   touch scroll a main-thread round trip. The Locations tab cannot drag at all
+   *   and is the longest list in the app, so it keeps a fully composited scroll.
+   *
+   * Nothing is refused before `begin()` has run, which is what leaves a swipe to
+   * the browser — momentum and all — and makes stillness the thing that decides.
+   *
+   * The element is detached by hand on the `null` call rather than by returning a
+   * cleanup: `rowProps` is spread onto a `motion.div` in two places, and a ref
+   * that only a React 19 renderer knows how to clean up would leak a listener
+   * per row through anything that composes refs itself.
+   */
+  const onTouchMove = useCallback((event: TouchEvent) => {
+    if (!started.current) return;
+    if (event.cancelable) event.preventDefault();
+  }, []);
+
+  const bound = useRef<HTMLElement | null>(null);
+
+  const rowRef = useCallback(
+    (element: HTMLElement | null) => {
+      if (bound.current) {
+        bound.current.removeEventListener("touchmove", onTouchMove);
+        bound.current = null;
+      }
+
+      if (!element || !canDrag) return;
+
+      element.addEventListener("touchmove", onTouchMove, { passive: false });
+      bound.current = element;
+    },
+    [canDrag, onTouchMove],
+  );
+
   return {
     /** True while this row is the one in the air. */
     isDragging,
-    /** Spread onto the row element. */
+    /**
+     * Spread onto the row element, and onto *one* element — the whole of it is
+     * the drag source, so the capture handler's `currentTarget` is what gets
+     * measured, lifted and drawn as the ghost.
+     */
     rowProps: {
+      ref: rowRef,
       onPointerDownCapture,
       style: canDrag ? ROW_STYLE : undefined,
     },

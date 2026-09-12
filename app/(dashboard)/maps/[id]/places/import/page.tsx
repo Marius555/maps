@@ -59,13 +59,30 @@ export default async function ImportPage(
      * than `max-w-5xl`, and the two narrow steps still get it — see `isWide` in
      * import-wizard.tsx. `loading.tsx` mirrors this and the Source step's width.
      */
-    <Container size="content">
+    <Container size="content" className="flex flex-col">
       <PageTitle>Import locations</PageTitle>
 
-      <ImportWizard
-        map={map}
-        headroom={{ plan, limit: PLAN_LIMITS[plan].places, used }}
-      />
+      {/*
+       * Centred down the page as well as across it, and `my-auto` is what does
+       * it rather than `justify-center`.
+       *
+       * The difference only shows on the two tall steps. When a flex item has
+       * negative free space, auto margins resolve to zero and the item aligns to
+       * the start — so Columns and Review scroll from their top edge exactly as
+       * they do today. `justify-content: center` would instead push their top
+       * above the scroll container, where nothing can reach it.
+       *
+       * `Container` is already `flex-1` inside `<main class="flex min-h-0
+       * flex-1 flex-col">` under a `min-h-[100dvh]` shell, so the height to
+       * divide up is there without anything new being measured. `PageTitle` is
+       * `sr-only` and takes none of it.
+       */}
+      <div className="my-auto w-full">
+        <ImportWizard
+          map={map}
+          headroom={{ plan, limit: PLAN_LIMITS[plan].places, used }}
+        />
+      </div>
     </Container>
   );
 }

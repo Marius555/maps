@@ -189,6 +189,32 @@ export type ZoneBlockMeasure = {
   bottom: number;
   left?: number;
   right?: number;
+  /**
+   * How tall this block **asks** to be, as opposed to how tall it was given —
+   * its own box plus whatever its content is reserving inside it.
+   *
+   * The two differ for exactly one reason, and it is the bug this field exists
+   * to stop. A zone is a flex column, and `hours` is the one block allowed to
+   * shrink below its own content (`flex: 0 1 auto` with `min-height: 0` — see
+   * docs/notes/cards.md). So when a design needs more height than the card has,
+   * that block silently absorbs the *entire* surplus and every rect in the zone
+   * then adds up to exactly the card's height. Nothing overflows, nothing looks
+   * wrong, and the room check — which compares those rects against
+   * `layout.maxHeight` — reads back a card that is precisely, permanently full.
+   * `roomForNew` pins to 0, every zone refuses, and the only thing on screen is
+   * a shrunken empty block that reads as free space. Measured to the shrink, the
+   * more over-full a card is the more certain it is to report itself exactly
+   * full: the same shape of backwards answer `roomForNew` already documents for
+   * leading space.
+   *
+   * So the room check is asked in terms of this, and the drawing is not: a mark
+   * has to be painted where the block actually is, which is the rect.
+   *
+   * Optional, and absent means the rect — a caller that cannot measure a block's
+   * own content is describing a card nothing has shrunk, which is what every
+   * fixture and every card that fits already is.
+   */
+  wants?: number;
 };
 
 /**
@@ -240,6 +266,15 @@ type MeasuredRow = {
    */
   flowTop: number;
   bottom: number;
+  /**
+   * How tall the line **asks** to be — its flow height with the flex column's
+   * shrink given back. See `wants` on `ZoneBlockMeasure`, which is where the
+   * whole argument is; this is that number taken over the line's members.
+   *
+   * Equal to `bottom - flowTop` for every line nothing has shrunk, which is
+   * every line on a card that fits.
+   */
+  wants: number;
   /** Those of its blocks that were actually measured. */
   blocks: readonly MeasuredBlock[];
 };
@@ -263,18 +298,37 @@ function extentOfBlocks(blocks: readonly MeasuredBlock[]): {
   top: number;
   flowTop: number;
   bottom: number;
+  wants: number;
 } {
   let top = blocks[0].top;
   let flowTop = blocks[0].flowTop;
   let bottom = blocks[0].bottom;
+  let wants = 0;
 
   for (const rect of blocks) {
     top = Math.min(top, rect.top);
     flowTop = Math.min(flowTop, rect.flowTop);
     bottom = Math.max(bottom, rect.bottom);
+    /*
+     * The line's own height with each member's shrink given back — see `wants`
+     * on `ZoneBlockMeasure`. A member contributes its flow height plus whatever
+     * the flex column took off it, and the line asks for as much as its
+     * hungriest member: two blocks sharing a line cost the card one line, which
+     * is the same rule `usedHeight` applies to their rects.
+     *
+     * The give-back is measured against the block's *own* box rather than its
+     * flow height, because the only difference between those two is an
+     * overlapping mark's lift, and a lift is not something a shrink can eat.
+     */
+    const grown =
+      rect.wants === undefined
+        ? 0
+        : Math.max(0, rect.wants - (rect.bottom - rect.top));
+
+    wants = Math.max(wants, rect.bottom - rect.flowTop + grown);
   }
 
-  return { top, flowTop, bottom };
+  return { top, flowTop, bottom, wants };
 }
 
 /** A zone's lines, in order, with the measurements joined on by id. */
@@ -325,6 +379,56 @@ function measuredRows(
   }
 
   return rows;
+}
+
+/**
+ * What every block on the card is spending of its height, by id — the map the
+ * room check is answered from.
+ *
+ * **Every block on a line is credited with the *line's* height, not its own.**
+ * `usedHeight` takes the taller of a pair, so telling it both are as tall as the
+ * line is the same number and needs no second code path — and it is the honest
+ * one, since a pair really does cost the card one line of height.
+ *
+ * **And it is what the line asks for, not what it was given.** That is `wants`
+ * on `ZoneBlockMeasure`, and the whole argument is there: one block in a zone is
+ * allowed to shrink below its own content, so rects alone always add up to
+ * exactly the card's height and a card can be over-full without a pixel of it
+ * showing. From the line's **flow** top either way, not its ink — a room check
+ * is arithmetic about how much of the card is spent, and a logo drawn half above
+ * the line it is on costs the card only the half that is inside it. Measured to
+ * the ink, a card with a logo on it reported itself 31px fuller than it was and
+ * closed the last lane on a card that visibly had room. See `flowTop` on
+ * `MeasuredRow`.
+ */
+function heightsOfRows(
+  rows: Iterable<readonly MeasuredRow[]>,
+): Record<string, number> {
+  const heights: Record<string, number> = {};
+
+  for (const zone of rows) {
+    for (const row of zone) {
+      for (const block of row.blocks) heights[block.id] = row.wants;
+    }
+  }
+
+  return heights;
+}
+
+/**
+ * The same map, for a caller that has zones rather than rows.
+ *
+ * `dropSlots` has already grouped the card into lines by the time it asks, and
+ * `useCardDropBands` has not — it needs this to say *how far* over its height a
+ * card is, which is the one thing the refusal has to be able to explain. Exported
+ * rather than duplicated there, because the two have to agree about what a block
+ * costs or the message would contradict the decision it is explaining.
+ */
+export function zoneHeights(
+  layout: CardLayout,
+  zones: readonly ZoneMeasure[],
+): Record<string, number> {
+  return heightsOfRows(zones.map((zone) => measuredRows(layout, zone)));
 }
 
 /**
@@ -448,6 +552,15 @@ function alone(
     bottom:
       rect.top +
       heightAt(rect.id, shareOf(found.block), width, rect.bottom - rect.top),
+    /*
+     * And no `wants` any more, because `heightAt` has just answered that same
+     * question better. It measures a clone that is `position: absolute` and so
+     * is not a flex item at all — the height it returns is already the unshrunk
+     * one, for the width this block is about to have. Carrying the old rect's
+     * reservation past it would be describing the block as it was on a line it
+     * has just left.
+     */
+    wants: undefined,
   };
 }
 
@@ -910,25 +1023,8 @@ export function dropSlots(
     rowsByZone.set(measure.zone, measuredRows(layout, measure));
   }
 
-  /*
-   * Every block on a line is credited with the *line's* height, not its own.
-   * `usedHeight` takes the taller of a pair, so telling it both are as tall as
-   * the line is the same number and needs no second code path — and it is the
-   * honest one, since a pair really does cost the card one line of height.
-   *
-   * From the line's **flow** top, not its ink. This feeds the room check, and a
-   * room check is arithmetic about how much of the card is spent — a logo drawn
-   * half above the line it is on costs the card only the half that is inside it.
-   * Measured to the ink, a card with a logo on it reported itself 31px fuller
-   * than it was and closed the last lane on a card that visibly had room. See
-   * `flowTop` on `MeasuredRow`.
-   */
-  const heights: Record<string, number> = {};
-  for (const rows of rowsByZone.values()) {
-    for (const row of rows) {
-      for (const block of row.blocks) heights[block.id] = row.bottom - row.flowTop;
-    }
-  }
+  // What the card is spending, for the room check alone — see `heightsOfRows`.
+  const heights = heightsOfRows(rowsByZone.values());
 
   const { gap } = layout;
   // A floor, because a block whose sample location has nothing to show measures

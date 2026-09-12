@@ -184,6 +184,24 @@ export function roomForNew(layout: CardLayout, heights: BlockHeights): number {
 }
 
 /**
+ * How far past its own height this card's blocks already reach, in px. Zero when
+ * the design fits.
+ *
+ * The other side of `roomForNew`, which clamps at nothing because a caller asking
+ * "may I add this" has no use for a negative. A caller asking *why not* does: an
+ * over-full card is the one state in which every zone refuses and nothing on
+ * screen says so, because the block that absorbed the surplus simply drew itself
+ * smaller (see `wants` in ./drop-slots.ts). This is the number that turns "No
+ * room for this on the card" into something the owner can act on.
+ *
+ * It reads the same `heights` the refusal was decided from, so the explanation
+ * and the decision cannot disagree.
+ */
+export function overHeight(layout: CardLayout, heights: BlockHeights): number {
+  return Math.max(0, contentHeight(layout, heights) - layout.maxHeight);
+}
+
+/**
  * Whether this zone can take this drag without the card overflowing.
  *
  * Two things are always true and are checked before the arithmetic:

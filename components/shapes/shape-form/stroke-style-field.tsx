@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 
+import { DOT_SPACING_RATIO } from "@/packages/shared/dot-line";
 import {
   SHAPE_STROKE_STYLES,
   type ShapeStrokeStyle,
@@ -17,14 +18,19 @@ import {
  * as the only signal, which is the same argument confidence-mark.tsx makes about
  * colour in the import wizard.
  *
- * The dash arrays are the renderers' own, scaled from line-widths to this SVG's
- * 3px stroke, so a preview cannot promise a marking the map does not draw.
+ * The numbers are the renderers' own, scaled from line-widths to this SVG's 3px
+ * stroke, so a preview cannot promise a marking the map does not draw. Dashed is
+ * `[2, 2]` in width units; dotted is not a dash pattern on a map at all — it is
+ * an icon placed every `DOT_SPACING_RATIO` widths (packages/shared/dot-line.ts)
+ * — but a zero-length dash under a round cap is the right way to say the same
+ * thing in SVG, where there is no SDF texture to stretch it.
  */
+const PREVIEW_STROKE = 3;
+
 const STYLES: Record<ShapeStrokeStyle, { label: string; dash?: string }> = {
   solid: { label: "Solid" },
-  dashed: { label: "Dashed", dash: "6 6" },
-  // Zero-length dashes with round caps — dots, the way MapLibre draws them.
-  dotted: { label: "Dotted", dash: "0 6" },
+  dashed: { label: "Dashed", dash: `${PREVIEW_STROKE * 2} ${PREVIEW_STROKE * 2}` },
+  dotted: { label: "Dotted", dash: `0 ${PREVIEW_STROKE * DOT_SPACING_RATIO}` },
 };
 
 export function StrokeStyleField({
@@ -82,7 +88,7 @@ export function StrokeStyleField({
                   x2="42"
                   y2="4"
                   stroke="currentColor"
-                  strokeWidth="3"
+                  strokeWidth={PREVIEW_STROKE}
                   strokeLinecap="round"
                   strokeDasharray={dash}
                 />

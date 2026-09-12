@@ -47,6 +47,13 @@ building the same card from the same functions in `packages/shared/`.
   `0 1 auto` with `minHeight: 0` **because it scrolls inside itself** — its summary row is
   `flex: none` and only the seven days give way. Nothing else may take that exemption
   without a scroller of its own.
+- **The room check is asked in terms of what a line *asked for*, never its rect.** That
+  exemption above is exactly why: the one shrinkable block absorbs a whole over-full
+  design, so the rects in a zone always sum to precisely the card's height and
+  `roomForNew` pins to 0 forever. `wants` on `ZoneBlockMeasure` is the unshrunk number,
+  `zoneHeights` is the only way to build the map `canDrop` reads, and the *drawing* still
+  uses the rects — a mark has to be painted where the block actually is. See the
+  post-mortem below.
 - **Only the bottom zone pins.** The middle zone's `flex-1` is the whole of it. A block at
   the bottom *of the middle zone* is held there by its own `offset`, which is space above
   it — so it lands flush only for a location whose content is as tall as the sample's.
@@ -77,12 +84,48 @@ building the same card from the same functions in `packages/shared/`.
   MapLibre defines `flyTo`'s offset that way. `card-place.ts` is its own module because
   `map.ts` imports maplibre-gl at module scope and is unreachable from a unit test.
 
+### The designer on a touchscreen
+
+- **A block's `style` prop must merge `rowProps.style`, not replace it.**
+  `designer-block.tsx` spread `rowProps` and then set `style={blockStyle(...)}` a few lines
+  later, and React replaces `style` wholesale rather than merging — so the `touch-action:
+  pan-y` the drag depends on was thrown away and **every placed block on the canvas computed
+  `auto`**. A finger on a block was handed to the scroller instead of to the gesture, and
+  nothing said so: the block simply did not move. It is
+  `style={{ ...rowProps.style, ...style }}` now, and the order is the point — the block's own
+  box must still win over the gesture's.
+- **A resize handle appears on hover *or* on selection, never on hover alone.** Both
+  `BlockResizeHandle` and `BlockCornerHandle` were `opacity-0 pointer-events-none` until
+  `group-hover/block` or `group-focus-within/block`, and neither state exists on a
+  touchscreen — so block height and logo size were unreachable on a phone for the whole life
+  of the page. They now also open on `group-data-selected/block`, which `DesignerBlock`
+  already published as `data-selected`, and which on touch is one tap away.
+  **`pointer-events` and `opacity` move together in every one of those class lists** — an
+  invisible handle that still takes presses intercepts ~12px of the block and silently starts
+  a resize where the user meant to pick it up.
+- **These two are the only handles on a block, and *move* is not one of them.** A block is
+  picked up by pressing anywhere on it, which is `useRowDragSource`'s gesture for every row
+  in the app — a 250ms hold on touch, 8px with a mouse. A grip was drawn here briefly and
+  removed; `docs/notes/editor-and-layout.md` has the bug it was answering and the
+  non-passive `touchmove` that answers it properly. Resize keeps its handles because there
+  is no whole-surface gesture for it to be: the surface already means move.
+- The palette has no grip glyph either, and it had one twice — first as decoration, then as
+  a real drag source. The whole row has always been what you pick up. The row's duplicated
+  `touch-pan-y` class went with it, since `rowProps.style` already states that rule.
+
 ### The Button block
 
-- **It stores a *source*, never a URL.** The design is saved per *account* and drawn for
-  every location on every map, so a URL on the block would send three thousand pins to one
-  page. `buttonSource` names a place to look; `buttonTargetOf` resolves it per location.
-  `null` is the common case, not an error path.
+- **It stores a *source*, never a URL — except per pin.** The design is saved per
+  *account* and drawn for every location on every map, so a URL on the block would send
+  three thousand pins to one page. `buttonSource` names a place to look; `buttonTargetOf`
+  resolves it per location. `null` is the common case, not an error path.
+- **`buttonHref` is the exception, and it is gated on being a per-pin override.** An
+  override is a whole resolved block against one place, so a URL there is about exactly
+  one card. `ButtonProperties` offers the option only when `isOwnCard` — the same flag
+  the Logo panel reads — and `buttonTargetOf` prefers it over `buttonSource`, returning
+  `null` rather than falling back when it will not parse. The box never shows `https://`
+  (`lib/card/button-link.ts` strips it for display and adds it back on the way in) and
+  **must not trim what it stores**, for the reason `buttonLabel` documents at length.
 - Field ids are per *map*: a button bound to one finds nothing on a map without it.
 - `buttonAction` is spelled `"link"`, so **absent is Directions** — a Button has to work
   before anybody configures it, and every location has coordinates.
@@ -127,6 +170,11 @@ building the same card from the same functions in `packages/shared/`.
 - The palette does **not** scroll while a block is in the air, via an **inline**
   `overflow-y: hidden` (it must beat both HeroUI's scroll-shadow class and the element's
   own `lg:overflow-y-auto`). `hidden`, not `clip` — `clip` drops `scrollTop` to 0.
+- **The Blocks palette is not a fold and must keep fitting.** All eleven blocks are
+  drawn at once, two-up, under static headings — measured at 315.5px of content in a
+  456px scroller. A tile that grows past one line, or a fifth shelf, has to be measured
+  against the column again. An empty shelf still renders nothing at all, heading
+  included; that is what lets it shrink as the card fills.
 
 ### Glass, theme and chrome
 
@@ -366,6 +414,53 @@ at 300px (block 40px, summary visible, week scrolling 138px inside 16px, blocks
 below flush at the card's edge) and at 720px (block 162px, week 138px, not
 scrolling — nothing with room on it moves).
 
+**And that exemption then made the card refuse every drop, which is the bug it
+took a reported “there is space right there” to find.** A zone is a flex column
+and the week is the one thing in it that may shrink below its own content, so on
+a design that needs more height than the card has, the week quietly absorbs *the
+whole surplus* — and every rect in the zone then adds up to precisely the card's
+height. Nothing overflows. Nothing looks wrong. But `dropSlots` built the map
+behind `hasRoomFor` out of exactly those rects, so `contentHeight` came back equal
+to `maxHeight` whatever the design actually weighed, `roomForNew` pinned to 0, and
+`canDrop` refused all three zones for good. The only thing on screen was the
+shrunken week, drawn as a large empty band in the middle of the card — which is
+where every palette chip was being aimed, and what the owner reasonably read as
+free space. The more over-full the card, the more certain the refusal: the same
+backwards answer `roomForNew` already documents for leading space, arrived at by a
+different route. Measured on the reported card — 220×300, week wanting 162px and
+drawn at 125.2 — the design needed 336.8px and the check reported 300 of 300.
+
+`wants` on `ZoneBlockMeasure` is the missing number, and `wantedHeight` in
+`use-drop-bands.ts` is how it is read: `blockContentStyle` stretches a block's
+content to `height: 100%`, but a block holding a reservation *floors* it as well
+(`.card-block--empty`, from `--card-empty-h`), and a floor beats a percentage —
+so the content element keeps its full height and is merely clipped by the
+`overflow: hidden` box above it. Its rect plus the block's own padding is what the
+block asked for. For every block nothing squeezed that is the rect it was given,
+which is why every existing fixture and test was unaffected to the pixel. Two
+things are deliberate. **Only the room check moved to it** — `zoneHeights` feeds
+`canDrop` and nothing else; the bands, marks and regions are still cut from the
+rects, because a mark has to be painted where the block actually is. And **the
+blind spot is written down rather than papered over**: a squeezed block whose
+content is real rather than reserved has no floor under it, so it reports the
+squeeze too and `wants` comes back level with the rect. That is precisely what the
+check did for every block before this existed, so it is never worse than the old
+answer.
+
+**The refusal now says why, because over-full is the one state that is invisible.**
+Full is visible — the blocks reach the bottom edge and the owner can see it.
+Over-full is not, for the reason above. So `CardDropOverlay` carries `over` from
+`overHeight`, read from the same `zoneHeights` map the refusal was decided from
+(the explanation and the decision cannot be allowed to disagree), and says “This
+card is 37px over its height. Make it taller, or remove a block.” in place of the
+bare “No room for this on the card.”, which is still what a merely full card
+gets. Letting the drop through instead was considered and rejected: `hasRoomFor`
+exists so a card cannot be *designed* to overflow on somebody else's website, and
+the block that would have paid for it is the scroller that exists for content
+nobody can measure at design time. Verified in the browser on the reported card at
+both widths and on both gestures — mouse and the 250ms touch hold — and the same
+card at 720px still offers 18 targets and four regions.
+
 **Only the bottom zone pins, and until now it was the one place a block could not
 be put.** The middle zone's `flex-1` is the entire "push to the bottom" mechanism
 on a card: it grows to fill whatever the ends leave and packs its own blocks from
@@ -585,23 +680,42 @@ picked up — `.is-draggable` is deliberately `cursor: pointer` (see globals.css
 so there was no cursor to say it either. And at half the column's width every
 label truncated, which is why `hint` — one good sentence per block, already
 written — had nowhere to live but a native `title`. So: full-width rows on
-`bg-default`, a `GripVertical`, the glyph in a tile of its own, and the hint on
-screen at two lines before it clamps. Eleven of those is a wall, which is what
-the folds are for: `BLOCK_GROUPS` in `block-labels.ts` shelves them by the
-question each answers, **a shelf holding nothing renders nothing at all**
-(`PropertyGroup`'s rule), and the palette therefore shrinks as the card fills up
-until it is the two or three blocks that genuinely repeat.
+`bg-default`, the block's own glyph in a tile of its own, and the hint on screen
+at two lines before it clamps. The row's hover border is what says it is picked
+up; the `GripVertical` that used to sit here is gone, twice over — see the
+touchscreen section above. Eleven of those is a wall, which is what the folds
+were for: `BLOCK_GROUPS` in `block-labels.ts` shelves them by the question each
+answers, **a shelf holding nothing renders nothing at all**, and the palette
+therefore shrinks as the card fills up until it is the two or three blocks that
+genuinely repeat.
 
 `PropertyFold` — the publish designer's own `Fold`, lifted to
-`components/ui/properties/property-fold.tsx` — is what both now use, because that
-`Accordion.Item` → `Heading` → `Trigger` / `Panel` → `Body` anatomy is
-load-bearing and a hand-copied second version is a trigger with no accessible
-heading. It is **not** a replacement for `PropertyGroup`: that one is always open
-and its argument still holds where it is, on the Modify tab, which is a
-fixed-height panel about one selected block. The two folds also differ in what
-they open with — publish opens on one, because comparing a panel setting against
-a colour is real; the palette opens on all of them, because nothing is being
-compared across shelves and hiding the block you came for is a click for nothing.
+`components/ui/properties/property-fold.tsx` — is what the Modify tab uses,
+because that `Accordion.Item` → `Heading` → `Trigger` / `Panel` → `Body` anatomy
+is load-bearing and a hand-copied second version is a trigger with no accessible
+heading.
+
+**The palette's folds are gone, and the shelves stayed.** Asked for, and right:
+a fold is a claim that you already know which shelf the thing you want is on, and
+this panel is the inventory rather than a run of questions. Shut and
+one-at-a-time — the rule every other fold in the app follows, and the right one
+for the Modify tab beside it, which asks up to twenty questions about one block —
+cost two presses to reach a Divider and left nothing on screen to tell somebody a
+Logo block existed.
+
+What paid for it is the row shape, and the numbers are the whole argument.
+Eleven full-width rows carrying a sentence of hint each is ~700px in a column
+whose scroller is about `100dvh − 286px`; eleven **two-up tiles** under static
+headings is ~340px. Measured in the browser with the card empty, which is the one
+state where all eleven are offered: 315.5px of content in a 456px scroller at a
+732px viewport, and 346 in 346 at 622px — no overflow either way, and no label
+truncated at 24rem. The hint is still there, in the `title` that already carried
+the zones sentence beside it; a tile is two words wide and a hint is a sentence,
+so on screen was never available to it here. `BLOCK_GROUPS` lost its `compact`
+flag with the change, because every tile is the compact one now.
+
+`PropertyFolds` is still what the Modify tab uses, and the single-open rule still
+holds everywhere it is used. The palette simply is not a fold any more.
 
 `EVERY_BLOCK_IS_SHELVED` is the one thing in that file worth not deleting. A new
 `CardBlockType` nobody filed would be a block that exists, drops onto a card

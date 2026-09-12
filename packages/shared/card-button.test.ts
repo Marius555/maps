@@ -178,4 +178,80 @@ describe("buttonTargetOf", () => {
       ).toBeNull();
     }
   });
+
+  describe("a link typed out for one location", () => {
+    it("wins over the source the design points at", () => {
+      // A per-pin override is one whole block against one place, so a URL on it
+      // is about exactly one card. It beats `buttonSource` because that is what
+      // singling a pin out has to mean.
+      expect(
+        buttonTargetOf(
+          button({
+            buttonAction: "link",
+            buttonSource: "booking",
+            buttonHref: "https://acme.example/book",
+          }),
+          place,
+          FIELDS,
+        ),
+      ).toEqual({ href: "https://acme.example/book", label: WEBSITE_LABEL });
+    });
+
+    it("wins over the location's own website too", () => {
+      expect(
+        buttonTargetOf(
+          button({
+            buttonAction: "link",
+            buttonHref: "https://acme.example/book",
+          }),
+          place,
+          FIELDS,
+        )?.href,
+      ).toBe("https://acme.example/book");
+    });
+
+    it("takes the owner's own label when there is one", () => {
+      expect(
+        buttonTargetOf(
+          button({
+            buttonAction: "link",
+            buttonHref: "https://acme.example/book",
+            buttonLabel: "Book now",
+          }),
+          place,
+          FIELDS,
+        )?.label,
+      ).toBe("Book now");
+    });
+
+    it("draws nothing rather than falling back when it will not parse", () => {
+      // Silently drawing the location's website instead would be a button that
+      // goes somewhere nobody chose.
+      for (const href of [
+        "javascript:alert(1)",
+        "https://javascript:alert(1)",
+        "acme.example",
+      ]) {
+        expect(
+          buttonTargetOf(
+            button({ buttonAction: "link", buttonHref: href }),
+            place,
+            FIELDS,
+          ),
+        ).toBeNull();
+      }
+    });
+
+    it("is ignored on a directions button", () => {
+      // `readBlock` never stores one there, but a hand-edited row can — and the
+      // absence of `buttonAction` is what directions *are*.
+      expect(
+        buttonTargetOf(
+          button({ buttonHref: "https://acme.example/book" }),
+          place,
+          FIELDS,
+        )?.label,
+      ).toBe(DIRECTIONS_LABEL);
+    });
+  });
 });

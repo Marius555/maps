@@ -293,6 +293,28 @@
 }
 
 /*
+ * The window's scrollbar is always allowed for, whether or not it is drawn.
+ *
+ * The dashboard's pages grow the document — `AppShell` is `min-h-[100dvh]`, a
+ * floor rather than an app frame — so anything that opens can cross the viewport
+ * boundary and bring the scrollbar in with it. On a classic (non-overlay)
+ * scrollbar that takes ~15px out of the layout in one frame, and the whole page
+ * jumps sideways: reported on the import wizard's Review step, where pressing
+ * **Fix** on a short list does exactly that.
+ *
+ * `stable` reserves the gutter up front, so appearing costs nothing. It is the
+ * same bug `block-editor-form.tsx` solved one level down by handing its panel to
+ * `ScrollShadow hideScrollBar`; the document has no such wrapper, and hiding the
+ * page's own scrollbar is not on the table.
+ *
+ * On the root element rather than on a page: only the scrolling element can
+ * reserve a gutter, and every page is inside this one.
+ */
+html {
+  scrollbar-gutter: stable;
+}
+
+/*
  * The canvas stretches horizontally to its container, whatever pixel width
  * MapLibre last gave it.
  *

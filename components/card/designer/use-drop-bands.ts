@@ -3,7 +3,7 @@
 import { useLayoutEffect, useState, type RefObject } from "react";
 
 import type { DraggedObject } from "@/components/groups/use-row-drag";
-import { newBlockHeight } from "@/lib/card/card-space";
+import { newBlockHeight, overHeight } from "@/lib/card/card-space";
 import {
   dropBands,
   dropRegions,
@@ -18,6 +18,7 @@ import {
   lendToEndZones,
   sideSlots,
   vacatedSpace,
+  zoneHeights,
   type BlockedFace,
   type DropSlot,
   type HeightAt,
@@ -73,6 +74,18 @@ export type CardDropGeometry = {
    * target the pointer is released on.
    */
   vacate?: VacatedSpace;
+  /**
+   * How far past its own height this card's blocks already reach, in px —
+   * `overHeight`. Absent when the design fits, which is the usual case.
+   *
+   * Here because it is the one thing an empty `bands` cannot explain for itself.
+   * A card whose blocks need more room than it has does not look broken: the one
+   * block allowed to shrink quietly gives up the difference (see `wants` in
+   * lib/card/drop-slots.ts), so every zone refuses while the screen shows a
+   * large empty block that reads as somewhere to drop. The overlay says this
+   * number instead of shrugging.
+   */
+  over?: number;
 };
 
 /**
@@ -229,6 +242,9 @@ function measureCard(
             // survivors at when the drag leaves it (`shrunkBy`).
             left: box.left - cardRect.left,
             right: box.right - cardRect.left,
+            // And what it asked for, which is not always what it got. See
+            // `wantedHeight`.
+            wants: wantedHeight(node, box.height),
           };
         },
       ),
@@ -305,6 +321,7 @@ function measureCard(
   );
 
   const vacated = vacatedSpace(layout, dragged, zones, heightAt);
+  const over = overHeight(layout, zoneHeights(layout, zones));
 
   const columns = sideSlots(layout, dragged, zones, heightAt).map((slot) => ({
     ...slot,
@@ -351,7 +368,65 @@ function measureCard(
      * changed.
      */
     ...(vacated ? { vacate: vacated } : {}),
+    /*
+     * And the one fact about the card rather than about this drag: how far past
+     * its own height it already reaches. Read from `zoneHeights`, which is the
+     * same map `dropSlots` answers `canDrop` from, so the explanation and the
+     * refusal cannot disagree — an empty `bands` and a non-zero `over` are two
+     * readings of one number.
+     */
+    ...(over > 0 ? { over } : {}),
   };
+}
+
+/**
+ * How tall a block **asked** to be, in px — which is not always how tall it is.
+ *
+ * A zone is a flex column, and one block in it is allowed to shrink below its
+ * own content: `hours` is `flex: 0 1 auto` with `min-height: 0`, because it
+ * scrolls inside itself (docs/notes/cards.md). So on a card whose design needs
+ * more height than the card has, that block quietly gives up the whole surplus
+ * and every rect in the zone then sums to exactly the card's height. Nothing
+ * overflows and nothing looks wrong — but the room check compares those rects
+ * against `layout.maxHeight` and reads back a card that is permanently, exactly
+ * full, so `roomForNew` pins to 0 and every zone refuses every drop. The only
+ * thing on screen is the shrunken block, drawn as a large empty area that reads
+ * as free space. That is the bug this function exists to answer, and it is the
+ * same shape as the leading-space one `roomForNew` already documents: the more
+ * over-full the card, the more certain the refusal.
+ *
+ * The content element is what still knows. `blockContentStyle` stretches it to
+ * `height: 100%`, but a block holding a reservation floors it as well
+ * (`.card-block--empty` in app/globals.css, from `--card-empty-h`), and a floor
+ * beats a percentage — so the content keeps its full height and is simply
+ * clipped by the `overflow: hidden` box between it and the block. Its rect is
+ * therefore the unshrunk number, and adding back the block's own padding gives
+ * what the block wanted.
+ *
+ * For every block nothing has shrunk this returns exactly the rect it was given,
+ * because the content is that rect less the padding. **Its one blind spot is a
+ * shrunk block whose content is real rather than reserved** — there the content
+ * is stretched to `height: 100%` with no floor under it, so it reports the
+ * shrink too and this comes back level with the rect. That is what the room
+ * check already did for every block before this existed, so it is never worse
+ * than the old answer; it is exact for the case that produced the bug.
+ *
+ * `getComputedStyle` once per block per gesture, alongside the rect that is
+ * already being taken — the measurement runs once when a block leaves the
+ * palette, not per pointer sample. See `useCardDropBands`.
+ */
+function wantedHeight(node: HTMLElement, drawn: number): number {
+  const content = node.querySelector<HTMLElement>("[data-block-content]");
+  if (!content) return drawn;
+
+  const style = getComputedStyle(node);
+  const padding =
+    (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+  const wants = content.getBoundingClientRect().height + padding;
+
+  // Never *less* than what is on screen: a block drawn taller than its content
+  // is a block the column stretched, and a stretch is not a shrink to give back.
+  return Math.max(drawn, wants);
 }
 
 /**

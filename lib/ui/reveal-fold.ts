@@ -345,9 +345,142 @@ export function revealFold(
 
   if (target === start) return noop;
 
-  const from = ownPanel.height;
-  const to = ownPanel.finalHeight ?? ownPanel.height;
+  return driveScroll({
+    item,
+    panel,
+    scroller,
+    start,
+    target,
+    from: ownPanel.height,
+    to: ownPanel.finalHeight ?? ownPanel.height,
+  });
+}
 
+/**
+ * The same reveal, for a fold that is a Motion collapse rather than a React Aria
+ * disclosure.
+ *
+ * Two things differ, and both are forced by what is animating.
+ *
+ * **The final height is read off `scrollHeight`.** Motion animates `height: 0 →
+ * "auto"` and writes no `--disclosure-panel-height` for `boxOf` to find. What it
+ * does leave is the same property the arithmetic needs: the wrapper is
+ * `overflow-hidden` (`COLLAPSE_CLASS`), so while it is collapsed its
+ * `scrollHeight` *is* the content's full height — readable on the first frame,
+ * which is the whole trick this file is built on.
+ *
+ * **The scroller may be the document.** `scrollableAncestor` looks for a computed
+ * `overflow-y` of `auto` or `scroll` and finds none for the page, and the import
+ * wizard's Review step is deliberately page-scrolled (its map is `lg:sticky`
+ * against it). `revealFold`'s answer there is a bare `scrollIntoView`, which
+ * fires *before* the row grows and so under-scrolls exactly the rows near the
+ * bottom of the screen — the ones that most need revealing. So this falls back to
+ * the scrolling element and keeps driving.
+ *
+ * `scroll-margin-top` is honoured by hand for the same reason: the arithmetic
+ * path never reaches `scrollIntoView`, which is what normally applies it, and on
+ * the Review step it is what keeps an opened row from landing behind the sticky
+ * map.
+ *
+ * @param item The element to bring into view — the whole row, not the panel.
+ * @param panel The clipped wrapper whose height animates.
+ */
+export function revealCollapse(
+  item: HTMLElement | null,
+  panel: HTMLElement | null,
+): () => void {
+  const noop = () => {};
+
+  if (!item || !panel) return noop;
+
+  const height = panel.getBoundingClientRect().height;
+  const finalHeight = panel.scrollHeight;
+  const growth = Math.max(finalHeight - height, 0);
+
+  const scroller =
+    scrollableAncestor(item, { slack: growth }) ??
+    (document.scrollingElement as HTMLElement | null);
+
+  if (!scroller) return noop;
+
+  const itemRect = item.getBoundingClientRect();
+
+  /*
+   * The document reports its own rect in page coordinates — `top` is minus the
+   * scroll offset — so it cannot be measured the way a bounded scroller is. Its
+   * viewport starts at zero by definition, and `clientHeight` on the scrolling
+   * element is the viewport's height.
+   */
+  const isDocument = scroller === document.scrollingElement;
+  const scrollerRect = scroller.getBoundingClientRect();
+  const view = isDocument
+    ? { top: 0, height: scroller.clientHeight }
+    : {
+        top: scrollerRect.top + scroller.clientTop,
+        height: scroller.clientHeight,
+      };
+
+  // Whatever the element asks to be kept clear of — a sticky header above it.
+  const margin = parseFloat(getComputedStyle(item).scrollMarginTop) || 0;
+
+  const start = scroller.scrollTop;
+  const maxScroll = Math.max(
+    scroller.scrollHeight + growth - view.height,
+    0,
+  );
+  const target = Math.min(
+    Math.max(
+      start +
+        nearestDelta(
+          {
+            top: itemRect.top - margin,
+            height: itemRect.height + margin + growth,
+          },
+          view,
+        ),
+      0,
+    ),
+    maxScroll,
+  );
+
+  if (target === start) return noop;
+
+  return driveScroll({
+    item,
+    panel,
+    scroller,
+    start,
+    target,
+    from: height,
+    to: finalHeight,
+  });
+}
+
+/**
+ * Walk `scrollTop` from `start` to `target` in step with the panel's height.
+ *
+ * Shared by both reveals, because the interesting part is the same for either:
+ * read the height each frame, turn it into progress, and put the scroller at the
+ * matching point. See this file's opening note for why that beats re-implementing
+ * the easing, and why a user taking over the scroller must end it.
+ */
+function driveScroll({
+  item,
+  panel,
+  scroller,
+  start,
+  target,
+  from,
+  to,
+}: {
+  item: HTMLElement;
+  panel: HTMLElement;
+  scroller: HTMLElement;
+  start: number;
+  target: number;
+  from: number;
+  to: number;
+}): () => void {
   /**
    * Keys that mean "I am scrolling this myself".
    *

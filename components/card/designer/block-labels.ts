@@ -145,9 +145,10 @@ type RetiredBlockType = "category" | "details";
  * It lives here with `BLOCK_LABELS` for that table's own reason: English the
  * dashboard needs and the embed must never ship.
  *
- * `compact` is the one shelf whose rows carry no hint. "Divider" and "Space"
- * say themselves, and two words on two lines each is a shelf of mostly nothing,
- * so `BlockPalette` draws that one two-up.
+ * No shelf is drawn differently from another any more. `compact` used to mark
+ * the one whose rows say themselves, back when the others were full-width rows
+ * carrying a sentence of hint; every tile is the compact one now, because the
+ * palette's job is to show all eleven at once (see `BlockPalette`).
  */
 export const BLOCK_GROUPS = [
   {
@@ -157,12 +158,11 @@ export const BLOCK_GROUPS = [
   },
   { id: "media", label: "Media", types: ["gallery", "logo"] },
   { id: "actions", label: "Actions", types: ["actions", "button"] },
-  { id: "layout", label: "Layout", types: ["divider", "spacer"], compact: true },
+  { id: "layout", label: "Layout", types: ["divider", "spacer"] },
 ] as const satisfies readonly {
   id: string;
   label: string;
   types: readonly CardBlockType[];
-  compact?: true;
 }[];
 
 /**

@@ -90,7 +90,12 @@ export function PinMapField({
 
   return (
     <div className="space-y-1.5">
-      <div className="h-48 overflow-hidden rounded-xl border border-border sm:h-56">
+      {/* Shorter in a narrow container, which on a phone is the bottom sheet.
+          A 192px map above four fields, a tag picker and a pin strip is most of
+          what a sheet can show before anything is scrolled — and the map is the
+          one thing here that reads fine smaller. A container query, so the size
+          answers to the box rather than to the window. */}
+      <div className="h-40 overflow-hidden rounded-xl border border-border @md:h-48 @2xl:h-56">
         <MapCanvas
           center={{ lng, lat }}
           // Closer than the map's default: this is one location, and opening on

@@ -109,6 +109,8 @@ export type BlockPatch = Partial<
    * a way back to the default without a second verb.
    */
   buttonSource?: string;
+  /* A link typed out for one location. Per-pin only — see `CardBlock.buttonHref`. */
+  buttonHref?: string;
   buttonLabel?: string;
   buttonBackground?: string;
   buttonBorder?: string;
@@ -316,8 +318,12 @@ export function BlockProperties({
   logoSample: Place | null;
   /**
    * Whether `logoSample` is the location this panel was opened over, rather than
-   * a stand-in the canvas picked. Only the Logo panel reads it, to decide
-   * whether an upload needs explaining -- see `LogoProperties`.
+   * a stand-in the canvas picked.
+   *
+   * Two panels read it. The Logo panel decides whether an upload needs explaining
+   * (see `LogoProperties`), and the Button panel decides whether a link may be
+   * typed out at all: a whole resolved block stored against one place can hold a
+   * URL, and the account-wide design cannot — `CardBlock.buttonHref`.
    */
   isOwnCard?: boolean;
   mapId: string;
@@ -650,6 +656,12 @@ export function BlockProperties({
             <ButtonProperties
               block={block}
               fields={fields}
+              // Whether a typed-out link is on offer, which is the one thing
+              // about this block that differs between the two panels. The card
+              // design is drawn for every location on every map, so a URL on it
+              // would send three thousand pins to one page; a per-pin override
+              // is one card, which is exactly where a URL belongs.
+              allowsOwnLink={isOwnCard ?? false}
               onChange={onChange}
             />
           ) : null}

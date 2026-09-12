@@ -106,7 +106,7 @@ export function CardDropOverlay({
   geometry: CardDropGeometry;
   onDrop: (dragged: CardDrag, target: CardDropTarget) => void;
 }) {
-  const { bands, regions, blocked, vacate } = geometry;
+  const { bands, regions, blocked, vacate, over } = geometry;
 
   /*
    * Which slot the pointer is in, read once here rather than by each slot for
@@ -166,8 +166,26 @@ export function CardDropOverlay({
 
       {bands.length === 0 ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4">
+          {/*
+            * Why, and what to do about it — not just "no".
+            *
+            * A card refuses every zone for one of two reasons, and only one of
+            * them is visible. Full is visible: the blocks reach the bottom and
+            * the owner can see it. **Over-full is not**, because the one block
+            * allowed to shrink absorbed the difference and drew itself smaller
+            * (see `wants` in lib/card/drop-slots.ts) — so the card looks fine,
+            * there is a large empty block in the middle of it, and "No room for
+            * this on the card" contradicts the screen. That was the reported
+            * bug. `over` is the missing number, and the second sentence is the
+            * way out: the Height control under Size, or one block fewer.
+            *
+            * Rounded, because it is measured text and a card is never 36.8px
+            * over in any sense its owner can act on.
+            */}
           <p className="card-drop-note text-center text-xs">
-            No room for this on the card.
+            {over === undefined
+              ? "No room for this on the card."
+              : `This card is ${String(Math.round(over))}px over its height. Make it taller, or remove a block.`}
           </p>
         </div>
       ) : (

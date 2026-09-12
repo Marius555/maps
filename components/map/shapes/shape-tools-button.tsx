@@ -132,9 +132,7 @@ export function ShapeToolsButton({
          * auto-sized flex child. The negative margin cancels the Button's `gap-2`,
          * which would otherwise leave a gap where the label used to be.
          */}
-        <span className="overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ms-0 max-w-40 opacity-100 group-has-[[data-search-open]]/toolbar:-ms-2 group-has-[[data-search-open]]/toolbar:max-w-0 group-has-[[data-search-open]]/toolbar:opacity-0">
-          {isDrawing ? "Stop drawing" : "Draw"}
-        </span>
+        
       </Button>
 
       <Popover.Content placement="bottom start">

@@ -397,6 +397,7 @@ export function MapEditor({
    * temporal dead zone when they are evaluated.
    */
   const mapHandle = useRef<MapHandle | null>(null);
+
   /*
    * A ref cannot wake an effect, and the framing below has to run once the map
    * exists *and* the locations have arrived — two things that land in either
@@ -1314,6 +1315,10 @@ export function MapEditor({
           addIcon={addIcon}
           colorFor={colorFor}
           pinIcons={map.pinIcons}
+          /* Only here. The three small maps built on this same canvas — the pin
+             field, the import review, the heatmap — take the two zoom buttons
+             and nothing else. */
+          showCompass
           showPlaceCard
           /* Every block this location left empty draws a dashed `+` on its
              card, opening the one field behind it — see `cardSlotOf`. The map

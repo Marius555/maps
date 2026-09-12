@@ -245,7 +245,16 @@ export function BlockResizeHandle({
       // tall was half its surface, and every press on it was excluded from the
       // move gesture outright by `NO_DRAG_PROPS`. Now the bar you can see is the
       // bar that resizes, and the rest of the edge belongs to the block.
-      className={`pointer-events-none absolute left-1/2 z-10 flex h-3 w-10 -translate-x-1/2 cursor-ns-resize touch-none justify-center opacity-0 transition-opacity group-hover/block:pointer-events-auto group-hover/block:opacity-100 group-focus-within/block:pointer-events-auto group-focus-within/block:opacity-100 ${
+      //
+      // **And when the block is selected, which is the only way in on a
+      // touchscreen.** Hover and focus-within are both pointer-and-keyboard
+      // states; neither exists on a phone, so these handles were invisible and
+      // `pointer-events: none` for the whole life of the page there — block
+      // height and logo size simply could not be changed. Selection is a tap,
+      // and `DesignerBlock` already publishes it as `data-selected` on the group
+      // root. The grip beside them opens on the same state, so the two controls
+      // on a block appear together or not at all.
+      className={`pointer-events-none absolute left-1/2 z-10 flex h-3 w-10 -translate-x-1/2 cursor-ns-resize touch-none justify-center opacity-0 transition-opacity group-hover/block:pointer-events-auto group-hover/block:opacity-100 group-focus-within/block:pointer-events-auto group-focus-within/block:opacity-100 group-data-selected/block:pointer-events-auto group-data-selected/block:opacity-100 ${
         edge === "top" ? "top-0 items-start" : "bottom-0 items-end"
       }`}
     >
@@ -468,7 +477,16 @@ export function BlockCornerHandle({
       // inside a white ring on a white card is nothing at all. A grip is
       // non-text content someone has to find and hit, so it is held to the same
       // 3:1 floor the rest of this surface is.
-      className={`pointer-events-none absolute right-0 bottom-0 z-10 size-3 cursor-nwse-resize touch-none rounded-[3px] border border-surface ${isSelected ? "bg-accent" : "bg-muted"} opacity-0 transition-[opacity,background-color] group-hover/block:pointer-events-auto group-hover/block:opacity-100 group-focus-within/block:pointer-events-auto group-focus-within/block:opacity-100`}
+      //
+      // **And when the block is selected, which is the only way in on a
+      // touchscreen.** Hover and focus-within are both pointer-and-keyboard
+      // states; neither exists on a phone, so these handles were invisible and
+      // `pointer-events: none` for the whole life of the page there — block
+      // height and logo size simply could not be changed. Selection is a tap,
+      // and `DesignerBlock` already publishes it as `data-selected` on the group
+      // root. The grip beside them opens on the same state, so the two controls
+      // on a block appear together or not at all.
+      className={`pointer-events-none absolute right-0 bottom-0 z-10 size-3 cursor-nwse-resize touch-none rounded-[3px] border border-surface ${isSelected ? "bg-accent" : "bg-muted"} opacity-0 transition-[opacity,background-color] group-hover/block:pointer-events-auto group-hover/block:opacity-100 group-focus-within/block:pointer-events-auto group-focus-within/block:opacity-100 group-data-selected/block:pointer-events-auto group-data-selected/block:opacity-100`}
     />
   );
 }

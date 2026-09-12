@@ -14,6 +14,7 @@ import {
   lendToEndZones,
   sideSlots,
   vacatedSpace,
+  zoneHeights,
   type DropSlot,
   type HeightAt,
   type ZoneMeasure,
@@ -3092,5 +3093,103 @@ describe("lendToEndZones", () => {
     // 48px of it at the card's edge.
     expect(find(zones, "bottom").top).toBe(380);
     expect(find(zones, "bottom").bottom).toBe(428);
+  });
+});
+
+/**
+ * The reported bug: a card refuses every drop while showing a large empty area.
+ *
+ * A zone is a flex column and `hours` is the one block allowed to shrink below
+ * its own content, so an over-full design never overflows — that block gives up
+ * the difference and the rects then sum to exactly the card's height. Measured to
+ * the rects, `roomForNew` is pinned at 0 and every zone refuses forever, while
+ * the shrunken block is drawn as the very empty space the owner is aiming at.
+ *
+ * The numbers are the real ones, scaled to the default 440px card: two blocks
+ * whose rects leave 208px going spare, where the second has been squeezed by
+ * 200px and really wants 300.
+ */
+describe("a block the flex column has shrunk", () => {
+  // An address rather than a name, so the name in hand is refused by room or by
+  // nothing — `acceptsBlock` lets a card have only one of each.
+  const layout = cardWith({
+    middle: [
+      { id: "a", type: "address" },
+      { id: "h", type: "hours" },
+    ],
+  });
+
+  const rects = [
+    { id: "a", top: 12, bottom: 112 },
+    { id: "h", top: 120, bottom: 220 },
+  ];
+
+  it("offers places when nothing says the block was squeezed", () => {
+    // 24 of padding, one gap and two 100px rects is 232 of 440 — the answer
+    // every caller that cannot measure a block's own content still gets.
+    const slots = dropSlots(layout, newBlock("name"), [
+      zoneOf("middle", 12, 428, rects),
+    ], 24);
+
+    expect(slots.length).toBeGreaterThan(0);
+  });
+
+  it("offers none once the squeeze is given back", () => {
+    // The same card, saying what the second block actually asked for: 24 + 8 +
+    // 100 + 300 is 432, so 8px are free and a name needs 32.
+    const slots = dropSlots(layout, newBlock("name"), [
+      zoneOf("middle", 12, 428, [rects[0], { ...rects[1], wants: 300 }]),
+    ], 24);
+
+    expect(slots).toEqual([]);
+  });
+
+  it("still lets a block already on the card be moved", () => {
+    // A move is free — it is already counted — and refusing one would strand
+    // every block on a card nobody can rearrange. See `hasRoomFor`.
+    const slots = dropSlots(layout, moveBlock("h"), [
+      zoneOf("middle", 12, 428, [rects[0], { ...rects[1], wants: 300 }]),
+    ], 24);
+
+    expect(slots.length).toBeGreaterThan(0);
+  });
+});
+
+describe("zoneHeights", () => {
+  it("credits a block with what its line asked for, not what it was given", () => {
+    const layout = cardWith({
+      middle: [
+        { id: "a", type: "name" },
+        { id: "h", type: "hours" },
+      ],
+    });
+
+    expect(
+      zoneHeights(layout, [
+        zoneOf("middle", 12, 428, [
+          { id: "a", top: 12, bottom: 112 },
+          { id: "h", top: 120, bottom: 220, wants: 300 },
+        ]),
+      ]),
+    ).toEqual({ a: 100, h: 300 });
+  });
+
+  it("gives both members of a pair the line's own height", () => {
+    const layout = cardWith({
+      middle: [
+        { id: "a", type: "name", half: true },
+        { id: "b", type: "address", half: true },
+      ],
+    });
+
+    // One line costs the card one line — the same rule `usedHeight` applies.
+    expect(
+      zoneHeights(layout, [
+        zoneOf("middle", 12, 428, [
+          { id: "a", top: 12, bottom: 60 },
+          { id: "b", top: 12, bottom: 48 },
+        ]),
+      ]),
+    ).toEqual({ a: 48, b: 48 });
   });
 });

@@ -386,12 +386,6 @@ export function CardDesigner({
            the dashboard's own. See `cardAccentVars`. */
         style={cardAccentVars(initialMap.settings)}
       >
-        <p className="shrink-0 text-xs text-muted">
-          This card design applies to every map in your account — changes here
-          change what visitors see everywhere, not just on this one.
-          {isDirty ? " You have unsaved changes." : null}
-        </p>
-
         {/* `lg:flex-1` and not `flex-1`: filling the row is what makes the two
             columns share one viewport height, and below `lg` there is only one
             column — stretching it there would squeeze a 440px card and a
@@ -485,7 +479,7 @@ export function CardDesigner({
              *
              * The cost is that Save is one tab away while a block is selected,
              * and `isDirty` above is what pays it: the strip carries a dot, and
-             * the line above the card still says it in words.
+             * this button is dead until there is something for it to do.
              */
             footer={
               activeTab === "elements" ? (

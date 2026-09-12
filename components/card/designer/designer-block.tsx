@@ -134,7 +134,18 @@ export function DesignerBlock({
        * use-drop-bands.ts.
        */
       data-block-id={block.id}
-      style={style}
+      /*
+       * `rowProps`' own style first, this block's box over it.
+       *
+       * React replaces `style` wholesale rather than merging it, so spreading
+       * `rowProps` above and then setting `style` here threw the whole of it
+       * away — including the `touch-action: pan-y` the touch drag depends on.
+       * Every placed block on this canvas computed `auto`, which means a finger
+       * on one was handed to the scroller instead of to the gesture, and the card
+       * designer could not be used on a phone at all. Nothing said so: the block
+       * simply did not move.
+       */
+      style={{ ...rowProps.style, ...style }}
       onClick={(event) => {
         // A block click must not also reach the backdrop's own onClick, which
         // deselects on anything that isn't a block — without this, selecting a

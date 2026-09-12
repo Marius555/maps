@@ -35,6 +35,26 @@ rewritten; it is the record of why this area is shaped as it is.
   the closing transition needs it. Measured after: 64 frames, **zero direction reversals**,
   a clean ease-out from 9.6px to 0.8px a frame. Single-open folds help on their own, by
   leaving far less `scrollTop` to clamp.
+- **The window's scrollbar gutter is reserved, once, on `html`.** The dashboard's pages
+  grow the document (`AppShell` is `min-h-[100dvh]`, a floor rather than an app frame),
+  so anything that opens can cross the viewport boundary and bring a classic scrollbar in
+  with it — taking ~15px out of the layout in one frame. `scrollbar-gutter: stable` in
+  `app/globals.css`. Reported on the import wizard's Review step, where pressing **Fix**
+  on a short list did exactly that; the fix is deliberately global rather than per screen,
+  because every page here can do it.
+- **The import wizard is centred down the page with `my-auto`, never `justify-center`.**
+  Auto margins resolve to zero when free space is negative, so the tall Columns and
+  Review steps still start at their top edge and scroll normally. `justify-content:
+  center` would push their top above the scroll container, where nothing can reach it.
+  `page.tsx` and its `loading.tsx` carry the same two classes.
+- **A Motion collapse reveals itself through `revealCollapse`, not `revealFoldIn`.**
+  `reveal-fold.ts`'s machinery reads React Aria's `--disclosure-panel-height`, which
+  Motion does not write; the collapse wrapper is `overflow-hidden`, so its `scrollHeight`
+  is the same answer. It also falls back to `document.scrollingElement` where
+  `scrollableAncestor` finds nothing, because a reveal fired before the row grows
+  under-scrolls exactly the rows near the bottom of the screen. **It honours
+  `scroll-margin-top` by hand**, since the arithmetic path never reaches `scrollIntoView`
+  — that is what keeps an opened review row from landing behind the `lg:sticky` map.
 - **A `<div>` inside a `<p>` is a hydration error, not a lint nit.** `SidebarGroupLabel`
   was a `<p>` and holds a `Skeleton` (a div) while the map name loads; the parser closes
   the paragraph early, the DOM is not the one React rendered, and the whole subtree
@@ -64,17 +84,94 @@ rewritten; it is the record of why this area is shaped as it is.
 ### Drag
 
 - `lib/map/edge-autoscroll.ts` pulls the container when the pointer nears an edge, because
-  the drag `preventDefault`s every `pointermove` and will never scroll there by itself.
+  a drag refuses the pan outright (see below) and will never scroll there by itself.
 - **`update` must be given `clientX` as well as `clientY`.** Without it the band is an
   infinite horizontal strip, and a block dragged across the card scrolled the palette out
   from under it at 14px a frame. The `clientX` argument is optional so the nine existing
   calls in `edge-autoscroll.test.ts` still pass unmodified.
-- Rows are `touch-action: pan-y`, not `none` — `none` gave every finger swipe to the drag.
-  Touch decides by **stillness**: movement first is a scroll, 250ms of stillness starts a
-  drag. The browser ignores `preventDefault` once a pan is committed, so a drag has to begin
-  from a finger that has not moved.
+- **The whole row is the drag source, on every device.** There is no grip, and the one
+  attempt at one is worth knowing about because it was a plausible answer to a
+  misdiagnosis — see the next two bullets. The row is `touch-action: pan-y` (`none` gave
+  every finger swipe to the drag and the panel could not be scrolled at all) and decides by
+  **stillness**: movement first is a scroll, 250ms of stillness starts a drag. A mouse skips
+  the hold and uses the 8px threshold.
+- **`preventDefault()` on a pointer event does not stop a scroll.** This is the bug that
+  cost the most here, and the code asserted the opposite in a comment for a long time: the
+  250ms hold was written to claim the pan by preventing the first `pointermove` after it
+  fired, which the Pointer Events spec defines as a no-op. On Android the compositor then
+  took the pan `pan-y` had promised it, marked every later move `cancelable: false`, and
+  finished with a `pointercancel`. The symptom was "the row does not move", with an empty
+  console.
+  **The evidence, and it was read backwards once:** `components/tags/use-chip-reorder.ts`
+  has the identical hold, threshold and `pan-y` and has always worked — because a chip drags
+  *horizontally*, the axis `pan-y` refuses declaratively, so it never had a pan to claim.
+  `components/map/add-location/use-drag-to-add.ts` always worked for the same declarative
+  reason: `touch-action: none`, no hold. Neither is evidence that a hold cannot work. Both
+  are evidence that only `touch-action` was ever doing any work. A grip carrying
+  `touch-action: none` was built on the backwards reading, worked, and has been removed.
+- **So the pan is claimed by a non-passive `touchmove`, and three details of how are forced
+  by the platform** (`rowRef` in `use-row-drag.ts`): it must be `addEventListener`, because
+  React registers `touchstart`/`touchmove`/`wheel` at its root *passively* and a JSX
+  `onTouchMove` therefore cannot `preventDefault` at all; it must be bound at mount, because
+  Chrome decides whether a scroll can go straight to the compositor by looking for blocking
+  listeners at hit-test time and one added mid-gesture does not apply to the gesture already
+  running; and it must be bound only where `canDrag`, because a blocking listener costs the
+  first move of every touch scroll a main-thread round trip and the Locations tab is the
+  longest list in the app and cannot drag at all. It refuses nothing before `begin()` has
+  run, which is what leaves a swipe to the browser with its momentum intact.
+  The ref detaches by hand on the `null` call rather than returning a cleanup, because
+  `rowProps` is spread onto a `motion.div` in two places and anything that composes refs
+  itself may drop a React 19 cleanup and leak a listener per row.
+- Android's own long-press is refused in three places, because it fires ~500ms in — a
+  quarter second *after* the row's hold has already started a drag. `user-select: none` and
+  `-webkit-touch-callout: none` sit on the row from the start (they refuse the selection
+  callout and the preview menu respectively, and `body.style.userSelect` in the drag effect
+  was always too late to retract something the browser decided at `pointerdown`), and a
+  `contextmenu` listener is bound for the length of a drag. The declarative pair is what
+  covers the 250ms *before* there is a drag to bind that listener from.
+  `preventDefault` on `pointermove` stays, guarded by `event.cancelable`, but only for text
+  selection and the mouse-compatibility events — it stops sixty warnings a second in the one
+  console you need to read.
+- **A `pointercancel` after a drag has begun completes over a lit target rather than
+  discarding it.** Before one it is the browser taking a scroll it was always allowed to
+  take. After one the `touchmove` above has already refused the pan, so there is no scroll to
+  take — a cancel is an interruption, and the highlight was a promise drawn from the same
+  coordinate. It always *ends* the gesture either way: no further move or up is delivered for
+  a cancelled pointer, so a drag kept alive would be a ghost stuck under a finger already off
+  the glass.
 - **Edit means the dialog, and only the dialog.** The row menu must not call `focusPlace`
   before `setEditingId` — that drew the card behind the modal and flew the camera away.
+
+### The editor map's own controls
+
+- **MapLibre's controls sit bottom-left, and that corner was chosen by elimination.**
+  Top-right is where the floating toolbar wraps to — which is why `map-toolbar.tsx` carried a
+  `pr-12` whose only job was dodging the zoom stack, now deleted. Bottom-right is spoken for
+  twice: MapLibre builds its own attribution there from the constructor, and the shape/route
+  card docks above it at `right-2 bottom-9`. Bottom-left is the only empty ground, so the
+  stack lands there and `map-hint-bar.tsx` / `selection-bar.tsx` carry `ps-12` to centre
+  their pill in what is left. Logical `ps`, not `pl`, so an RTL host moves the gap with it.
+- **The dashboard gets the zoom stack and nothing else.** Locate, fullscreen and the scale
+  ruler were all built and all removed: on the dashboard they are furniture over a map the
+  owner is *editing*, and the corner is worth more than they are. `showCompass` is the one
+  thing that varies — the editor asks for it, and the three small maps on this same canvas
+  (the pin field, the import review map, the Analytics heatmap) take the bare zoom pair,
+  because a third button on a 160px map is clutter. **The embed is untouched and still offers
+  all of them**, since there the visitor is only looking; that choice lives in
+  `SnapshotSettings` and `components/publish/design-sidebar/map-controls-group.tsx`.
+
+### Verifying a map in the browser
+
+- **A full-page DevTools screenshot renders an *idle* MapLibre canvas as blank.** MapLibre
+  runs with `preserveDrawingBuffer: false`, so once the map reaches `idle` there is no
+  preserved buffer for the capture path to composite, and the frame comes back showing the
+  frame's own `bg-surface-secondary` — with the DOM, the canvas dimensions, the WebGL context
+  and even the pin marker all measurably correct. This cost most of a session: it was read as
+  a regression, bisected against a moving tree, and "confirmed" only because the working arm
+  happened to be captured mid-render on a cold tile cache.
+  **Screenshot the element, not the page** (`take_screenshot` with a `uid`, which forces a
+  fresh composite of that subtree), or count frames — `map.on("render")` to `idle` — and
+  believe that over the picture.
 
 ### Surfaces
 

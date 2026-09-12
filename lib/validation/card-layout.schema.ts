@@ -9,6 +9,7 @@ import {
   MAX_BLOCK_OFFSET,
   MAX_BLOCK_PADDING,
   MAX_BUTTON_BORDER_WIDTH,
+  MAX_BUTTON_HREF,
   MAX_BUTTON_LABEL,
   MAX_BUTTON_PADDING,
   MAX_BUTTON_RADIUS,
@@ -155,9 +156,16 @@ export const cardBlockSchema = z.object({
    * which is checked by *finding* it rather than by matching a pattern: a
    * button naming a field this map does not have simply draws nothing, which is
    * the same thing it does for a location that left the field blank.
+   *
+   * The typed link is bounded and not shaped either, and deliberately not
+   * `z.url()`: the control writes on every keystroke, so a schema that refused
+   * `acme.c` would refuse the third character of every link anybody types. What
+   * actually decides is `safeHref` in packages/shared/card-button.ts, which both
+   * renderers run and which admits http(s) alone — a `javascript:` URL is a URL.
    */
   buttonAction: z.enum(["link", "directions"]).optional(),
   buttonSource: z.string().max(MAX_BUTTON_SOURCE).optional(),
+  buttonHref: z.string().max(MAX_BUTTON_HREF).optional(),
   buttonLabel: z.string().max(MAX_BUTTON_LABEL).optional(),
   // The button's own box. Bounded here and clamped again by the resolver, which
   // is also what drops them off a block type that draws no button — and, for

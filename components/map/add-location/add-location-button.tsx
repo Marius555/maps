@@ -187,13 +187,7 @@ export function AddLocationButton({
            * label reaches zero width and leaves half a centimetre of nothing
            * behind, and the button stops short of closing up.
            */}
-          <span
-            className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] group-has-[[data-search-open]]/toolbar:-ms-2 group-has-[[data-search-open]]/toolbar:max-w-0 group-has-[[data-search-open]]/toolbar:opacity-0 ${
-              isDragging ? "-ms-2 max-w-0 opacity-0" : "ms-0 max-w-40 opacity-100"
-            }`}
-          >
-            {isAdding ? "Stop adding" : "Add location"}
-          </span>
+          
         </Button>
       </span>
 

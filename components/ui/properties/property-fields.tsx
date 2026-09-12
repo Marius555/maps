@@ -3,6 +3,7 @@
 import {
   Checkbox,
   Input,
+  InputGroup,
   Label,
   TextField,
   ToggleButton,
@@ -269,12 +270,23 @@ export function PropertyText({
   value,
   placeholder,
   maxLength,
+  prefix,
   onChange,
 }: {
   label: string;
   value: string;
   placeholder?: string;
   maxLength: number;
+  /**
+   * A fixed lead-in drawn inside the box, outside the editable part.
+   *
+   * `https://` is the case it exists for: nobody types a scheme, so the control
+   * that asks for a link should not have one in it — but a box that silently adds
+   * one is a box that lies about what it stores. Showing it as furniture says
+   * both at once. `InputGroup.Input` is React Aria's own `Input` underneath, so it
+   * still reads the `TextField`'s value and `onChange`.
+   */
+  prefix?: string;
   onChange: (value: string) => void;
 }) {
   return (
@@ -286,7 +298,16 @@ export function PropertyText({
       onChange={onChange}
     >
       <Label>{label}</Label>
-      <Input placeholder={placeholder} />
+      {prefix === undefined ? (
+        <Input placeholder={placeholder} />
+      ) : (
+        <InputGroup variant="secondary" fullWidth>
+          <InputGroup.Prefix className="pr-0 text-muted">
+            {prefix}
+          </InputGroup.Prefix>
+          <InputGroup.Input placeholder={placeholder} />
+        </InputGroup>
+      )}
     </TextField>
   );
 }

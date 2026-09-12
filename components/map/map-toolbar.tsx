@@ -159,10 +159,14 @@ export function MapToolbar({
 }) {
   return (
     /*
-     * `pr-12` on the row keeps the wrapping controls clear of MapLibre's own
-     * NavigationControl, which sits at top-right inside the same box.
+     * The full width of the map, with nothing reserved on the right.
+     *
+     * This carried a `pr-12` for as long as MapLibre's NavigationControl sat at
+     * top-right inside the same box. The controls are in the bottom-right corner
+     * now (use-maplibre.ts), so the reservation was a 48px hole the toolbar
+     * wrapped around for no reason.
      */
-    <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-wrap items-start gap-2 pr-12">
+    <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-wrap items-start gap-2">
       {/*
        * `group/toolbar` is what the add control's label watches: the search sets
        * `data-search-open` on itself when it expands, and the label folds.

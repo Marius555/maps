@@ -10,8 +10,12 @@ import {
 import {
   DOT_IMAGE_ID,
   DOT_IMAGE_SIZE,
-  DOT_SPACING_PX,
+  DOT_TEXT_SIZE,
+  DOT_WIDTH_BUCKETS,
   dotImage,
+  dotLayerId,
+  dotSpacingFor,
+  dotWidthFilter,
 } from "@/packages/shared/dot-line";
 import {
   MIN_POLYGON_POINTS,
@@ -71,6 +75,20 @@ export const SHAPE_LINE_LAYER = "editor-shape-outlines";
  */
 export const SHAPE_DASHED_LINE_LAYER = "editor-shape-dashed-outlines";
 export const SHAPE_DOTTED_LINE_LAYER = "editor-shape-dotted-outlines";
+
+/**
+ * One dotted layer per stroke width, because `symbol-spacing` is a **layout**
+ * property and cannot be data-driven.
+ *
+ * The dot's size follows the feature (`icon-size` is an expression); the distance
+ * between dots cannot, so it has to be a constant per layer. Twelve layers is the
+ * whole width range, so every shape lands on exactly one of them and the spacing
+ * follows the stroke the way `line-dasharray`'s units used to. A layer no shape on
+ * the map matches builds no bucket. See packages/shared/dot-line.ts.
+ */
+export const SHAPE_DOTTED_LINE_LAYERS = DOT_WIDTH_BUCKETS.map((width) =>
+  dotLayerId(SHAPE_DOTTED_LINE_LAYER, width),
+);
 /**
  * The outline of whatever is being drawn right now — dashed, and its own layer.
  *
@@ -96,7 +114,7 @@ export const SHAPE_HIT_LAYERS = [
   SHAPE_FILL_LAYER,
   SHAPE_LINE_LAYER,
   SHAPE_DASHED_LINE_LAYER,
-  SHAPE_DOTTED_LINE_LAYER,
+  ...SHAPE_DOTTED_LINE_LAYERS,
 ];
 
 type ShapeProperties = {
@@ -446,24 +464,38 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
     map.addImage(DOT_IMAGE_ID, dotImage(), { sdf: true });
   }
 
-  if (!map.getLayer(SHAPE_DOTTED_LINE_LAYER)) {
+  for (const width of DOT_WIDTH_BUCKETS) {
+    const id = dotLayerId(SHAPE_DOTTED_LINE_LAYER, width);
+
+    if (map.getLayer(id)) continue;
+
     map.addLayer(
       {
-        id: SHAPE_DOTTED_LINE_LAYER,
+        id,
         type: "symbol",
         source: SHAPE_SOURCE,
         filter: [
           "all",
           ["!", ["get", "draft"]],
           ["==", ["get", "stroke"], "dotted"],
+          // This layer's share of the dotted shapes: the ones whose stroke is
+          // the width its spacing was built for.
+          dotWidthFilter(width),
         ],
         layout: {
           "symbol-placement": "line",
-          "symbol-spacing": DOT_SPACING_PX,
+          // Constant, because a layout property cannot be an expression — which
+          // is the whole reason there are twelve of these layers.
+          "symbol-spacing": dotSpacingFor(width),
+          // Not about text: it is what stops MapLibre flooring the spacing at the
+          // dot image's own pixel width. See `DOT_TEXT_SIZE`.
+          "text-size": DOT_TEXT_SIZE,
           "icon-image": DOT_IMAGE_ID,
           // The selected multiplier is the one the outline layers apply, so a
           // selected dotted shape thickens by the same proportion as every
-          // other kind.
+          // other kind. The *spacing* stays where it was: a selection is meant
+          // to read as heavier, and re-spacing it would redraw the marking
+          // rather than emphasise it.
           "icon-size": [
             "/",
             [
@@ -482,6 +514,7 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
       beforeId,
     );
   }
+
   if (!map.getLayer(SHAPE_VERTEX_LAYER)) {
     map.addLayer(
       {

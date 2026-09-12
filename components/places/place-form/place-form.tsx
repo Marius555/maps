@@ -1,8 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button, Modal } from "@heroui/react";
-import { useState } from "react";
+import { Button } from "@heroui/react";
+import { useState, type ComponentType, type ReactNode } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -47,18 +47,42 @@ import { MediaSection } from "./sections/media-section";
  * beside the form rather than inside it because a `File` has no business in a
  * zod schema, and written by `useSavePlacePhotos` on submit. The logo is a
  * `LogoDraft` on exactly those terms.
+ *
+ * **The two slots it draws into are handed in, because there are two shells.**
+ * A centred dialog is the wrong shape on a phone, so `PlaceEditDialog` renders
+ * either a `Modal` or a bottom `Drawer` — and the form has to span the body and
+ * the footer of whichever one it is in (see the docblock on the `<form>` below
+ * for why it spans them at all). Both shells expose the same pair with the same
+ * props, so naming them as components is the whole of the difference.
  */
+
+/**
+ * The body and footer of the overlay this form is drawing into.
+ *
+ * `Modal.Body`/`Modal.Footer` or `Drawer.Body`/`Drawer.Footer`. Held as a
+ * constant by each caller rather than built inline, so the form is not handed
+ * two new component identities on every render — React would unmount and remount
+ * the whole subtree, taking the focus and every uncommitted keystroke with it.
+ */
+export type FormShell = {
+  Body: ComponentType<{ className?: string; children?: ReactNode }>;
+  Footer: ComponentType<{ className?: string; children?: ReactNode }>;
+};
+
 export function PlaceForm({
   map,
   place,
+  shell,
   onSaved,
   onCancel,
 }: {
   map: AppMap;
   place: Place;
+  shell: FormShell;
   onSaved?: () => void;
   onCancel?: () => void;
 }) {
+  const { Body, Footer } = shell;
   const updatePlace = useUpdatePlace(map.id);
   const savePhotos = useSavePlacePhotos(map.id);
   const saveLogo = useSavePlaceLogo(map.id);
@@ -203,15 +227,31 @@ export function PlaceForm({
      * why it carries the dialog's own flex column rather than a `form=`
      * attribute and a lifted `isSubmitting`.
      *
+     * `Body` and `Footer` rather than `Modal.Body`/`Modal.Footer`, because on a
+     * phone this same form is drawn inside a bottom sheet — see `FormShell`. The
+     * arrangement above is identical in both: `.drawer__body` ships the same
+     * `min-h-0 flex-1 overflow-y-auto` that `.modal__body--scroll-inside` does.
+     *
      * `mt-2` is what `.modal__header + .modal__body` used to give the body for
-     * free; with this element between them the adjacency no longer matches.
+     * free; with this element between them the adjacency no longer matches. The
+     * drawer pays the same 8px through `.drawer__header + .drawer__body`, so one
+     * value serves both.
      */
     <form
       onSubmit={onSubmit}
       className="mt-2 flex min-h-0 flex-1 flex-col"
       noValidate
     >
-      <Modal.Body className="space-y-4">
+      {/* `@container` is what makes the field rows below respond to *this box*
+          rather than to the window.
+
+          They were `sm:` — a viewport query — which is wrong in both directions
+          at once: two-column rows fired inside a 448px dialog on every desktop
+          (the bug `hours-day-row.tsx` records working around), and would not
+          fire in a wide sheet on a phone held sideways. The container is the
+          thing the fields actually have to fit in, so it is the thing they ask
+          about. */}
+      <Body className="@container space-y-4">
         {updatePlace.error ? <ErrorMessage error={updatePlace.error} /> : null}
         {savePhotos.error ? <ErrorMessage error={savePhotos.error} /> : null}
         {saveLogo.error ? <ErrorMessage error={saveLogo.error} /> : null}
@@ -253,12 +293,13 @@ export function PlaceForm({
             onPhotosChange={setPhotos}
           />
         </FormSectionGroup>
-      </Modal.Body>
+      </Body>
 
       {/* `.modal__footer` is already `flex flex-row items-center justify-end
           gap-2`, and `.modal__body + .modal__footer` pays the 20px above it, so
-          the row keeps exactly the shape it had as a hand-built div. */}
-      <Modal.Footer>
+          the row keeps exactly the shape it had as a hand-built div.
+          `.drawer__footer` is the same rule with the same spacing. */}
+      <Footer>
         {onCancel ? (
           <Button variant="tertiary" onPress={onCancel}>
             Cancel
@@ -267,7 +308,7 @@ export function PlaceForm({
         <Button type="submit" isPending={isSubmitting}>
           Save changes
         </Button>
-      </Modal.Footer>
+      </Footer>
     </form>
   );
 }

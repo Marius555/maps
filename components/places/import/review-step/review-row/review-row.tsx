@@ -3,6 +3,7 @@
 import { Button, Input, Label, TextField } from "@heroui/react";
 import { Crosshair, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useRef } from "react";
 
 import { CoordinateFields } from "@/components/places/coordinate-fields";
 import { AddressSearchField } from "@/components/places/place-form/address-search-field";
@@ -14,6 +15,7 @@ import {
 import type { DraftPlace } from "@/lib/import/draft-places";
 import { issuesFor } from "@/lib/import/issues";
 import { formatCoords, roundCoord } from "@/lib/map/geo";
+import { revealCollapse } from "@/lib/ui/reveal-fold";
 import { RowAlternatives } from "./row-alternatives";
 import { RowIssues } from "./row-issues";
 import { RowStatus } from "./row-status";
@@ -68,6 +70,28 @@ export function ReviewRow({
 }) {
   const isPlaced = draft.lat !== null && draft.lng !== null;
 
+  const rowRef = useRef<HTMLLIElement>(null);
+  const foldRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * Opening a row brings it into view, the way every fold in the app does.
+   *
+   * Pressing **Fix** near the bottom of the screen used to put four fields below
+   * the fold — the gesture's whole result off screen, on a list whose rhythm is
+   * "fix this one, look at the next". `revealCollapse` is `revealFoldIn`'s twin
+   * for a Motion collapse; it drives the scroll on the same curve as the growth
+   * rather than snapping after it, and it honours the `scroll-mt` below so the
+   * row does not land behind the sticky map.
+   *
+   * On open only. A close takes the row's own height away beneath whatever is
+   * being read, which is not a thing anybody needs moving for.
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+
+    return revealCollapse(rowRef.current, foldRef.current);
+  }, [isOpen]);
+
   const placementIssues = [
     ...issuesFor(draft.issues, "address"),
     ...issuesFor(draft.issues, "coordinates"),
@@ -89,6 +113,7 @@ export function ReviewRow({
 
   return (
     <motion.li
+      ref={rowRef}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -102,7 +127,11 @@ export function ReviewRow({
        * screens. Selection is a fill rather than an accent border for the same
        * reason — it marks a row without adding an edge to count.
        */
-      className={`border-t border-border px-2 py-1.5 transition-colors ${
+      /* `lg:scroll-mt-*` is what the reveal above aims at, and the number is the
+         sticky map's: `lg:top-4` plus `lg:h-[min(24rem,40vh)]` in review-step.tsx,
+         plus the `space-y-3` between them. Without it a revealed row lands under
+         the map, which is the whole reason that element caps its own height. */
+      className={`border-t border-border px-2 py-1.5 transition-colors lg:scroll-mt-[calc(min(24rem,40vh)+1.75rem)] ${
         isSelected ? "bg-accent-soft" : ""
       }`}
     >
@@ -178,6 +207,7 @@ export function ReviewRow({
           {isOpen ? (
             <motion.div
               key="open"
+              ref={foldRef}
               {...collapseMotion()}
               className={COLLAPSE_CLASS}
             >

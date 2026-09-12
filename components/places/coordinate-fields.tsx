@@ -31,7 +31,7 @@ export function CoordinateFields({
   lat,
   lng,
   isDisabled,
-  className = "grid gap-3 sm:grid-cols-2",
+  className = "grid gap-3 @md:grid-cols-2",
   onChange,
 }: {
   lat: number | null;
@@ -40,10 +40,15 @@ export function CoordinateFields({
   /**
    * The pair's own layout, for a caller whose row is not a half-and-half split.
    *
-   * Defaulted to what every caller drew before this existed, so the place form
-   * is untouched. The import review row overrides it: a latitude is nine
-   * characters and its box does not need a quarter of a full-width table row,
-   * which is what a `sm:grid-cols-2` inside a `flex-1` gave it there.
+   * Defaulted to the place form's own layout, which is where this pair began.
+   * **That default is a container query and therefore assumes a container** —
+   * the dialog body declares one (place-form.tsx), and a caller outside one gets
+   * a single column, which is the safe answer rather than a broken one. It was a
+   * `sm:` viewport query and split in two inside a 448px dialog, which is the
+   * width the dialog actually had.
+   *
+   * The import review row overrides it either way: a latitude is nine characters
+   * and its box does not need a quarter of a full-width table row.
    */
   className?: string;
   onChange: (coords: { lat: number; lng: number }) => void;

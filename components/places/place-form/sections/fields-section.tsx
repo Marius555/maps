@@ -52,7 +52,8 @@ export function FieldsSection({
             title="Extra fields"
             summary={filledSummary(fields.map((definition) => values[definition.id]))}
           >
-            <div className="grid gap-4 sm:grid-cols-2">
+            {/* `@md:` against the dialog body — see ContactSection. */}
+            <div className="grid gap-4 @md:grid-cols-2">
               {fields.map((definition) => (
                 <TextField
                   key={definition.id}

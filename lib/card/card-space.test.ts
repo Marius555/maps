@@ -5,6 +5,7 @@ import {
   contentHeight,
   hasRoomFor,
   newBlockHeight,
+  overHeight,
   roomForNew,
   usedHeight,
 } from "./card-space";
@@ -243,5 +244,44 @@ describe("usedHeight with a pair", () => {
     expect(hasRoomFor(paired, "top", { kind: "new", type: "divider" }, {})).toBe(
       true,
     );
+  });
+});
+
+describe("overHeight", () => {
+  it("is nothing for a card that fits", () => {
+    const layout = cardWith({ middle: [{ id: "a", type: "name" }] });
+
+    expect(overHeight(layout, { a: 100 })).toBe(0);
+    // Exactly full is not over: the check that refuses a *new* block and the
+    // number that explains the refusal are allowed to disagree about the edge.
+    expect(overHeight(layout, { a: 440 - 24 })).toBe(0);
+  });
+
+  it("says how far past its own height the card reaches", () => {
+    const layout = cardWith({
+      middle: [
+        { id: "a", type: "name" },
+        { id: "h", type: "hours" },
+      ],
+    });
+
+    // 24 of padding, one 8px gap, and 100 + 360 of blocks is 492 against 440.
+    expect(contentHeight(layout, { a: 100, h: 360 })).toBe(492);
+    expect(overHeight(layout, { a: 100, h: 360 })).toBe(52);
+    // And the other side of it clamps, which is why both exist.
+    expect(roomForNew(layout, { a: 100, h: 360 })).toBe(0);
+  });
+
+  it("does not count leading space, which gives way", () => {
+    const layout = cardWith({
+      middle: [
+        { id: "a", type: "name", offset: 200 },
+        { id: "h", type: "hours" },
+      ],
+    });
+
+    // The 200px holding the name down is slack, so the card is not over by it —
+    // the same rule `roomForNew` is written against.
+    expect(overHeight(layout, { a: 100, h: 300 })).toBe(0);
   });
 });

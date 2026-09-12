@@ -7,8 +7,14 @@ import { AnimatePresence, motion } from "motion/react";
  *
  * Bottom-centre, not top-centre: the toolbar wraps onto a second line on narrow
  * viewports and used to collide with this. The bottom edge is also where the eye
- * ends up after reading the toolbar, and it clears the attribution because that
- * sits bottom-right.
+ * ends up after reading the toolbar.
+ *
+ * `ps-12` is what keeps the pill off MapLibre's controls, which stack up the
+ * bottom-**left** corner (use-maplibre.ts). The pill stays centred — in the
+ * space beside them, which on a phone is the difference between a readable hint
+ * and one with a zoom button on top of it. Logical, not physical: the corner is
+ * `bottom-left` either way, but an RTL host would want the gap on the other
+ * side and `ps` moves with it.
  *
  * Animated because it appears and disappears in response to a mode the user just
  * switched — that is feedback, not decoration (§8). It needs `AnimatePresence`
@@ -34,7 +40,7 @@ export function MapHintBar({
           // Matches --duration-fast / --ease-out from globals.css. Motion takes
           // numbers and a cubic-bezier array, not CSS variables.
           transition={{ duration: 0.15, ease: [0, 0, 0.2, 1] }}
-          className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-3"
+          className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-3 ps-12"
         >
           <p
             className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-foreground shadow-sm"

@@ -1,9 +1,11 @@
 import { z } from "zod";
 
 import {
+  MAX_STROKE_WIDTH,
   MIN_CIRCLE_RADIUS_M,
   MIN_LINE_POINTS,
   MIN_POLYGON_POINTS,
+  MIN_STROKE_WIDTH,
   SHAPE_STROKE_STYLES,
 } from "@/packages/shared/shapes";
 import { hexColorSchema, latSchema, lngSchema } from "./common";
@@ -38,9 +40,12 @@ export const DEFAULT_SHAPE_OPACITY = 0.2;
  * coastline. Twelve is about where a line stops reading as a route and starts
  * reading as a region — and it is also the cap on the column, so a value past it
  * would be refused by Appwrite as a 500 rather than by us as a field error.
+ *
+ * Defined in `packages/shared/shapes.ts` and re-exported here, because the
+ * renderers need it too and the embed cannot import `/lib`. This file is still
+ * the only thing that *enforces* it.
  */
-export const MIN_STROKE_WIDTH = 1;
-export const MAX_STROKE_WIDTH = 12;
+export { MAX_STROKE_WIDTH, MIN_STROKE_WIDTH };
 
 /**
  * A polygon is capped, and the cap is about the snapshot rather than the

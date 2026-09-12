@@ -44,8 +44,12 @@ import type {
 import {
   DOT_IMAGE_ID,
   DOT_IMAGE_SIZE,
-  DOT_SPACING_PX,
+  DOT_TEXT_SIZE,
+  DOT_WIDTH_BUCKETS,
   dotImage,
+  dotLayerId,
+  dotSpacingFor,
+  dotWidthFilter,
 } from "@/packages/shared/dot-line";
 import { pinColorOfTags, tagChipsOf } from "@/packages/shared/tags";
 
@@ -93,6 +97,18 @@ const SHAPE_FILL_LAYER = "shape-fills";
 const SHAPE_LINE_LAYER = "shape-outlines";
 const SHAPE_DASHED_LINE_LAYER = "shape-dashed-outlines";
 const SHAPE_DOTTED_LINE_LAYER = "shape-dotted-outlines";
+
+/**
+ * One dotted layer per stroke width, matching the editor's own table.
+ *
+ * `symbol-spacing` is a layout property and cannot be data-driven, so the only
+ * way the gap between dots follows the stroke is a constant per layer. Twelve
+ * covers the whole width range the editor offers; a width nothing on this map
+ * uses builds no bucket. See packages/shared/dot-line.ts.
+ */
+const SHAPE_DOTTED_LINE_LAYERS = DOT_WIDTH_BUCKETS.map((width) =>
+  dotLayerId(SHAPE_DOTTED_LINE_LAYER, width),
+);
 
 /**
  * One line layer per marking, matching the editor's own table.
@@ -1374,24 +1390,43 @@ function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
    */
   map.addImage(DOT_IMAGE_ID, dotImage(), { sdf: true });
 
-  map.addLayer({
-    id: SHAPE_DOTTED_LINE_LAYER,
-    type: "symbol",
-    source: SHAPE_SOURCE_ID,
-    filter: ["==", ["get", "stroke"], "dotted"],
-    layout: {
-      "symbol-placement": "line",
-      "symbol-spacing": DOT_SPACING_PX,
-      "icon-image": DOT_IMAGE_ID,
-      "icon-size": ["/", ["get", "width"], DOT_IMAGE_SIZE],
-      // Not a label: collision detection would drop dots wherever the route
-      // passes near a place name, and a dotted line with gaps reads as one
-      // that stops.
-      "icon-allow-overlap": true,
-      "icon-ignore-placement": true,
-    },
-    paint: { "icon-color": ["get", "color"] },
-  });
+  /*
+   * One layer per stroke width: `symbol-spacing` is a layout property and
+   * cannot be an expression, so the only way the gap between dots follows the
+   * stroke is a constant per layer. Twelve covers the whole range the editor
+   * offers, and a width nothing on this map uses builds no bucket.
+   */
+  for (const width of DOT_WIDTH_BUCKETS) {
+    map.addLayer({
+      id: dotLayerId(SHAPE_DOTTED_LINE_LAYER, width),
+      type: "symbol",
+      source: SHAPE_SOURCE_ID,
+      filter: [
+        "all",
+        ["==", ["get", "stroke"], "dotted"],
+        dotWidthFilter(width),
+      ],
+      layout: {
+        "symbol-placement": "line",
+        "symbol-spacing": dotSpacingFor(width),
+        // Not about text: it is what stops MapLibre flooring the spacing at the
+        // dot image's own pixel width. See `DOT_TEXT_SIZE`.
+        "text-size": DOT_TEXT_SIZE,
+        "icon-image": DOT_IMAGE_ID,
+        // A constant, not an expression: this layer draws one width and knows
+        // which. The editor's copy keeps the expression because a selected shape
+        // is drawn heavier there and nothing here has a selection.
+        "icon-size": width / DOT_IMAGE_SIZE,
+        // Not a label: collision detection would drop dots wherever the route
+        // passes near a place name, and a dotted line with gaps reads as one
+        // that stops.
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+      paint: { "icon-color": ["get", "color"] },
+    });
+  }
+
 }
 
 /**
@@ -1469,16 +1504,30 @@ function wireShapeInteractions(
      * hit — and they also draw every area's edge, so this is what makes clicking
      * a region's border open that region.
      *
-     * All three, because a marking must not decide whether the thing wearing it
-     * can be tapped: a dotted route is mostly gaps, and `queryRenderedFeatures`
-     * tests the line's geometry rather than its dashes, so a gap still hits.
+     * **Every marking, and dotted has to be listed by name.** A marking must
+     * not decide whether the thing wearing it can be tapped, and dotted left
+     * `OUTLINE_LAYERS` when it became a symbol layer — so for a while a dotted
+     * shape in a published map could not be clicked at all.
+     *
+     * Listing the symbol layers is enough because the dots are close together:
+     * `queryRenderedFeatures` tests each icon's own box, so a gap can miss, but
+     * the gaps are a fraction of the stroke and this query has `TAP_SLOP` around
+     * the pointer. Measured against a zero-opacity line drawn over the same
+     * geometry, on a 4px area edge and a 6px route at z15: out of ~2,400 sample
+     * points the line answered where the dots did not **zero** times with the
+     * slop applied, and three times without it. So the extra layer was deleted
+     * rather than kept — see `DOT_SPACING_RATIO` for why the spacing is what
+     * makes that true.
      *
      * A route wins over an edge it happens to cross. Both can be in the box, and
      * of the two the route is the smaller and more deliberate aim: an area can
      * be opened from anywhere in its fill, and a route has only its own width.
      */
     const outlines = found(
-      OUTLINE_LAYERS.map((outline) => outline.id),
+      [
+        ...OUTLINE_LAYERS.map((outline) => outline.id),
+        ...SHAPE_DOTTED_LINE_LAYERS,
+      ],
       boxAround(point),
     );
     const route = outlines.find((shape) => shape.kind === "line");
