@@ -44,6 +44,7 @@ export function useShapeLayers({
   drawMode,
   isRouting,
   colorFor,
+  draftColorFor,
   onSelect,
 }: {
   map: React.RefObject<MapLibreMap | null>;
@@ -69,6 +70,15 @@ export function useShapeLayers({
   isRouting?: boolean;
   /** Paint colour per shape, group colour included. Defaults to `shape.color`. */
   colorFor?: (shape: Shape) => string;
+  /**
+   * The colour the shape being drawn will be saved in.
+   *
+   * Asked per draft rather than passed as a value because the answer depends on
+   * the geometry: a line or a route takes the colour of the first pin it was
+   * drawn through, and that pin is not known until the gesture has touched it.
+   * See `shapeSeedColor`.
+   */
+  draftColorFor?: (geometry: ShapeGeometry) => string;
   onSelect: (shapeId: string) => void;
 }) {
   /** Any tool that reads clicks off the canvas, route tool included. */
@@ -78,6 +88,7 @@ export function useShapeLayers({
   const selectedRef = useRef(selectedShapeId);
   const selectedManyRef = useRef(selectedShapeIds);
   const colorForRef = useRef(colorFor);
+  const draftColorForRef = useRef(draftColorFor);
   const onSelectRef = useRef(onSelect);
 
   /** id → the geometry a held handle is currently describing. */
@@ -106,6 +117,7 @@ export function useShapeLayers({
         selectedRef.current,
         selectedManyRef.current,
         colorForRef.current,
+        draftColorForRef.current,
         previews.current,
         drawing.current,
       ),
@@ -177,8 +189,9 @@ export function useShapeLayers({
     selectedRef.current = selectedShapeId;
     selectedManyRef.current = selectedShapeIds;
     colorForRef.current = colorFor;
+    draftColorForRef.current = draftColorFor;
     redraw();
-  }, [shapes, selectedShapeId, selectedShapeIds, colorFor, redraw]);
+  }, [shapes, selectedShapeId, selectedShapeIds, colorFor, draftColorFor, redraw]);
 
   // Clicking a fill selects it. Registered per layer so MapLibre does the hit
   // testing; the canvas's own click handler checks the same layers before
@@ -290,6 +303,7 @@ function buildFeatures(
   selectedId: string | null,
   selectedIds: ReadonlySet<string> | undefined,
   colorFor: ((shape: Shape) => string) | undefined,
+  draftColorFor: ((geometry: ShapeGeometry) => string) | undefined,
   previews: globalThis.Map<string, ShapeGeometry>,
   drawing: ShapeGeometry | null,
 ): ShapeFeatures {
@@ -305,7 +319,7 @@ function buildFeatures(
     ),
   );
 
-  if (drawing) features.push(...draftFeatures(drawing));
+  if (drawing) features.push(...draftFeatures(drawing, draftColorFor?.(drawing)));
 
   return { type: "FeatureCollection", features };
 }

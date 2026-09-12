@@ -48,3 +48,41 @@ export function TreeBranch({
     />
   );
 }
+
+/**
+ * An ancestor's rail, passing over a row that belongs to something deeper.
+ *
+ * The panel is two levels deep in exactly one place: a route that is itself in
+ * a group, whose stops therefore hang off the route while the group's rail still
+ * has members below to reach. This is that outer level — the line, with no elbow,
+ * because the row beside it is not one of *its* children.
+ *
+ * `continues` false draws a gap of the same width instead of a line. That is the
+ * case where the route was the group's last member: the rail closed at the route's
+ * own elbow, and running it on past the stops would point at nothing.
+ */
+export function TreeRail({
+  color,
+  continues,
+}: {
+  /** The ancestor group's colour. Undefined falls back to the border grey. */
+  color?: string;
+  /** Whether the ancestor has more rows below this one. */
+  continues: boolean;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      style={
+        color && continues
+          ? ({ "--tree-color": color } as CSSProperties)
+          : undefined
+      }
+      /* Same `-mb-0.5` reach into the row gap as TreeBranch, so consecutive
+         rows join into one line rather than a dotted column. */
+      className={`w-4 shrink-0 self-stretch${
+        continues ? " tree-rail -mb-0.5" : ""
+      }`}
+    />
+  );
+}

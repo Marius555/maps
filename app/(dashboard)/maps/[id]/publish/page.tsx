@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/current-user";
 import { getCardDesign } from "@/lib/repositories/card-design.repository";
 import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
+import { listAllGroups } from "@/lib/repositories/groups.repository";
 import { loadMap } from "@/lib/repositories/load-map";
 import { listAllPlaces } from "@/lib/repositories/places.repository";
 import { listAllShapes } from "@/lib/repositories/shapes.repository";
@@ -43,6 +44,7 @@ export default async function MapPublishPage(
       initialMap={data.map}
       initialPlaces={data.places}
       initialShapes={data.shapes}
+      initialGroups={data.groups}
       initialCardDesign={data.cardDesign}
     />
   );
@@ -57,12 +59,19 @@ async function loadPublishData(userId: string, mapId: string) {
   // document is built against the *default* card and then thrown away and
   // rebuilt when the real one lands. One more query here, one less full
   // MapLibre boot on every visit — see `EmbedPreview`'s `cardDesign`.
-  const [map, places, shapes, cardDesign] = await Promise.all([
+  //
+  // Groups come along for a third reason again: the preview is the real embed
+  // reading a snapshot built in the browser, and a group decides what colour a
+  // pin or a route is painted (lib/map/group-colors.ts). Fetched here rather
+  // than from the browser so the preview never draws the ungrouped colours once
+  // and then rebuilds — the same argument the card design makes above.
+  const [map, places, shapes, groups, cardDesign] = await Promise.all([
     loadMap(userId, mapId),
     listAllPlaces(repoContext(userId), mapId),
     listAllShapes(repoContext(userId), mapId),
+    listAllGroups(repoContext(userId), mapId),
     getCardDesign(repoContext(userId)),
   ]);
 
-  return { map, places, shapes, cardDesign };
+  return { map, places, shapes, groups, cardDesign };
 }

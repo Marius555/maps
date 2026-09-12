@@ -19,6 +19,7 @@ import type { NextConfig } from "next";
 const embedCorsHeaders = [
   { key: "Access-Control-Allow-Origin", value: "*" },
   { key: "Cross-Origin-Resource-Policy", value: "cross-origin" },
+ 
 ];
 
 const nextConfig: NextConfig = {

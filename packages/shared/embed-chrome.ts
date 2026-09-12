@@ -46,6 +46,18 @@ export function chromeVars(
         : `${settings.panelRadius}px`,
     "--lm-row-pin":
       settings.rowPinSize === undefined ? undefined : `${settings.rowPinSize}px`,
+    /*
+     * The corner on a results row's Directions and phone links.
+     *
+     * A property rather than a fifth `data-lm-link` value, because a corner is a
+     * *length* every one of those treatments reads — the stylesheet's default is
+     * the 999px pill every published row already draws, so absent is that pill
+     * and nothing here writes one.
+     */
+    "--lm-link-radius":
+      settings.rowLinkRadius === undefined
+        ? undefined
+        : `${settings.rowLinkRadius}px`,
     "--lm-surface": c?.surface,
     "--lm-foreground": c?.foreground,
     "--lm-muted": c?.muted,
@@ -93,6 +105,27 @@ export function chromeAttrs(
      * snapshot published before this field existed already draws (§7).
      */
     "data-lm-bar": settings.panelScrollbar === false ? "0" : undefined,
+    /*
+     * The floating toolbar's glass, and an attribute for `data-lm-bar`'s reason
+     * rather than for its own: what it switches on is a *set* of custom
+     * properties on the toolbar — the panel's opacity, blur and corner, read
+     * through one indirection so that every existing override of a control's
+     * background still wins on its own terms. A variable cannot turn a block of
+     * variables on.
+     *
+     * Only `true` writes anything. Absent is the solid control every published
+     * map draws (§7).
+     */
+    "data-lm-glass": settings.toolbarGlass ? "1" : undefined,
+    /*
+     * How a results row's two links are painted, and only when it is not the
+     * outlined pill they have always been — so an owner who has not touched the
+     * control writes no attribute and the stylesheet's own rule stands.
+     */
+    "data-lm-link":
+      settings.rowLinkStyle && settings.rowLinkStyle !== "outline"
+        ? settings.rowLinkStyle
+        : undefined,
   };
 }
 
@@ -112,6 +145,9 @@ export const CHROME_SETTING_KEYS = [
   "panelBlur",
   "panelRadius",
   "panelScrollbar",
+  "toolbarGlass",
   "rowPinSize",
+  "rowLinkStyle",
+  "rowLinkRadius",
   "colors",
 ] as const satisfies readonly (keyof SnapshotSettings)[];

@@ -85,7 +85,7 @@ const ROW_STYLE: CSSProperties = { touchAction: "pan-y" };
 /**
  * What is in the air.
  *
- * The first three are rows of the locations panel. The last two are the card
+ * The first four are rows of the locations panel. The last two are the card
  * designer, which runs this same gesture rather than a second one: the threshold,
  * the 250ms touch hold, the ghost, Escape-to-abort and the edge autoscroll are
  * all things that took real work to get right, and a designer that felt different
@@ -99,6 +99,19 @@ export type DraggedObject = {
     | "place"
     | "shape"
     | "group"
+    /**
+     * One stop of a route, being reordered within it. `id` is
+     * `<shapeId>:<index>`, because a stop has no id of its own — the order
+     * *is* the membership (lib/map/sidebar-rows.ts), and a round trip visits
+     * one location twice.
+     *
+     * Added to this union rather than changing the `accepts`/`onDrop`
+     * contract, which the card designer shares: a reorder needs to know which
+     * half of a row the pointer is in, and the answer was two registered
+     * targets per row rather than a third argument for every target in the
+     * app. See components/map/routes/route-stop-list-item.tsx.
+     */
+    | "route-stop"
     /** A block being moved on the card. `id` is the block's id. */
     | "card-block"
     /** A block being dragged off the palette. `id` is the block *type*. */

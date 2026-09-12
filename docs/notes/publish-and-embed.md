@@ -207,6 +207,60 @@ rewritten; it is the record of why this area is shaped as it is.
   reasoning, because the argument against the header was that a 20rem row already held a
   truncating map name, and turning the back link into an icon is what removed it. It kept
   its translucent pill only for as long as it was on the map.
+- **A floating toolbar wears the panel's glass, and the glass rule sets no real
+  property.** `toolbarGlass` writes `data-lm-glass`, and the rule under it
+  assigns `--lm-tool-bg` and `--lm-tool-blur` on the toolbar alone; the base
+  `.lm-search__input, .lm-button` rule reads them as fallbacks. That is forced
+  rather than tidy: a rule *painting* `background` on those elements would have
+  to out-weigh `.lm-toolbar--docked .lm-search__input` (two classes) and lose to
+  `.lm-button--on` (one), and no selector does both. Naming the ground instead
+  leaves every existing override winning exactly as it did. `blur(var(--lm-panel-blur))`
+  carries **no fallback on purpose** — absent makes `--lm-tool-blur`
+  guaranteed-invalid, so `backdrop-filter: var(--lm-tool-blur, none)` resolves to
+  `none` rather than the `blur(0)` `chromeVars` already refuses to write. The
+  corner is deliberately *not* inherited: `--lm-panel-radius` runs to 24px, which
+  on a 34px control is a lozenge.
+- **The results-row links are four tokens on the link and three treatments on the
+  root, and the split is a cascade fact.** `.lm-list__link:hover` sets
+  `--lm-link-bg`/`--lm-link-fg` **on the element**, which beats any inherited
+  value however heavy the selector that set it — so a variant painting real
+  properties would kill its own hover, and a variant setting the tokens on the
+  link would too. On `.lm-root` they reach the link by inheritance and the hover
+  still wins. The outline's hover *line* is therefore scoped
+  `.lm-root:not([data-lm-link])`, because leaving it in the shared rule grew a
+  border on every borderless chip under the pointer. Verified in the browser
+  across all four treatments, at rest and hovered.
+- **`card: false` is a pin that opens nothing, and `focusPlace` needed no branch
+  for it.** MapLibre's `Popup.remove()` does `delete this._container`, so
+  `getElement()` is undefined on a popup never added — which is every popup on a
+  card-less map — and `flyToCard`'s existing `!card` branch already flies plain.
+  `setOpen` still runs, so a pin click marks the row: the information moves to
+  the panel rather than disappearing. A shape's popup is out of scope — it is an
+  area's name, not a location card.
+- **`select()` must scroll this list and nothing else.**
+  `row.scrollIntoView({ block: "nearest" })` is what it was, and on a drawer map
+  it dragged the basemap out from under a panel nobody had opened — measured:
+  `root.scrollLeft` 0 → 284, the panel from x=670 to x=386, the canvas from
+  x=16.8 to x=−267.2, with `data-lm-drawer-open` false and no veil, so there was
+  nothing to press to undo it. `inert` answers the *focus* half of this trap and
+  cannot answer this half. Two rect reads and one `scrollTop` write reproduce
+  `nearest` exactly with no way to reach an ancestor.
+- **A group's colour travels; a group's id does not.** `groupId` is still kept off
+  every snapshot — a visitor cannot see a group or act on one. What is published is
+  the colour it *decided*, because that is a fact about the pin rather than about the
+  group: `SnapshotShape.color` (already "already resolved", so free) and the new
+  optional `SnapshotPlace.color`, written only when a group actually decided.
+  **Absent means the pin works its own colour out**, which is what every snapshot
+  already on a customer's site says, so a map with no groups publishes the bytes it
+  always published. `lib/map/group-colors.ts` is the single statement of the
+  precedence, and the canvas, the PNG export and publish all read it.
+- **The designer's "Results panel" fold is three folds.** Search and Nearest and the
+  glass switch were never panel controls — the embed draws them on a map with the
+  list switched off — and they are in "Map controls" now. Transparency, blur and
+  corners are a "Panel surface" fold that is `isEmpty` unless the panel floats,
+  because a trigger opening onto nothing is worse than no trigger. What is left is a
+  master switch, three selectors and one run of switches, which is the shape the rest
+  of the designer already had.
 - **The accent has a default and the other four colours do not.** `DEFAULT_EMBED_ACCENT`
   seeds `DEFAULT_EMBED_SETTINGS.colors`, so `readColors` always resolves an accent and every
   new publish writes one. `--lm-focus` in the stylesheet stays `#1c7ed6`, because that is
@@ -419,6 +473,32 @@ width from 480px down, and Nearest wrapped to a second row below 260px. After: t
 runs 418 → 130px across that range, nothing wraps down to a 180px embed, and the zoom stack
 starts at y=53.
 
+**Three settings later, the binding number is the total and it has 26 bytes in
+it.** Glass over the map, a card that can be switched off and a treatment for the
+results row's two links cost about 360 bytes gzipped between them, against a
+ceiling with 400. They fit, and what paid for the overshoot is worth writing
+down, because it is the shape of every future addition here:
+
+- `--lm-tool-radius` went, on its own merits — see the invariant above.
+- `focusPlace`'s explicit card-off branch went, because `flyToCard` already had
+  one and MapLibre's `remove()` guarantees it fires.
+- `--lm-link-bg: transparent` in the `plain` rule was the base's own default
+  restated, and the outline's hover line moved to `:not([data-lm-link])` instead
+  of being painted on all four and undone on three.
+
+None of that is a feature trimmed, which is the test §4 sets. **What did not
+happen, and is the next lever if anyone needs one:** the bundle's own CSS is
+29.2KB raw, and **8.1KB of it is `:lang()` expansion Lightning CSS generates
+because `build.target` is `es2020`** — every `inset-inline-*` ships as an
+LTR/RTL pair, twice over, once for `:is()` and once for `:-webkit-any()`.
+Gzipped that is about 400 bytes, for browsers that cannot render a `color-mix()`,
+a `@container` query or an ESM script and therefore cannot render this embed at
+all. Raising `build.cssTarget` would reclaim it — and would also re-weigh every
+selector in this file, including the two ties hand-counted above (the 480px
+toolbar rule and the drawer's open/closed pair), which is why it is written here
+as a measured option rather than taken as a shave. It is a §3/§4 conversation,
+and the numbers for it are on this line.
+
 **The tag filter chips are gone from the embed, and that one is not free.** The
 bundle is shared, so a map published with chips loses them on the next deploy of
 `/embed` without its owner republishing — the one place §7 is not honoured, taken
@@ -450,3 +530,30 @@ visitor's path (§2).
 **The own-code budget was raised from 42KB to 46KB for the map designer**, and that is the second and last time it should happen casually. It was at *exactly* 43,008 of 43,008 bytes — passing only because the check compares with `>` — and the designer needed a floating panel, a pin per results row and a dozen settings reads. Two things made 46 honest rather than a shrug: the **total**, which is what §4 actually protects and what a visitor downloads, had the room (315.9KB against the 320KB ceiling); and it was part-paid by deleting the tag filter chips rather than borrowed whole. The reasoning is written out in `scripts/check-embed-size.mjs`. Do not raise it again to get past a binding budget — it exists to catch the MapLibre duplication regression above, and a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam.
 
 It started type-only. It now also holds a little runtime — `color.ts`, `darken-style.ts`, `load-style.ts`, `shapes.ts` — because the editor and the embed must run *the same* dark-basemap transform and turn a circle into *the same* ring of points, not two that agree today: the preview panel renders the real embed bundle beside the editor's own canvas, so any drift is two differently-coloured or differently-shaped maps on one screen. The condition for putting runtime here is **zero dependencies, vanilla TS**, since whatever this directory imports the embed inherits. ESLint holds `/packages/shared` to the embed's own import ban for exactly that reason. Anything needing a package belongs in `/lib`.
+
+
+**The budget was at the ceiling, and the lever this file left on the table is
+what paid for the next feature.** Three settings had taken the total to 320.0KB of
+a 320.0KB ceiling — passing only because the comparison is `>` — with 211 bytes
+left against our own 47KB budget. Then a dotted route turned out to draw eggs
+rather than dots at every fractional zoom (`docs/notes/shapes-and-routes.md`), and
+fixing it in the embed as well as the editor costs about 250 bytes. Editor-only was
+not an option: the preview on this page is the real bundle, so a fix in one is a
+new divergence in the other, which is the class of bug the same change was closing
+for colours.
+
+So the `build.cssTarget` option written up above was taken, and it reclaimed
+**about 600 bytes** — more than the ~400 estimated. Ours went 47.1 → 46.5KB and the
+total 320.2 → 319.7KB, which is more headroom than there was before any of this
+started. The argument is the one this file already made: the expansion is an
+LTR/RTL `:lang()` polyfill for `inset-inline-*`, and logical properties have been
+supported since Chrome 87 — far below the `color-mix()`, `@container` and ESM floor
+that decides whether this bundle renders at all. **No browser that could render the
+embed before loses anything.**
+
+The risk this file flagged was that raising it re-weighs every selector, including
+the two ties hand-counted here. Checked in the browser against `/embed/dev.html`
+after the change: the floating glass panel, the docked toolbar, the results rows
+with their outlined pill links, the circle and polygon shapes and the scrollbar all
+draw exactly as before. Worth re-checking the narrow-width drawer specifically if
+anything in that area moves again.

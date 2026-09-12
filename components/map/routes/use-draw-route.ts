@@ -4,6 +4,7 @@ import type { Map as MapLibreMap, MapMouseEvent } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 
 import { appendStop } from "@/lib/map/route-stops";
+import { isOptimisticPlaceId } from "@/lib/query/places";
 import {
   ROUTE_SNAP_RADIUS_PX,
   snapToPlace,
@@ -71,6 +72,7 @@ export function useDrawRoute({
   onPreview,
   onDraw,
   onRefused,
+  onMissed,
   onCheck,
   onConsider,
   onCancel,
@@ -89,6 +91,24 @@ export function useDrawRoute({
   onDraw: (stops: RouteStop[]) => void;
   /** A click on a location the engine cannot reach. The caller says so. */
   onRefused: (placeId: string) => void;
+  /**
+   * A click that added no stop, and why.
+   *
+   * The three cases below used to be silent on the argument that none of them is
+   * worth interrupting anyone about. What that produced was five clicks becoming
+   * three stops with nothing said, and a tool that reads as unreliable — the
+   * same silence the snap radius was widened to fix, one layer up. So the two
+   * that a person can act on are reported, and the caller decides how loudly.
+   *
+   * `"empty"` is a click on open ground, and fires once per gesture: it is the
+   * common miss and a toast per stray click would be worse than the silence.
+   * `"saving"` is a pin whose create has not come back yet — rare, and gone in a
+   * moment, so it is said every time.
+   *
+   * The two genuinely silent cases stay silent: clicking the pin that is already
+   * the last stop, and the 25-stop cap.
+   */
+  onMissed: (reason: "empty" | "saving") => void;
   /**
    * Settle whether this location can be a stop, waiting if it has to.
    *
@@ -124,6 +144,7 @@ export function useDrawRoute({
     onPreview,
     onDraw,
     onRefused,
+    onMissed,
     onCheck,
     onConsider,
     onCancel,
@@ -136,6 +157,7 @@ export function useDrawRoute({
       onPreview,
       onDraw,
       onRefused,
+      onMissed,
       onCheck,
       onConsider,
       onCancel,
@@ -169,6 +191,15 @@ export function useDrawRoute({
     const asked = new Set<string>();
 
     /**
+     * Whether this gesture has already said that a click landed on nothing.
+     *
+     * Once. Someone who has been told what a stop is does not need telling again
+     * every time the pointer is a few pixels out, and a drawing gesture is
+     * exactly where a stack of toasts would cover the thing being drawn.
+     */
+    let warnedEmpty = false;
+
+    /**
      * The location under the pointer, or null over open ground.
      *
      * At the pin's own radius rather than the line tool's twelve pixels. Here
@@ -199,7 +230,10 @@ export function useDrawRoute({
 
       hovered = placeId;
       if (dwell) clearTimeout(dwell);
-      if (!placeId) return;
+      // Same reason the click path skips it: there is nothing on the server to
+      // ask about yet, and the answer would be about an id that is about to be
+      // thrown away.
+      if (!placeId || isOptimisticPlaceId(placeId)) return;
 
       dwell = setTimeout(() => handlers.current.onConsider(placeId), 250);
     };
@@ -279,8 +313,8 @@ export function useDrawRoute({
       /*
        * A pin the engine cannot reach. Refused here rather than in `appendStop`,
        * which stays a rule about the list of stops and knows nothing about
-       * roads — and refused *loudly*, unlike the three silent cases below it,
-       * because this click landed squarely on something the user aimed at.
+       * roads — and refused by name, because this click landed squarely on
+       * something the user aimed at.
        *
        * The snap still happens first. Ignoring grey pins in `snapToPlace` would
        * turn this into a click on open ground, which is the silence that made
@@ -292,9 +326,37 @@ export function useDrawRoute({
         return;
       }
 
-      // Off a pin, on the pin that is already the last stop, or at the cap: all
-      // three change nothing, and none of them is worth interrupting anyone
-      // about. See `appendStop`.
+      /*
+       * A pin that exists only in the cache, waiting on its create.
+       *
+       * Refused, because bonding to it is unrecoverable: the temporary id is
+       * swapped for the server's the moment the create lands
+       * (`lib/query/places.ts`), and nothing rewrites a stop that already
+       * holds the old one. The route would keep an id no location will ever
+       * have — a stop reading "Deleted location" for a pin sitting right
+       * there on the map, for the life of the route.
+       *
+       * Here rather than in `snapToPlace`, for the reason the refusal above
+       * gives: a pin ignored by the magnet is a click on open ground, and the
+       * message would name nothing.
+       */
+      if (snap?.placeId && isOptimisticPlaceId(snap.placeId)) {
+        handlers.current.onMissed("saving");
+        return;
+      }
+
+      // A click on open ground. Said once per gesture — see `onMissed`.
+      if (!snap?.placeId) {
+        if (!warnedEmpty) {
+          warnedEmpty = true;
+          handlers.current.onMissed("empty");
+        }
+        return;
+      }
+
+      // On the pin that is already the last stop, or at the cap: both change
+      // nothing, and neither is worth interrupting anyone about. See
+      // `appendStop`.
       const next = appendStop(stops, snap);
       if (!next) return;
 
@@ -308,10 +370,16 @@ export function useDrawRoute({
 
       const snap = snapAt(event);
 
-      // Nothing to settle: open ground, or a pin this gesture already waited
-      // for. `onCheck` answers a known pin without a request, so the common
-      // case never reaches the branch below at all.
-      if (!snap?.placeId || asked.has(snap.placeId)) {
+      // Nothing to settle: open ground, a pin this gesture already waited for,
+      // or one that does not exist on the server yet — asking the engine about
+      // a temporary id would spend a request on a location it has never heard
+      // of. `onCheck` answers a known pin without a request, so the common case
+      // never reaches the branch below at all.
+      if (
+        !snap?.placeId ||
+        asked.has(snap.placeId) ||
+        isOptimisticPlaceId(snap.placeId)
+      ) {
         take(snap);
         return;
       }

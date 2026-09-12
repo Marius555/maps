@@ -1,5 +1,5 @@
 import { gazetteerBase } from "@/lib/gazetteer/config";
-import type { AppMap, Place, Shape } from "@/lib/repositories/types";
+import type { AppMap, Group, Place, Shape } from "@/lib/repositories/types";
 import type { CardLayout } from "@/packages/shared/card-layout";
 import type { MapSnapshot } from "@/packages/shared/snapshot";
 import { buildSnapshot } from "./build";
@@ -41,6 +41,15 @@ export function buildPreviewSnapshot(
   shapes: Shape[],
   /** The account's own card design — see buildSnapshot's own parameter. */
   cardLayout?: CardLayout | null,
+  /**
+   * The map's groups, for the colours they decide.
+   *
+   * The preview is the real embed bundle reading a snapshot built in the
+   * browser, so leaving these out is exactly how the preview came to draw a
+   * grouped route in a different colour from the canvas beside it — see
+   * `lib/snapshot/build.ts`.
+   */
+  groups?: readonly Group[],
 ): MapSnapshot {
   const origin = globalThis.location?.origin ?? "";
   const { snapshot } = buildSnapshot(
@@ -50,6 +59,11 @@ export function buildPreviewSnapshot(
     map.updatedAt,
     origin ? gazetteerBase(origin) : undefined,
     cardLayout,
+    // No collector URL, which is the third deliberate difference above: the
+    // preview is the real bundle, and one that reported would file the owner's
+    // own clicks on their own map as a visitor's.
+    undefined,
+    groups,
   );
 
   return { ...snapshot, allowedDomains: [] };

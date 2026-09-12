@@ -40,6 +40,15 @@ import { hexColorSchema } from "./common";
  * option the schema rejects as a 400.
  */
 export const PANEL_SIDES = ["left", "right"] as const;
+/**
+ * How a results row's Directions and phone links are painted.
+ *
+ * `"outline"` first because it is the pill every published row already draws —
+ * `chromeAttrs` writes no attribute for it, so the order here is also the order
+ * "absent, then the three departures from it" is written everywhere else.
+ * Mirrors `SnapshotRowLinkStyle`, which is the type half of the same list.
+ */
+export const ROW_LINK_STYLES = ["outline", "soft", "solid", "plain"] as const;
 export const CONTROL_CORNERS = [
   "top-left",
   "top-right",
@@ -83,6 +92,14 @@ export const embedSettingsSchema = z.object({
   search: z.boolean(),
   nearest: z.boolean(),
   list: z.boolean(),
+  /**
+   * Whether clicking a pin opens its card.
+   *
+   * Spelled as the card being shown, so absent keeps meaning the card every
+   * published map opens (`packages/shared/snapshot.ts`) — the same way round as
+   * `panelScrollbar`, and for the same reason.
+   */
+  card: z.boolean(),
 
   panelSide: z.enum(PANEL_SIDES),
   panelFloat: z.boolean(),
@@ -112,12 +129,25 @@ export const embedSettingsSchema = z.object({
    * every published map draws today (`packages/shared/snapshot.ts`).
    */
   panelDrawer: z.boolean(),
+  /**
+   * Whether the search box, find-nearest and the drawer's trigger wear the
+   * panel's glass while they float over the map.
+   *
+   * Read only when the toolbar is floating — with the list on and the map wide
+   * it is docked inside the panel and already on that surface. Spelled as the
+   * glass being on, so absent keeps meaning the solid control every published
+   * map draws.
+   */
+  toolbarGlass: z.boolean(),
 
   rowPin: z.boolean(),
   rowPinSize: z.number().int().min(16).max(48),
   rowAddress: z.boolean(),
   rowDistance: z.boolean(),
   rowActions: z.boolean(),
+  rowLinkStyle: z.enum(ROW_LINK_STYLES),
+  /** 999 is the pill; the ceiling is the pill, not a corner anyone can pick. */
+  rowLinkRadius: z.number().int().min(0).max(999),
 
   controlsCorner: z.enum(CONTROL_CORNERS),
   compass: z.boolean(),
@@ -177,6 +207,10 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   // nothing for a map already published — its live snapshot keeps the shape it
   // was written with, and only a republish opts it in.
   list: true,
+  // On: a store locator whose pins say nothing is the unusual map, not the
+  // common one. Off is for an owner whose locations are a picture and whose
+  // words live in the panel beside it.
+  card: true,
 
   // A see-through panel over the right of the map is the design. The embed still
   // reads absent as the docked left column it always drew, so this reaches a
@@ -203,12 +237,24 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   // visitor is already looking at. Absent stays the stacked layout, so this
   // reaches a live site only on its owner's next publish.
   panelDrawer: true,
+  // On, so the one arrangement where the controls are *not* already on the
+  // panel still looks designed: a list-less map, and a narrow one whose list is
+  // a drawer, both floated three opaque white boxes over the basemap beside a
+  // panel made of glass. It costs nothing on a wide map with a list, where the
+  // toolbar is docked and this is not read.
+  toolbarGlass: true,
 
   rowPin: true,
   rowPinSize: 28,
   rowAddress: true,
   rowDistance: true,
   rowActions: true,
+  // The pill the panel has always drawn. Both of these start at what a live map
+  // renders, because neither is a design anybody has asked us to change — they
+  // are there so an owner whose own site has square, filled buttons can stop the
+  // map being the one round-cornered thing on the page.
+  rowLinkStyle: "outline",
+  rowLinkRadius: 999,
 
   // Left, so the controls are not underneath a right-hand panel.
   controlsCorner: "top-left",
@@ -260,6 +306,7 @@ export function readEmbedSettings(
     search: readFlag(settings.search, d.search),
     nearest: readFlag(settings.nearest, d.nearest),
     list: readFlag(settings.list, d.list),
+    card: readFlag(settings.card, d.card),
 
     panelSide: readChoice(settings.panelSide, PANEL_SIDES, d.panelSide),
     panelFloat: readFlag(settings.panelFloat, d.panelFloat),
@@ -269,12 +316,19 @@ export function readEmbedSettings(
     panelRadius: readNumber(settings.panelRadius, 0, 24, d.panelRadius),
     panelScrollbar: readFlag(settings.panelScrollbar, d.panelScrollbar),
     panelDrawer: readFlag(settings.panelDrawer, d.panelDrawer),
+    toolbarGlass: readFlag(settings.toolbarGlass, d.toolbarGlass),
 
     rowPin: readFlag(settings.rowPin, d.rowPin),
     rowPinSize: readNumber(settings.rowPinSize, 16, 48, d.rowPinSize),
     rowAddress: readFlag(settings.rowAddress, d.rowAddress),
     rowDistance: readFlag(settings.rowDistance, d.rowDistance),
     rowActions: readFlag(settings.rowActions, d.rowActions),
+    rowLinkStyle: readChoice(
+      settings.rowLinkStyle,
+      ROW_LINK_STYLES,
+      d.rowLinkStyle,
+    ),
+    rowLinkRadius: readNumber(settings.rowLinkRadius, 0, 999, d.rowLinkRadius),
 
     controlsCorner: readChoice(
       settings.controlsCorner,

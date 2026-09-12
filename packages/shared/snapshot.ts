@@ -141,6 +141,22 @@ export type SnapshotPlace = {
    * is still live on a customer's site and must keep parsing.
    */
   icon?: string;
+  /**
+   * This pin's colour, when a group decided it rather than the pin itself.
+   *
+   * **Absent means the pin's own colour**, which is what every snapshot ever
+   * published says and what the embed has always worked out for itself —
+   * `resolvePin`'s colour, then the first defined tag's. So a map with no groups
+   * publishes exactly the bytes it published before this field existed, and
+   * nothing on a live site moves until its owner republishes (§7).
+   *
+   * Written only when there is an override, and the override is a *group's*
+   * colour: the group the location is in, or the group a route it is a stop on
+   * is in. The group's **id** still does not travel — a visitor cannot see a
+   * group or act on one, and `lib/snapshot/build.ts` says so at more length. It
+   * is the colour that is a fact about the pin.
+   */
+  color?: string;
   description?: string;
   phone?: string;
   email?: string;
@@ -278,6 +294,16 @@ export type SnapshotShape = {
 /** Which side of the map the results panel sits on. */
 export type SnapshotPanelSide = "left" | "right";
 
+/**
+ * How a results row's Directions and phone links are painted.
+ *
+ * Absent — the outlined pill — is deliberately not a member, the same way
+ * `CardButtonVariant` leaves its filled default out: it is the state the field
+ * says by not being there, and every snapshot already on a customer's site says
+ * it with silence.
+ */
+export type SnapshotRowLinkStyle = "outline" | "soft" | "solid" | "plain";
+
 /** A corner of the map, for MapLibre's own control stack. */
 export type SnapshotCorner =
   | "top-left"
@@ -343,6 +369,24 @@ export type SnapshotSettings = {
    * growing a panel on someone's website without them republishing is not that.
    */
   list?: boolean;
+  /**
+   * Whether clicking a pin opens its card.
+   *
+   * `false` is a map that is pins and nothing else — which is a real product for
+   * an owner whose locations are a picture rather than a directory, and who has
+   * the results panel beside the map to carry the words. The pin still *says*
+   * which location it is: a click marks that location's row in the panel, so the
+   * information moves rather than disappearing.
+   *
+   * Spelled as the card being shown rather than as `hideCard`, because absent
+   * has to keep meaning what the embed has always done — every published map
+   * opens a card, and a flag whose absence meant "hidden" would empty every one
+   * of them on the next deploy of the bundle (§7).
+   *
+   * A shape's own popup is not this. It is a name and a sentence about an area
+   * the owner drew, not a location card, and it stays.
+   */
+  card?: boolean;
 
   /* The results panel — absent is the docked left column it has always been. */
 
@@ -380,6 +424,25 @@ export type SnapshotSettings = {
    * describe it.
    */
   panelDrawer?: boolean;
+  /**
+   * Give the search box, find-nearest and the drawer's trigger the same glass
+   * the panel is designed in, for as long as they are floating over the map.
+   *
+   * Only ever read on a *floating* toolbar — with the list on and the map wide
+   * the toolbar is docked inside the panel and is already on that surface. What
+   * this answers is the two arrangements where it is not: a map with the results
+   * panel switched off, and a narrow map whose list is a drawer, where three
+   * opaque white boxes sat on the basemap beside a panel made of glass.
+   *
+   * It carries no colours of its own. The controls read `panelOpacity`,
+   * `panelBlur` and `panelRadius` — the owner's own answers — so there is one
+   * design here rather than two that agree today.
+   *
+   * Absent means the solid controls every published map draws, which is why this
+   * is spelled as the glass being on: the bundle is shared, and a flag whose
+   * absence meant glass would frost every live map on the next deploy (§7).
+   */
+  toolbarGlass?: boolean;
 
   /* One results row — absent is the row as it was before any of this. */
 
@@ -392,6 +455,22 @@ export type SnapshotSettings = {
   rowDistance?: boolean;
   /** The Directions and phone links under a row. `false` hides them. */
   rowActions?: boolean;
+  /**
+   * How those two links are painted. Absent means the outlined pill, which is
+   * what every published row draws — see `SnapshotRowLinkStyle`.
+   *
+   * Only read when `rowActions` leaves them on the row at all.
+   */
+  rowLinkStyle?: SnapshotRowLinkStyle;
+  /**
+   * Their corner radius, in pixels. Absent means 999 — the pill above — and a
+   * `0` here is the square-cornered chip an owner asks for by picking it.
+   *
+   * A number rather than a member of the style union, because the two questions
+   * are genuinely separate: a solid chip and an outlined one both have a corner,
+   * and folding them together would be eight names for four answers.
+   */
+  rowLinkRadius?: number;
 
   /* MapLibre's own controls. */
 

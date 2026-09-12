@@ -91,7 +91,23 @@ export function nextShapeDefaults(
      * the same colour, and that is the point of the rule rather than a cost of
      * it: they are both that depot's.
      */
-    color: preferredColor ?? PALETTE_COLORS[shapes.length % PALETTE_COLORS.length],
+    color: preferredColor ?? paletteColorFor(shapes),
     sortOrder: highestSortOrder + 1,
   };
+}
+
+/**
+ * The palette colour the next shape drawn on this map would take.
+ *
+ * Exported because the draft on the canvas has to be able to ask the same
+ * question the create does. A shape used to be drawn in a hard-coded blue and
+ * then land in whatever colour this decided, so every circle, polygon and route
+ * changed colour the moment it saved — most visibly a route, which is blue for
+ * the whole length of a multi-click gesture. One expression, two readers.
+ */
+export function paletteColorFor(
+  /** Only the count is read — the same slice `nextShapeDefaults` takes. */
+  shapes: readonly Pick<Shape, "name" | "sortOrder">[],
+): string {
+  return PALETTE_COLORS[shapes.length % PALETTE_COLORS.length];
 }

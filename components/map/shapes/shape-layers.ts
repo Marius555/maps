@@ -8,6 +8,12 @@ import {
   DEFAULT_SHAPE_OPACITY,
 } from "@/lib/validation/shape.schema";
 import {
+  DOT_IMAGE_ID,
+  DOT_IMAGE_SIZE,
+  DOT_SPACING_PX,
+  dotImage,
+} from "@/packages/shared/dot-line";
+import {
   MIN_POLYGON_POINTS,
   shapePoints,
   shapePolygon,
@@ -47,13 +53,21 @@ export const SHAPE_LINE_LAYER = "editor-shape-outlines";
  * the identical shape the embed draws beside it in the preview panel. Splitting
  * them leaves a solid outline on exactly the pixels it has always been on.
  *
- * Splitting them is also what lets each have its own cap, and the caps are not
- * interchangeable. A round cap adds half a width at each end of every dash,
- * which closes a [2, 2] gap — and a round cap on a zero-length dash is exactly
- * what turns [0, 2] into a row of dots.
+ * Splitting them is also what lets each have its own cap. The dashed one keeps
+ * a butt cap, because a round cap adds half a width at each end of every dash
+ * and closes a [2, 2] gap. Its dash lengths are multiples of the line width, so
+ * the pattern scales with a shape's own thickness without either number being
+ * touched.
  *
- * Dash lengths are multiples of the line width, so both patterns scale with a
- * shape's own thickness without either number being touched.
+ * **The dotted one is a `symbol` layer and not a line at all**, and that is the
+ * one place these two stopped being the same thing with different numbers. A
+ * zero-length dash under a round cap is the documented way to dot a line and it
+ * draws a *circle only at integer zooms*: the dash pattern is an SDF texture
+ * whose horizontal scale is anchored to tile units and corrected in 2× steps,
+ * so between two zoom levels the dot is stretched along the line by up to ~1.41×
+ * while its height stays pinned to the stroke width. Measured at 6px: round at
+ * z15, a visible egg at z15.5. An icon placed along the line has no such scale.
+ * See packages/shared/dot-line.ts, which both renderers read.
  */
 export const SHAPE_DASHED_LINE_LAYER = "editor-shape-dashed-outlines";
 export const SHAPE_DOTTED_LINE_LAYER = "editor-shape-dotted-outlines";
@@ -178,10 +192,21 @@ export function shapeFeature(
  */
 export function draftFeatures(
   geometry: ShapeGeometry,
+  /**
+   * The colour this shape will actually be saved in.
+   *
+   * It used to be `DEFAULT_SHAPE_COLOR` unconditionally, which made every draft
+   * blue and every saved shape something else — `nextShapeDefaults` gives a line
+   * or a route the colour of the first pin it was drawn through and everything
+   * else the next palette colour. The gap was visible for the whole length of a
+   * gesture and worst on a route, which is many clicks long. Defaulted rather
+   * than required so a caller with no map to ask still draws something.
+   */
+  color: string = DEFAULT_SHAPE_COLOR,
 ): GeoJSON.Feature<GeoJSON.Geometry, ShapeProperties>[] {
   const properties: ShapeProperties = {
     id: "",
-    color: DEFAULT_SHAPE_COLOR,
+    color,
     opacity: DEFAULT_SHAPE_OPACITY,
     selected: true,
     isLine: geometry.kind === "line",
@@ -273,9 +298,8 @@ const OUTLINE_LAYERS: {
   // Butt, because a round cap adds half a width at each end of every dash and at
   // this spacing that closes the gaps and draws a solid line with dents in it.
   { id: SHAPE_DASHED_LINE_LAYER, stroke: "dashed", cap: "butt", dash: [2, 2] },
-  // Round, and a zero-length dash: a cap on nothing is a circle, which is the
-  // only way MapLibre draws a dotted line.
-  { id: SHAPE_DOTTED_LINE_LAYER, stroke: "dotted", cap: "round", dash: [0, 2] },
+  // Dotted is not here: it is a symbol layer, added below. See the note on
+  // SHAPE_DOTTED_LINE_LAYER.
 ];
 
 /** Idempotent: safe to call again after a style swap has dropped everything. */
@@ -406,6 +430,58 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
     );
   }
 
+  /*
+   * Dots, as icons along the line rather than as a dash pattern.
+   *
+   * `icon-color` needs an SDF image, which is what `dotImage` returns — one
+   * image for every colour on the map, rather than one per colour added and
+   * evicted as the owner recolours things.
+   *
+   * `icon-allow-overlap` and `icon-ignore-placement` both on, because this is
+   * not a label: MapLibre's collision detection would drop dots wherever a
+   * route passes near a place name, and a dotted line with gaps in it reads as
+   * a line that stops.
+   */
+  if (!map.hasImage(DOT_IMAGE_ID)) {
+    map.addImage(DOT_IMAGE_ID, dotImage(), { sdf: true });
+  }
+
+  if (!map.getLayer(SHAPE_DOTTED_LINE_LAYER)) {
+    map.addLayer(
+      {
+        id: SHAPE_DOTTED_LINE_LAYER,
+        type: "symbol",
+        source: SHAPE_SOURCE,
+        filter: [
+          "all",
+          ["!", ["get", "draft"]],
+          ["==", ["get", "stroke"], "dotted"],
+        ],
+        layout: {
+          "symbol-placement": "line",
+          "symbol-spacing": DOT_SPACING_PX,
+          "icon-image": DOT_IMAGE_ID,
+          // The selected multiplier is the one the outline layers apply, so a
+          // selected dotted shape thickens by the same proportion as every
+          // other kind.
+          "icon-size": [
+            "/",
+            [
+              "case",
+              ["get", "selected"],
+              ["*", ["get", "width"], SELECTED_WIDTH_SCALE],
+              ["get", "width"],
+            ],
+            DOT_IMAGE_SIZE,
+          ],
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+        paint: { "icon-color": ["get", "color"] },
+      },
+      beforeId,
+    );
+  }
   if (!map.getLayer(SHAPE_VERTEX_LAYER)) {
     map.addLayer(
       {

@@ -101,3 +101,26 @@ describe("dropAction — a group in the hand", () => {
     expect(dropAction(group("g1"), on(shape("s1"), "g1"), "")).toBeNull();
   });
 });
+
+/*
+ * A route's stop is not a member of anything, so none of the cases above can
+ * mean anything for one — its membership is the route's own `stops` array, and
+ * reordering that is a different gesture handled by the drop bands on each stop
+ * row (components/map/routes/route-stop-list-item.tsx).
+ */
+describe("dropAction — a route's stop in the hand", () => {
+  const stop = (id: string): DraggedObject => ({ type: "route-stop", id });
+
+  it("does nothing on any row of the panel", () => {
+    expect(dropAction(stop("r1:0"), on(place("p1")), "")).toBeNull();
+    expect(dropAction(stop("r1:0"), on(place("p1"), "g1"), "")).toBeNull();
+    expect(dropAction(stop("r1:0"), on(shape("s1"), "g1"), "")).toBeNull();
+    expect(dropAction(stop("r1:0"), onHeader("g1"), "")).toBeNull();
+  });
+
+  // Without the guard this fell through to `create`, making a group out of a
+  // location and a row index.
+  it("does not make a group out of a loose row and a stop", () => {
+    expect(dropAction(stop("r1:2"), on(shape("s1")), "")).toBeNull();
+  });
+});

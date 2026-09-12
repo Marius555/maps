@@ -1,46 +1,50 @@
 "use client";
 
-import { LocateFixed, PanelLeft, PanelRight, Search } from "lucide-react";
+import { PanelLeft, PanelRight } from "lucide-react";
 
-import { PropertyChoice, PropertyScale } from "@/components/ui/properties/property-fields";
+import { PropertyChoice } from "@/components/ui/properties/property-fields";
 import { PropertyNumberSelect } from "@/components/ui/properties/property-select";
 import {
   PropertySwitch,
   PropertySwitches,
 } from "@/components/ui/properties/property-switch";
-import { PropertyToggles } from "@/components/ui/properties/property-toggles";
 import type { EmbedDesign } from "./use-embed-design";
 
 /**
- * The results panel: whether there is one, where it sits, and what it looks
- * like.
+ * The results panel: whether there is one, where it sits and how wide.
  *
  * Every control that describes the panel's *shape* is hidden when the panel is
  * off, because they all describe a thing that is not on the map — and a column
  * of live-looking controls that change nothing is worse than a shorter panel.
- * The transparency run goes one step further and hides unless the panel is
- * *floating*: opacity on a docked column reveals the page's own background, not
- * the map, which is not what anyone is asking for when they reach for it.
  *
- * **Search and Nearest are the exception, and they used to be inside that
- * branch.** They are not panel controls: with the list off the embed still draws
- * both, floating over the map, so hiding their toggles left an owner looking at
- * a search box on their map with no way in this panel to switch it off — and no
- * way to switch it *on* for a bare map either. They sit outside the fold's
- * conditional now, and the label no longer says "Above the results", which is
- * only where they are when there are results.
+ * **This fold held eleven controls and now holds six, and the two that left did
+ * not go because the fold was long — they went because they were never panel
+ * controls.** Search and Nearest are drawn on a map with the list switched off,
+ * floating over the basemap; hiding their toggles inside this fold's `list`
+ * branch left an owner looking at a search box with no way in this panel to
+ * switch it off, and no way to switch it *on* for a bare map either. They are in
+ * "Map controls" now, with the glass switch that is about those same controls
+ * floating, and that fold was already the one shaped like this: a choice, a row
+ * of tiles, and one run of switches at the end.
  *
- * **The two switches at the foot are the panel's own yes/no questions**, and the
- * second of them is the only control here that describes a width this preview
- * may not be showing: a drawer replaces the stacked list below 768px of the
- * embed's own box, which is what the tablet and phone tiles in the header exist
- * to check.
+ * **The surface — transparency, blur, corners — is its own fold.** It is read
+ * only on a *floating* panel (opacity on a docked column reveals the page's own
+ * background, not the map, which is not what anyone reaches for it wanting), so
+ * three of the nine controls here were invisible half the time and pushed the
+ * two switches at the foot off the bottom of a 20rem column the other half. A
+ * fold that disappears says that better than a gap does — see
+ * `panel-surface-group.tsx` and `PropertyFold`'s `isEmpty`.
  *
- * **Width and Transparency are selects; everything else is tiles.** Five words
- * across a 20rem column is about 60px each and none of them are readable, which
- * is the complaint that broke this panel open. The split is per control rather
- * than a blanket rule: a corner tile draws its own radius and says itself at any
- * width, so it stays a tile.
+ * **What is left is one master switch, three selectors, one run of switches.**
+ * No boolean sits between two fields, which is the rule
+ * `components/ui/properties/property-fields.tsx` states and the rule this fold
+ * was breaking in three places at once.
+ *
+ * **Width is a select; everything else is tiles.** Five words across a 20rem
+ * column is about 60px each and none of them are readable, which is the
+ * complaint that broke this panel open. The split is per control rather than a
+ * blanket rule: a corner tile draws its own radius and says itself at any width,
+ * so it stays a tile.
  */
 export function PanelGroup({ settings, set }: EmbedDesign) {
   return (
@@ -52,18 +56,6 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
           onChange={(value) => set("list", value)}
         />
       </PropertySwitches>
-
-      {/* Outside the branch below: these two exist whether or not the list
-          does. */}
-      <PropertyToggles
-        label="Search and nearest"
-        options={TOOLS}
-        selected={[
-          ...(settings.search ? (["search"] as const) : []),
-          ...(settings.nearest ? (["nearest"] as const) : []),
-        ]}
-        onChange={(value, isSelected) => set(value, isSelected)}
-      />
 
       {settings.list ? (
         <>
@@ -88,51 +80,28 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
             onChange={(value) => set("panelWidth", value)}
           />
 
-          {/* Only a floating panel has the map behind it to show through. */}
-          {settings.panelFloat ? (
-            <>
-              <PropertyNumberSelect
-                label="Transparency"
-                value={settings.panelOpacity}
-                options={OPACITIES}
-                onChange={(value) => set("panelOpacity", value)}
-              />
-              <PropertyScale
-                label="Blur behind"
-                value={settings.panelBlur}
-                options={BLURS}
-                onChange={(value) => set("panelBlur", value)}
-              />
-              <PropertyScale
-                label="Corners"
-                value={settings.panelRadius}
-                options={RADII}
-                onChange={(value) => set("panelRadius", value)}
-              />
-            </>
-          ) : null}
+          {/* Last, because a run of yes/no questions goes at the end of its fold
+              — a boolean interrupting a run of shape controls is the thing that
+              rule exists to stop. Both apply to the preview under the pointer
+              rather than waiting for a Save.
 
-          {/* Last, because a lone yes/no goes at the end of its fold — a boolean
-              interrupting a run of shape controls is the thing that rule exists
-              to stop. It is a switch on this panel's own terms: it applies to
-              the preview under the pointer rather than waiting for a Save.
+              The scrollbar is on by default, and deliberately so: the bar is the
+              only thing telling a visitor the list continues below the fold. Off
+              is the answer for a short list, or for an owner who has designed the
+              panel down to its corners and does not want the browser's chrome in
+              the middle of it.
 
-              On by default, and deliberately so: the bar is the only thing
-              telling a visitor the list continues below the fold. Off is the
-              answer for a short list, or for an owner who has designed the
-              panel down to its corners and does not want the browser's chrome
-              in the middle of it. */}
+              "Narrow", not "mobile": the embed sizes off its own box, so a 360px
+              map in a sidebar on a 1440px monitor gets the drawer and a phone
+              held sideways may not. Both are inside the `list` branch because a
+              drawer is where the list goes, and there is no list to put anywhere
+              with the panel switched off. */}
           <PropertySwitches>
             <PropertySwitch
               label="Show the list's scrollbar"
               isSelected={settings.panelScrollbar}
               onChange={(value) => set("panelScrollbar", value)}
             />
-            {/* "Narrow", not "mobile": the embed sizes off its own box, so a
-                360px map in a sidebar on a 1440px monitor gets this and a phone
-                held sideways may not. Inside the `list` branch because a drawer
-                is where the list goes, and there is no list to put anywhere with
-                the panel switched off. */}
             <PropertySwitch
               label="Use a drawer on narrow screens"
               isSelected={settings.panelDrawer}
@@ -183,12 +152,6 @@ const PLACEMENTS = [
   },
 ] as const;
 
-/** The two controls that can sit above the results, as one line of tiles. */
-const TOOLS = [
-  { value: "search", label: "Search box", icon: Search },
-  { value: "nearest", label: "Nearest to me", icon: LocateFixed },
-] as const;
-
 /*
  * Percentages of the embed's own width rather than pixels, and the reason is the
  * same one the stylesheet gives: a fixed panel is a different proportion of every
@@ -202,44 +165,3 @@ const WIDTHS = [
   { value: 42, label: "Wide" },
   { value: 50, label: "Half" },
 ] as const;
-
-/* Stored as opacity but labelled as transparency, which is the way round
-   somebody looking at a see-through panel describes it. */
-const OPACITIES = [
-  { value: 100, label: "Solid" },
-  { value: 94, label: "Faint" },
-  { value: 88, label: "Light" },
-  { value: 76, label: "Clear" },
-  { value: 60, label: "Glass" },
-] as const;
-
-/*
- * Three, not five. Blur is a background effect nobody is choosing 16px of, and
- * the two dropped stops sat either side of ones that were already there —
- * `nearestStop` lights the nearer tile for a map that stored one of them, and
- * writes nothing.
- */
-const BLURS = [
-  { value: 0, label: "None" },
-  { value: 10, label: "Soft" },
-  { value: 20, label: "Strong" },
-] as const;
-
-/**
- * Five corners, as tiles that draw their own corner.
- *
- * The same answer `RADIUS_STOPS` gives in the card designer, and the reason it
- * survives the cull to three elsewhere: a radius is hard to say with a word and
- * trivial to say with the thing itself, so the tile costs no label width at all.
- */
-const RADII = [0, 6, 12, 18, 24].map((value, index, all) => ({
-  value,
-  label: ["Square", "Slight", "Regular", "Round", "Pill"][index] as string,
-  icon: (
-    <span
-      aria-hidden="true"
-      className="size-3.5 border-2 border-current"
-      style={{ borderRadius: `${String((index / (all.length - 1)) * 7)}px` }}
-    />
-  ),
-}));

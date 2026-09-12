@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { AUTO_STYLE, BASEMAP_SOURCES, CONCRETE_MAP_STYLES } from "@/lib/map/style";
-import type { AppMap, Place, Shape } from "@/lib/repositories/types";
+import type { AppMap, Group, Place, Shape } from "@/lib/repositories/types";
 import { DEFAULT_EMBED_SETTINGS } from "@/lib/validation/embed-settings.schema";
 import { defaultCardLayout, type CardLayout } from "@/packages/shared/card-layout";
 import { emptyHours } from "@/packages/shared/hours";
@@ -1457,5 +1457,140 @@ describe("buildSnapshot analytics", () => {
     );
 
     expect(snapshot.settings.analytics).toBe(true);
+  });
+});
+
+/*
+ * The group's *colour* travels and the group's *id* does not.
+ *
+ * This is the divergence these tests exist to keep closed: the editor's canvas
+ * and the PNG export both paint a grouped route in its group's colour, and for a
+ * while the preview drawn beside the canvas — and the customer's live site —
+ * painted it its own. `lib/map/group-colors.ts` is the shared answer; this is the
+ * publish end of it.
+ */
+describe("buildSnapshot group colours", () => {
+  function makeGroup(overrides: Partial<Group> = {}): Group {
+    return {
+      id: "group-1",
+      mapId: "map-1",
+      name: "Northern run",
+      color: "#2f9e44",
+      sortOrder: 0,
+      createdAt: GENERATED_AT,
+      updatedAt: GENERATED_AT,
+      ...overrides,
+    };
+  }
+
+  function makeRoute(overrides: Partial<Shape> = {}): Shape {
+    return makeShape({
+      id: "route-1",
+      name: "Northern run",
+      geometry: {
+        kind: "line",
+        points: [
+          [25.28, 54.687],
+          [25.29, 54.688],
+        ],
+        route: {
+          profile: "car",
+          stops: [
+            { at: [25.28, 54.687], placeId: "place-1" },
+            { at: [25.29, 54.688], placeId: "place-2" },
+          ],
+          durationS: 600,
+        },
+      },
+      ...overrides,
+    });
+  }
+
+  function build(places: Place[], shapes: Shape[], groups: Group[]) {
+    return buildSnapshot(
+      makeMap(),
+      places,
+      shapes,
+      GENERATED_AT,
+      undefined,
+      null,
+      undefined,
+      groups,
+    ).snapshot;
+  }
+
+  it("publishes a grouped shape in its group's colour", () => {
+    const snapshot = build([makePlace()], [makeShape({ groupId: "group-1" })], [makeGroup()]);
+
+    expect(snapshot.shapes?.[0]?.color).toBe("#2f9e44");
+  });
+
+  it("publishes a loose shape in its own colour", () => {
+    const snapshot = build([makePlace()], [makeShape()], [makeGroup()]);
+
+    expect(snapshot.shapes?.[0]?.color).toBe("#1c7ed6");
+  });
+
+  it("publishes a grouped location's colour", () => {
+    const snapshot = build([makePlace({ groupId: "group-1" })], [], [makeGroup()]);
+
+    expect(snapshot.places[0]?.color).toBe("#2f9e44");
+  });
+
+  /*
+   * The sub-group rule. A route is the parent of the locations it connects, so
+   * putting the route in a group paints its stops — none of which is a member of
+   * anything.
+   */
+  it("lends a grouped route's colour to the pins it stops at", () => {
+    const snapshot = build(
+      [makePlace({ id: "place-1" }), makePlace({ id: "place-2" }), makePlace({ id: "place-3" })],
+      [makeRoute({ groupId: "group-1" })],
+      [makeGroup()],
+    );
+
+    const byId = new Map(snapshot.places.map((place) => [place.id, place.color]));
+
+    expect(byId.get("place-1")).toBe("#2f9e44");
+    expect(byId.get("place-2")).toBe("#2f9e44");
+    expect(byId.get("place-3")).toBeUndefined();
+  });
+
+  /*
+   * The load-bearing half. Absent means the pin works its own colour out, which
+   * is what every snapshot already on a customer's site says — so a map with no
+   * groups has to publish byte-identical JSON to the file it published before
+   * this field existed (§7).
+   */
+  it("says nothing about the colour of a location no group decided", () => {
+    const snapshot = build([makePlace()], [], []);
+
+    expect(snapshot.places[0]).not.toHaveProperty("color");
+  });
+
+  it("omits it for every place when no groups are passed at all", () => {
+    const { snapshot } = buildSnapshot(makeMap(), [makePlace()], [], GENERATED_AT);
+
+    expect(snapshot.places[0]).not.toHaveProperty("color");
+  });
+
+  // Deleting a group deletes one row and leaves its members naming it. Every
+  // other reader treats that as ungrouped; publish is not the exception.
+  it("ignores a groupId naming a group that no longer exists", () => {
+    const snapshot = build([makePlace({ groupId: "gone" })], [makeShape({ groupId: "gone" })], []);
+
+    expect(snapshot.places[0]).not.toHaveProperty("color");
+    expect(snapshot.shapes?.[0]?.color).toBe("#1c7ed6");
+  });
+
+  it("still keeps the group's id off both", () => {
+    const snapshot = build(
+      [makePlace({ groupId: "group-1" })],
+      [makeShape({ groupId: "group-1" })],
+      [makeGroup()],
+    );
+
+    expect(snapshot.places[0]).not.toHaveProperty("groupId");
+    expect(snapshot.shapes?.[0]).not.toHaveProperty("groupId");
   });
 });

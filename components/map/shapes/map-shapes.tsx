@@ -58,6 +58,8 @@ export type MapShapesProps = {
    * about groups.
    */
   colorFor?: (shape: Shape) => string;
+  /** The colour the shape being drawn will save in — see useShapeLayers. */
+  draftColorFor?: (geometry: ShapeGeometry) => string;
   onSelectShape: (shapeId: string | null) => void;
   onEditShape?: (shapeId: string) => void;
   onCreateShape: (geometry: ShapeGeometry) => void;
@@ -119,6 +121,7 @@ export function MapShapes({
   selectedShapeIds,
   drawMode,
   colorFor,
+  draftColorFor,
   onSelectShape,
   onEditShape,
   onCreateShape,
@@ -173,6 +176,7 @@ export function MapShapes({
     drawMode,
     isRouting,
     colorFor,
+    draftColorFor,
     onSelect: onSelectShape,
   });
 
@@ -292,6 +296,35 @@ export function MapShapes({
   );
 
   /**
+   * A click that added no stop.
+   *
+   * The gesture used to say nothing at all here, and what that produced was
+   * people counting five clicks and getting three stops — a tool that looks
+   * unreliable rather than one that was aimed at slightly. `useDrawRoute` does
+   * the rationing (once a gesture for a miss on open ground); this only writes
+   * the sentence.
+   *
+   * Both say what happened and what to do about it, and neither uses the word
+   * "invalid" — §8.
+   */
+  const missedStop = useCallback((reason: "empty" | "saving") => {
+    if (reason === "saving") {
+      toast.warning("That location is still saving", {
+        description:
+          "It needs a moment to finish before it can be a stop. Click it again shortly.",
+        timeout: 5000,
+      });
+      return;
+    }
+
+    toast.warning("Click a location to add a stop", {
+      description:
+        "A route runs between the locations on your map, so a click on open ground adds nothing. Press Enter when you have the stops you want.",
+      timeout: 5000,
+    });
+  }, []);
+
+  /**
    * Every pin, asked about in the background as soon as the tool is armed.
    *
    * This used to be `places.filter((place) => !place.address)`, on the argument
@@ -370,6 +403,7 @@ export function MapShapes({
     onPreview: draw,
     onDraw: drawRoute,
     onRefused: refuseStop,
+    onMissed: missedStop,
     onCheck: checkStop,
     onConsider: considerStop,
     onCancel: onStopDrawing,

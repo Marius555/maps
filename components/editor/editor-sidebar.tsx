@@ -14,6 +14,7 @@ import type {
   Place,
   Shape,
 } from "@/lib/repositories/types";
+import type { RouteStop } from "@/packages/shared/shapes";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { LocationsList } from "./locations-panel/locations-list";
 import { UngroupDropZone } from "./locations-panel/ungroup-drop-zone";
@@ -73,6 +74,7 @@ export function EditorSidebar({
   onGroupObjects,
   onAddToGroup,
   onMergeGroups,
+  onRouteThrough,
 }: {
   mapId: string;
   places: Place[];
@@ -110,6 +112,8 @@ export function EditorSidebar({
   onAddToGroup: (groupId: string, dragged: DraggedObject) => void;
   /** A group was dropped on another: everything in the source moves to the target. */
   onMergeGroups: (targetGroupId: string, sourceGroupId: string) => void;
+  /** Reorder a route's stops and ask the engine again — see LocationsList. */
+  onRouteThrough: (shapeId: string, stops: readonly RouteStop[]) => void;
 }) {
   const animateMoves =
     places.length + shapes.length + groups.length <= ANIMATE_MOVES_UP_TO;
@@ -194,6 +198,7 @@ export function EditorSidebar({
             onGroupObjects={onGroupObjects}
             onAddToGroup={onAddToGroup}
             onMergeGroups={onMergeGroups}
+            onRouteThrough={onRouteThrough}
           />
         </ScrollShadow>
 

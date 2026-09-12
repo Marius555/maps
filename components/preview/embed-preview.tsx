@@ -12,7 +12,7 @@ import {
   repaintFrame,
 } from "@/lib/preview/live-chrome";
 import { buildPreviewSnapshot } from "@/lib/snapshot/preview";
-import type { AppMap, Place, Shape } from "@/lib/repositories/types";
+import type { AppMap, Group, Place, Shape } from "@/lib/repositories/types";
 import { effectiveCardLayout } from "@/lib/card/designer-status";
 import { CHROME_SETTING_KEYS } from "@/packages/shared/embed-chrome";
 import type { MapSnapshot } from "@/packages/shared/snapshot";
@@ -67,6 +67,9 @@ const RELEASE_AFTER_MS = FADE_MS + 80;
  */
 const NO_CARD_DESIGN: Record<string, unknown> = {};
 
+/** Hoisted so an omitted `groups` is one identity and never a fresh array. */
+const NO_GROUPS: readonly Group[] = [];
+
 /**
  * The published map, as a visitor would get it, without publishing.
  *
@@ -91,6 +94,7 @@ export function EmbedPreview({
   map,
   places,
   shapes,
+  groups = NO_GROUPS,
   className,
   frame = true,
   maxWidth,
@@ -100,6 +104,16 @@ export function EmbedPreview({
   map: AppMap;
   places: Place[];
   shapes: Shape[];
+  /**
+   * The map’s groups, for the colours they decide.
+   *
+   * A prop rather than a `useGroups` call in here, on the same terms as `places`
+   * and `shapes`: this preview draws whatever the page around it is looking at,
+   * and a second source for the same rows is how a preview comes to disagree
+   * with the canvas next to it. Defaulted, so a caller with no groups to hand
+   * builds the snapshot it always built.
+   */
+  groups?: readonly Group[];
   className?: string;
   /**
    * The account's card design, when the page around this already loaded it.
@@ -248,8 +262,9 @@ export function EmbedPreview({
         places,
         shapes,
         effectiveCardLayout(design),
+        groups,
       ),
-    [map, settings, places, shapes, design],
+    [map, settings, places, shapes, design, groups],
   );
 
   /*

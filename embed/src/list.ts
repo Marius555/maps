@@ -148,10 +148,39 @@ export function createList(
 
     row.classList.add("lm-list__item--on");
     row.setAttribute("aria-current", "true");
-    // `nearest` so a row already in view doesn't move, and so a list scrolled
-    // into the middle of a customer's page doesn't drag the page with it.
-    row.scrollIntoView({ block: "nearest" });
+    reveal(row);
   };
+
+  /**
+   * Bring a row into view **by scrolling this list and nothing else**.
+   *
+   * `scrollIntoView({ block: "nearest" })` is what this was, and it is the bug
+   * behind "pressing Nearest to me drags the sidebar out and I can't get rid of
+   * it". On a narrow map the results panel is a drawer parked off the edge at
+   * `translateX(100%)`, and `.lm-root` is `overflow: hidden` — which is still
+   * scrollable programmatically. Asked to reveal a row inside that panel, the
+   * browser does the only thing it can: it scrolls the nearest scrollable
+   * ancestor, which is the root, and the basemap goes with it. The panel appears
+   * to slide in, but nothing *opened* it — no veil, no `data-lm-drawer-open`, so
+   * there is nothing to press to make it go away.
+   *
+   * Every route into a card lands here (`onSelect` → `select`), so the same
+   * thing happened on a plain pin click. `inert` in `installDrawer` answers the
+   * *focus* half of this trap and cannot answer this half: an explicit
+   * `scrollIntoView` is not focus, and an inert subtree still scrolls.
+   *
+   * Two rect reads and one `scrollTop` write reproduce `block: "nearest"`
+   * exactly — a row already in view does not move — with no way to reach an
+   * ancestor. `root` is the scroller: `.lm-list` is the element carrying
+   * `overflow-y: auto`.
+   */
+  function reveal(row: HTMLElement): void {
+    const seen = root.getBoundingClientRect();
+    const at = row.getBoundingClientRect();
+
+    if (at.top < seen.top) root.scrollTop += at.top - seen.top;
+    else if (at.bottom > seen.bottom) root.scrollTop += at.bottom - seen.bottom;
+  }
 
   /**
    * This location's pin, as pixels.

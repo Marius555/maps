@@ -41,6 +41,12 @@ import type {
   SnapshotShape,
   SnapshotTagGroup,
 } from "@/packages/shared/snapshot";
+import {
+  DOT_IMAGE_ID,
+  DOT_IMAGE_SIZE,
+  DOT_SPACING_PX,
+  dotImage,
+} from "@/packages/shared/dot-line";
 import { pinColorOfTags, tagChipsOf } from "@/packages/shared/tags";
 
 import { buildPopup, buildShapePopup } from "./popup";
@@ -94,12 +100,11 @@ const SHAPE_DOTTED_LINE_LAYER = "shape-dotted-outlines";
  * A layer each rather than a data-driven `line-dasharray`, for the reason
  * components/map/shapes/shape-layers.ts spells out: a `case` puts every feature
  * in the layer through the SDF shader, solid ones included, and the editor draws
- * the same shape beside this bundle in its preview panel. The caps are not
- * interchangeable either — round closes a [2, 2] gap, and round on a zero-length
- * dash is the only way MapLibre draws a dot.
+ * the same shape beside this bundle in its preview panel.
  *
- * Dashes are multiples of the line width, so both patterns scale with a shape's
- * own thickness.
+ * Dashes are multiples of the line width, so the pattern scales with a shape's
+ * own thickness. Dotted is not in this table — it is a symbol layer, added
+ * below, because a dash pattern cannot draw a round dot at a fractional zoom.
  */
 const OUTLINE_LAYERS: {
   id: string;
@@ -109,7 +114,6 @@ const OUTLINE_LAYERS: {
 }[] = [
   { id: SHAPE_LINE_LAYER, stroke: "solid", cap: "round", dash: null },
   { id: SHAPE_DASHED_LINE_LAYER, stroke: "dashed", cap: "butt", dash: [2, 2] },
-  { id: SHAPE_DOTTED_LINE_LAYER, stroke: "dotted", cap: "round", dash: [0, 2] },
 ];
 
 /** Past this zoom, show individual pins rather than bubbles. */
@@ -445,6 +449,17 @@ export function createMap(
    * colour the pin the visitor just clicked is wearing.
    */
   const cardTagGroups = snapshot.tagGroups ?? [];
+  /*
+   * Whether a pin opens a card at all.
+   *
+   * `!== false`, not truthiness: absent is the card every published map draws,
+   * and only an owner who switched it off and republished says otherwise (§7).
+   *
+   * The pin still answers "which location is this?" with the card off — it marks
+   * the row in the results panel, which is where the owner has chosen to keep
+   * the words. A shape's popup is not governed by this; see the setting.
+   */
+  const showCard = snapshot.settings.card !== false;
   const popup = new Popup({
     closeButton: true,
     /*
@@ -600,6 +615,16 @@ export function createMap(
 
   const showPopup = (place: SnapshotPlace) => {
     setOpen(place.id);
+
+    /*
+     * Cards off: the selection above is the whole of what a pin click does, and
+     * that is the feature rather than a degraded version of it. `setOpen` marks
+     * the location's row in the results panel and reports the open, so a map
+     * that is pins and a list still says which pin was pressed — and a map that
+     * is pins alone does exactly what its owner asked for and nothing else.
+     */
+    if (!showCard) return;
+
     // Set per place, not at construction: one Popup instance serves both pin
     // shapes, and the card has to clear whichever one it is opening over.
     popup
@@ -667,6 +692,16 @@ export function createMap(
        * the way there.
        */
       showPopup(place);
+      /*
+       * Unchanged with the card switched off, and that is `flyToCard`'s own
+       * `!card` branch doing its job rather than an omission. MapLibre's
+       * `remove()` does `delete this._container`, so `getElement()` is undefined
+       * on a popup that has never been added — which is every popup on a map
+       * whose owner turned the card off — and the function falls through to the
+       * plain `flyTo` it already keeps for that case. The one exception is
+       * right too: with a *shape's* card open, that card is genuinely on screen
+       * and genuinely worth flying clear of.
+       */
       flyToCard(map, popup, [place.lng, place.lat]);
     },
 
@@ -1326,6 +1361,37 @@ function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
       },
     });
   }
+
+  /*
+   * Dots, as icons along the line rather than as a dash pattern.
+   *
+   * A zero-length dash under a round cap draws a circle only at integer zooms —
+   * the dash pattern is an SDF texture whose scale is anchored to tile units, so
+   * between two levels the dot stretches along the line while its height stays
+   * pinned to the stroke width. A symbol has no such scale. The editor's table
+   * says the same thing at more length; packages/shared/dot-line.ts is the image
+   * both of them draw.
+   */
+  map.addImage(DOT_IMAGE_ID, dotImage(), { sdf: true });
+
+  map.addLayer({
+    id: SHAPE_DOTTED_LINE_LAYER,
+    type: "symbol",
+    source: SHAPE_SOURCE_ID,
+    filter: ["==", ["get", "stroke"], "dotted"],
+    layout: {
+      "symbol-placement": "line",
+      "symbol-spacing": DOT_SPACING_PX,
+      "icon-image": DOT_IMAGE_ID,
+      "icon-size": ["/", ["get", "width"], DOT_IMAGE_SIZE],
+      // Not a label: collision detection would drop dots wherever the route
+      // passes near a place name, and a dotted line with gaps reads as one
+      // that stops.
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+    },
+    paint: { "icon-color": ["get", "color"] },
+  });
 }
 
 /**
@@ -1595,7 +1661,15 @@ export function pinsOf(snapshot: MapSnapshot): CustomPinIcon[] {
 }
 
 /**
- * A place's colour: its custom pin's own, or failing that its first tag's.
+ * A place's colour: what a group decided, else its custom pin's own, else its
+ * first tag's.
+ *
+ * `place.color` is the group's answer and is absent on every snapshot that has
+ * no groups in it — which is every snapshot published before the field existed,
+ * so this line changes nothing about a live map until its owner republishes. The
+ * editor resolves the same order in `lib/map/group-colors.ts`, and that file is
+ * what publish reads too, so all three agree by construction rather than by
+ * agreeing today.
  *
  * A custom pin is a finished design and brings its colour with it, which is the
  * one case where a tag does not decide. The same `??` runs in the editor
@@ -1621,6 +1695,7 @@ export function colorOf(
   pins?: readonly CustomPinIcon[],
 ): string {
   return (
+    place.color ??
     resolvePin(place.icon, pins)?.color ??
     pinColorOfTags(colors.tagGroups, place.tags) ??
     colors.categories.get(place.category ?? "") ??

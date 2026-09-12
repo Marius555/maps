@@ -11,6 +11,7 @@ import { uploadSnapshot } from "@/lib/snapshot/storage";
 import { effectiveCardLayout } from "@/lib/card/designer-status";
 import { getCardDesign } from "./card-design.repository";
 import type { RepoContext } from "./context";
+import { listAllGroups } from "./groups.repository";
 import { toAppMap } from "./mappers";
 import { getMap } from "./maps.repository";
 import { listAllPlaces } from "./places.repository";
@@ -57,9 +58,11 @@ export async function publishMap(
 ): Promise<PublishResult> {
   // Ownership first — nothing is generated for a map the caller can't publish.
   const map = await getMap(ctx, mapId);
-  const [places, shapes, cardDesign] = await Promise.all([
+  const [places, shapes, groups, cardDesign] = await Promise.all([
     listAllPlaces(ctx, mapId),
     listAllShapes(ctx, mapId),
+    // Only their colours are published, never their ids — see buildSnapshot.
+    listAllGroups(ctx, mapId),
     getCardDesign(ctx),
   ]);
 
@@ -72,6 +75,7 @@ export async function publishMap(
     gazetteerBase(origin),
     effectiveCardLayout(cardDesign),
     collectUrl(origin),
+    groups,
   );
 
   // Storage before the row. If the upload fails the map stays exactly as it was,

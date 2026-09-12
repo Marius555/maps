@@ -24,6 +24,7 @@ import type { GeocodeCandidate } from "@/lib/geocoding/types";
 import { isDefaultView } from "@/lib/map/default-view";
 import { roundCoord } from "@/lib/map/geo";
 import { groupAction, groupActionLabel } from "@/lib/map/group-action";
+import { groupColorIndex } from "@/lib/map/group-colors";
 import { membersOf } from "@/lib/map/group-members";
 import { nextGroupDefaults } from "@/lib/map/next-group-defaults";
 import type { PlanHeadroom } from "@/lib/map/plan-headroom";
@@ -56,7 +57,7 @@ import {
   useShapesSnapshot,
   useUpdateShape,
 } from "@/lib/query/shapes";
-import { nextShapeDefaults } from "@/lib/map/next-shape-defaults";
+import { nextShapeDefaults, paletteColorFor } from "@/lib/map/next-shape-defaults";
 import { shapeSeedColor } from "@/lib/map/shape-seed-color";
 import { planFeatureNote } from "@/lib/repositories/errors";
 import type { PlanId } from "@/lib/repositories/plan-limits";
@@ -69,11 +70,11 @@ import {
 } from "@/lib/stores/editor-store";
 import { placeIndex, resolveGeometry } from "@/lib/map/line-endpoints";
 import { resolvePin } from "@/packages/shared/pin-icons";
-import { pinColorOfTags } from "@/packages/shared/tags";
 import {
   routeOf,
   shapeBounds,
   type ShapeBounds,
+  type RouteStop,
   type ShapeGeometry,
   type ShapeKind,
 } from "@/packages/shared/shapes";
@@ -294,7 +295,8 @@ export function MapEditor({
 
 
   /**
-   * A group's colour, for everything in it.
+   * A group's colour, for everything in it — and for everything a grouped route
+   * stops at.
    *
    * Membership is the one thing the editor could not show on the map. The
    * sidebar knows which locations are in a group; the map — where the user is
@@ -304,33 +306,30 @@ export function MapEditor({
    * It wins over the tags and over a custom pin's own colour, because a group
    * whose members are three different colours communicates nothing. Taking an
    * object out gives its own colour straight back.
+   *
+   * The whole precedence lives in `lib/map/group-colors.ts` rather than here,
+   * because the exported PNG and the *published snapshot* have to give the same
+   * answer and for a long time the snapshot did not ask the question at all —
+   * see that file. `shapes` is an input because a route lends its group's colour
+   * to the pins it stops at.
    */
-  const groupColorById = useMemo(
-    () => new Map(groups.map((group) => [group.id, group.color])),
-    [groups],
+  const colorIndex = useMemo(
+    () => groupColorIndex({ groups, shapes, tagGroups: map.tagGroups }),
+    [groups, shapes, map.tagGroups],
   );
 
   // Memoised because its identity is load-bearing: both the marker layer and the
   // shape layer repaint when it changes, which is how recolouring a group reaches
   // objects whose own rows have not changed at all.
   const colorFor = useCallback(
-    (place: Place, pinColor?: string) =>
-      groupColorById.get(place.groupId) ??
-      pinColor ??
-      /*
-       * The location's **first** tag, which is what replaced its category when
-       * the two merged. Walked rather than read off `tags[0]` — `pinColorOfTags`
-       * skips ids the map no longer defines, so a pin does not lose its colour
-       * because of a tag deleted in Settings months ago.
-       */
-      pinColorOfTags(map.tagGroups, place.tags),
-    [groupColorById, map.tagGroups],
+    (place: Place, pinColor?: string) => colorIndex.forPlace(place, pinColor),
+    [colorIndex],
   );
 
   /** The same rule for shapes, whose own colour is the one being overridden. */
   const shapeColorFor = useCallback(
-    (shape: Shape) => groupColorById.get(shape.groupId) ?? shape.color,
-    [groupColorById],
+    (shape: Shape) => colorIndex.forShape(shape),
+    [colorIndex],
   );
 
   /**
@@ -645,6 +644,25 @@ export function MapEditor({
    * to be adjusted. Leaving the tool armed afterwards would mean the next click —
    * very likely on a handle — started drawing a second shape instead.
    */
+  /**
+   * What the shape under the cursor is painted while it is still a draft.
+   *
+   * The same question `addShape` asks a moment later, asked of the geometry so
+   * far. Without it every draft was `DEFAULT_SHAPE_COLOR` and every shape changed
+   * colour the instant it saved — for a route, which is drawn over many clicks
+   * and then takes its first pin’s colour, that was the whole gesture in a blue
+   * that appeared nowhere else on the map.
+   *
+   * Reads through `readShapes`/`readPlaces` rather than the rendered arrays for
+   * the reason `addShape` does: this runs inside a draw gesture, not a render.
+   */
+  const draftColorFor = useCallback(
+    (geometry: ShapeGeometry) =>
+      shapeSeedColor(geometry, readPlaces(), placeColorFor) ??
+      paletteColorFor(readShapes()),
+    [readPlaces, readShapes, placeColorFor],
+  );
+
   const addShape = useCallback(
     async (geometry: ShapeGeometry) => {
       setMode("browse");
@@ -698,6 +716,31 @@ export function MapEditor({
       updateShapeMutate({ shapeId, input: { geometry } });
     },
     [updateShapeMutate],
+  );
+
+  /**
+   * Ask the engine for a route through these stops and save what comes back.
+   *
+   * **One path for every way a saved route changes**, and it lives here rather
+   * than inside `MapShapes` because the sidebar needs it too: reordering a
+   * route's stops happens in the Locations panel, which is a different component
+   * tree from the canvas. Two copies of these four lines would be two
+   * opportunities to forget the profile.
+   *
+   * The stops are the caller's to resolve — both callers send them at the
+   * positions their pins are at now, so a reorder or a removal on a route that
+   * had also gone stale does not quietly re-commit the stale coordinates.
+   */
+  const routeThrough = useCallback(
+    async (shapeId: string, stops: readonly RouteStop[]) => {
+      const shape = readShapes().find((candidate) => candidate.id === shapeId);
+      const route = shape ? routeOf(shape.geometry) : null;
+      if (!route) return;
+
+      const geometry = await routeRequest.request(stops, route.profile);
+      if (geometry) moveShape(shapeId, geometry);
+    },
+    [readShapes, routeRequest, moveShape],
   );
 
   /** Picking a shape in the sidebar flies to it, as picking a location does. */
@@ -1307,6 +1350,7 @@ export function MapEditor({
             selectedShapeId,
             drawMode,
             colorFor: shapeColorFor,
+            draftColorFor,
             onSelectShape: selectShape,
             onEditShape: setEditingShapeId,
             onCreateShape: (geometry) => void addShape(geometry),
@@ -1359,6 +1403,7 @@ export function MapEditor({
         onEditGroup={setEditingGroupId}
         onGroupObjects={groupObjects}
         onAddToGroup={addToGroup}
+        onRouteThrough={(shapeId, stops) => void routeThrough(shapeId, stops)}
         onMergeGroups={(targetGroupId, sourceGroupId) => {
           void mergeGroups(targetGroupId, sourceGroupId);
         }}
@@ -1420,6 +1465,7 @@ export function MapEditor({
         map={map}
         places={places}
         shapes={shapes}
+        groups={groups}
         isOpen={isPreviewOpen}
         onOpenChange={setIsPreviewOpen}
       />

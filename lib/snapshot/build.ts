@@ -1,5 +1,6 @@
 import { gazetteerCountries } from "@/lib/gazetteer/config";
 import { isValidLngLat, roundCoord } from "@/lib/map/geo";
+import { groupColorIndex } from "@/lib/map/group-colors";
 import { placeIndex, resolveGeometry } from "@/lib/map/line-endpoints";
 import {
   ATTRIBUTION_HTML,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/map/style";
 import type {
   AppMap,
+  Group,
   MapField,
   MapTagGroup,
   Place,
@@ -63,11 +65,27 @@ import type {
  * operation whose output lands on strangers' websites, so it has to be testable
  * without provisioning anything (CLAUDE.md §9). The upload lives in publish.ts.
  *
- * Groups are absent, and that is deliberate rather than unfinished. A group is
- * how the owner organises the editor's sidebar; a visitor cannot see one or act
- * on one, and every field here is bytes downloaded by everyone who loads the
- * customer's page. `groupId` is on the `Place` and `Shape` domain types and must
- * not be copied through.
+ * **Groups are absent and their colours are not, and the difference is the whole
+ * rule.** A group is how the owner organises the editor's sidebar: a visitor
+ * cannot see one, cannot filter by one and cannot act on one, and every field
+ * here is bytes downloaded by everyone who loads the customer's page. So
+ * `groupId` is on the `Place` and `Shape` domain types and must not be copied
+ * through — and nothing does.
+ *
+ * What *is* copied through is the colour a group decided, because that is not a
+ * fact about the group, it is a fact about the pin. It used not to be, and the
+ * symptom was the reason this paragraph was rewritten: the editor's canvas paints
+ * a grouped route in its group's colour, the PNG export agrees with the canvas,
+ * and the preview panel drawn *beside* the canvas on the publish page painted the
+ * same route its own colour, as did the customer's live site. Three renderers and
+ * two answers, with two of them on screen at once. `lib/map/group-colors.ts` is
+ * now the single statement of the precedence and all three read it.
+ *
+ * A shape says it in `SnapshotShape.color`, which was already "hex, already
+ * resolved" and costs nothing new. A location says it in the optional
+ * `SnapshotPlace.color`, written **only** when a group actually decided — so a
+ * map with no groups publishes the bytes it has always published and the embed
+ * goes on resolving the pin's own colour for itself (§7).
  */
 
 export type BuildSnapshotResult = {
@@ -117,6 +135,19 @@ export function buildSnapshot(
    * owner has also switched `settings.analytics` on.
    */
   collectUrl?: string,
+  /**
+   * The map's groups, or omitted for none.
+   *
+   * Only their **colours** are read, and only to resolve what a pin or a shape
+   * is actually painted — see `lib/map/group-colors.ts`, which is the one place
+   * that precedence is written and which the editor's canvas and the PNG export
+   * read too. Injected rather than looked up for the same reason everything else
+   * here is: this function stays pure.
+   *
+   * Optional, so a caller that has no groups to hand publishes exactly what it
+   * published before — including every test that does not care.
+   */
+  groups?: readonly Group[],
 ): BuildSnapshotResult {
   const usable: Place[] = [];
   const skipped: Place[] = [];
@@ -129,6 +160,16 @@ export function buildSnapshot(
   }
 
   const pinIcons = usedPinIcons(map, usable);
+
+  /*
+   * What a group decided, for the pins and the shapes it decided it for.
+   *
+   * Built from the shapes the caller handed in rather than from `resolved`
+   * below, because it reads a route's *stops* — which resolving endpoints does
+   * not touch — and because `drawable` has already dropped shapes that would
+   * publish nothing, one of which may still be lending a pin its colour.
+   */
+  const colors = groupColorIndex({ groups: groups ?? [], shapes });
 
   /*
    * The filter vocabulary and the extra fields, narrowed to what the published
@@ -218,12 +259,20 @@ export function buildSnapshot(
       ...(tagGroups.length > 0 ? { tagGroups } : {}),
       ...(fields.length > 0 ? { fields } : {}),
       places: usable.map((place) =>
-        toSnapshotPlace(place, definedTags, definedFields, publishedLayout),
+        toSnapshotPlace(
+          place,
+          definedTags,
+          definedFields,
+          publishedLayout,
+          colors.overrideForPlace(place),
+        ),
       ),
       // Dropped entirely when empty, like every other optional field — and this
       // one has to be, because absent is also what every snapshot published
       // before shapes existed says.
-      ...(drawable.length > 0 ? { shapes: drawable.map(toSnapshotShape) } : {}),
+      ...(drawable.length > 0
+        ? { shapes: drawable.map((shape) => toSnapshotShape(shape, colors.forShape(shape))) }
+        : {}),
       // Same rule again, and this one carries it furthest: a map whose owner
       // never opened the appearance menu publishes the exact bytes it published
       // before any of this existed.
@@ -483,6 +532,11 @@ function toSnapshotPlace(
    * has never opened the designer -- and then there is nothing to override.
    */
   cardLayout: CardLayout | null,
+  /**
+   * The colour a group decided for this pin, or undefined for one no group
+   * decided. See `lib/map/group-colors.ts` and `SnapshotPlace.color`.
+   */
+  groupColor: string | undefined,
 ): SnapshotPlace {
   const snapshot: SnapshotPlace = {
     id: place.id,
@@ -494,6 +548,9 @@ function toSnapshotPlace(
 
   if (place.address) snapshot.address = place.address;
   if (place.icon) snapshot.icon = place.icon;
+  // Only when a group decided it. Absent is the pin working its own colour out,
+  // which is what every snapshot already on a customer's site says.
+  if (groupColor) snapshot.color = groupColor;
   if (place.description) snapshot.description = place.description;
   if (place.phone) snapshot.phone = place.phone;
   if (place.email) snapshot.email = place.email;
@@ -562,7 +619,17 @@ function isDrawableShape(shape: Shape): boolean {
  * Empty strings and nulls are dropped rather than serialised, as everywhere else
  * here, and the geometry is flattened into the union the embed reads.
  */
-function toSnapshotShape(shape: Shape): SnapshotShape {
+function toSnapshotShape(
+  shape: Shape,
+  /**
+   * What it is actually painted: its group's colour, or its own.
+   *
+   * Passed in rather than read off `shape.color` here, because the answer is a
+   * question about the map's groups and this function has neither — see
+   * `lib/map/group-colors.ts`.
+   */
+  color: string,
+): SnapshotShape {
   /*
    * The stroke is written only where it says something.
    *
@@ -576,7 +643,7 @@ function toSnapshotShape(shape: Shape): SnapshotShape {
   const common = {
     id: shape.id,
     name: shape.name,
-    color: shape.color,
+    color,
     opacity: shape.opacity,
     ...(shape.description ? { description: shape.description } : {}),
     ...(shape.strokeWidth ? { strokeWidth: shape.strokeWidth } : {}),

@@ -65,10 +65,22 @@ export function RouteStopsList({
         const canRemove =
           Boolean(onRemoveStop) && canRemoveStop(stops, index);
 
-        // "Waypoint" is only ever read by a route drawn before stops were
-        // required to be locations. Nothing produces one now.
+        /*
+         * The address, falling back to the name — the same answer the sidebar's
+         * stop row gives, so one location cannot read as two different things on
+         * two screens at once. `place.name` alone is "Location 9" for a pin
+         * dropped on the map; see components/places/place-row-label.tsx.
+         *
+         * One line only here, because this card sits over the map and the
+         * postcode is not worth the height.
+         *
+         * "Waypoint" is only ever read by a route drawn before stops were
+         * required to be locations. Nothing produces one now.
+         */
         const label = isBonded
-          ? (place?.name ?? "Deleted location")
+          ? place
+            ? place.address || place.name
+            : "Deleted location"
           : "Waypoint";
 
         const body = (

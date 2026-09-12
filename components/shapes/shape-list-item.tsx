@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Trash2, Ungroup } from "lucide-react";
+import { ChevronRight, Pencil, Trash2, Ungroup } from "lucide-react";
 import { motion } from "motion/react";
 
 import {
@@ -30,6 +30,9 @@ export function ShapeListItem({
   shape,
   groupColor,
   isSelected,
+  stopCount,
+  isOpen = false,
+  onToggle,
   indent,
   isLastInGroup = false,
   startsLooseSection,
@@ -46,6 +49,18 @@ export function ShapeListItem({
   /** Set for a row in a group: what the shape is actually painted on the map. */
   groupColor?: string;
   isSelected: boolean;
+  /**
+   * How many stops this route has, or undefined for a shape that is not one.
+   *
+   * Drawn beside the summary the way a group draws its member count, and for
+   * the same reason: shut, the row is the only thing saying its children are
+   * there at all.
+   */
+  stopCount?: number;
+  /** Whether those stops are drawn below it. */
+  isOpen?: boolean;
+  /** Omit and no disclosure is drawn — every shape that is not a route. */
+  onToggle?: () => void;
   /** Inside a group. The step in and the rail beside it are what say so. */
   indent?: boolean;
   /** The last member of its group: the rail ends here rather than running on. */
@@ -122,6 +137,38 @@ export function ShapeListItem({
           isDraggable ? " is-draggable" : ""
         }`}
       >
+        {/*
+         * A route is the parent of the pins it stops at, so its row opens like a
+         * group header does — see lib/map/sidebar-rows.ts. Its own control and
+         * not the row press, for GroupListItem's reason: opening a route to see
+         * its stops and selecting the route on the map are two intentions, and
+         * one button doing both means you cannot do either without the other.
+         *
+         * Shut by default, which is the opposite of a group and deliberate: a
+         * route holds up to 25 stops and lists them on its own card already, so
+         * a map with a few routes would open onto nothing but stops.
+         */}
+        {onToggle ? (
+          <button
+            type="button"
+            aria-expanded={isOpen}
+            aria-label={
+              isOpen
+                ? `Hide the stops on ${shape.name}`
+                : `Show the stops on ${shape.name}`
+            }
+            onClick={onToggle}
+            {...NO_DRAG_PROPS}
+            className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-default focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+          >
+            <ChevronRight
+              aria-hidden="true"
+              className={`size-4 transition-transform duration-[var(--duration-fast)] ${
+                isOpen ? "rotate-90" : ""
+              }`}
+            />
+          </button>
+        ) : null}
         <button
           type="button"
           className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none focus-visible:inset-ring-2 focus-visible:inset-ring-focus"
@@ -139,6 +186,9 @@ export function ShapeListItem({
             </span>
             <span className="block truncate text-xs text-muted">
               {shapeSummary(shape.geometry)}
+              {stopCount === undefined
+                ? null
+                : ` · ${String(stopCount)} ${stopCount === 1 ? "stop" : "stops"}`}
             </span>
           </span>
         </button>

@@ -2,7 +2,7 @@
 
 import { toast } from "@heroui/react";
 import { AnimatePresence } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { GroupListItem } from "@/components/groups/group-list-item";
 import { DeleteGroupDialog } from "@/components/groups/delete-group-dialog";
@@ -13,8 +13,14 @@ import { DeletePlaceDialog } from "@/components/places/delete-place-dialog";
 import { PlaceListItem } from "@/components/places/place-list-item";
 import { DeleteShapeDialog } from "@/components/shapes/delete-shape-dialog";
 import { ShapeListItem } from "@/components/shapes/shape-list-item";
+import { RouteStopListItem } from "@/components/map/routes/route-stop-list-item";
 import { dropAction, type DropTargetRow } from "@/lib/map/drop-action";
-import { sidebarRows } from "@/lib/map/sidebar-rows";
+import { placeIndex } from "@/lib/map/line-endpoints";
+import { makeEnd, makeStart, moveStop } from "@/lib/map/route-order";
+import { resolvedStops } from "@/lib/map/route-staleness";
+import { removeStopAt } from "@/lib/map/route-stops";
+import { routeOf } from "@/packages/shared/shapes";
+import { sidebarRows, type SidebarRow } from "@/lib/map/sidebar-rows";
 import {
   isOptimisticGroupId,
   useDeleteGroup,
@@ -28,6 +34,40 @@ import { formatCount } from "@/lib/format/number";
 import type { Group, MapTagGroup, Place, Shape } from "@/lib/repositories/types";
 import { pinColorOfTags } from "@/packages/shared/tags";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
+import type { RouteStop } from "@/packages/shared/shapes";
+
+/** The stop row last pressed, and the location it named. */
+type PressedStop = { key: string; placeId: string };
+
+/**
+ * Whether a selected location lights *this* row of *this* route.
+ *
+ * A route's stop has no id, so selection is keyed on the location it names — and
+ * a round trip names one location twice. Both rows matched, so pressing Start
+ * lit End as well, on a panel where lighting a row is how you say "this one".
+ *
+ * The row the user pressed wins. With nothing pressed — a marquee, a click on
+ * the pin itself, a selection made anywhere but here — the location's first
+ * visit is the row that stands for it, so exactly one row lights either way.
+ *
+ * The press is matched on the route as well as the location, because one
+ * location can be a stop on two routes and a press on one of them says nothing
+ * about the other.
+ */
+function lightsThisStop(
+  row: Extract<SidebarRow, { kind: "route-stop" }>,
+  isSelectedPlace: boolean,
+  pressed: PressedStop | null,
+): boolean {
+  if (!row.place || !isSelectedPlace) return false;
+
+  const pressedHere =
+    pressed !== null &&
+    pressed.placeId === row.place.id &&
+    pressed.key.startsWith(`route:${row.shape.id}:`);
+
+  return pressedHere ? pressed.key === row.key : row.isFirstVisit;
+}
 
 /**
  * Everything in the Locations panel, as one list.
@@ -75,6 +115,7 @@ export function LocationsList({
   onGroupObjects,
   onAddToGroup,
   onMergeGroups,
+  onRouteThrough,
 }: {
   mapId: string;
   groups: Group[];
@@ -113,6 +154,14 @@ export function LocationsList({
   onAddToGroup: (groupId: string, dragged: DraggedObject) => void;
   /** A group was dropped on another: everything in the source moves to the target. */
   onMergeGroups: (targetGroupId: string, sourceGroupId: string) => void;
+  /**
+   * Ask the routing engine for a route through these stops and save it.
+   *
+   * The one path every reordering gesture in this panel goes through, and the
+   * same one the route's card uses for Recalculate and its × — lifted to
+   * `map-editor.tsx` so the sidebar and the canvas cannot drift on the profile.
+   */
+  onRouteThrough: (shapeId: string, stops: readonly RouteStop[]) => void;
 }) {
   /*
    * Open by default, and remembered per group only while the editor is on
@@ -120,6 +169,81 @@ export function LocationsList({
    * not a preference worth a column in the database.
    */
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  /*
+   * Shut by default, which is the opposite of a group — see `sidebarRows`.
+   * Remembered for as long as the editor is on screen, on the same terms.
+   */
+  const [expandedRoutes, setExpandedRoutes] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  /*
+   * The stop row the user last pressed, or null.
+   *
+   * Selection is keyed on the location, and a round trip names one location
+   * twice — so the id alone cannot say which of the two rows was pressed. This
+   * is the tie-break, and only that: it never selects anything on its own, and
+   * with nothing pressed the row standing for the location is its first visit.
+   *
+   * The location comes with the key so a stale press needs no clearing. Select
+   * anything else and the id stops matching, which is already "ignore this".
+   */
+  const [pressedStop, setPressedStop] = useState<PressedStop | null>(null);
+
+  /*
+   * Routes already on the map when this panel mounted.
+   *
+   * Seeded on the first run so they keep the shut-by-default above; a route that
+   * appears *after* it is one that was just drawn, and opens itself.
+   */
+  const knownShapeIds = useRef<Set<string> | null>(null);
+
+  /**
+   * A route opens the moment it is drawn.
+   *
+   * Drawing one takes its stops out of the loose run and out of any group they
+   * were in — one row per location, see `sidebarRows` — so connecting five pins
+   * with the route shut removes five rows from the panel and puts "· 5 stops" on
+   * a row that is folded. Reported as the pins having been deleted, which is
+   * exactly what it looks like. Opening it makes the same change read as a move:
+   * the rows go under the route, where they now live.
+   *
+   * Only on the way in. Reasserting it would fight the chevron, and a route the
+   * owner folded is one they folded.
+   */
+  useEffect(() => {
+    const ids = new Set(shapes.map((shape) => shape.id));
+
+    if (knownShapeIds.current === null) {
+      knownShapeIds.current = ids;
+      return;
+    }
+
+    const known = knownShapeIds.current;
+    const opened = shapes.filter(
+      (shape) => !known.has(shape.id) && routeOf(shape.geometry),
+    );
+
+    // Replaced rather than added to: an optimistic shape id is swapped for the
+    // server's on success, and a set that only grows would hold every temporary
+    // id the session ever minted.
+    knownShapeIds.current = ids;
+
+    setExpandedRoutes((current) => {
+      // Narrowed to what still exists as well as widened by what just arrived,
+      // for the same reason: a drawn route is in here twice for a moment, under
+      // its temporary id and then its real one, and a deleted one forever.
+      const next = new Set<string>();
+      for (const id of current) if (ids.has(id)) next.add(id);
+      for (const shape of opened) next.add(shape.id);
+
+      // The array identity changes on every refetch, so an unconditional write
+      // here would be a render per poll.
+      const isSame =
+        next.size === current.size && [...next].every((id) => current.has(id));
+
+      return isSame ? current : next;
+    });
+  }, [shapes]);
 
   const ungroup = useDeleteGroup(mapId);
   const deleteGroupContents = useDeleteGroupContents(mapId);
@@ -144,6 +268,7 @@ export function LocationsList({
     places,
     shapes,
     collapsed,
+    expandedRoutes,
     hideEmptyGroups: isGrouping,
   });
 
@@ -178,6 +303,35 @@ export function LocationsList({
       if (!next.delete(groupId)) next.add(groupId);
       return next;
     });
+
+  const toggleRoute = (shapeId: string) =>
+    setExpandedRoutes((current) => {
+      const next = new Set(current);
+      if (!next.delete(shapeId)) next.add(shapeId);
+      return next;
+    });
+
+  /**
+   * Ask the engine again, through whichever reordering rule was pressed.
+   *
+   * **Resolved first.** The stops go back at the positions their pins are at
+   * *now* rather than where the engine last drew them, exactly as dropping a
+   * stop from the route's card does — reordering a route that had also gone
+   * stale must not quietly re-commit the stale coordinates.
+   *
+   * `null` from the rule means the move changes nothing, and nothing is what
+   * happens: every one of these would otherwise be a metered request for the
+   * geometry already on screen (CLAUDE.md §12). See lib/map/route-order.ts.
+   */
+  const reroute = (
+    shape: Shape,
+    rule: (stops: readonly RouteStop[]) => RouteStop[] | null,
+  ) => {
+    if (shape.geometry.kind !== "line") return;
+
+    const next = rule(resolvedStops(shape.geometry, placeIndex(places)));
+    if (next) onRouteThrough(shape.id, next);
+  };
 
   /**
    * The group a dragged object is currently in, or "".
@@ -353,6 +507,72 @@ export function LocationsList({
               );
             }
 
+            if (row.kind === "route-stop") {
+              const { shape, stopIndex } = row;
+
+              return (
+                <RouteStopListItem
+                  key={row.key}
+                  routeId={shape.id}
+                  routeName={shape.name}
+                  stops={row.stops}
+                  stopIndex={stopIndex}
+                  place={row.place}
+                  role={row.role}
+                  railColor={row.railColor}
+                  outerRail={row.outerRail}
+                  isLast={row.isLast}
+                  isSelected={lightsThisStop(
+                    row,
+                    row.place !== undefined &&
+                      (row.place.id === selectedPlaceId ||
+                        selectedPlaceIds.has(row.place.id)),
+                    pressedStop,
+                  )}
+                  pinIcons={pinIcons}
+                  groupColor={row.groupColor}
+                  pinColor={
+                    row.place
+                      ? pinColorOfTags(tagGroups, row.place.tags)
+                      : undefined
+                  }
+                  // Same two windows a loose row uses, so a stop whose lookup is
+                  // still out waits as a skeleton rather than flashing the
+                  // placeholder name it is about to lose.
+                  isAddressPending={
+                    row.place
+                      ? isOptimisticPlaceId(row.place.id) ||
+                        (pendingAddressIds?.has(row.place.id) ?? false)
+                      : false
+                  }
+                  hasAddressFailed={
+                    row.place
+                      ? (failedAddressIds?.has(row.place.id) ?? false)
+                      : false
+                  }
+                  animateMoves={animateMoves}
+                  onSelect={() => {
+                    if (!row.place) return;
+                    setPressedStop({ key: row.key, placeId: row.place.id });
+                    onSelectPlace(row.place.id);
+                  }}
+                  onMove={(insertBefore) =>
+                    reroute(shape, (stops) =>
+                      moveStop(stops, stopIndex, insertBefore),
+                    )
+                  }
+                  onMakeStart={() =>
+                    reroute(shape, (stops) => makeStart(stops, stopIndex))
+                  }
+                  onMakeEnd={() =>
+                    reroute(shape, (stops) => makeEnd(stops, stopIndex))
+                  }
+                  onRemove={() =>
+                    reroute(shape, (stops) => removeStopAt(stops, stopIndex))
+                  }
+                />
+              );
+            }
             const { shape } = row;
             const target: DropTargetRow = {
               kind: "object",
@@ -368,6 +588,9 @@ export function LocationsList({
                 isSelected={
                   shape.id === selectedShapeId || selectedShapeIds.has(shape.id)
                 }
+                stopCount={row.stops?.length}
+                isOpen={row.isOpen}
+                onToggle={row.stops ? () => toggleRoute(shape.id) : undefined}
                 indent={row.indent}
                 isLastInGroup={row.isLastInGroup}
                 startsLooseSection={row.startsLooseSection}

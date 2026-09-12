@@ -55,6 +55,19 @@ export function dropAction(
    */
   draggedGroupId: string,
 ): DropOutcome | null {
+  /*
+   * A route's stop is not a member of anything, so none of the seven cases
+   * below can mean anything for one.
+   *
+   * Its membership is the route's own `stops` array and its position in that
+   * array is the thing being dragged — a different gesture with a different
+   * answer, handled by the two drop bands on each stop row
+   * (components/map/routes/route-stop-list-item.tsx). Without this guard a
+   * stop dropped on an ordinary row would fall through to `create` and make a
+   * group out of a location and a row index.
+   */
+  if (dragged.type === "route-stop") return null;
+
   if (dragged.type === "group") return groupDroppedOn(dragged, target);
 
   // A row cannot be dropped on itself. That is a mis-drop, not a group of one.

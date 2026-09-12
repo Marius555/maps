@@ -1110,6 +1110,36 @@
 }
 
 /*
+ * The outer rail, for the one place this panel is two levels deep: a route
+ * inside a group, whose stops hang off the route while the group's own rail
+ * still has members below to reach. See components/ui/tree-branch.tsx.
+ *
+ * The line and nothing else — no elbow, because the row beside it belongs to
+ * the route rather than to the group. Sharing `.tree-branch`'s rule and
+ * suppressing `::after` would have been the shorter spelling and the worse one:
+ * an elbow is what a branch *is*, and a modifier that removes it reads as a
+ * branch that is missing something rather than as a different mark.
+ */
+.tree-rail {
+  position: relative;
+}
+
+.tree-rail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: color-mix(
+    in oklch,
+    var(--tree-color, var(--border)) 40%,
+    transparent
+  );
+}
+
+/*
  * While a shape tool is armed, a location's pin stops being clickable.
  *
  * A marker is a DOM element over the canvas and it is about 26px across — wider

@@ -4,10 +4,11 @@ import { useState } from "react";
 
 import { EmbedPreview } from "@/components/preview/embed-preview";
 import { PageTitle } from "@/components/ui/page-title";
+import { useGroups } from "@/lib/query/groups";
 import { useMap } from "@/lib/query/maps";
 import { usePlaces } from "@/lib/query/places";
 import { useShapes } from "@/lib/query/shapes";
-import type { AppMap, Place, Shape } from "@/lib/repositories/types";
+import type { AppMap, Group, Place, Shape } from "@/lib/repositories/types";
 import { DesignSidebar } from "./design-sidebar/design-sidebar";
 import { useEmbedDesign } from "./design-sidebar/use-embed-design";
 import { DEFAULT_DEVICE, deviceWidth, type DeviceId } from "./preview-device/devices";
@@ -38,11 +39,15 @@ export function PublishPanel({
   initialMap,
   initialPlaces,
   initialShapes,
+  initialGroups,
   initialCardDesign,
 }: {
   initialMap: AppMap;
   initialPlaces: Place[];
   initialShapes: Shape[];
+  /** Loaded server-side for the same reason `initialCardDesign` is — a group
+      decides what colour the preview paints a pin or a route. */
+  initialGroups: Group[];
   /** Loaded server-side so the preview never builds a document twice — see
       `EmbedPreview`'s `cardDesign`. */
   initialCardDesign?: Record<string, unknown>;
@@ -50,6 +55,7 @@ export function PublishPanel({
   const { data: map = initialMap } = useMap(initialMap.id, initialMap);
   const { data: places = initialPlaces } = usePlaces(initialMap.id, initialPlaces);
   const { data: shapes = initialShapes } = useShapes(initialMap.id, initialShapes);
+  const { data: groups = initialGroups } = useGroups(initialMap.id, initialGroups);
 
   const design = useEmbedDesign(map);
   const isEmpty = places.length === 0 && shapes.length === 0;
@@ -104,6 +110,7 @@ export function PublishPanel({
               map={map}
               places={places}
               shapes={shapes}
+              groups={groups}
               settings={design.settings}
               cardDesign={initialCardDesign}
               frame={false}

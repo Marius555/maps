@@ -271,14 +271,68 @@
   padding-top: 42px;
 }
 
+/*
+ * The controls themselves, and the two `--lm-tool-*` indirections are what let
+ * a floating toolbar wear the panel's glass.
+ *
+ * Written as fallbacks rather than as a second rule, because the alternative is
+ * a specificity race nobody wins: a glass rule painting `background` on these
+ * elements has to be heavier than `.lm-toolbar--docked .lm-search__input` (two
+ * classes) and *lighter* than `.lm-button--on` (one), which is not an ordering
+ * that exists. Naming the ground instead means the glass rule sets no real
+ * property at all — see `[data-lm-glass]` below — and every existing override
+ * keeps winning exactly as it did.
+ *
+ * Both fall back to what the control has always drawn, so a snapshot published
+ * before any of this renders the solid, unblurred box (§7).
+ */
 .lm-search__input,
 .lm-button {
   font: inherit;
   border-radius: 8px;
   border: 1px solid var(--lm-border);
-  background: var(--lm-surface);
+  background: var(--lm-tool-bg, var(--lm-surface));
   color: var(--lm-foreground);
   box-shadow: var(--lm-shadow);
+  backdrop-filter: var(--lm-tool-blur, none);
+}
+
+/*
+ * A floating toolbar in the panel's own glass.
+ *
+ * `:not(.lm-toolbar--docked)` is the whole condition and it is exact: docked,
+ * the toolbar is inside `.lm-panel` and already on that surface, so there is
+ * nothing to match. Floating, it is the list-less map and the narrow drawer —
+ * the two arrangements where three opaque white boxes sat on the basemap beside
+ * a panel made of glass, which is the complaint this answers.
+ *
+ * **It sets custom properties and nothing else.** That is what keeps the lit
+ * find-nearest button, the docked well and the hover states all painting
+ * themselves; see the rule above.
+ *
+ * The values are the panel's own — the owner designs one surface and both
+ * things wear it — and glass is the transparency and the blur, not the corner.
+ * `--lm-panel-radius` runs to 24px, which on a 34px-tall control is a lozenge
+ * rather than the panel's corner said at a smaller size, so these keep the 8px
+ * they have always had. `--lm-tool-bg` carries the fallback that leaves them
+ * opaque, so a map with `toolbarGlass` on and nothing else designed still looks
+ * like a map.
+ *
+ * `blur(var(--lm-panel-blur))` has **no fallback on purpose**. `--lm-panel-blur`
+ * is written only when the owner asked for a blur, so when it is absent this
+ * substitution fails, `--lm-tool-blur` computes to the guaranteed-invalid value,
+ * and `backdrop-filter: var(--lm-tool-blur, none)` above takes its own fallback
+ * — `none`, not `blur(0)`. The distinction is the one `chromeVars` already
+ * makes for the panel: a `backdrop-filter` nobody asked for is a compositing
+ * cost, not a no-op.
+ */
+.lm-root[data-lm-glass] .lm-toolbar:not(.lm-toolbar--docked) {
+  --lm-tool-bg: color-mix(
+    in oklab,
+    var(--lm-surface) var(--lm-panel-opacity, 100%),
+    transparent
+  );
+  --lm-tool-blur: blur(var(--lm-panel-blur));
 }
 
 .lm-search__input {
@@ -368,10 +422,17 @@
    that is trying to say it is on. */
 .lm-button--on:hover {
   border-color: color-mix(in oklab, var(--lm-focus) 45%, var(--lm-border));
-  /* Mixed into the surface rather than into `transparent`: this button floats
-     over the basemap, and a see-through tint would be the map showing through a
-     control. The docked toolbar wants the opposite and says so below. */
-  background: color-mix(in oklab, var(--lm-focus) 12%, var(--lm-surface));
+  /* Mixed into the toolbar's own ground rather than into `transparent`: this
+     button floats over the basemap, and a see-through tint would be the map
+     showing through a control. `--lm-tool-bg` is that ground — the surface
+     unless the owner asked for glass, in which case the lit state is glass too
+     rather than the one opaque box in the row. The docked toolbar wants the
+     opposite and says so below. */
+  background: color-mix(
+    in oklab,
+    var(--lm-focus) 12%,
+    var(--lm-tool-bg, var(--lm-surface))
+  );
   color: var(--lm-focus);
 }
 
@@ -1827,20 +1888,90 @@
  * embed's existing vocabulary rather than a second one.
  */
 .lm-list__link {
-  padding: 3px 9px;
-  border: 1px solid var(--lm-border);
-  border-radius: 999px;
-  color: var(--lm-foreground);
+  padding: 3px var(--lm-link-pad, 9px);
+  border: 1px solid var(--lm-link-bd, var(--lm-border));
+  border-radius: var(--lm-link-radius, 999px);
+  background: var(--lm-link-bg, transparent);
+  color: var(--lm-link-fg, var(--lm-foreground));
   font-size: 12px;
   line-height: 1.5;
   text-decoration: none;
   white-space: nowrap;
 }
 
+/*
+ * Hover, written as the four tokens rather than as the four properties.
+ *
+ * That is what makes one rule serve every treatment below: a variant sets those
+ * tokens on `.lm-root`, where they reach the link by inheritance, and *any*
+ * declaration on the element itself beats an inherited value however light the
+ * selector is. Painted as real properties here, this rule would be one class
+ * against a variant's two and every chip would have gone dead under the pointer.
+ */
 .lm-list__link:hover {
-  border-color: color-mix(in oklab, var(--lm-focus) 45%, var(--lm-border));
-  background: color-mix(in oklab, var(--lm-focus) 8%, transparent);
-  color: var(--lm-focus);
+  --lm-link-bg: color-mix(in oklab, var(--lm-focus) 8%, transparent);
+  --lm-link-fg: var(--lm-focus);
+}
+
+/*
+ * The line is the outlined pill's own hover, so it is scoped to the outlined
+ * pill rather than painted on everything and undone three times.
+ *
+ * It cannot live in the rule above: that one sets the token **on the element**,
+ * which outweighs a variant's inherited `transparent` however heavy the
+ * variant's selector is, so every borderless chip grew an outline the moment a
+ * pointer touched it. `:not([data-lm-link])` is exactly the absent state, which
+ * is what the outlined pill *is*.
+ */
+.lm-root:not([data-lm-link]) .lm-list__link:hover {
+  --lm-link-bd: color-mix(in oklab, var(--lm-focus) 45%, var(--lm-border));
+}
+
+/*
+ * The three treatments that are not the outlined pill.
+ *
+ * Absent is that pill, which is what every published row draws (§7) — the same
+ * way `CardButtonVariant` leaves its own filled default unnamed. They sit on
+ * `.lm-root` rather than on the link so the hover above keeps winning; see it
+ * for why that matters.
+ *
+ * The corner is not here. It is `--lm-link-radius`, a length written straight
+ * onto the root by `chromeVars`, because a square chip and a pill are the same
+ * three treatments with a different corner rather than six treatments.
+ */
+.lm-root[data-lm-link="soft"] {
+  --lm-link-bd: transparent;
+  --lm-link-bg: color-mix(in oklab, var(--lm-foreground) 7%, transparent);
+}
+
+.lm-root[data-lm-link="solid"] {
+  --lm-link-bd: transparent;
+  --lm-link-bg: var(--lm-focus);
+  /* The card's filled button already reads white on the owner's accent, and
+     this is that button at chip size. */
+  --lm-link-fg: #ffffff;
+}
+
+/* Deepened rather than tinted: the generic hover lightens a *ground*, and over a
+   filled accent that reads as the control switching off. */
+.lm-root[data-lm-link="solid"] .lm-list__link:hover {
+  --lm-link-bg: color-mix(in oklab, var(--lm-focus) 86%, #000000);
+  --lm-link-fg: #ffffff;
+}
+
+/* No box at all — the links as words under the address, for an owner whose
+   panel is already full of chips. The padding goes with the border, or the row
+   keeps a 9px indent around nothing. */
+.lm-root[data-lm-link="plain"] {
+  --lm-link-bd: transparent;
+  --lm-link-pad: 0;
+  --lm-link-fg: var(--lm-focus);
+}
+
+/* A ground would be a chip again, so this one says it the way words do. */
+.lm-root[data-lm-link="plain"] .lm-list__link:hover {
+  --lm-link-bg: transparent;
+  text-decoration: underline;
 }
 
 /* Both are the panel talking about itself rather than about a place, so they are

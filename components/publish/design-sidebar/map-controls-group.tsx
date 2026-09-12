@@ -1,6 +1,6 @@
 "use client";
 
-import { Compass, LocateFixed, Maximize, Ruler } from "lucide-react";
+import { Compass, LocateFixed, Maximize, Ruler, Search } from "lucide-react";
 
 import { PropertyChoice } from "@/components/ui/properties/property-fields";
 import {
@@ -12,7 +12,14 @@ import { CONTROL_CORNERS } from "@/lib/validation/embed-settings.schema";
 import type { EmbedDesign } from "./use-embed-design";
 
 /**
- * MapLibre's own controls: which of them, and where.
+ * MapLibre's own controls: which of them, and where — plus the two switches
+ * that are about the pins rather than about the controls.
+ *
+ * "Group nearby pins" was already one of those and sets the precedent: this
+ * fold is what the map *does*, not only what MapLibre draws on it. "Open a card
+ * when a pin is clicked" joins it there rather than in the Results panel fold,
+ * because the card is the map's answer to a press and the panel is the other
+ * one — an owner switching the card off is usually keeping the panel.
  *
  * Every one of these is close to free in the embed's byte budget, and that is a
  * fact about the build rather than about the controls: `maplibre-gl` is external
@@ -49,9 +56,25 @@ export function MapControlsGroup({ settings, set }: EmbedDesign) {
         onChange={(value, isSelected) => set(value, isSelected)}
       />
 
-      {/* The two whose labels are sentences about the visitor's page rather
-          than names of a thing on the map — no glyph says either, so they get a
-          line each. */}
+      {/* Ours rather than MapLibre’s, and that is the only thing that ever made
+          them look like results-panel controls. The embed draws both with the
+          list switched off, floating over the basemap — which is exactly the
+          arrangement in which the panel fold used to hide their toggles, leaving
+          an owner with a search box on their map and no way here to switch it
+          off, and no way to switch it on for a bare map either. */}
+      <PropertyToggles
+        label="Search and nearest"
+        options={TOOLS}
+        selected={[
+          ...(settings.search ? (["search"] as const) : []),
+          ...(settings.nearest ? (["nearest"] as const) : []),
+        ]}
+        onChange={(value, isSelected) => set(value, isSelected)}
+      />
+
+      {/* The four whose labels are sentences about what the map *does* rather
+          than names of a thing sitting on it — no glyph says any of them, so
+          they get a line each. */}
       <PropertySwitches>
         <PropertySwitch
           label="Zoom with the scroll wheel"
@@ -63,10 +86,52 @@ export function MapControlsGroup({ settings, set }: EmbedDesign) {
           isSelected={settings.clustering}
           onChange={(value) => set("clustering", value)}
         />
+        <PropertySwitch
+          label="Open a card when a pin is clicked"
+          isSelected={settings.card}
+          onChange={(value) => set("card", value)}
+        />
+
+        {/* Shown only where it can do something, which is the rule the rest of
+            the designer follows. Search and Nearest are docked *inside* the
+            results panel on a wide map with a list, and already on its surface;
+            the two arrangements where they float over the basemap are a map with
+            no list at all, and a narrow one whose list is a drawer. On a wide
+            list map with the drawer off there is nothing here to frost, so there
+            is no control.
+
+            It carries no colours of its own — the controls read the panel’s own
+            transparency, blur and corners, so what is designed is one surface
+            rather than two that agree today. */}
+        {!settings.list || settings.panelDrawer ? (
+          <PropertySwitch
+            label="Frost the controls over the map"
+            isSelected={settings.toolbarGlass}
+            onChange={(value) => set("toolbarGlass", value)}
+          />
+        ) : null}
       </PropertySwitches>
+
+      {/* Said once, where the switch is, rather than in the Card tab that
+          designs the thing this hides. Turning it off is a real product — pins
+          as a picture, words in the panel — and the one thing an owner needs to
+          know is which of the two that press empties. */}
+      {settings.card ? null : (
+        <p className="text-xs text-muted">
+          {settings.list
+            ? "Clicking a pin highlights its row in the results panel instead."
+            : "With the results panel off too, this map is pins and nothing else."}
+        </p>
+      )}
     </div>
   );
 }
+
+/** The two controls that are ours rather than MapLibre’s, as one line of tiles. */
+const TOOLS = [
+  { value: "search", label: "Search box", icon: Search },
+  { value: "nearest", label: "Nearest to me", icon: LocateFixed },
+] as const;
 
 const CONTROLS = [
   { value: "geolocate", label: "Find my location", icon: LocateFixed },

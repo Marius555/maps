@@ -104,13 +104,16 @@ export function removeStopAt(
  * from a place to itself is not a leg, and asking an engine to drive it is
  * asking a question with no answer.
  *
+ * Exported for `route-order.ts`, which reorders the same list and has to answer
+ * the round-trip case the same way this one does.
+ *
  * An unbonded stop is always kept, and that guard is load-bearing rather than
  * defensive: every free waypoint on a route drawn before stops had to be
  * locations has `placeId` undefined, so comparing the ids alone would read two
  * genuinely different points as the same one and quietly delete a stop nobody
  * touched.
  */
-function collapseRepeats(stops: readonly RouteStop[]): RouteStop[] {
+export function collapseRepeats(stops: readonly RouteStop[]): RouteStop[] {
   return stops.filter((stop, at) => {
     if (at === 0 || !stop.placeId) return true;
     return stop.placeId !== stops[at - 1]?.placeId;

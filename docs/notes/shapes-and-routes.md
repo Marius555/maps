@@ -46,6 +46,14 @@ rewritten; it is the record of why this area is shaped as it is.
 - **A stop is a location, and only a location.** A click on no pin adds nothing
   (`lib/map/route-stops.ts`, along with the already-last-stop and 25-stop-cap cases). Free
   waypoints still load and draw but are never produced again.
+- **A click that adds nothing says so — once.** A miss on open ground and a click on a pin
+  still being created both raise a toast (`onMissed` in `use-draw-route.ts`, written in
+  `map-shapes.tsx`); the open-ground one fires once per gesture. The already-last-stop and
+  the cap stay silent, because neither is something anybody can act on.
+- **A stop never bonds to an optimistic place id.** A pin whose create is still in flight
+  carries a `temp-` id that is swapped for the server's the moment it lands, and nothing
+  rewrites a stop that already holds the old one. Refused in `use-draw-route.ts` rather than
+  in `snapToPlace`, for the reason the unroutable refusal gives.
 - A routed line has **no drag handles** — the engine's points are not ours to drag. The
   card's stop list is the grip (`route-stops-list.tsx`), and both its gestures go through
   one `routeThrough`, which is also Recalculate's.
@@ -81,6 +89,42 @@ rewritten; it is the record of why this area is shaped as it is.
 - **Routes are a paid feature**, enforced on both endpoints that reach the engine
   (`directions` and the `routable` sweep, the bigger spender). `PlanFeatureError` is its
   own error: a limit offers a delete *and* an upgrade, a gate offers only the upgrade.
+- **A route is the second kind of parent in the Locations panel, and it owns no
+  membership.** The stop list *is* the membership (`lib/map/sidebar-rows.ts`), so a
+  route group needs no column, no cleanup when a stop goes, and no answer to "what
+  if a pin is on two routes" — it is on both. Start and end are `stops[0]` and
+  `stops[n-1]`, not fields.
+- **One row per location.** A stop is drawn under its route and nowhere else — not
+  in the loose run, and not in a group it was also put in by hand. Two rows for one
+  location meant selection (which is keyed on the location) lit both, one of them in
+  a group the click had nothing to do with. The group's count follows the same
+  narrowing, so a header never promises a row it does not open onto.
+- **A route opens the moment it is drawn, and only then.** `sidebarRows` takes a new
+  route's stops out of the loose run and out of their groups, so connecting five pins with
+  the route shut deletes five rows from the panel and leaves "· 5 stops" on a folded row.
+  It is a move, and it has to read as one. Reasserted on arrival only — a route the owner
+  folded stays folded.
+- **A round trip lights the row that was pressed.** Selection is keyed on the location,
+  and `stops[0]` and `stops[n-1]` can be the same one, so one id matched two rows and
+  pressing Start lit End too. `isFirstVisit` on the row plus `lightsThisStop` in the
+  Locations panel settle it: the pressed row wins, and with nothing pressed the first visit
+  stands for the location.
+- **A stop row draws the same label as every other location row.** `PlaceRowLabel` —
+  address first, postcode and name under it — not `place.name`, which for a dropped pin is
+  "Location 9". The canvas card's list agrees with it on the first line.
+- **Every reordering gesture goes back through the engine, and `null` means "do
+  nothing".** `lib/map/route-order.ts` returns null for a move that leaves the same
+  route, which is what stops a drop back where it started spending a metered request
+  (§12). Callers resolve the stops first, exactly as the card's × does, so a reorder
+  on a stale route never re-commits stale coordinates.
+- **`routeThrough` lives in `map-editor.tsx`, not in `MapShapes`.** The sidebar
+  reorders routes and is a different component tree from the canvas; two copies of
+  those four lines would be two chances to forget the profile.
+- **A dotted outline is a `symbol` layer, not a dash pattern.** A zero-length dash
+  under a round cap draws a circle *only at integer zooms* — see below.
+- **Route-stop rows are the one place this panel is two levels deep.** `TreeRail`
+  draws the ancestor's line with no elbow; `continues: false` draws a gap of the
+  same width, because a rail running past the group's last member points at nothing.
 - Geocoding's ceiling is asked **before the first lookup** (`assertPlaceHeadroom`, hoisted
   out of `createPlaces`), not after the last.
 - The default engine is the **public OSRM demo server, development only**. `ROUTING_URL`
@@ -90,6 +134,51 @@ rewritten; it is the record of why this area is shaped as it is.
   the nearest street instead.
 
 ## Notes
+
+**The dots on a dotted route were eggs, and the spelling that fails is the one
+the documentation recommends.** `line-dasharray: [0, 2]` with `line-cap: "round"`
+— a cap on a zero-length dash — is how you dot a line in MapLibre, and it draws a
+circle only at *integer* zooms. The dash pattern is an SDF texture sampled along
+the line, and the shader anchors its horizontal scale to tile units, correcting
+in 2× steps through the fromScale/toScale crossfade; between two zoom levels the
+pattern is stretched along the line by up to ~1.41× while the dot's height stays
+pinned to the real stroke width. Measured in the browser on a 6px route: round at
+z15, a visible egg at z15.5, round again at z16. That is the whole bug, and it is
+why it had never been caught — every screenshot taken at a round number looks
+right.
+
+A `symbol` layer has no such scale, so the dotted style is now an icon placed
+along the line: `symbol-placement: "line"`, one SDF disc from
+`packages/shared/dot-line.ts`, `icon-color: ["get", "color"]` so one image serves
+every colour on the map, and `icon-size` data-driven off the feature's own width.
+`icon-allow-overlap` and `icon-ignore-placement` are both on because this is not a
+label — collision detection would drop dots wherever a route passes a place name,
+and a dotted line with gaps in it reads as a line that stops.
+
+Two things it costs, and both are the right way round. `symbol-spacing` is a
+layout property and cannot be data-driven, so the spacing no longer follows the
+stroke: it is a flat 14px, which makes a heavy dotted line read as a denser row of
+dots than a hairline. And the image is shared rather than per-renderer, because
+the publish preview draws the real embed bundle against the same map the editor is
+drawing — two dot images that agree today is exactly the drift `packages/shared`
+exists to prevent.
+
+**Routes became a container in the sidebar, and the membership was already
+there.** `LineGeometry.route.stops` is ordered, is what the engine is re-sent, and
+is what `routeThrough` rewrites — so making the route the parent of the pins it
+connects needed no column, no migration and no cleanup pass. Dropping the route
+into an ordinary group is already `dropAction`'s `join`; what is new is that the
+stops then take that group's colour, which is the whole of "a sub-group recolours
+its pins". `lib/map/group-colors.ts` is where that precedence lives now, and the
+canvas, the PNG export and *publish* all read it.
+
+The reorder gestures are a drag between two rows and two menu items, and the drag
+needed no change to the shared pointer gesture. `components/groups/use-row-drag.ts`
+hit-tests with `elementFromPoint` and hands a target only the payload — there is
+no "which half of the row" in that contract, and the card designer shares the file.
+Two absolutely-positioned halves per row, each its own registered target, answer
+the same question with no change to it at all; they are `pointer-events: none`
+until a stop of that same route is in the air.
 
 **Shapes are the one thing the editor draws as style layers, and that has a trap.** A location is a DOM `Marker`; an *area* cannot be, so circles and polygons are a GeoJSON source with fill and line layers (`components/map/shapes/`) — the pattern that until now lived only in the embed. `setStyle`, which `use-maplibre.ts` calls on every basemap or theme change, discards every source and layer on the map. Pins survive it precisely because they are DOM; these do not, so `use-shape-layers.ts` re-adds them on `styledata`. That is the first thing to test after touching any of this. The handles *are* DOM markers, so a drag inherits the machinery the pins already use, and a drag paints through a preview channel that writes straight to the source — the PATCH fires once, on release.
 
@@ -353,3 +442,45 @@ menu greys the Route row and says why rather than hiding it — a paid feature
 invisible from the plan below it is one nobody upgrades for — and Recalculate
 needs no separate handling, since `toastError` already renders the server's own
 sentence verbatim.
+
+## The round trip that selected two rows
+
+A route's stop has no id of its own. The row key is `route:<shapeId>:<index>`, which is
+correct and was never the problem; selection is the other half, and selection in this panel
+is keyed on the **location**, because that is what the map, the marquee and the place card
+all agree a selection is.
+
+A round trip ends where it started. `stops[0].placeId === stops[n-1].placeId`, `from === to`,
+and both rows are honest rows for one honest location. So one selected id matched two of
+them, and pressing the row chipped **Start** lit the row chipped **End** as well — on a panel
+where lighting a row is the whole of how you say "this one". Found on a real map: a four-stop
+loop through three pins, `Location 9` at both ends.
+
+The fix is not to key selection on the row. Clicking a stop selects the *location* — the
+marker breathes, the card opens — and a selection that only the sidebar understood would
+leave the map with nothing to highlight. So the location stays the selection and the panel
+breaks the tie: `sidebarRows` marks each stop `isFirstVisit` (the first row on *that route*
+naming *that* location), and `lightsThisStop` picks the pressed row when one was pressed here
+and the first visit otherwise. A marquee, a click on the pin, a selection from anywhere else
+lights exactly one row, and nothing had to learn about routes to do it.
+
+The press carries the location id with it rather than a key alone, which is what makes it
+self-expiring: select anything else and the id stops matching, so there is no state to clear
+and no way for a stale press to light a row nobody chose. It is matched on the route too —
+one location can be a stop on two routes, and a press on one says nothing about the other.
+
+## Why the stops vanished, and why opening the route is the answer
+
+"One row per location" is right and stays. What it cost was legibility at the one moment it
+does the most work: drawing a route moves every pin it connects out of the loose run and out
+of any group, and routes are shut by default, so the gesture's visible result was five rows
+disappearing and a `· 5 stops` appearing on a row that was folded. Reported as the pins
+having been deleted — and from outside, that is exactly what it looks like. The panel's own
+header disagreed with it the whole time: nine locations counted, three rows drawn.
+
+Opening the route on arrival turns the same change into a move you can watch. It is done from
+the ids present at mount rather than by reasserting an open set, so a route that already
+existed keeps the shut default and a route the owner folded stays folded — the effect fires
+for shapes that appear *after* the panel did, which is exactly "just drawn". The seen-ids ref
+is replaced rather than added to, because an optimistic shape id is swapped for the server's
+on success and a set that only grew would hold every temporary id the session ever minted.

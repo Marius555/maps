@@ -18,6 +18,7 @@ import { ColorsGroup } from "./colors-group";
 import { MapControlsGroup } from "./map-controls-group";
 import { MeasurementGroup } from "./measurement-group";
 import { PanelGroup } from "./panel-group";
+import { PanelSurfaceGroup } from "./panel-surface-group";
 import { RowsGroup } from "./rows-group";
 import type { EmbedDesign } from "./use-embed-design";
 
@@ -112,10 +113,17 @@ export function DesignSidebar({
         ) : null}
 
         {/*
-          A full-height column holding five unrelated questions — where the
-          panel goes, what a row says, what is on the map, what colour it all
-          is, and whether visitors are counted — so a wall of thirty controls is
-          one nobody reads down.
+          A full-height column holding six unrelated questions — where the
+          panel goes, what it is made of, what a row says, what is on the map,
+          what colour it all is, and whether visitors are counted — so a wall of
+          thirty controls is one nobody reads down.
+
+          Six rather than five because "Results panel" had grown to eleven
+          controls with switches at positions 1, 3, 10 and 11, which is the
+          wall again inside one fold. Two of them were never panel controls and
+          are in "Map controls" now; the three describing the panel’s *surface*
+          are their own fold below, because all three are read only on a
+          floating panel and a fold can say that by not being there.
 
           It used to open on "Results panel" and allow several at once, the
           argument being that comparing a panel setting against a colour is a
@@ -126,6 +134,18 @@ export function DesignSidebar({
         <PropertyFolds>
           <PropertyFold id="panel" title="Results panel">
             <PanelGroup {...design} />
+          </PropertyFold>
+
+          {/* Transparency, blur and corners are read only where the map shows
+              through the panel, so with it docked or switched off this fold is
+              not merely empty — it is a trigger that opens onto nothing, which
+              is what `isEmpty` exists to remove. */}
+          <PropertyFold
+            id="surface"
+            title="Panel surface"
+            isEmpty={!design.settings.list || !design.settings.panelFloat}
+          >
+            <PanelSurfaceGroup {...design} />
           </PropertyFold>
 
           {/* Rows describe a panel that is not there when the panel is off. */}

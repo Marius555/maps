@@ -49,6 +49,7 @@ export default defineConfig({
     emptyOutDir: true,
     // Broad enough for anything that can run MapLibre at all.
     target: "es2020",
+    cssTarget: ["chrome111", "safari16.4", "firefox128", "edge111"],
     sourcemap: true,
     lib: {
       entry: resolve(import.meta.dirname, "src", "index.ts"),
