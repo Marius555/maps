@@ -95,9 +95,15 @@ export function DesignerCanvasArea({
       }
       /* `overflow-hidden` is what clips the removal wall to this box's own
          rounded corners: the wall is flush to the top, right and bottom edges
-         and square, so without it its corners poke past the radius below `lg`,
-         where nothing else was clipping. At `lg` the scroller takes over. */
-      className={`relative min-h-64 overflow-hidden rounded-xl bg-default/40 lg:min-h-0 lg:overflow-auto ${
+         and square, so without it its corners poke past the radius in the one
+         band where nothing else is clipping. At `lg` the scroller takes over.
+
+         Below `lg` this box is the whole page — the sidebar is a bottom sheet
+         over it there — so it takes the height instead of the card's, and
+         scrolls vertically when the card is taller than the screen. The
+         horizontal axis stays clipped: the removal wall comes in from beyond the
+         right edge, and `overflow-x: auto` would offer to scroll out to it. */
+      className={`relative min-h-64 overflow-hidden rounded-xl bg-default/40 max-lg:min-h-0 max-lg:overflow-y-auto lg:min-h-0 lg:overflow-auto ${
         isTranslucent ? "transparency-grid" : ""
       }`}
     >
@@ -108,8 +114,14 @@ export function DesignerCanvasArea({
        * container overflows in both directions and only one of them can be
        * scrolled back to. A `min-h-full` child inside the scroller centres
        * against the visible height and simply grows past it instead.
+       *
+       * The extra bottom padding below `lg` is the sheet's peek strip: it is
+       * parked over this box's own bottom edge, so without the room the card is
+       * centred behind it. Padding rather than a shorter box, because this is
+       * the scroller — the card has to be able to be scrolled clear of the strip
+       * as well as centred above it.
        */}
-      <div className="flex min-h-full items-center justify-center p-6">
+      <div className="flex min-h-full items-center justify-center p-6 max-lg:pb-[calc(1.5rem+var(--sheet-peek))]">
         {children}
       </div>
 

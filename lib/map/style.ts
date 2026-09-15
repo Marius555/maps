@@ -530,3 +530,30 @@ export function shouldDarkenStyle(
 ): boolean {
   return style === "auto" && prefersDark;
 }
+
+/**
+ * The light/dark the map itself is drawn in — `"light"` or `"dark"`.
+ *
+ * The one rule every piece of chrome that sits *on* a map has to follow, kept in
+ * one place because three things now ask it: the place card (`cardThemeClass`,
+ * which flips this again for a ground its owner pinned), the editor's floating
+ * controls, and MapLibre's own zoom stack and attribution bar.
+ *
+ * Auto asks the viewer; everything else asks the basemap. `prefersDark` arrives
+ * as an argument rather than being read here, because the answer is the
+ * *dashboard's* resolved theme (`usePrefersDark`, which reads the `.dark` class
+ * off `<html>`) and not the operating system's preference — an owner whose OS is
+ * dark and who picked Light in the account menu gets a light basemap, and the
+ * chrome on it has to agree. See lib/card/card-theme.ts for the full
+ * post-mortem of getting that source wrong.
+ */
+export function mapThemeClass(
+  style: MapStyleKey,
+  prefersDark: boolean,
+): "light" | "dark" {
+  return (
+    isAutoMapStyle(style) ? prefersDark : isDarkMapStyle(resolveMapStyle(style))
+  )
+    ? "dark"
+    : "light";
+}

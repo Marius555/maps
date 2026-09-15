@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import type { Shape } from "@/lib/repositories/types";
+import { newId } from "@/lib/utils/id";
 import {
   DEFAULT_SHAPE_COLOR,
   DEFAULT_SHAPE_OPACITY,
@@ -101,7 +102,7 @@ export function useCreateShape(mapId: string) {
 
       const now = new Date().toISOString();
       const optimistic: Shape = {
-        id: `${TEMP_SHAPE_ID_PREFIX}${crypto.randomUUID()}`,
+        id: `${TEMP_SHAPE_ID_PREFIX}${newId()}`,
         mapId,
         name: input.name,
         description: input.description ?? null,

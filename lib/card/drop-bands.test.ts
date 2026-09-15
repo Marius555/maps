@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { DraggedObject } from "@/components/groups/use-row-drag";
 import {
   MIN_BAND,
+  areaBands,
   dropBands,
   dropRegions,
   splitAlignColumns,
@@ -15,13 +16,18 @@ import type { DropSlot } from "./drop-slots";
 /**
  * The rules a person feels as "I can drop it there and the two targets never
  * tangle", asked here instead. Where the *places* come from is
- * `drop-slots.test.ts`; this is only how the card is divided among them.
+ * `drop-slots.test.ts`; this is only how the free space is divided among them.
  *
  * Every number is px against a 440px card, which is what `defaultCardLayout` is.
  */
 
-/** A place with no height — the seam between two touching blocks. */
-const seam = (y: number, index = 0): DropSlot => ({
+/**
+ * A place with no height of its own: the bare arithmetic of dividing by centres,
+ * with no box in the way. The card no longer offers one — a run with no room for
+ * the block offers nothing (`run` in ./drop-slots.ts) — but `dropBands` still
+ * has to divide them correctly.
+ */
+const point = (y: number, index = 0): DropSlot => ({
   zone: "middle",
   index,
   y,
@@ -54,16 +60,16 @@ function expectPartition(
 }
 
 describe("dropBands", () => {
-  it("gives one place the whole card", () => {
-    const bands = dropBands([seam(220)], 0, 440);
+  it("gives one place the whole of what it is given", () => {
+    const bands = dropBands([point(220)], 0, 440);
 
     expect(bands).toEqual([
       { zone: "middle", index: 0, y: 220, height: 0, offset: 0, top: 0, bottom: 440 },
     ]);
   });
 
-  it("splits at the midpoint between two seams", () => {
-    const bands = dropBands([seam(100, 0), seam(300, 1)], 0, 440);
+  it("splits at the midpoint between two places", () => {
+    const bands = dropBands([point(100, 0), point(300, 1)], 0, 440);
 
     expectPartition(bands, 0, 440);
     expect(bands[0].bottom).toBe(200);
@@ -84,18 +90,18 @@ describe("dropBands", () => {
   });
 
   it("orders by position, whatever order the places arrive in", () => {
-    const bands = dropBands([seam(300, 1), seam(100, 0)], 0, 440);
+    const bands = dropBands([point(300, 1), point(100, 0)], 0, 440);
 
     expect(bands.map((band) => band.y)).toEqual([100, 300]);
   });
 
-  it("keeps two seams either side of a divider apart", () => {
+  it("keeps two places either side of a divider apart", () => {
     /*
      * The bug this whole module exists for. A divider is a couple of pixels
-     * tall, so the seam above it and the seam below it are 2px apart — as
-     * in-flow lanes they drew over each other and over the divider.
+     * tall, so a place above it and a place below it sit 2px apart — as in-flow
+     * lanes they drew over each other and over the divider.
      */
-    const bands = dropBands([seam(200, 0), seam(202, 1)], 0, 440);
+    const bands = dropBands([point(200, 0), point(202, 1)], 0, 440);
 
     expectPartition(bands, 0, 440);
     for (const band of bands) {
@@ -104,11 +110,11 @@ describe("dropBands", () => {
   });
 
   it("never lets the minimum push the last band past the card", () => {
-    // Four seams crowded at the bottom: the forward pass alone would walk the
+    // Four places crowded at the bottom: the forward pass alone would walk the
     // boundaries off the end of the card. The backward pass is what pulls them
     // back inside it.
     const bands = dropBands(
-      [seam(400, 0), seam(410, 1), seam(420, 2), seam(430, 3)],
+      [point(400, 0), point(410, 1), point(420, 2), point(430, 3)],
       0,
       440,
     );
@@ -122,11 +128,11 @@ describe("dropBands", () => {
   });
 
   it("falls back to equal shares when the card cannot fit a minimum each", () => {
-    // Five seams in 40px: 16px each is 80px, which the card does not have. Every
-    // place still gets a band, because one that exists and cannot be reached is
-    // worse than one that is small.
+    // Five places in 40px: 16px each is 80px, which the card does not have.
+    // Every place still gets a band, because one that exists and cannot be
+    // reached is worse than one that is small.
     const bands = dropBands(
-      [seam(0, 0), seam(10, 1), seam(20, 2), seam(30, 3), seam(40, 4)],
+      [point(0, 0), point(10, 1), point(20, 2), point(30, 3), point(40, 4)],
       0,
       40,
     );
@@ -138,6 +144,81 @@ describe("dropBands", () => {
 
   it("has nothing to divide when nothing accepts the drag", () => {
     expect(dropBands([], 0, 440)).toEqual([]);
+  });
+});
+
+describe("areaBands", () => {
+  /** A run's place: a name-sized box inside the free space it names. */
+  const inRun = (
+    y: number,
+    areaTop: number,
+    areaBottom: number,
+    rest: Partial<DropSlot> = {},
+  ): DropSlot => ({
+    ...box(y, 24, rest.index ?? 0),
+    areaTop,
+    areaBottom,
+    ...rest,
+  });
+
+  it("divides a run between its own places and stops at its edges", () => {
+    // Free space from 48 to 140 holds three names. Above 48 and below 140 is a
+    // block or a gap, and it aims at nothing.
+    const bands = areaBands([
+      inRun(48, 48, 140),
+      inRun(82, 48, 140),
+      inRun(116, 48, 140),
+    ]);
+
+    expect(bands).toHaveLength(3);
+    expectPartition(bands, 48, 140);
+  });
+
+  it("gives the space between two runs to nobody", () => {
+    // Two runs in one zone with a block between them, 140 to 208.
+    const bands = areaBands([
+      inRun(48, 48, 140),
+      inRun(208, 208, 300, { index: 2 }),
+    ]);
+
+    expect(bands.map((band) => [band.top, band.bottom])).toEqual([
+      [48, 140],
+      [208, 300],
+    ]);
+  });
+
+  it("keeps runs in different zones apart, even at the same index", () => {
+    const bands = areaBands([
+      inRun(12, 12, 60, { zone: "top" }),
+      inRun(80, 80, 200, { zone: "middle" }),
+    ]);
+
+    expect(bands.map((band) => [band.zone, band.top, band.bottom])).toEqual([
+      ["top", 12, 60],
+      ["middle", 80, 200],
+    ]);
+  });
+
+  it("lets a place with no free space of its own catch its own box, last", () => {
+    /*
+     * A logo straddling the photo above it: its area is empty (130 to 130) and
+     * its square is drawn from 99 to 161, half over the photo. It comes after the
+     * runs, so where it hangs into the free space below, the square wins inside
+     * its own box.
+     */
+    const bands = areaBands([
+      inRun(99, 130, 130, { zone: "top", index: 1, height: 62 }),
+      inRun(130, 130, 428),
+    ]);
+
+    expect(bands.map((band) => [band.zone, band.top, band.bottom])).toEqual([
+      ["middle", 130, 428],
+      ["top", 99, 161],
+    ]);
+  });
+
+  it("has nothing to divide when nothing accepts the drag", () => {
+    expect(areaBands([])).toEqual([]);
   });
 });
 
@@ -204,12 +285,12 @@ describe("splitAlignColumns", () => {
     }
   });
 
-  it("leaves a seam and a column slot alone", () => {
-    // A seam has no height, so there is no square to draw in it; a column slot
-    // already knows its own box, because it is the room beside a block rather
-    // than a share of the card.
+  it("leaves a column slot, and anything with no height, alone", () => {
+    // A column slot already knows its own box, because it is the room beside a
+    // block rather than a share of a run; a place with no height has no square
+    // to draw in it.
     const column: DropSlot = { ...box(100, 62), left: 12, width: 140, half: "start" };
-    const bands = banded([seam(40), column]);
+    const bands = banded([point(40), column]);
 
     expect(splitAlignColumns(bands, 62, line)).toEqual(bands);
   });
@@ -282,13 +363,9 @@ describe("dropRegions", () => {
     expect(regions.map((region) => region.y)).toEqual([12, 160]);
   });
 
-  it("gives a seam no area at all", () => {
-    /*
-     * A seam has no height and always lands on a boundary something else owns —
-     * the bottom edge of the block above it, or the card edge where the next
-     * zone's first outline begins. Drawn at rest it was chrome ruled across the
-     * design; it stays a bold-only mark. Same argument as `.card-drop-seam`.
-     */
+  it("draws nothing for a place with no height", () => {
+    // Nothing to outline is nothing drawn. The card no longer offers such a
+    // place — this is the guard, not a case anyone reaches.
     expect(dropRegions([band(220, 0, 0, 440)])).toEqual([]);
   });
 
@@ -316,7 +393,7 @@ describe("dropRegions", () => {
      * A mark straddling the block above it: the run has no span, the square is
      * drawn half over that block, and the area is empty to say so. Drawn at rest
      * it was a faint box over a photo — a place offered on top of something that
-     * is already on the card. Same answer as a seam, for the same reason.
+     * is already on the card.
      */
     expect(dropRegions([band(99, 62, 90, 170, { areaTop: 130, areaBottom: 130 })])).toEqual(
       [],

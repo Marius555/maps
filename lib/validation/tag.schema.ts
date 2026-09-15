@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { newShortId } from "@/lib/utils/id";
+
 import { hexColorSchema, idSchema } from "./common";
 import { DEFAULT_PALETTE_COLOR } from "./palette";
 
@@ -134,11 +136,11 @@ export const placeTagsSchema = z
  * a `cat-` id again, so it cannot collide with anything, past or future.
  */
 export function newTagId(): string {
-  return `tag-${crypto.randomUUID().slice(0, 8)}`;
+  return `tag-${newShortId()}`;
 }
 
 export function newTagGroupId(): string {
-  return `grp-${crypto.randomUUID().slice(0, 8)}`;
+  return `grp-${newShortId()}`;
 }
 
 function countTags(groups: readonly { tags: readonly unknown[] }[]): number {

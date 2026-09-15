@@ -42,6 +42,26 @@ import type { StyleSpecification } from "maplibre-gl";
  * and the layers land at the end of the list. Measured in the browser, that put
  * every shape fill over every label on the map.
  */
+/**
+ * Layer metadata asking for a carried layer to go back on *top* of the map
+ * instead of under the labels.
+ *
+ * The cluster bubbles need it (components/map/clusters/cluster-layers.ts): a
+ * bubble is a stand-in for pins, and pins are DOM over everything. Put under the
+ * labels, a street name would cross out the count. Their rebuild path adds them
+ * with no `beforeId` — the end of the list — so this puts them there too, for the
+ * reason the note above gives: the two paths must stack a layer the same way.
+ *
+ * Metadata rather than a list of ids, so this file still names nothing the
+ * editor adds.
+ */
+export const STACK_ON_TOP = { "editor:stack": "top" };
+
+function isStackedOnTop(layer: StyleSpecification["layers"][number]): boolean {
+  const metadata = layer.metadata as Record<string, unknown> | undefined;
+  return metadata?.["editor:stack"] === "top";
+}
+
 export function carryRuntimeLayers(
   previous: StyleSpecification | undefined,
   next: StyleSpecification,
@@ -79,6 +99,11 @@ export function carryRuntimeLayers(
       ...Object.fromEntries(carried.map((id) => [id, previous.sources[id]])),
     },
     // Their own relative order is kept: whatever added them chose it.
-    layers: [...next.layers.slice(0, at), ...carriedLayers, ...next.layers.slice(at)],
+    layers: [
+      ...next.layers.slice(0, at),
+      ...carriedLayers.filter((layer) => !isStackedOnTop(layer)),
+      ...next.layers.slice(at),
+      ...carriedLayers.filter(isStackedOnTop),
+    ],
   };
 }

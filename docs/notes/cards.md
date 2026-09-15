@@ -21,6 +21,10 @@ building the same card from the same functions in `packages/shared/`.
 - `lib/card/designer-status.ts` is the one seam every reader goes through.
   `effectiveCardLayout` is what `buildSnapshot` reads, and a layout equal to
   `defaultCardLayout()` is **omitted from the snapshot entirely**.
+- **A ground the owner pinned decides the card's light/dark; the basemap decides only
+  when nothing was pinned.** `cardFlipsTheme` (`packages/shared/card-ground.ts`) is the
+  one function both renderers ask, and a translucent ground is composited over the map
+  before the question is put. See "The ground has the last word" below.
 
 ### Absent means the old behaviour
 
@@ -36,6 +40,25 @@ building the same card from the same functions in `packages/shared/`.
   becomes. **Quietly editing a design somebody made is the one thing these functions must
   never do** — including opening a panel, which is why `nearestStop` lights the closest
   tile **without writing it back**.
+- **The designer opens onto `defaultCardLayout()`, not onto a blank card**, because that is
+  what an unconfigured account's published map already draws. It used to open onto
+  `emptyCardLayout()`, on the reasoning that a card "half-built by nobody" is confusing —
+  and the premise was wrong: it is not built by nobody, it is what the product does, so a
+  blank canvas was the one screen in the app disagreeing with the thing it exists to show.
+  `isSavedCardLayout` is still the seam, and still has to be — a card somebody deliberately
+  *cleared* round-trips as three empty zones and must come back empty. Reset still clears to
+  `emptyCardLayout()`; clearing has to stay reachable.
+- **A map with no locations draws `SAMPLE_PLACE`, captioned as an example.** This overrides
+  the argument on `card/page.tsx` — that an invented sample "would show a card that looks
+  finished against data nobody has" — and keeps the half of it that was right. The real
+  first location still wins wherever there is one, and the sample carries **no photo**, so
+  the gallery block still shows its own empty state. Three things about it are load-bearing:
+  it lives in `lib/card/`, never `packages/shared/`, because the embed inherits that
+  directory and is 0.2KB from its ceiling (§4); its `tags` are empty and the chips come from
+  `previewChips`, because a fresh map has no tag vocabulary and a synthetic chip in front
+  would paint the sample pin a colour the map has never heard of; and `logoSample` keeps the
+  *real* location or null, because the Logo panel uploads to what it names and a frozen
+  constant is not somewhere to write.
 - The Links row's flags are spelled as the hidden state (`hidePhone`, `hideEmail`,
   `hideWebsite`, `hideDirections`) — `true` or absent, never `false`.
 
@@ -113,6 +136,113 @@ building the same card from the same functions in `packages/shared/`.
   a real drag source. The whole row has always been what you pick up. The row's duplicated
   `touch-pan-y` class went with it, since `rowProps.style` already states that rule.
 
+### Dropping a block (designer only)
+
+- **The magnet draws; the pointer drops.** While a block is in the air the copy in
+  the hand is pulled onto the slot under the pointer (`components/groups/ghost-magnet.ts`,
+  answered by `use-ghost-snap.ts`) and let go over anything that is not a slot — a
+  blocked face, the remove wall, off the card. Where a release lands is still
+  `elementFromPoint` **at the pointer**; the copy is `pointer-events: none`, so it may
+  be drawn anywhere. Never let the hit test read where the ghost is.
+- **Opt-in through `registerSnap`, and held in a ref.** With nothing registered the
+  ghost is moved by `moveRowGhost` sample for sample, which is what keeps the Locations
+  panel, groups and route stops exactly as they were. It is asked on every pointer
+  sample, so registering must never be a render. It unregisters when the overlay's
+  `useIsPresent` goes false, or the fading layer would pull the next drag onto the last
+  one's slots.
+- **One spring on a progress value, drawing `mix(from, to)` with `to` read live.** A
+  spring per coordinate aimed at the pointer chases a target that moved after it was
+  aimed; the live mix converges on the hand exactly and then hands back to
+  `moveRowGhost`. A moved block's copy takes the slot's height (`fillHeight`); a palette
+  tile keeps its own and is centred, because it is a label and not the block.
+- **The landed block's travel is turned off by its transition — `layout: { duration: 0
+  }` — never by removing `layout` or `layoutId`.** At release the copy is already on the
+  slot, so the block gliding in from its old place draws a second block crossing the
+  card. Taking `layoutId` off for a commit leaves a snapshot of the old place in Motion's
+  shared-layout stack for the next claimant to animate from.
+- **`justLanded` covers moves as well as new blocks, and carries `isNew`.** The bounce is
+  both arrivals; the line's fade (`movingBlockMotion`'s `isArriving`) stays new-only,
+  because a moved block's rebuilt line would fade in the partner that never moved.
+- **The landing is started imperatively (`use-landing.ts`), never as a mount animation —
+  and so must anything else that animates "on arrival" on this canvas.** Each zone is an
+  `AnimatePresence initial={false}`, and Motion's `PresenceChild` memoises its context on
+  `isPresent`, so a line present since page load goes on saying `initial: false` forever.
+  A block remounted into it (moved into a pair, or back out of one) gets
+  `blockInitialAnimation` and is initialised at the *end* of what it declares. Measured:
+  the ring arrived at opacity 0 / scale 1.07 on its first frame and the content at rest,
+  while the palette drop animated only because its line was new. The ring is therefore
+  always in the tree, invisible at rest, rather than mounted for the landing.
+- **Clearing `justLanded` must not stop the landing, and its clock starts after the drop's
+  commit.** Nothing in the hook stops its animations — no cleanup, and no `useAnimate`.
+  `useAnimate` stops its scope's animations from an unmount effect, and the App Router
+  runs React Strict Mode in development, which disconnects and reconnects a fresh mount's
+  effects: measured, the content got one frame (scale 1.08 → 1.0696) and froze, and the
+  ring's opacity never started. It is plain `animate` on the hook's own refs; a second
+  landing interrupts the first because Motion starts each value over the last. The flag only has to
+  outlive the commit that decides travel and the line's fade. Its timer lives in an
+  effect rather than in `onDrop` because a drop's commit (new layout, selection, the
+  Modify tab mounting) measured 277ms in development before the first frame — a timer
+  started at the release closed with the declarative version's bounce half played. The
+  effect's cleanup cancels the previous timer, so a second landing is never cleared by the
+  first one's timeout.
+- **Reduced motion keeps the snap and loses the spring.** `MotionConfig` does not reach a
+  vanilla `animate`, so `ghost-magnet.ts` asks `matchMedia` itself and jumps. The
+  resting regions' 2px / 70% / tinted look is their static form once `MotionConfig`
+  stops the breathing.
+- **A region pops and breathes on two nested elements**, one `scale` each
+  (`DropRegionOutline`). It now carries a faint accent tint, which reverses "outlines
+  and nothing else" for the resting layer only — a region is free space by construction,
+  so the tint covers nothing. The bold mark is a stronger tint with no edge at all — see
+  the bullet on one edge below.
+- **A block drops only into free space. There are no seams.** A run with no room for the
+  block offers nothing (`run` returns `[]`). It used to offer a zero-height "seam" that
+  pushed everything below it down — hairline places at the top of every zone, between
+  touching lines and at the bottom of the card — and that was reported as a bug. Only
+  the straddling logo keeps a place with no room of its own: it is a square that spends
+  none.
+- **Hit areas are the free space, not the card** (`areaBands`). Each run is partitioned
+  among its own slots and nothing outside a run aims anywhere: over a block or a gap the
+  copy unsnaps, and a release falls to `card:frame` and is a no-op, never a delete.
+  Handing `dropBands` the whole card made the nearest place win, which the magnet would
+  draw as the block landing somewhere other than under the pointer. Blocked faces and
+  pair targets span the **whole line** for the same reason — the 16px strips `faceBand`
+  used to leave at each end existed only to keep the seams reachable.
+- **One edge on a place, and it is the area's.** The bold mark (`.card-drop-slot`) is a
+  tint, not dashes: it sits inside a region with dashes of its own — measured 220×24
+  inside 222×28 — and two edges a pixel apart, breathing against each other, read as a
+  border on the block seated between them. The copy wears no edge either:
+  `.row-ghost--snapped` clears the root's ground, border and shadow; a carried palette
+  tile hands the root's chrome to the pill (`.row-ghost:has(> .palette-tile)`), where it
+  otherwise traced a 12px-radius rectangle round a pill; and a moved block's clone drops
+  its selection ring (`.row-ghost > [data-block-id]`), which every block wears after the
+  drop that placed it.
+- **The copy is never dimmed.** The source is cloned in the commit that gave it
+  `opacity-35`, so the copy measured 0.35 of the root's 0.9; `mountRowGhost` sets the
+  copy's own opacity to 1, and a seated root is 1 as well. The magnet *scales* the copy —
+  it never lays it out again — to sit `SNAP_INSET` inside the slot, on the same spring as
+  the box. A moved block (`fit: "block"`) is laid out at the slot's size; a palette tile
+  (`fit: "label"`) is centred at its own size **and keeps its pill ground** — shedding it
+  left dark text on the veil — losing only the hairline and its padding, so a 24px Name
+  place seats it at 0.75.
+- **The empty image block is a drag source, and it is not dashed.** Its file-drop
+  `<label>` carried `NO_DRAG_PROPS` over the whole block, so an image block with no photo
+  could not be moved or removed at all. Dashes on this canvas mean a place a block can
+  go; the placeholder is a plain fill with a solid accent ring only while a file is over it.
+- **A finished drag swallows the one click it leaves behind** (`swallowNextClick` in
+  use-row-drag.ts), Escape included — otherwise letting go of the image block opens the
+  file picker. Only drags that started; a plain click is untouched.
+- **Click-to-place is the same carry, ended differently** (`use-tap-carry.ts`). A click on
+  a palette tile puts it in `dragged` with `carriedBy: "tap"`, so the areas, the sheet's
+  retract and `onDrop` all answer it unchanged; the next click on a place drops it, and
+  any other click, or Escape, ends it. Blocks already on the card do not take part — a
+  click there still selects. Three rules hold it up. **A gesture's `setDragged(null)` ends
+  only a drag**: `finish()` sends one on every pointerup after a press, and unguarded a
+  click on the carried tile disarmed at pointerup and re-armed on the click. **The click
+  listener is capture-phase and ends the carry before `onDrop`**, `finish()`'s order, which
+  the sheet's close depends on. **A tap source toggles itself** (`TAP_SOURCE_PROPS`):
+  ending the carry in the listener and letting the tile decide races a microtask flush
+  between the two, and the tile picks itself back up.
+
 ### The Button block
 
 - **It stores a *source*, never a URL — except per pin.** The design is saved per
@@ -170,11 +300,116 @@ building the same card from the same functions in `packages/shared/`.
 - The palette does **not** scroll while a block is in the air, via an **inline**
   `overflow-y: hidden` (it must beat both HeroUI's scroll-shadow class and the element's
   own `lg:overflow-y-auto`). `hidden`, not `clip` — `clip` drops `scrollTop` to 0.
-- **The Blocks palette is not a fold and must keep fitting.** All eleven blocks are
-  drawn at once, two-up, under static headings — measured at 315.5px of content in a
-  456px scroller. A tile that grows past one line, or a fifth shelf, has to be measured
-  against the column again. An empty shelf still renders nothing at all, heading
-  included; that is what lets it shrink as the card fills.
+- **The Blocks palette is not a fold, and it is one per line.** All eleven blocks are
+  drawn at once under static headings, as full-width buttons — **38px a tile, 582px of
+  content in a 524px scroller at an 800px viewport**, so with the card empty (the worst
+  case, and the only time all eleven are offered) it overflows by 58px and scrolls. It
+  was two-up and fitted at 315.5px in a 456px scroller; that arithmetic was never wrong
+  but its premise was — it assumed the tile still carried a sentence of hint, which has
+  been in `title` for a long time. Without the sentence the real choice was a grid of
+  two-word chips, which reads as a legend, against a stack of controls, which reads as a
+  shelf you take from. A tile that grows past one line, or a fifth shelf, has to be
+  measured against the column again: those are what turn one flick into a hunt. An empty
+  shelf still renders nothing at all, heading included; that is what lets it shrink as
+  the card fills.
+- **A tile is a pill, and the hover does not touch its edge.** `rounded-full`, with the
+  glyph in a `size-6` well of its own so the round left end has something to be round
+  about — eleven bare icons a fixed distance from a curve is the shape's one failure mode.
+  Hover changes the fill (`--accent-soft`) and paints the well solid accent, and nothing
+  else: `hover:border-accent` put an accent hairline round every tile the pointer crossed,
+  which on a column of eleven read as the list flickering, and next to the card it was a
+  second accent outline competing with the drop chrome. The label stays `text-foreground`
+  throughout, because `--accent-soft` is `color-mix(accent 15%)` — a tint, not a solid —
+  so `--accent-foreground` on it would be near-white on pale in the light theme.
+  **Measured after the change: still 37.6px a tile**, which is what keeps the arithmetic
+  above true; `py-1.5` plus a 24px well plus the hairline was chosen to land there.
+- **Below `lg` the whole sidebar is a bottom sheet, and the page holds nothing but the
+  card** (`designer-side-panel.tsx`, over `components/ui/bottom-sheet.tsx`). The stacked
+  layout put the palette *under* the card in a page that scrolls, and the gesture that
+  puts a block on the card is a drag onto the card — so reaching Divider scrolled the
+  target off screen and the two could never be visible at once. The first attempt moved
+  only the palette into a drawer and left the tab strip in the page; that was rejected on
+  sight, and rightly — what is worth reclaiming on a phone is the whole column, not the
+  eleven tiles inside it.
+- **It was an off-canvas panel down the right edge, behind a scrim, below `md`, and all
+  three of those are gone.** It is the editor's sheet: a `--sheet-peek` strip along the
+  bottom of the workspace, dragged open to 65dvh, with nothing dimmed behind it. The
+  breakpoint moved with it — see the next bullet — and the scrim went because a peek strip
+  is the statement a scrim contradicts: what is behind this still works.
+- **It is one element positioned two ways, not two components.** A sheet below `lg`, an
+  ordinary grid column at `lg` and above. Rendering a phone copy and a desktop copy would
+  put two React Aria `Tabs` in the tree claiming one label and two file inputs behind the
+  Logo control; choosing between them in JavaScript would paint the phone's layout for a
+  frame on every desktop load, because `useMediaQuery`'s server snapshot is `false`.
+  Positioning is the one thing CSS can change without moving anything in the tree, so that
+  is what changes. The single exception is `inert` while closed — an off-screen panel is
+  still in the tab order, and an attribute is not something a media query can set. Phrased
+  so the server's `false` means *not* inert.
+- **`lg` and not `md`, and the reason the old breakpoint existed is gone.** It was `md`
+  because the trigger lived in the app's mobile header, which is the one row of chrome
+  below `md` — so a panel that went off-canvas between `md` and `lg` would have had
+  nowhere to be opened from, and that band kept the stacked layout. A grab rail is its own
+  trigger at every width, so the band gets the sheet too, and with it went the trigger, the
+  focus restore, the `MD_TO_LG` query and the `scrollIntoView` that band needed to make a
+  selection reachable.
+- **The peek strip is the panel's header moved, not a second one invented.** Shut, it
+  carries the open tab's name (`TAB_TITLES`), the unsaved dot and the two controls that act
+  on the whole design — Reset and Close. `SectionPanel`'s own header row is therefore
+  `max-lg:hidden`, which is what `headerClassName` is for; the tab strip below it is *not*
+  in that row and stays. Reset is drawn in both, one of the two always `display: none`, so
+  nothing is offered twice — which is also why its body is `resetCard` in
+  `card-designer.tsx` rather than an arrow function written out at each site.
+- **The panel fills its height and scrolls inside itself at every width now.**
+  `FILLS`/`CLIPS`/`SCROLLS` in `card-designer-tabs.tsx` used to be split `max-md:` / `lg:`
+  with nothing in between, because the middle band was an ordinary page-height panel. There
+  is no middle band. Four boxes still have to agree, and one missing `min-h-0` still makes
+  the whole chain grow instead of scrolling.
+- **It is not a modal, because React Aria's modal marks the rest of the page `inert`.**
+  This was HeroUI's `Drawer` first, and `inert` — not `aria-hidden`, which would only have
+  been rude to a screen reader — makes a subtree untargetable by hit testing.
+  `useRowDragSource` resolves every drop with
+  `elementFromPoint(x, y).closest("[data-drop-id]")`, so with the drawer open that call
+  returned `<body>` for every sample over the card: measured, the card's drop bands were
+  all still laid out at the right coordinates and not one of them could be found. Turning
+  the backdrop's `pointer-events` off does not help, because `inert` is on the *page*, not
+  the overlay. A modal is a statement that nothing outside it can be interacted with,
+  which is the opposite of a panel you drag out of. Escape is done by hand instead.
+  Re-measured on the sheet with synthetic touch pointers at 502x732: hold 360ms on a
+  palette tile, and the ghost lifts, the sheet parks itself at its peek, `elementFromPoint`
+  resolves `card:middle:3:29`, the band lights, and the release lands the block.
+- **It retracts for the length of a drag; it does not close.** `useRowDragSource` lives on
+  the `PaletteTile`, and its drag-lifetime effect tears the ghost down on unmount — so
+  closing the panel when the gesture starts would end the gesture in the same frame. It
+  parks at its peek and goes `pointer-events: none` while `dragged?.type === "card-new"`
+  (`isRetracted` on `BottomSheet`), and is closed properly once the drop has landed
+  (`finish()` clears `dragged` *before* it calls the target's `onDrop`). Escape is ignored
+  there too: for every drag in this app Escape means abandon the drag, and the panel's own
+  listener would otherwise close it mid-gesture.
+- **A tap on a placed block opens the sheet; a drop does not.** Both paths select, and for
+  a while only one of them had anywhere to show the result: below the breakpoint the panel
+  is shut and `inert`, so tapping a block lit its ring and its resize handles and nothing
+  else happened. The reason this is **`selectOnCanvas` and not two more lines inside
+  `select`** is the rule directly above: a drop selects what landed too, and a drop must
+  leave the panel shut so the card is visible at the moment it has just changed. Since
+  `finish()` clears `dragged` *before* calling `onDrop`, an open requested from inside
+  `select` would arrive in the same commit as that close, and the two would fight over one
+  boolean. Only the canvas asks.
+- **`isPanelOpen` is a plain boolean, and it used to record how it opened.** There were two
+  ways in and they differed in whether focus moved with the panel: the header's trigger was
+  a deliberate move from the other end of the screen and took focus (and gave it back on
+  close); a tap on a block was not, and moving focus off the thing just tapped would also
+  arm that restore. With the trigger gone the only openers are the rail — which is inside
+  the sheet — and a selection, so `null | "trigger" | "selection"` and `focusOnOpen` went
+  with it.
+- **Nothing scrolls the card into view, because the card cannot be off screen.** Below `lg`
+  the canvas is a single `1fr` grid row filling what is left of the viewport and scrolling
+  inside itself when a tall card needs it, so the page does not scroll at all. It carries
+  `max-lg:pb-[calc(1.5rem+var(--sheet-peek))]` so the card is centred *above* the strip
+  rather than behind it — padding on the scroller rather than a shorter box, so a tall card
+  can still be scrolled clear of it. Measured at 502x732: `scrollHeight === clientHeight`
+  with the sheet open and shut, and the card's box ends at the strip's own top edge.
+  `.row-ghost` still sits at `z-index: 60` — the sheet is `z-30`, and the copy in your hand
+  has to win.
 
 ### Glass, theme and chrome
 
@@ -188,6 +423,12 @@ building the same card from the same functions in `packages/shared/`.
   resolved from the *basemap*), on the card element itself in `card-canvas.tsx` and
   `place-card.tsx` — **not** on the wrappers carrying `cardAccentVars`, which are the whole
   editor row and designer column.
+- **`cardThemeClass` no longer owns that rule; it applies one flip on top of it.** The
+  basemap half is `mapThemeClass` in `lib/map/style.ts`, which the map frame and MapLibre's
+  own chrome now read as well (`docs/notes/basemaps-and-tiles.md`). A card is the one thing
+  on a map allowed to disagree with it, and only because its ground is a colour its owner
+  pinned — `cardFlipsTheme`. Nesting is fine and is what happens today: the frame declares
+  the basemap's class and the card declares its own inside it, which wins for its subtree.
 - **Auto asks `usePrefersDark()`, never `matchMedia` — and never at render.** The answer is
   an argument, the same shape `shouldDarkenStyle` takes, because the OS preference and the
   dashboard's theme are different questions and a `typeof window` branch in a render is a
@@ -197,6 +438,77 @@ building the same card from the same functions in `packages/shared/`.
   Without them a cloned block silently draws in `--card-accent`'s `#1c7ed6` fallback.
 - `.transparency-grid` is a checkerboard shown only while the card is see-through; the
   studio's flat `bg-default/40` workspace cannot otherwise tell glass from solid.
+- **`CardFrame` re-states `color`, not just the tokens.** Putting `.light`/`.dark` on the
+  card re-declares every *variable* for the subtree, but `color` itself was still whatever
+  `<body>` computed under the dashboard's theme (`app/layout.tsx`), so anything falling
+  through to `inherit` or `currentColor` was drawn in the page's ink rather than the
+  card's. The embed's twin had always said it — `.lm-root { color: var(--lm-foreground) }`
+  and again on `.maplibregl-popup-content` — and this side never did.
+
+#### The ground has the last word
+
+**The bug.** Pinning the card's background and then changing the map's theme made the card
+unreadable — grey text on a grey card, with only the button visible because its colour is a
+literal too. Measured on a real design: ground `#ffffff` at 60% over the dark basemap
+resolves to about `#a3a3a3`, and the address on it was `--muted` from the *dark* set,
+`#989898`. The same colour, give or take.
+
+Nothing was misbehaving. `cardThemeClass` gives the card the basemap's light/dark on
+purpose, so the studio previews what a visitor gets; `cardGround` keeps the colour its
+owner pinned. A pinned colour cannot follow a theme, and nothing made the text follow the
+pinned colour. `cardGround`'s own docblock had already named the trap — *"a stored
+`#ffffff` could not be [readable in dark mode]"* — and only avoided it while `background`
+was absent.
+
+**It was never studio-only.** The embed had the identical shape and the identical defect:
+one `lm-root--dark` for the whole embed, and a comment on `.maplibregl-popup-content`
+saying `--lm-card-bg` unset "is what keeps a card readable on a dark map" — true, and
+silent about the case where the owner set it. So published customer maps drew the same
+grey-on-grey. The twin-renderer rule guaranteed agreement, and what the two agreed on was
+the bug.
+
+**The rule.** A pinned ground decides; the basemap decides when nothing was pinned. The
+second half is the old behaviour untouched, which is what keeps every card that never
+opened the Background control rendering exactly as before — `card-theme.test.ts` asserts
+that equivalence directly.
+
+**Why it is one function and not two that agree.** `cardFlipsTheme` lives in
+`packages/shared/card-ground.ts` and both renderers call it. It costs the embed almost
+nothing because `parseColor` and `lightnessOf` were already in the bundle via
+`loadMapStyle` → `map-appearance` → `style-tint`.
+
+**Translucency is composited, not ignored.** A ground at 60% is 60% the owner's colour and
+40% the map; a 10% white veil over a dark basemap is still a dark card and still wants pale
+text. OKLab's L is perceptual and `color-mix(in oklab, …)` is what paints this anyway, so
+mixing the two lightnesses in that space is the arithmetic the browser is about to do. The
+colour's own alpha counts too — `#ffffff80` is as see-through as 60%.
+
+**It returns a boolean, and that was forced.** The obvious signature is `"light" | "dark" |
+null`, and it was that first. Both callers immediately converted it, and the conversion in
+the embed cost bytes that did not exist: the bundle came out **28 bytes over the 320KB
+ceiling**, which §4 says is not a number to edit. `cardFlipsTheme` answers the comparison
+both callers actually wanted — the embed toggles one class on it, `cardThemeClass` folds it
+in with a single `!==` — and that, plus dropping a clamp that duplicated what
+`card-layout.ts` already bounds, brought it to 6 bytes under. The same pressure is why the
+embed's half is **one** class rather than two, and why the dark direction is a second
+selector on the existing `.lm-root--dark` block rather than six values copied out of it:
+cheaper, and there is now no copy to drift.
+
+**Only three tokens are re-declared** — `--lm-foreground`, `--lm-muted`, `--lm-border` —
+because they are the three a card's text falls back through. A colour pinned on a block
+still outranks all of it, every rule being `var(--lm-card-color, var(--lm-muted))`. They go
+on the popup *shell*, since custom properties inherit and a value set on the element beats
+one inherited from `.lm-root` whatever the specificity. Verified in the browser both ways:
+flip inside a dark root resolves `#1b1d21/#656b76/#e2e5ea`, inside a light root
+`#f2f3f5/#a2a8b3/#2c2f35`, and a popup without the class is unchanged in both.
+
+**What this does not fix**, and should not: a card pinned to 60% white over a dark basemap
+is a mid-grey card by construction. The text now takes the palette that reads best on it —
+measured `#636363` on `#a3a3a3`, about 2.4:1, against `#989898` on `#a3a3a3` before, about
+1.1:1 — but the design's own opacity is the owner's to choose, and overriding it would be
+this file editing somebody's card. The related trap is that the Background control offers
+`fallback="#ffffff"`, so one touch pins white for good; a way back to "no colour" is worth
+more here than any amount of cleverness about contrast.
 
 ### Slots (editor only)
 

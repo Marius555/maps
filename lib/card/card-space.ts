@@ -23,7 +23,7 @@ import type { CardDrag } from "./card-edits";
  * as tall as the name, an address as tall as the address, and both change with
  * the location the canvas happens to be drawing. So the caller passes in what
  * each block currently measures (`components/card/designer/use-drop-bands.ts`,
- * in the same pass that finds the seams) and this does the arithmetic. The
+ * in the same pass that finds the free space) and this does the arithmetic. The
  * fallbacks below are only for a block that has never been measured at all.
  */
 

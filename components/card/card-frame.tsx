@@ -631,7 +631,19 @@ export function CardFrame({
       {...rootProps}
       ref={ref}
       style={{ ...cardStyle(layout), ...style }}
-      className={`flex max-w-full flex-col overflow-hidden bg-surface ${className ?? ""}`}
+      /*
+       * `text-foreground` beside `bg-surface`, and it is not decoration.
+       *
+       * The card is its own colour context — the theme class on this element
+       * re-declares every token for the subtree (`cardThemeClass`). But
+       * re-declaring a *variable* is not re-stating a *property*: `color` is
+       * still whatever `<body>` computed it to under the dashboard's own theme,
+       * so anything inside falling through to `inherit` or `currentColor` was
+       * drawn in the page's ink rather than the card's. The embed's twin has
+       * always said it — `.lm-root { color: var(--lm-foreground) }` and again on
+       * `.maplibregl-popup-content` — and this side never did.
+       */
+      className={`flex max-w-full flex-col overflow-hidden bg-surface text-foreground ${className ?? ""}`}
     >
       {CARD_ZONES.map((zone) => renderZone(zone))}
       {children}

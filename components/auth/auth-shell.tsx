@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { PRODUCT_NAME } from "@/lib/config";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 /**
  * The right-hand column of every auth screen: what the page is, the form, and
@@ -34,7 +34,7 @@ export function AuthShell({
         href="/"
         className="inline-block text-sm font-semibold tracking-tight text-foreground transition-colors hover:text-muted lg:hidden"
       >
-        {PRODUCT_NAME}
+        <BrandLogo />
       </Link>
 
       <div className="space-y-2">

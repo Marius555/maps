@@ -517,11 +517,24 @@ function Gallery({
 
 /**
  * Where a designer-only preview photo comes from: a native file drop, or a
- * click that opens the OS picker. Deliberately not the same drag this block
- * can itself be moved with — `NO_DRAG_PROPS` carves this whole surface out of
- * that gesture, the same way the remove button and the resize handle do, so
- * pressing here to choose a file cannot also pick the block up and move it. A
- * gallery block still has the corner grip for that.
+ * click that opens the OS picker.
+ *
+ * **It is also the block's own surface, so the block moves like every other.**
+ * This used to carry `NO_DRAG_PROPS`, so a press meant to choose a file could
+ * not also pick the block up — but it fills the whole block, so the carve-out
+ * *was* the whole block, and an image block with no photo could not be moved or
+ * dragged to Remove at all. The two gestures do not actually collide: a click
+ * is a press that never travels `useRowDragSource`'s 8px (or outlasts its 250ms
+ * hold on touch), a native file drop is a different event family altogether,
+ * and the one `click` a finished drag leaves behind is swallowed by the drag
+ * (`swallowNextClick` in components/groups/use-row-drag.ts) rather than opening
+ * the picker.
+ *
+ * **Filled, never dashed.** On this canvas dashes mean a place a *block* can go
+ * (`.card-drop-slot`, `.card-drop-region`), and a dashed box that says "drop"
+ * was taken for one of those. It is the plain fill a published card's empty
+ * gallery already draws, and lights with a solid accent ring only while a file
+ * is actually over it.
  */
 function GallerySampleDropzone({
   onSampleImage,
@@ -539,7 +552,6 @@ function GallerySampleDropzone({
   return (
     <label
       htmlFor={inputId}
-      {...NO_DRAG_PROPS}
       onDragOver={(event) => {
         event.preventDefault();
         setIsOver(true);
@@ -550,8 +562,10 @@ function GallerySampleDropzone({
         setIsOver(false);
         take(event.dataTransfer.files);
       }}
-      className={`flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1 border-2 border-dashed text-center text-muted transition-colors ${
-        isOver ? "border-accent bg-accent-soft text-foreground" : "border-border"
+      className={`flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1 text-center transition-[color,background-color,box-shadow] ${
+        isOver
+          ? "bg-accent-soft text-foreground inset-ring-2 inset-ring-accent"
+          : "bg-default text-muted"
       }`}
     >
       <ImagePlus aria-hidden="true" className="size-5" />

@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 
 import { AuthDivider } from "@/components/auth/auth-divider";
 import { GoogleButton } from "@/components/auth/google-button";
+import { LegalConsentNotice } from "@/components/brand/legal-consent-notice";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
 import { useLogin } from "@/lib/query/auth";
@@ -86,6 +87,10 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
           Log in
         </Button>
       </form>
+
+      {/* Here as well as on signup: Continue with Google creates the account on
+          first press from this page too. */}
+      <LegalConsentNotice />
     </div>
   );
 }

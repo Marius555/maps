@@ -3,6 +3,7 @@ import { Instrument_Sans } from "next/font/google";
 
 import { AppProviders } from "@/components/providers/app-providers";
 import { ThemeScript } from "@/components/providers/theme-script";
+import { BRAND } from "@/lib/brand";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "@/lib/config";
 import "./globals.css";
 
@@ -13,11 +14,16 @@ const instrumentSans = Instrument_Sans({
 });
 
 export const metadata: Metadata = {
+  applicationName: PRODUCT_NAME,
   title: {
     default: PRODUCT_NAME,
     template: `%s · ${PRODUCT_NAME}`,
   },
   description: PRODUCT_TAGLINE,
+  // brand.json's favicon. The default file lives in /public rather than at
+  // app/favicon.ico, because the file convention would add a second
+  // <link rel="icon"> that no edit to brand.json could remove.
+  icons: BRAND.favicon ? { icon: BRAND.favicon } : undefined,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

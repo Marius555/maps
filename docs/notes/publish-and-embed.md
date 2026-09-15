@@ -11,10 +11,23 @@ rewritten; it is the record of why this area is shaped as it is.
   `buildSnapshot`, so the panel and the published map cannot disagree about an unset field.
 - **Everything the designer writes is optional on `SnapshotSettings`, and absent means what
   the embed did before that field existed.** Hence the asymmetry: `DEFAULT_EMBED_SETTINGS`
-  is what a map *publishes* (panel right, floating, pins in rows, controls top-left); the
+  is what a map *publishes* (panel right, floating, pins in rows, controls bottom-left); the
   **embed** reads a missing key as the *old* behaviour (panel docked left, no pins, controls
   top-right). Changing a default changes the next publish and can never change what a live
   customer site already renders.
+- **A changed default does not reach a map that already has the old one written down, and
+  that is the asymmetry seen from the owner's chair.** Reported as "the zoom buttons are
+  top-left and I asked for lower left". Nothing was broken: `controlsCorner` shipped
+  defaulting to `"top-left"`, `useEmbedDesign` writes the *whole* resolved blob on the first
+  edit of anything, so that value was baked into the row — and when the default became
+  `"bottom-left"`, `readEmbedSettings` found a real value and never reached it. Verified in
+  the browser: the snapshot in the preview frame said `top-left`, the sidebar's Corner tile
+  said "Top left", and the embed had put both control groups in
+  `.maplibregl-ctrl-top-left` exactly as asked. The fix is one press of the tile, and the
+  thing to know is the shape: **every map that predates a default carries the default it
+  was written against**, and nothing may quietly rewrite it (§6 — a design somebody made is
+  not ours to edit). If a changed default ever has to reach existing maps, that is a
+  migration with the owner's knowledge, not an edit to `DEFAULT_EMBED_SETTINGS`.
 - **A boolean the stylesheet branches on is an attribute, not a variable.** `panelScrollbar`
   hides the results list's own bar, and hiding one takes `scrollbar-width` *and* a
   `::-webkit-scrollbar` rule — a pseudo-element cannot be switched on by a custom property.
@@ -26,9 +39,30 @@ rewritten; it is the record of why this area is shaped as it is.
   sidebar takes that 15rem and there is no `Container`. The back link in the sidebar header
   is the only way out — structure, not decoration.
 - The two-pane breakpoint is `lg`, because the embed's own stacking query is 640px **of its
-  own width** and 1024 − 320 leaves 704px. Below `lg` the page stacks. (The drawer query is
-  768px, so a `panelDrawer` map drawers at `lg` in the designer — that is the setting doing
-  what it says, not the pane being too narrow.)
+  own width** and 1024 − 320 leaves 704px. (The drawer query is 768px, so a `panelDrawer`
+  map drawers at `lg` in the designer — that is the setting doing what it says, not the
+  pane being too narrow.)
+- **Below `lg` the design column is a bottom sheet over the map**, the same box the
+  editor's locations panel and the card designer's sidebar are
+  (`components/ui/bottom-sheet.tsx`). It was a `max-h-[60dvh]` block stacked under a
+  `55dvh` map with the page scrolling past both — a designer where neither half has room
+  and neither can be seen while the other is used. The page's own row therefore carries a
+  definite height at every width (`h-[calc(100dvh-3.5rem)] md:h-[100dvh]`, the 3.5rem
+  being the `md:hidden` `MobileHeader`), plus `relative` and `max-lg:overflow-hidden`,
+  which are what the sheet needs of a caller.
+- **The preview gets `max-lg:pb-[var(--sheet-peek)]`, not `--map-chrome-inset`.** The
+  editor lifts MapLibre's bottom corner with that property; it cannot reach here, because
+  the preview is the real embed in an iframe and a custom property on this document stops
+  at the frame. Ending the frame above the strip is the only way the embed's attribution
+  and its zoom stack stay uncovered (§12). Measured at 822x732: the frame's bottom edge is
+  668 and the strip's top is 669.
+- **The peek strip says the name and `PublishStatus compact`, and the footer's copy is
+  `max-lg:hidden`.** The full status is a sentence; on a 390px strip 2.75rem tall, beside
+  the panel's own name, it wrapped onto three lines and printed itself over "Design". The
+  compact form is the word plus the card designer's unsaved dot — whether it is live, and
+  whether what is live is current. **Publish itself is one tap away** below `lg`: it stays
+  in the footer, because a long column of controls must not be able to push it out of
+  reach and a second row of chrome is what the strip exists to avoid.
 - **This page must have no `loading.tsx`.** With one, a navigation produced two large grey
   states for one click (the nav unmounting, `main` jumping 240px, eight `animate-pulse`
   boxes, then a second commit 550ms later). With none, the router awaits the payload and the
@@ -261,6 +295,40 @@ rewritten; it is the record of why this area is shaped as it is.
   because a trigger opening onto nothing is worse than no trigger. What is left is a
   master switch, three selectors and one run of switches, which is the shape the rest
   of the designer already had.
+- **The toolbar's controls are 23px tall, and the row states its own type to get there.**
+  They were `font: inherit` — 14px off `.lm-root` — with 7px of padding, which is a 34px
+  box; asked for a third off, the line box is most of that height, so the type had to come
+  down with the padding. `font-size: 12px` therefore sits on `.lm-toolbar`, **once**, and
+  everything in the row takes it: `font: inherit` on the field and the buttons is exactly
+  the declaration that makes a form control read its parent's type, and the search dropdown
+  is a `ul` inside it. `line-height` is deliberately *not* stated — 12px at the inherited
+  1.45 is a 17.4px line, and 2px either side plus the hairline is 23px on the nose. It
+  cannot be set on `.lm-root` instead: that 14px is the whole embed's, the results rows and
+  the card included.
+- **Three numbers have to move with it or something breaks silently.**
+  `.lm-button--icon` is a square sized to the field's height (23px, was 34); the toolbar's
+  glyphs are `.lm-toolbar svg { width: 12px; height: 12px }`, because `dom.ts`'s `icon()`
+  writes 18 as presentation attributes and has to keep doing so — the same helper draws the
+  card's links and folds, which did not get smaller; and the MapLibre top-corner clearance
+  is `top: 10px` plus the control height, so **42px became 31px, in both places**
+  (`:has(> .lm-toolbar)` and its 480px twin). Too large is a phantom band with nothing in
+  it; too small is the overlap that rule exists to end. Measured at a 390px embed: the
+  floating toolbar is 368x23 with the drawer trigger beside it and no wrap, both top
+  corners pad 31px, and a control there would start 8px below the toolbar — the same gap 42
+  gave at the old size.
+- **This one reaches live maps**, on the next `/embed` deploy and without the owner
+  republishing, which is the tag-chip trade taken deliberately again. It is a size change
+  rather than a broken state becoming a working one, so it is a weaker case than the four
+  toolbar fixes above — it was asked for directly, and the alternative (a setting) would be
+  a key in `SnapshotSettings` for something nobody would open the panel to change.
+- **It cost nothing against the budget, and that was the constraint rather than a
+  coincidence.** The total was 319.8KB of a 320.0KB ceiling. Every value here is an edit in
+  place; the only real additions are the glyph rule and one `font-size`, and the first pass
+  — which put `font-size` and `line-height` on each control and a third on the dropdown —
+  went **10 bytes over**. Stating the type once on the row, dropping the `line-height`
+  override in favour of arithmetic that lands on 23 anyway, and folding the two
+  `color: var(--lm-muted)` declarations in that corner into the rule they share, brought it
+  to 320.0KB with **3 bytes** spare. The budget was not raised (§4).
 - **The accent has a default and the other four colours do not.** `DEFAULT_EMBED_ACCENT`
   seeds `DEFAULT_EMBED_SETTINGS.colors`, so `readColors` always resolves an accent and every
   new publish writes one. `--lm-focus` in the stylesheet stays `#1c7ed6`, because that is
@@ -348,7 +416,7 @@ means what the embed did before that field existed.** That is §7, and the
 asymmetry it forces is the thing to understand before adding a setting:
 `DEFAULT_EMBED_SETTINGS` in `lib/validation/embed-settings.schema.ts` is what a
 map *publishes* and carries the current design (panel right, floating, pins in
-the rows, controls top-left); the **embed** reads a missing key as the old
+the rows, controls bottom-left); the **embed** reads a missing key as the old
 behaviour (panel docked left, no pins, controls top-right). Changing a default
 changes what the next publish writes and can never change what a live customer
 site already renders. `readEmbedSettings` resolves one fully-populated object

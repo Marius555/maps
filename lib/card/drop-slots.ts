@@ -594,14 +594,11 @@ export type DropSlot = {
   /** Where the mark is drawn, in px from the card's top. */
   y: number;
   /**
-   * How tall the mark is. **Zero for a seam**: a run with no room for the block
-   * still offers the one insertion point between the two blocks it separates,
-   * drawn as a rule rather than a box, and dropping there pushes what follows
-   * down — which is the honest outcome when there is nowhere to put it.
-   *
-   * With one exception, and it is the one landing that genuinely needs no room:
-   * a **mark** straddling the block above it spends only half its own height, so
-   * a run with no span still draws it as the square it lands as. See `run`.
+   * How tall the mark is — a block's height, never zero. A run with no room for
+   * the block offers no place at all (`run`), with one exception, and it is the
+   * one landing that genuinely needs no room: a **mark** straddling the block
+   * above it spends only half its own height, so a run with no span still draws
+   * it as the square it lands as.
    */
   height: number;
   /** The `offset` the landing block takes: how far below the run's start it sits. */
@@ -634,8 +631,8 @@ export type DropSlot = {
    * How wide the block that lands here becomes, as a percentage of the card.
    *
    * **Every slot that is drawn full width says 100**, which is the rule that
-   * makes the mark honest: a run slot and a seam carry no `left`/`width`, so
-   * they are painted across the whole card, and a 50%-wide block released on one
+   * makes the mark honest: a run slot carries no `left`/`width`, so it is
+   * painted across the whole card, and a 50%-wide block released on one
    * used to land at 50% with reserved space beside it — an outline promising a
    * block twice the size of the one that arrived. Landing alone on a line is now
    * how a block gets its full width back, and the Width slider is the only way to
@@ -679,12 +676,9 @@ export type DropSlot = {
    * for it. Absent means the two are the same, which is every other slot.
    *
    * A pair target draws the whole column it will fill, so the outline promises
-   * the block's real size — but it only *catches* the middle of it. The strips
-   * left at the top and bottom belong to the runs above and below, so dropping a
-   * block onto a line to pair with it and dropping it onto a line to go above it
-   * stay two aimable gestures on a card with no space between its blocks. It is
-   * the same distinction the Locations panel draws between joining a group and
-   * passing over one.
+   * the block's real size — which, for a logo joining a line of text, is taller
+   * than the line. What it *catches* is the line itself, top to bottom: the part
+   * of the card the block already sitting there covers.
    */
   hitTop?: number;
   hitBottom?: number;
@@ -700,10 +694,10 @@ export type DropSlot = {
    *
    * An **empty** area — top and bottom equal — is a place with no free space of
    * its own: a mark landing on the bottom edge of the block above borrows that
-   * block and spends nothing. It is a real drop and it draws no resting outline,
-   * for the same reason a seam does not. Absent means the slot's own box is the
-   * area, which is every column target: the room beside a block *is* what it
-   * stands for.
+   * block and spends nothing. It is a real drop, it draws no resting outline, and
+   * it catches the pointer with its own box (`areaBands`). Absent means the
+   * slot's own box is the area, which is every column target: the room beside a
+   * block *is* what it stands for.
    */
   areaTop?: number;
   areaBottom?: number;
@@ -746,61 +740,8 @@ export type DropSlot = {
   mark?: boolean;
 };
 
-/**
- * How much of a block's own height offers to pair, as a fraction.
- *
- * The rest is split between the runs either side of it. Six tenths is enough
- * that the middle of a block reads as "here" rather than as a sliver you have to
- * find, and leaves a fifth of the block at each end — on a 110px photo that is
- * 22px, comfortably over `MIN_BAND`.
- */
-const PAIR_BAND = 0.6;
-
 /** The one split a pair drop makes. Everything else is the Width slider's. */
 const PAIR_SHARE = 50;
-
-/**
- * The middle of a line: the part of it that belongs to the **block sitting
- * there** rather than to the runs of free space above and below it.
- *
- * One function, because two things cut this band and they must never disagree.
- * `pairTargets` uses it for the strip that offers to split the line, and
- * `blockedFaces` uses it for the strip that refuses the drop outright — and
- * those are the same place seen from either side: wherever a line can be paired
- * with, the pair target is drawn there; wherever it cannot, the refusal is. Two
- * copies of `(height - band) / 2` would be a card where the two answers sat a
- * few pixels apart and a sliver of a block quietly meant something else.
- *
- * `strip` is what has to be left at each end, and it is the one number the two
- * callers pass differently. A pair target is something you aim **at**, so it may
- * take the whole of a short line — that is what makes dropping a name onto
- * another name work at all, and it has always done so. A blocked face is
- * something you must not fall **into**, and taking 16px out of a 24px name to
- * say "no" would cost the two insertion points either side of it, which are real
- * places someone wants. Taking the middle 66px of a 110px photo costs nothing.
- * So the refusal keeps `MIN_BAND` clear at each end and simply does not apply to
- * a line too short to spare it; the offer does not.
- *
- * Null when there is no middle left to speak of.
- */
-function faceBand(
-  top: number,
-  bottom: number,
-  /** What is left at each end, at minimum. Zero lets the band take the lot. */
-  strip: number,
-): { top: number; bottom: number } | null {
-  const height = bottom - top;
-  const room = height - strip * 2;
-  if (room < MIN_BAND) return null;
-
-  const band = Math.min(
-    Math.max(MIN_BAND, Math.round(height * PAIR_BAND)),
-    room,
-  );
-  const from = top + (height - band) / 2;
-
-  return { top: from, bottom: from + band };
-}
 
 /**
  * The parts of the card that are **occupied**, and therefore the parts no run of
@@ -816,12 +757,20 @@ function faceBand(
  * nothing, so a refused drop is a no-op rather than a release into thin air
  * (which is what `onDroppedOutside` reads as a delete).
  *
+ * **The whole line, top to bottom.** A face used to cover only the middle six
+ * tenths of a block, and nothing at all of a block under 48px, leaving a strip at
+ * each end through which the seams — the zero-height places between touching
+ * blocks — could still be reached. There are no seams now (`run`), and a run no
+ * longer reaches past its own free space (`areaBands` in ./drop-bands.ts), so a
+ * strip left here would be a part of a block that said neither *here* nor *not
+ * here*.
+ *
  * **It composes rather than repartitioning.** A face is painted over the run
  * bands and under the column targets, and `document.elementFromPoint` takes the
  * last of two overlapping targets — so wherever a line really can take the block
  * beside what is already on it, `sideSlots` has drawn a column there and that
- * column wins inside its own box. Nothing about `dropBands` changes, and every
- * case falls out of code that already exists:
+ * column wins inside its own box. Every case falls out of code that already
+ * exists:
  *
  * | the line | `sideSlots` gives | the face resolves to |
  * |---|---|---|
@@ -856,14 +805,11 @@ export function blockedFaces(
        * out of view still has a rect, and refusing a drop somewhere the card is
        * not drawing it would be a target nobody can see or explain.
        */
-      const band = faceBand(
-        Math.max(row.top, measure.top),
-        Math.min(row.bottom, measure.bottom),
-        MIN_BAND,
-      );
-      if (!band) continue;
+      const top = Math.max(row.top, measure.top);
+      const bottom = Math.min(row.bottom, measure.bottom);
+      if (bottom <= top) continue;
 
-      faces.push({ zone: measure.zone, line: row.index, ...band });
+      faces.push({ zone: measure.zone, line: row.index, top, bottom });
     }
   }
 
@@ -1180,11 +1126,9 @@ export function dropSlots(
    *   and the lift is folded into the stored `offset`, which `blockEdges` then
    *   subtracts straight back out.
    *
-   * A run with no span at all is the same question with the same answer. It is
-   * a seam for everything else — a rule on the boundary, and what follows moves
-   * down — but a mark straddling the block above it is not pushing anything
-   * anywhere, so it keeps the square and the lift rather than collapsing to a
-   * hairline nothing draws at rest.
+   * A run with no room for the block offers nothing at all — except to a mark
+   * straddling the block above it, which spends no room of its own and so keeps
+   * the square and the lift.
    *
    * `leadingGap` is the test for "there is a block above this run", and it
    * agrees with `dropCardBlock`'s own index arithmetic in the one case where
@@ -1258,17 +1202,19 @@ export function dropSlots(
 
     if (count <= 0) {
       /*
-       * A **mark** with a block above it is not a seam. `lift` is exactly the
-       * half of itself `blockEdges` will pull it up by, so a run with no span of
-       * its own is still the one place a logo straddles the edge above it —
-       * which is the layout the Overlap slider produces, reached by dragging
-       * instead of by finding the slider.
+       * A **mark** with a block above it still has a place here. `lift` is
+       * exactly the half of itself `blockEdges` will pull it up by, so a run with
+       * no span of its own is still the one place a logo straddles the edge above
+       * it — which is the layout the Overlap slider produces, reached by dragging
+       * instead of by finding the slider. It spends no room, so "no room" does
+       * not refuse it.
        *
-       * It was a hairline before, and a hairline is the one thing this landing
-       * does not look like: `dropRegions` drops a zero-height band outright, so
-       * nothing was drawn at rest at all, and the card most likely to hit this —
-       * a photo filling its zone, with no run under it — is exactly the card
-       * someone drops a logo onto. The gesture worked and looked refused.
+       * It was once a zero-height slot like every other run with no room, and
+       * that is the one thing this landing does not look like: `dropRegions`
+       * drops a zero-height band outright, so nothing was drawn at rest at all,
+       * and the card most likely to hit this — a photo filling its zone, with no
+       * run under it — is exactly the card someone drops a logo onto. The gesture
+       * worked and looked refused.
        *
        * Drawn as the square that lands, so `splitAlignColumns` can divide it
        * into the three places across the line the mark could sit.
@@ -1277,7 +1223,7 @@ export function dropSlots(
        * its own — that is the whole case — so there is nothing to outline at
        * rest, and an outline drawn from the square would sit half over the very
        * block being straddled. It is the one place offered under the pointer
-       * alone, which is the same bargain `.card-drop-seam` already makes.
+       * alone, and it catches the pointer with its own square (`areaBands`).
        */
       if (pulls) {
         const area = from + lead;
@@ -1300,31 +1246,18 @@ export function dropSlots(
       }
 
       /*
-       * No room for a block, but still a place: this is the seam between the two
-       * blocks the run separates, and inserting between two touching blocks has
-       * to stay possible.
+       * No room for the block, and so no place.
        *
-       * **It still says what follows it.** "No room" here means no room for the
-       * block *and* the gaps either side of it — a run of 112px offers nowhere
-       * to put a 110px photo that also owes a gap — and that is a long way from
-       * no room at all. Leaving `nextOffset` off let the line below keep a
-       * leading space measured against a card the drop had just changed, which
-       * is precisely how a move failed to undo itself: take a photo out from
-       * above a line, put it back, and the line stayed where the *gap* had put
-       * it. `settles` answers 0 for a genuinely touching pair, which is what
-       * this branch used to mean by saying nothing.
+       * This used to be a **seam**: a zero-height slot on the boundary between
+       * the two blocks the run separates, drawn under the pointer as a hairline,
+       * so a block could always be pushed in between two touching ones. That
+       * offered the top of every zone, the join between every two lines and the
+       * bottom of the card as places — none of them with any room — and it was
+       * reported as a bug: a block goes where there is space for it. A card with
+       * none says so (`over`, and the overlay's "No room" note) rather than
+       * making some by shoving everything below the drop further down.
        */
-      return [
-        {
-          zone,
-          index,
-          y: from + lead,
-          height: 0,
-          offset: 0,
-          widthPct: 100,
-          ...(closes ? { nextOffset: settles(0) } : {}),
-        },
-      ];
+      return [];
     }
 
     /*
@@ -1461,9 +1394,9 @@ function liftOf(layout: CardLayout, drag: CardDrag): number {
  * check is about the card's *height*, and landing beside a block that is already
  * there spends none — so a top zone whose photo has filled it still offers the
  * space next to that photo, which is exactly where someone would want to put a
- * name. The row can grow if the newcomer is taller than the block it joins;
- * that is the same honest overflow a seam already accepts. A swap and a flip
- * spend nothing at all.
+ * name. The row can grow if the newcomer is taller than the block it joins,
+ * which is honest: it is the block that was dropped, drawn at its own size. A
+ * swap and a flip spend nothing at all.
  */
 /**
  * How tall a block on the card would draw at a given share of the line, in px.
@@ -1817,7 +1750,7 @@ type SideTarget = {
    *
    * The **hit** band is untouched by it. A pair target carries `hitTop` and
    * `hitBottom`, and those are what `useCardDropBands` reads for the pointer, so
-   * the aim stays the middle six tenths of the line however the box is drawn.
+   * the aim stays the line itself however the box is drawn.
    */
   height?: number;
   /** What the landing block becomes. Absent leaves its own width alone. */
@@ -1831,7 +1764,7 @@ type SideTarget = {
    * rest, so the block it lands beside narrows to whatever that rest is.
    */
   pairWidthPct?: number;
-  /** The middle of the line, which is all a pair target catches. */
+  /** The line itself, top to bottom, which is what a pair target catches. */
   hitTop?: number;
   hitBottom?: number;
   /**
@@ -1999,10 +1932,14 @@ function selfTargets(
  * the share `cardRows` will compute, or the block lands *under* the one it was
  * dropped beside instead of next to it.
  *
- * The line has to be tall enough to have a middle, too. Below `MIN_BAND` the
- * band this would catch is the whole block, which would take the insertion
- * points above and below it away entirely — and a divider is 13px tall. A line
- * that short is paired with the slider or not at all.
+ * The line has to be at least `MIN_BAND` tall, too — a divider is 13px, and a
+ * target that thin is not one anyone can aim at while moving. A line that short
+ * is paired with the slider or not at all.
+ *
+ * **It catches the whole line.** It used to catch only the middle six tenths,
+ * leaving a strip at each end for the seams between touching blocks. There are
+ * no seams now, and the line's `blockedFaces` band covers it top to bottom, so
+ * a strip left here would hatch the ends of a line whose middle offered to pair.
  */
 function pairTargets(
   layout: CardLayout,
@@ -2049,13 +1986,11 @@ function pairTargets(
   if (!mark && share < (CARD_BLOCKS[type].minWidthPct ?? 100)) return [];
   if (rest < (CARD_BLOCKS[sitting.type].minWidthPct ?? 100)) return [];
 
-  const band = faceBand(row.top, row.bottom, 0);
-  if (!band) return [];
+  if (row.bottom - row.top < MIN_BAND) return [];
 
-  // Renamed on the way in: `faceBand` speaks in the box's own edges, and here
-  // that box is the *hit* area rather than the drawn one — the outline is the
-  // whole column, because that is what will land there.
-  const middle = { hitTop: band.top, hitBottom: band.bottom };
+  // The *hit* area rather than the drawn one — the outline is the whole column,
+  // because that is what will land there, and it can be taller than the line.
+  const middle = { hitTop: row.top, hitBottom: row.bottom };
 
   if (mark) {
     /*

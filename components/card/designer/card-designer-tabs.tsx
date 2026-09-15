@@ -9,8 +9,31 @@ import { useTabSwipe } from "./use-tab-swipe";
 
 export type DesignerTab = "elements" | "modify";
 
-/** What the panel calls itself, per tab. The strip and the heading agree. */
-const TAB_TITLES: Record<DesignerTab, string> = {
+/*
+ * The panel has a height of its own at every width now, so its body is always
+ * what scrolls.
+ *
+ * These three used to be split `max-md:` / `lg:`, with nothing in between: the
+ * sidebar was an off-canvas overlay below `md` and a viewport-tall column at
+ * `lg`, and the band between them stacked under the card as an ordinary panel
+ * that grew with whichever tab was open — there was no viewport height to divide
+ * up there, and a body scrolling inside a box that is itself scrolling down the
+ * page is two scrollbars for one list. The sheet covers that band now
+ * (`DesignerSidePanel`), so there is one answer and the variants are gone.
+ *
+ * Named here rather than repeated, because the four boxes below have to agree:
+ * a `min-h-0` missing from any one of them and the whole chain grows instead of
+ * scrolling.
+ */
+const FILLS = "min-h-0 flex-1";
+const CLIPS = "overflow-hidden";
+const SCROLLS = "overflow-x-hidden overflow-y-auto";
+
+/**
+ * What the panel calls itself, per tab. The strip, the heading and — below `lg`,
+ * where the heading is hidden — the sheet's peek strip all agree.
+ */
+export const TAB_TITLES: Record<DesignerTab, string> = {
   elements: "Blocks",
   modify: "Modify",
 };
@@ -46,9 +69,10 @@ const TAB_TITLES: Record<DesignerTab, string> = {
  * and the sidebar's height is what used to move the card every time someone
  * switched tabs.
  *
- * All of it is `lg:`-gated, because below that the sidebar sits under the card
- * with no height of its own to scroll inside — there it is just a panel, as
- * tall as whichever tab is open, and the page scrolls.
+ * `FILLS`/`CLIPS`/`SCROLLS` below are that shape, and they are unconditional
+ * now — see the note there. **The heading is not**: below `lg` this panel is
+ * inside a bottom sheet whose peek strip already says which tab is open, so the
+ * header row is `max-lg:hidden` and the tab strip under it is not.
  */
 export function CardDesignerTabs({
   activeTab,
@@ -87,7 +111,7 @@ export function CardDesignerTabs({
     <Tabs
       // `gap-0` cancels HeroUI's own `.tabs` gap: the only child here is the
       // panel, which owns every edge inside it.
-      className="flex w-full flex-col gap-0 lg:min-h-0"
+      className={`flex w-full flex-col gap-0 ${FILLS}`}
       selectedKey={activeTab}
       onSelectionChange={(key) => onTabChange(key as DesignerTab)}
     >
@@ -114,12 +138,18 @@ export function CardDesignerTabs({
             </Tabs.List>
           </Tabs.ListContainer>
         }
-        // At `lg` the panel is a fixed-height column whose body scrolls, rather
-        // than a box that grows with whichever tab is open — that is what keeps
-        // the card still while the sidebar's contents change under it. Below
-        // `lg` it is an ordinary panel and the page scrolls.
-        className="flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden"
-        bodyClassName="flex flex-col lg:min-h-0 lg:flex-1"
+        // A fixed-height column whose body scrolls, rather than a box that
+        // grows with whichever tab is open — that is what keeps the card still
+        // while the sidebar's contents change under it.
+        // Flush to the sheet's own edges below `lg`: the sheet there is the
+        // whole surface and draws the border, and a rounded card inset inside it
+        // would be a second edge a millimetre in from the first.
+        className={`flex flex-col ${FILLS} ${CLIPS} max-lg:rounded-none max-lg:border-0`}
+        // The sheet's peek strip already says which tab is open and carries
+        // Reset and Close, so up there this row would be the panel naming itself
+        // twice. The tab strip below it is not in here and stays.
+        headerClassName="max-lg:hidden"
+        bodyClassName={`flex flex-col ${FILLS}`}
       >
         <DesignerTabPanel id="elements" swipeProps={swipeProps}>
           {elementsPanel}
@@ -146,8 +176,13 @@ export function CardDesignerTabs({
  *
  * `bg-accent` and not a warning colour: unsaved work is the normal state of a
  * designer, not a fault.
+ *
+ * The sheet's peek strip carries one too (`CardDesigner`), for one step further
+ * out of the same reason: below `lg` the tab strip is inside the part that is
+ * shut, so with the sheet down there would otherwise be nothing on screen to say
+ * a change has not been saved.
  */
-function UnsavedDot() {
+export function UnsavedDot() {
   return (
     <>
       <span
@@ -246,12 +281,12 @@ function DesignerTabPanel({
   return (
     <Tabs.Panel
       id={id}
-      className="mt-0 flex flex-col p-0 lg:min-h-0 lg:flex-1 lg:overflow-hidden"
+      className={`mt-0 flex flex-col p-0 ${FILLS} ${CLIPS}`}
     >
       <ScrollShadow
         hideScrollBar
         size={24}
-        className="lg:min-h-0 lg:flex-1 lg:overflow-x-hidden lg:overflow-y-auto"
+        className={`${FILLS} ${SCROLLS}`}
         {...swipeProps}
         style={
           isFrozen

@@ -5,7 +5,7 @@ import { useLayoutEffect, useState, type RefObject } from "react";
 import type { DraggedObject } from "@/components/groups/use-row-drag";
 import { newBlockHeight, overHeight } from "@/lib/card/card-space";
 import {
-  dropBands,
+  areaBands,
   dropRegions,
   splitAlignColumns,
   toCardDrag,
@@ -86,6 +86,16 @@ export type CardDropGeometry = {
    * number instead of shrugging.
    */
   over?: number;
+  /**
+   * The line's own box — where a full-width block starts and how wide it is, in
+   * px from the card's left. What a band with no `left` of its own spans.
+   *
+   * Carried so the overlay can move a mark between a full-width band and a
+   * column in numbers rather than switching between `var(--card-pad)` and px,
+   * which nothing can animate across — and so the ghost can be pulled onto a
+   * band without knowing the card's padding.
+   */
+  line: { left: number; width: number };
 };
 
 /**
@@ -284,12 +294,12 @@ function measureCard(
   /*
    * Two sources, composed rather than merged.
    *
-   * `dropBands` partitions the card top to bottom — every pixel to exactly one
-   * slot — which is a one-dimensional answer and the right one for a target that
-   * spans the card's width. A column slot is only part of a line wide, so it has
-   * no place in that partition and needs none: its band *is* its own rect. They
-   * go last, and the overlay paints them last, which is what lets one win the
-   * pointer inside its own box against the full-width band underneath it.
+   * `areaBands` divides each run of free space between the slots inside it —
+   * and gives nothing outside a run to anybody, so a pointer over a block or
+   * over the gap between two lines aims at no place at all. A column slot is not
+   * part of a run: it is only part of a line wide, and its band *is* its own
+   * rect. They go last, and the overlay paints them last, which is what lets one
+   * win the pointer inside its own box against the blocked face underneath it.
    */
   /*
    * One measurer for the whole pass, and so one cache.
@@ -302,7 +312,7 @@ function measureCard(
    */
   const heightAt = heightMeasurer(layout, nodes);
 
-  const partitioned = dropBands(
+  const partitioned = areaBands(
     dropSlots(
       layout,
       dragged,
@@ -316,8 +326,6 @@ function measureCard(
       lineHeightOf(movedNode, movedZone, layout, drag, lineBox.width, blockHeight),
       heightAt,
     ),
-    0,
-    cardRect.height,
   );
 
   const vacated = vacatedSpace(layout, dragged, zones, heightAt);
@@ -376,6 +384,7 @@ function measureCard(
      * readings of one number.
      */
     ...(over > 0 ? { over } : {}),
+    line: lineBox,
   };
 }
 
@@ -640,7 +649,8 @@ function withoutWidth(block: CardBlock): CardBlock {
  * the line above it is a question nobody has answered yet. Answer it there, not
  * by guessing here.
  *
- * Empty for a drag that is not a mark, and for a seam, which has no box to cut.
+ * Empty for a drag that is not a mark, and for a slot with no height to cut a
+ * square from.
  *
  * **And for a target that has already cut its own.** The two columns a mark makes
  * of a full-width line (`pairTargets`) know where the square goes better than

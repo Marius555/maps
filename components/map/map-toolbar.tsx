@@ -26,6 +26,13 @@ import { ShapeToolsButton } from "./shapes/shape-tools-button";
  * Grouping them on a real surface gives them a background to sit on and reads as
  * one control cluster rather than several loose objects.
  *
+ * That surface is **glass, and its light/dark is the map's** — see
+ * `.map-chrome-panel` in app/globals.css and `mapThemeClass`. The panel was an
+ * opaque `bg-surface` in the *dashboard's* theme, which on a phone in system
+ * dark mode is a black slab over a white basemap that no change of map style
+ * could shift. The buttons stay opaque on it: they are what the toolbar is for,
+ * and a translucent control on translucent glass is two veils over one pixel.
+ *
  * Add mode carries a text label because it is a mode you can be *in*, and an icon
  * alone can't say "currently on". The rest are icon buttons with tooltips. The
  * label folds away while the search is open, because the two cannot both have the
@@ -177,7 +184,13 @@ export function MapToolbar({
        * when the label finishes folding. A narrow map shrinks the field instead;
        * that is continuous, and every button keeps its size.
        */}
-      <div className="group/toolbar pointer-events-auto flex max-w-full min-w-0 items-center gap-1 rounded-xl border border-border bg-surface p-1 shadow-sm">
+      {/* `map-chrome-panel`, not `bg-surface`: the panel is glass so the basemap
+          reads through it, while its controls keep a solid ground of their own —
+          see the rule in app/globals.css. Both colours come from the subtree's
+          tokens, and the subtree wears the *map's* light/dark rather than the
+          dashboard's (`mapThemeClass` on the canvas frame), so a toolbar over a
+          white basemap is white even when the dashboard is in dark mode. */}
+      <div className="map-chrome-panel group/toolbar pointer-events-auto flex max-w-full min-w-0 items-center gap-1 rounded-xl border border-border p-1 shadow-sm">
         <AddLocationButton
           isAdding={isAdding}
           addIcon={addIcon}
@@ -238,8 +251,8 @@ export function MapToolbar({
           onPress={onSaveView}
         />
 
-        {/* The editor canvas has no popups, clusters or filters — those are the
-            embed's. This is the only place in the editor you can see them. */}
+        {/* The editor canvas has no popups or filters — those are the embed's.
+            This is the only place in the editor you can see them. */}
         <IconButton
           label="Preview as a visitor"
           icon={Eye}
@@ -269,7 +282,7 @@ export function MapToolbar({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ duration: 0.15, ease: [0, 0, 0.2, 1] }}
-            className="pointer-events-auto rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-muted shadow-sm"
+            className="map-chrome-panel pointer-events-auto rounded-full border border-border px-2.5 py-1 text-xs text-muted shadow-sm"
             role="status"
           >
             View saved

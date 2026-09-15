@@ -16,6 +16,7 @@ import type {
 } from "@/lib/repositories/types";
 import type { RouteStop } from "@/packages/shared/shapes";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
+import { LocationsDrawer } from "./locations-panel/locations-drawer";
 import { LocationsList } from "./locations-panel/locations-list";
 import { UngroupDropZone } from "./locations-panel/ungroup-drop-zone";
 
@@ -144,18 +145,15 @@ export function EditorSidebar({
 
   return (
     <RowDragProvider>
-      {/* `max-h-[60dvh]` only below `lg`. There the row stacks — map above,
-          panel below — so there is no shared height to divide and the panel
-          would grow the page one location at a time. Above `lg` the row's own
-          height governs, and a cap here would fight it. */}
-      <aside className="flex max-h-[60dvh] min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:max-h-none lg:w-80 lg:shrink-0">
-        <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
-          <h2 className="text-sm font-semibold text-foreground">Locations</h2>
-          {/* Counts every location on the map, grouped or not: this is the plan
-              limit, not the length of the list under it. */}
-          <PlaceCountBadge count={places.length} limit={placeLimit} />
-        </header>
-
+      {/* The panel's own box. A column beside the map at `lg`, a bottom sheet
+          over it below — and it owns the title row, because on a phone that row
+          is the only part of this that is on screen. See LocationsDrawer. */}
+      <LocationsDrawer
+        title="Locations"
+        /* Counts every location on the map, grouped or not: this is the plan
+           limit, not the length of the list under it. */
+        meta={<PlaceCountBadge count={places.length} limit={placeLimit} />}
+      >
         {error ? (
           <div className="px-3 pt-3">
             <ErrorMessage error={error} />
@@ -205,7 +203,7 @@ export function EditorSidebar({
         {/* Outside the scroll area on purpose — a long list must not be able to
             push the one drop target a drag needs out of reach. */}
         <UngroupDropZone isGrouped={isGrouped} onUngroup={onRemoveFromGroup} />
-      </aside>
+      </LocationsDrawer>
     </RowDragProvider>
   );
 }

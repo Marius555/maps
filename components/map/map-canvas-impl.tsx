@@ -22,8 +22,8 @@ import { registerPmtilesProtocol } from "@/lib/map/pmtiles";
 import { selectionBounds } from "@/lib/map/selection-bounds";
 import { effectiveCardLayout } from "@/lib/card/designer-status";
 import { cardThemeClass } from "@/lib/card/card-theme";
+import { mapThemeClass, type MapStyleKey } from "@/lib/map/style";
 import { usePrefersDark } from "@/lib/theme/use-prefers-dark";
-import type { MapStyleKey } from "@/lib/map/style";
 import { configureMaplibreWorker } from "@/lib/map/worker";
 import type {
   AppMap,
@@ -37,6 +37,8 @@ import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { shapeBounds, type ShapeBounds } from "@/packages/shared/shapes";
 import { tagChipsOf } from "@/packages/shared/tags";
 import { useAddModeGhost } from "./add-location/use-add-mode-ghost";
+import { withoutClusterLayers } from "./clusters/cluster-layers";
+import { usePlaceClusters } from "./clusters/use-place-clusters";
 import { PlaceCard } from "./place-card/place-card";
 import { SelectBox, type SelectBoxHandle } from "./select-box/select-box";
 import { useSelectBox } from "./select-box/use-select-box";
@@ -207,6 +209,15 @@ export type MapCanvasProps = {
    * drafts are all plain pins anyway.
    */
   pinIcons?: CustomPinIcon[];
+  /**
+   * Gather nearby pins into numbered bubbles, as the published map does. See
+   * components/map/clusters/use-place-clusters.ts.
+   *
+   * Absent means off, which is what the import review and the pin field want:
+   * the review exists to show where *every* location landed so a bad one can be
+   * dragged, and a bubble is exactly what hides it.
+   */
+  clustering?: boolean;
   /** `null` clears the selection — a click on the basemap, closing the card. */
   onSelectPlace: (placeId: string | null) => void;
   /** Adds an Edit action to the card. Omit and the card is read-only. */
@@ -286,6 +297,7 @@ export default function MapCanvasImpl({
   tagGroups,
   colorFor,
   pinIcons,
+  clustering,
   shapes,
   selection,
   showCompass,
@@ -302,6 +314,9 @@ export default function MapCanvasImpl({
   // The card's light/dark for an Auto map — the same source `useMaplibre` reads
   // for the basemap, so the two cannot disagree. See `cardThemeClass`.
   const prefersDark = usePrefersDark();
+
+  // The basemap's light/dark, worn by the frame — see the class on it below.
+  const mapTheme = mapThemeClass(style, prefersDark);
 
   /**
    * The box the map is *born* framed on, decided before it exists.
@@ -472,7 +487,7 @@ export default function MapCanvasImpl({
     pinIcons,
   });
 
-  usePlaceMarkers({
+  const { setVisibleIds } = usePlaceMarkers({
     map,
     isReady,
     places,
@@ -495,6 +510,25 @@ export default function MapCanvasImpl({
     stopIds,
     onSelect: onSelectPlace,
     onMove: onMovePlace,
+  });
+
+  /*
+   * Nearby pins as numbered bubbles, the way the published map draws them. The
+   * bubbles are style layers and the pins stay the markers above, so this only
+   * tells the marker layer which ones a bubble is standing in for.
+   */
+  usePlaceClusters({
+    map,
+    isReady,
+    places,
+    selectedPlaceId,
+    isEnabled: Boolean(clustering),
+    // Every stop on a route is a pin, and the line tool snaps to pins — a tool
+    // cannot reach a location a bubble has swallowed. `isDrawing`, not
+    // `drawMode`, for the route tool's sake (see `isRouting` above).
+    isSuspended: isDrawing,
+    isBrowsing: !isAdding && !isDrawing && !selection?.isSelecting,
+    onVisibleChange: setVisibleIds,
   });
 
   // Latest handlers and mode without re-binding the map listener on every render.
@@ -715,8 +749,10 @@ export default function MapCanvasImpl({
 
         return {
           // MapLibre's own resolved style: sources with their URLs filled in and
-          // layers with the theme's tint already applied.
-          style: instance.getStyle(),
+          // layers with the theme's tint already applied. Less the cluster
+          // bubbles — the export draws every location itself, and a bubble
+          // copied across would sit over the pins it is counting.
+          style: withoutClusterLayers(instance.getStyle()),
           center: { lng: centre.lng, lat: centre.lat },
           zoom: instance.getZoom(),
           bearing: instance.getBearing(),
@@ -789,9 +825,23 @@ export default function MapCanvasImpl({
      */
     <div
       ref={frame}
-      // `overflow-hidden` here, not on whatever the caller wraps this in: between
-      // a shrink and the debounced resize, the canvas is wider than the frame.
-      className="relative h-full w-full overflow-hidden bg-surface-secondary"
+      /*
+       * The map's own light/dark, declared on the frame.
+       *
+       * Two attributes for two jobs. The class re-declares every colour token
+       * for this subtree (app/globals.css), which is what makes the chrome
+       * floating on the map — and the place card below — follow the *basemap*
+       * rather than the dashboard's theme. `data-map-theme` is what MapLibre's
+       * own zoom stack and attribution bar are styled against, and it has to be
+       * an attribute rather than the class: those rules were `.dark .maplibregl-*`
+       * descendant selectors, and `<html class="dark">` is an ancestor of every
+       * map, so a `.light` frame inside a dark dashboard could never have won.
+       *
+       * See `mapThemeClass`. The card asks the same question and is allowed one
+       * further flip, for a ground its owner pinned.
+       */
+      className={`relative h-full w-full overflow-hidden bg-surface-secondary text-foreground ${mapTheme}`}
+      data-map-theme={mapTheme}
     >
       <div
         ref={container}
@@ -840,7 +890,7 @@ export default function MapCanvasImpl({
           /* The card draws in the map's own light/dark — the studio, this
              canvas and the customer's site are one picture. See
              `cardThemeClass`. */
-          theme={cardThemeClass(style, prefersDark)}
+          theme={cardThemeClass(style, prefersDark, cardLayout)}
           /*
            * Hidden while adding: the point of add mode is dropping several pins
            * in a row, and a card opening over the map after each one is in the

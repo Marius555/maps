@@ -2,8 +2,8 @@
 
 import { Button, Drawer } from "@heroui/react";
 
+import { BrandLogo } from "@/components/brand/brand-logo";
 import type { AuthUser } from "@/lib/auth/types";
-import { PRODUCT_NAME } from "@/lib/config";
 import { UserMenu } from "../user-menu";
 import { useSidebar } from "./sidebar-context";
 import { SidebarNav } from "./sidebar-nav";
@@ -24,7 +24,7 @@ export function SidebarMobile({ user }: { user: AuthUser }) {
         <Drawer.Dialog className="flex h-full flex-col">
           <Drawer.Header>
             <Drawer.Heading className="text-sm font-semibold">
-              {PRODUCT_NAME}
+              <BrandLogo />
             </Drawer.Heading>
           </Drawer.Header>
 

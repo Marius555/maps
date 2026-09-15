@@ -19,6 +19,7 @@ export function SectionPanel({
   footer,
   children,
   className = "",
+  headerClassName = "",
   bodyClassName = "",
 }: {
   title?: string;
@@ -37,6 +38,15 @@ export function SectionPanel({
   children?: React.ReactNode;
   className?: string;
   /**
+   * Appended to the header row's own classes, for a panel that has somewhere
+   * better to say its name — the card designer's sidebar is a bottom sheet below
+   * `lg` whose peek strip already carries the open tab's title and its controls,
+   * so the header is `max-lg:hidden` there. The `toolbar` and the rule under it
+   * are deliberately outside this, because the tab strip is chrome the sheet
+   * still wants.
+   */
+  headerClassName?: string;
+  /**
    * Appended to the body's own classes, for a panel whose body has to do
    * something structural — the card designer's sidebar is a fixed-height column
    * whose contents scroll, which needs `flex min-h-0 flex-1 flex-col` on this
@@ -51,7 +61,9 @@ export function SectionPanel({
     >
       {title ? (
         <>
-          <header className="flex items-start justify-between gap-4 px-5 py-4 sm:px-6">
+          <header
+            className={`flex items-start justify-between gap-4 px-5 py-4 sm:px-6 ${headerClassName}`}
+          >
             <div className="min-w-0 space-y-1">
               <h2 className="text-sm font-semibold text-foreground">{title}</h2>
               {description ? (

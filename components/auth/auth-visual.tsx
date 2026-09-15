@@ -1,4 +1,4 @@
-import { PRODUCT_NAME } from "@/lib/config";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 /**
  * The left half of the auth screen.
@@ -29,9 +29,9 @@ export function AuthVisual() {
           what guarantees that, rather than trusting the diagram to stay light
           where the words are. */}
       <div className="auth-visual__scrim relative z-10 px-12 pt-24 pb-12">
-        <p className="text-sm font-semibold tracking-tight text-foreground">
-          {PRODUCT_NAME}
-        </p>
+        <div className="text-sm font-semibold tracking-tight text-foreground">
+          <BrandLogo className="h-7" />
+        </div>
         <p className="mt-3 max-w-sm text-2xl leading-snug font-semibold tracking-tight text-balance text-foreground">
           Your locations, on your own site.
         </p>

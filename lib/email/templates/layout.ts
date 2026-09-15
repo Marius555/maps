@@ -1,4 +1,4 @@
-import { PRODUCT_NAME } from "@/lib/config";
+import { BRAND, isExternalLink, type Brand } from "@/lib/brand";
 
 /**
  * One skeleton, shared by every message we send.
@@ -17,6 +17,9 @@ import { PRODUCT_NAME } from "@/lib/config";
  * Light only. `prefers-color-scheme` support across clients is too partial to
  * carry a second palette, and a light card is legible in a dark client while the
  * reverse is not.
+ *
+ * The name, logo and footer come from brand.json. `brand` is a parameter only so
+ * the tests can pass their own; every real caller takes the default.
  */
 
 /** The theme's accent, `oklch(64.37% 0.2195 36.18)`, in the one notation email understands. */
@@ -25,6 +28,13 @@ const INK = "#2e2e2e";
 const MUTED = "#767676";
 const BORDER = "#e9e9e9";
 const CANVAS = "#f7f7f7";
+
+/**
+ * Image formats every mail client draws. SVG is not one — Gmail and Outlook both
+ * drop it — so an SVG logo, or a URL with no extension to judge by, sends the
+ * name as text instead of an empty box.
+ */
+const EMAIL_IMAGE = /\.(png|jpe?g|gif)$/i;
 
 export type EmailCta = { label: string; url: string };
 
@@ -55,7 +65,88 @@ function paragraphs(lines: string[]): string {
     .join("");
 }
 
-export function emailShell({ title, intro, cta, outro }: EmailShellInput): string {
+/**
+ * The origin a brand.json path (`/brand/logo.png`, `/privacy`) is resolved
+ * against, taken from the button's own link.
+ *
+ * Every button is built from `env.appUrl` — the configured origin, never a
+ * request's `Host` header (see lib/env.ts) — so this is that value, without this
+ * module having to import the server's environment and needing an `.env` to be
+ * tested. No button means no origin, and a path is then left out rather than
+ * sent relative: a relative href in an email goes nowhere.
+ */
+function originOf(cta: EmailCta | undefined): string | undefined {
+  if (!cta) return undefined;
+
+  try {
+    return new URL(cta.url).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveLink(
+  href: string | undefined,
+  origin: string | undefined,
+): string | undefined {
+  if (!href) return undefined;
+  if (isExternalLink(href)) return href;
+  return origin ? new URL(href, origin).toString() : undefined;
+}
+
+function header(brand: Brand, origin: string | undefined): string {
+  const logo = resolveLink(brand.logo.light, origin);
+
+  if (logo && EMAIL_IMAGE.test(new URL(logo).pathname)) {
+    return `<img src="${escapeHtml(logo)}" alt="${escapeHtml(brand.logo.alt ?? brand.name)}" height="28" style="display:block;height:28px;width:auto;max-width:200px;margin:0 0 24px;border:0;" />`;
+  }
+
+  return `<p style="margin:0 0 24px;font-size:14px;font-weight:600;letter-spacing:-0.01em;color:${INK};">${escapeHtml(brand.name)}</p>`;
+}
+
+type Footer = {
+  holder: string;
+  address?: string;
+  supportEmail?: string;
+  privacyUrl?: string;
+};
+
+function footer(brand: Brand, origin: string | undefined): Footer {
+  return {
+    holder: brand.company.legalName ?? brand.name,
+    address: brand.company.address,
+    supportEmail: brand.contact.supportEmail,
+    privacyUrl: resolveLink(brand.legal.privacyUrl, origin),
+  };
+}
+
+function footerHtml({ holder, address, supportEmail, privacyUrl }: Footer): string {
+  const links = [
+    supportEmail
+      ? `<a href="mailto:${escapeHtml(supportEmail)}" style="color:${MUTED};">${escapeHtml(supportEmail)}</a>`
+      : "",
+    privacyUrl
+      ? `<a href="${escapeHtml(privacyUrl)}" style="color:${MUTED};">Privacy policy</a>`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const lines = [
+    escapeHtml(holder),
+    address ? escapeHtml(address).replace(/\n/g, "<br />") : "",
+    links,
+  ].filter(Boolean);
+
+  return `<p style="margin:20px 0 0;font-size:12px;line-height:1.6;color:${MUTED};">${lines.join("<br />")}</p>`;
+}
+
+export function emailShell(
+  { title, intro, cta, outro }: EmailShellInput,
+  brand: Brand = BRAND,
+): string {
+  const origin = originOf(cta);
+
   const button = cta
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
          <tr><td style="border-radius:8px;background:${ACCENT};">
@@ -86,7 +177,7 @@ export function emailShell({ title, intro, cta, outro }: EmailShellInput): strin
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border:1px solid ${BORDER};border-radius:14px;">
             <tr>
               <td style="padding:32px 32px 8px;">
-                <p style="margin:0 0 24px;font-size:14px;font-weight:600;letter-spacing:-0.01em;color:${INK};">${escapeHtml(PRODUCT_NAME)}</p>
+                ${header(brand, origin)}
                 <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:600;letter-spacing:-0.02em;color:${INK};">${escapeHtml(title)}</h1>
                 ${paragraphs(intro)}
                 ${button}
@@ -95,7 +186,7 @@ export function emailShell({ title, intro, cta, outro }: EmailShellInput): strin
               </td>
             </tr>
           </table>
-          <p style="margin:20px 0 0;font-size:12px;line-height:1.6;color:${MUTED};">${escapeHtml(PRODUCT_NAME)}</p>
+          ${footerHtml(footer(brand, origin))}
         </td>
       </tr>
     </table>
@@ -109,7 +200,13 @@ export function emailShell({ title, intro, cta, outro }: EmailShellInput): strin
  * Not a nicety: a message with no `text/plain` part scores as spam with most
  * filters, and the link has to survive in it or the fallback is not one.
  */
-export function emailText({ title, intro, cta, outro }: EmailShellInput): string {
+export function emailText(
+  { title, intro, cta, outro }: EmailShellInput,
+  brand: Brand = BRAND,
+): string {
+  const { address, supportEmail, privacyUrl } = footer(brand, originOf(cta));
+  const { legalName } = brand.company;
+
   return [
     title,
     "",
@@ -117,6 +214,10 @@ export function emailText({ title, intro, cta, outro }: EmailShellInput): string
     ...(cta ? ["", `${cta.label}: ${cta.url}`] : []),
     ...(outro ? ["", ...outro] : []),
     "",
-    `— ${PRODUCT_NAME}`,
+    `— ${brand.name}`,
+    ...(legalName ? [legalName] : []),
+    ...(address ? [address] : []),
+    ...(supportEmail ? [supportEmail] : []),
+    ...(privacyUrl ? [`Privacy policy: ${privacyUrl}`] : []),
   ].join("\n");
 }

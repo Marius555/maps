@@ -9,6 +9,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { useUpdateMap } from "@/lib/query/maps";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { SM_BREAKPOINT, useMediaQuery } from "@/lib/ui/use-media-query";
+import { newShortId } from "@/lib/utils/id";
 import { PALETTE_COLORS } from "@/lib/validation/palette";
 import { MAX_PIN_ICONS, pinIconsSchema } from "@/lib/validation/pin-icon.schema";
 import { CUSTOM_PIN_PREFIX, type CustomPinIcon } from "@/packages/shared/pin-icons";
@@ -336,7 +337,7 @@ function deleteLabel(usageCount: number): string {
 
 function blankPin(existing: CustomPinIcon[]): CustomPinIcon {
   return {
-    id: crypto.randomUUID().slice(0, 8),
+    id: newShortId(),
     label: "",
     color: PALETTE_COLORS[existing.length % PALETTE_COLORS.length],
     glyph: "store",

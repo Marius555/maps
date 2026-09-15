@@ -40,8 +40,8 @@ function getClient(): Resend | null {
 }
 
 /**
- * `from` carries the product name so the inbox shows "Map Embed", not a bare
- * address. Resend takes the `Name <addr>` form as-is.
+ * `from` carries the product name from brand.json, so the inbox shows a name
+ * rather than a bare address. Resend takes the `Name <addr>` form as-is.
  */
 function sender(): string {
   return `${PRODUCT_NAME} <${env.emailFrom}>`;

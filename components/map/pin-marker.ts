@@ -102,6 +102,22 @@ export function playDrop(element: HTMLElement): void {
   );
 }
 
+/**
+ * Whether this location is inside a cluster bubble at the current zoom.
+ *
+ * The bubble is a style layer and the pin is DOM, so the pin has to be taken off
+ * the map while the bubble counts it — or a zoomed-out map draws every location
+ * twice, once as itself and once as a number. See
+ * components/map/clusters/use-place-clusters.ts, which decides.
+ *
+ * A class and `display: none` rather than removing the marker: the diff pass in
+ * use-place-markers.ts owns creation, and a pin coming back out of a bubble must
+ * be the same element, not a new one replaying its drop.
+ */
+export function setPinClustered(element: HTMLElement, isClustered: boolean): void {
+  element.classList.toggle("map-pin--clustered", isClustered);
+}
+
 export function setPinSelected(element: HTMLElement, isSelected: boolean): void {
   element.classList.toggle("map-pin--selected", isSelected);
   element.setAttribute("aria-current", isSelected ? "true" : "false");

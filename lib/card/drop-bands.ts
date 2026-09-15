@@ -21,18 +21,21 @@ import type { DropSlot } from "./drop-slots";
  *
  * The drop targets live on an overlay above the card and are computed from the
  * card's measured geometry, rather than being lanes grown between the blocks.
- * That buys three things at once:
+ * That buys two things at once:
  *
  * - **Nothing on the card moves.** The chrome is not in the layout at all, so it
- *   cannot resize, reflow or clip anything, and a target is free to be as large
- *   as it likes — which is what lets the *drawn* mark be the size of the block
- *   while the *hit area* is the size of a fair share of the card.
- * - **They cannot overlap.** `dropBands` *partitions* the card: every pixel
- *   belongs to exactly one slot. However thin the block between two slots is,
- *   their two bands are still disjoint.
- * - **Nearest wins.** Because the partition covers the whole card there is no
- *   dead space and nothing to aim at precisely — and when only one zone accepts
- *   the drag (`actions` may only go at the bottom), the entire card aims at it.
+ *   cannot resize, reflow or clip anything, and a target is free to be larger
+ *   than what it draws — which is what lets the *drawn* mark be the size of the
+ *   block while the *hit area* is its share of a whole run of free space.
+ * - **They cannot overlap.** `dropBands` *partitions* whatever it is given:
+ *   every pixel of it belongs to exactly one slot, however close two slots sit.
+ *
+ * **What it is given is the free space, and nothing else** (`areaBands`). It
+ * used to be the whole card — no dead space, the nearest place wins — and that
+ * stopped being a kindness once the copy in the hand was pulled onto the place
+ * aimed at: with the pointer over a block, the block in the hand was drawn
+ * landing somewhere else. A pointer over a block or a gap now aims at nothing,
+ * and a release there does nothing.
  */
 
 /** What is being dropped, as the card's own vocabulary. Null for other drags. */
@@ -105,10 +108,10 @@ export type DropBand = DropSlot & { top: number; bottom: number };
  * card top to bottom by each slot's centre, and three slots sharing one centre
  * would collapse its arithmetic.
  *
- * Two kinds of band are left alone. A seam has no height, so there is no square
- * to draw in it and nothing for the three columns to be three of; and a column
- * slot already knows its own box, because it is the room beside a block rather
- * than a share of the card.
+ * A column slot is left alone: it already knows its own box, because it is the
+ * room beside a block rather than a share of a run. So is anything with no
+ * height, which has no square to draw in it — the card offers no such place any
+ * more, and this is not the function to start doing so.
  */
 export function splitAlignColumns(
   bands: readonly DropBand[],
@@ -206,12 +209,10 @@ export type DropRegion = {
  * names no area, and there its own box is the honest answer: the room beside a
  * block *is* what it stands for.
  *
- * **Two places show nothing at rest.** A seam is a line, and it always lands on
- * a boundary something else already owns: the bottom edge of the block above it,
- * or the card edge where the next zone's first outline begins. A mark straddling
- * the block above it spends no room at all, so its area is empty and any outline
- * would be drawn over a block that is already on the card. Both stay marks under
- * the pointer alone — the argument `.card-drop-seam` in app/globals.css makes.
+ * **One place shows nothing at rest.** A mark straddling the block above it
+ * spends no room at all, so its area is empty and any outline would be drawn
+ * over a block that is already on the card. It stays a mark under the pointer
+ * alone.
  */
 export function dropRegions(bands: readonly DropBand[]): DropRegion[] {
   const regions = new Map<string, DropRegion>();
@@ -220,8 +221,8 @@ export function dropRegions(bands: readonly DropBand[]): DropRegion[] {
     const bandTop = band.areaTop ?? band.y;
     const bandBottom = band.areaBottom ?? band.y + band.height;
 
-    // One guard for everything with nothing to show: a seam, whose own box is a
-    // line, and a straddling mark, whose area is empty because it spends no room.
+    // Nothing to show: a straddling mark, whose area is empty because it spends
+    // no room of its own.
     if (bandBottom - bandTop <= 0) continue;
 
     const key = [band.zone, band.index, band.half ?? "", band.line ?? ""].join(":");
@@ -293,8 +294,7 @@ export function dropBands(
   const height = bottom - top;
   if (count === 0 || height <= 0) return [];
 
-  // A seam has no height, so its centre is the seam itself — which is exactly
-  // where a zero-height mark is drawn.
+  // The middle of a place's box — which, for one with no height, is its own edge.
   const centre = (slot: DropSlot) => slot.y + slot.height / 2;
 
   const sorted = [...slots].sort(
@@ -337,4 +337,58 @@ export function dropBands(
     top: edges[i],
     bottom: edges[i + 1],
   }));
+}
+
+/**
+ * Which part of the card aims at each place — **only the free space that place
+ * is in**, and nothing outside it.
+ *
+ * `dropBands` used to be handed the whole card, so every pixel belonged to some
+ * slot: the middle of a photo, the gap between two lines and the card's own
+ * padding all aimed at whichever place was nearest. That was forgiving while the
+ * only answer was an outline. Now the copy in the hand is pulled onto whatever
+ * the pointer aims at (`ghost-magnet.ts`), so the nearest place would be drawn
+ * too — the block carried off to a slot somewhere else on the card while the
+ * pointer sits over a block — and dropping only where there is room is what was
+ * asked for. So each run of free space is divided among its own slots, by the
+ * same centres `dropBands` has always used, and everything between runs aims at
+ * nothing: the copy follows the hand there, and a release is caught by the
+ * card's own catch-all (`card:frame` in card-canvas.tsx) and does nothing.
+ *
+ * **Grouped by run**, `zone:index` — `dropRegions`' key for one. Every slot
+ * `run` emits carries its run's index and its run's area, and no two runs in a
+ * zone share an index.
+ *
+ * **A place with no free space of its own catches its own box.** A logo
+ * straddling the block above it names an empty area (`areaTop === areaBottom`)
+ * and is still a real drop. Those boxes are listed *after* the runs, so where
+ * one hangs into free space below the edge it straddles, the square wins inside
+ * its own box — the same last-painted-wins rule the overlay's layers rest on.
+ *
+ * Column slots do not come through here. They are not part of a run, and their
+ * band is their own rect (`useCardDropBands`).
+ */
+export function areaBands(slots: readonly DropSlot[]): DropBand[] {
+  const runs = new Map<string, DropSlot[]>();
+  const own: DropBand[] = [];
+
+  for (const slot of slots) {
+    const { areaTop, areaBottom } = slot;
+
+    if (areaTop === undefined || areaBottom === undefined || areaBottom <= areaTop) {
+      if (slot.height > 0) {
+        own.push({ ...slot, top: slot.y, bottom: slot.y + slot.height });
+      }
+      continue;
+    }
+
+    const key = `${slot.zone}:${String(slot.index)}`;
+    runs.set(key, [...(runs.get(key) ?? []), slot]);
+  }
+
+  const bands = [...runs.values()].flatMap((run) =>
+    dropBands(run, run[0].areaTop ?? 0, run[0].areaBottom ?? 0),
+  );
+
+  return [...bands, ...own];
 }

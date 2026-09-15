@@ -3,7 +3,11 @@
 import { ChevronRight, MapPin, Pencil, Trash2, Ungroup } from "lucide-react";
 import { motion } from "motion/react";
 
-import { LIST_ROW_CLASS, listRowMotion } from "@/components/ui/list-row-motion";
+import {
+  LIST_ROW_CLASS,
+  LIST_ROW_SURFACE_CLASS,
+  listRowMotion,
+} from "@/components/ui/list-row-motion";
 import { RowMenu } from "@/components/ui/row-menu";
 import type { Group } from "@/lib/repositories/types";
 import {
@@ -109,7 +113,7 @@ export function GroupListItem({
         data-selected={isSelected || undefined}
         {...targetProps}
         {...rowProps}
-        className={`group flex h-12 items-center gap-1 rounded-xl px-2 transition-colors hover:bg-default data-drop-target:inset-ring-2 data-drop-target:inset-ring-accent data-selected:bg-accent-soft${
+        className={`${LIST_ROW_SURFACE_CLASS}${
           isDraggable ? " is-draggable" : ""
         }`}
       >

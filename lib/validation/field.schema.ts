@@ -5,6 +5,8 @@ import type {
   SnapshotFieldType,
 } from "@/packages/shared/snapshot";
 
+import { newShortId } from "@/lib/utils/id";
+
 import { idSchema } from "./common";
 
 /**
@@ -110,7 +112,7 @@ export const placeFieldsSchema = z
 
 /** Fresh, never reused — the same rule and the same reason as `newTagId`. */
 export function newCustomFieldId(): string {
-  return `fld-${crypto.randomUUID().slice(0, 8)}`;
+  return `fld-${newShortId()}`;
 }
 
 export type CustomFieldInput = z.infer<typeof customFieldSchema>;

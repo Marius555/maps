@@ -1,7 +1,7 @@
 import type { StyleSpecification } from "maplibre-gl";
 import { describe, expect, it } from "vitest";
 
-import { carryRuntimeLayers } from "./carry-style";
+import { STACK_ON_TOP, carryRuntimeLayers } from "./carry-style";
 
 /**
  * A basemap as MapLibre would hand it back from `serialize()` — one vector
@@ -130,6 +130,53 @@ describe("carryRuntimeLayers", () => {
       "background",
       "editor-shape-fills",
       "editor-shape-outlines",
+    ]);
+  });
+
+  it("puts a layer that asks to stack on top back on top, over the labels", () => {
+    /*
+     * The editor's cluster bubbles. They stand in for pins, which are DOM over
+     * everything, and their rebuild path adds them at the end of the list — so a
+     * theme change has to put them there too, not under the labels with the
+     * shapes.
+     */
+    const style = withShapes();
+    const previous: StyleSpecification = {
+      ...style,
+      sources: {
+        ...style.sources,
+        "editor-place-clusters": {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+          cluster: true,
+        },
+      },
+      layers: [
+        ...style.layers,
+        {
+          id: "editor-cluster-bubbles",
+          type: "circle",
+          source: "editor-place-clusters",
+          metadata: STACK_ON_TOP,
+        },
+        {
+          id: "editor-cluster-counts",
+          type: "symbol",
+          source: "editor-place-clusters",
+          metadata: STACK_ON_TOP,
+        },
+      ],
+    };
+
+    expect(ids(carryRuntimeLayers(previous, basemap()))).toEqual([
+      "background",
+      "water",
+      "road",
+      "editor-shape-fills",
+      "editor-shape-outlines",
+      "place-label",
+      "editor-cluster-bubbles",
+      "editor-cluster-counts",
     ]);
   });
 

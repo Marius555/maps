@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 
 import { AuthDivider } from "@/components/auth/auth-divider";
 import { GoogleButton } from "@/components/auth/google-button";
+import { LegalConsentNotice } from "@/components/brand/legal-consent-notice";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
 import { useSignup } from "@/lib/query/auth";
@@ -79,6 +80,8 @@ export function SignupForm() {
           Create account
         </Button>
       </form>
+
+      <LegalConsentNotice />
     </div>
   );
 }

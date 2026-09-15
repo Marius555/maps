@@ -8,6 +8,7 @@ import { MapSkeleton } from "@/components/map/map-skeleton";
 import type { MapStyleKey } from "@/lib/map/style";
 import { selectionBounds } from "@/lib/map/selection-bounds";
 import type { HeatPoint } from "@/lib/analytics/view";
+import { retryImport } from "@/lib/ui/retry-import";
 
 /**
  * Two questions, one canvas.
@@ -24,8 +25,11 @@ import type { HeatPoint } from "@/lib/analytics/view";
  * at module load, and Next 16 throws if `dynamic({ ssr: false })` is called from
  * a Server Component. That is the reason this file and the impl are separate,
  * and the impl is imported nowhere else.
+ *
+ * `retryImport` is what keeps a chunk that 404s once from being fatal forever —
+ * see its own file for why React.lazy makes that the default.
  */
-const HeatMapImpl = dynamic(() => import("./heat-map-impl"), {
+const HeatMapImpl = dynamic(retryImport(() => import("./heat-map-impl")), {
   ssr: false,
   loading: () => <MapSkeleton />,
 });

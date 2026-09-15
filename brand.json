@@ -1,0 +1,34 @@
+{
+  "name": "Map Embed",
+  "tagline": "Put your locations on a map and embed it on your site.",
+  "website": "",
+  "logo": {
+    "light": "",
+    "dark": "",
+    "alt": ""
+  },
+  "favicon": "/favicon.ico",
+  "company": {
+    "legalName": "",
+    "registrationNumber": "",
+    "vatNumber": "",
+    "address": ""
+  },
+  "contact": {
+    "supportEmail": "",
+    "privacyEmail": ""
+  },
+  "legal": {
+    "termsUrl": "",
+    "privacyUrl": "",
+    "cookiesUrl": "",
+    "dpaUrl": ""
+  },
+  "social": {
+    "x": "",
+    "linkedin": "",
+    "facebook": "",
+    "instagram": "",
+    "github": ""
+  }
+}

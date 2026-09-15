@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef } from "react";
 
 import type { Shape } from "@/lib/repositories/types";
 import type { ShapeGeometry, ShapeKind } from "@/packages/shared/shapes";
+import { isOnClusterBubble } from "../clusters/cluster-layers";
 import {
   SHAPE_HIT_LAYERS,
   SHAPE_SOURCE,
@@ -209,6 +210,11 @@ export function useShapeLayers({
        * routinely inside a delivery radius or a district somebody drew.
        */
       if (isArmed) return;
+
+      // A cluster bubble is drawn over the shapes. A click on one that happens
+      // to sit inside an area is the bubble's — it zooms in, and selecting the
+      // area underneath as well is a card nobody asked for.
+      if (isOnClusterBubble(instance, event.point)) return;
 
       const id = event.features?.[0]?.properties?.id;
       if (typeof id === "string" && id) onSelectRef.current(id);

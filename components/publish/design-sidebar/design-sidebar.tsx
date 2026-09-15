@@ -3,7 +3,9 @@
 import { Button, ScrollShadow, Tooltip } from "@heroui/react";
 import { ChevronLeft, RotateCcw } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { PropertyFold } from "@/components/ui/properties/property-fold";
 import { PropertyFolds } from "@/components/ui/properties/property-folds";
@@ -43,6 +45,19 @@ import type { EmbedDesign } from "./use-embed-design";
  * a snapshot built in the browser — so what is on the left is not an impression
  * of the published map, it is the published map. Most controls no longer rebuild
  * it at all; see components/preview/embed-preview.tsx.
+ *
+ * **Below `lg` the column is a bottom sheet over the map** — the same box the
+ * editor's locations panel and the card designer's sidebar are
+ * (`components/ui/bottom-sheet.tsx`). It used to be a `max-h-[60dvh]` block
+ * stacked under a `55dvh` map with the page scrolling past both, which is a
+ * designer where neither half has room and neither can be seen while the other
+ * is used. Shut, the strip says whether there is anything to publish; open, the
+ * controls take the frame and the preview is still the band above them.
+ *
+ * The consequence to know: **Publish is one tap away** below `lg` rather than on
+ * screen. It is in the footer inside, because a long column of controls must not
+ * be able to push it out of reach, and a footer in the peek would be a second
+ * row of chrome on the one width that has none to spare.
  */
 export function DesignSidebar({
   map,
@@ -63,8 +78,40 @@ export function DesignSidebar({
 }) {
   const isEmpty = places.length === 0 && shapes.length === 0;
 
+  // Shut to start with, which only means anything below `lg`: the map is what
+  // this page is for, and the controls are one tap from it.
+  const [isOpen, setIsOpen] = useState(false);
+
   return (
-    <aside className="order-2 flex max-h-[60dvh] min-h-0 shrink-0 flex-col overflow-hidden border-t border-border bg-surface lg:order-1 lg:max-h-none lg:w-80 lg:border-t-0 lg:border-r">
+    <BottomSheet
+      contentId="design-sheet-content"
+      label="Design"
+      isOpen={isOpen}
+      onOpenChange={setIsOpen}
+      /*
+       * What the shut strip says. The name, because with the app nav gone this
+       * column is the only thing telling anyone what it is — and the publish
+       * state, because "is there anything unpublished?" is the one question
+       * worth answering without opening anything. The footer's own copy is
+       * `max-lg:hidden`, so it is said once at either width.
+       */
+      peek={
+        <>
+          <h2 className="truncate text-sm font-semibold text-foreground">
+            Design
+          </h2>
+          <PublishStatus
+            compact
+            map={map}
+            hasPendingChanges={hasUnpublishedChanges(map, places, shapes)}
+          />
+        </>
+      }
+      // No `lg` form: up there this panel has its own header row, and a second
+      // title above it would be the column naming itself twice.
+      peekClassName="lg:hidden"
+      className="order-2 max-lg:rounded-t-xl max-lg:border max-lg:border-border lg:order-1 lg:w-80 lg:shrink-0 lg:border-r lg:border-border"
+    >
       <header className="flex min-h-14 shrink-0 items-center gap-1 border-b border-border px-2">
         {/* The nav is gone on this page, so this is the way back.
 
@@ -175,10 +222,15 @@ export function DesignSidebar({
       {/* Outside the scroller on purpose: a long column of controls must not be
           able to push Publish out of reach. */}
       <footer className="shrink-0 space-y-3 border-t border-border px-3 py-3">
-        <PublishStatus
-          map={map}
-          hasPendingChanges={hasUnpublishedChanges(map, places, shapes)}
-        />
+        {/* `max-lg:hidden`, because the sheet's peek strip carries it there —
+            the point of the strip is that the state is readable with the
+            controls shut. */}
+        <div className="max-lg:hidden">
+          <PublishStatus
+            map={map}
+            hasPendingChanges={hasUnpublishedChanges(map, places, shapes)}
+          />
+        </div>
 
         {/* A map carrying only shapes publishes something real, so this waits
             until there is genuinely nothing to put on a customer's site. */}
@@ -192,6 +244,6 @@ export function DesignSidebar({
         <ShareDialog map={map} />
         <PublishAction mapId={map.id} />
       </footer>
-    </aside>
+    </BottomSheet>
   );
 }

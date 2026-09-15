@@ -26,6 +26,11 @@ emails.
   to a server redirect that ends at `/maps`.** See *The SameSite trap* below.
   This governs `/auth/success` and `/verify-email` and is the single most
   breakable thing in this area.
+- **`proxy.ts` redirects towards `/login` and never away from it.** Bouncing a
+  signed-in visitor off `/login` is `redirectIfSignedIn()`, called by the two
+  pages that want it, because a proxy redirect answers a client-side navigation
+  with a bare 307 and the router decodes the wrong route's payload. See *The
+  proxy cannot redirect a navigation* below.
 - **A token is single-use, so nothing that spends one may retry.**
   `useOAuthSession` and `useResetPassword` both set `retry: false`, and
   `OAuthCallback` guards its effect with a ref against StrictMode's double
@@ -79,10 +84,62 @@ a Strict cookie.
   cookie goes with it).
 
 This is also why `/auth/success`, `/auth/failure`, `/forgot-password`,
-`/reset-password` and `/verify-email` are deliberately *absent* from
-`proxy.ts`'s matcher. Adding them to `AUTH_PATHS` would be worse than useless:
-that set redirects signed-in users away, and someone signed in on this browser is
-allowed to follow a reset link.
+`/reset-password` and `/verify-email` never got a signed-in bounce of their own.
+Giving them one would be worse than useless: it sends a signed-in user away, and
+someone signed in on this browser is allowed to follow a reset link. It is the
+reason `redirectIfSignedIn()` is called by `/login` and `/signup` individually
+rather than from `(auth)/layout.tsx`, which would catch all seven.
+
+## The proxy cannot redirect a navigation
+
+`proxy.ts` used to hold the mirror of the signed-out rule — a session cookie on
+`/login` or `/signup` redirected to `/maps`. It sent the right user to the right
+place and it cost a full page reload every time, which is invisible on a desktop
+and on a phone is a white flash and a second download of the whole app.
+
+A client-side navigation does not request a page, it requests that route's flight
+payload: `GET /login?_rsc=<hash>` with an `RSC: 1` header. A proxy redirect
+answers that with a bare 307, `fetch` follows a 307 transparently and the router
+is not allowed to intercept it, so what comes back is the payload for `/maps`
+against a request made for `/login`. Decoding it walks onto a row id that has
+already resolved and throws
+
+```
+TypeError: chunk.reason.enqueueModel is not a function
+```
+
+which surfaces as `Failed to fetch RSC payload for /login. Falling back to
+browser navigation.` — the reload. The destination is never wrong, so the only
+symptom is the reload and a console error, and it reproduces only while signed
+in. Signed out, `/login` renders and nothing redirects.
+
+**It cannot be fixed inside the proxy, and this was measured rather than
+assumed.** Next strips both `_rsc` and the `RSC` header before `proxy()` is
+called — instrumenting the function to echo `request.url` and
+`request.headers.get("rsc")` back on the response returns a clean
+`http://localhost:3000/login` and `null` for every form of the request. So the
+proxy cannot tell a navigation from a document request, and cannot carry the
+cache-busting param across the hop to keep the payload matched to the request.
+Next's own client has a redirect-replay path for this
+(`experimental.validateRSCRequestHeaders`, on by default) and it is what turns
+the mismatch into the throw rather than a silent wrong render.
+
+`redirect()` during a render is the mechanism that does work, because a redirect
+raised while rendering is encoded *in the flight body* — the router applies it as
+a redirect instead of decoding a foreign payload. On a document request it is
+still a 307. Hence `redirectIfSignedIn()`.
+
+Verified in the browser rather than by reasoning, per the house rule, and with
+the control run both ways: clicking the marketing header's `Log in` while signed
+in, holding a marker on `window` to tell a soft navigation from a reload. With
+the proxy branch the marker is gone — the document was replaced. With
+`redirectIfSignedIn()` the marker survives, the URL is `/maps`, and nothing is
+logged.
+
+The signed-out direction keeps its 307 and should. It answers a document request
+— a typed URL, an old bookmark — and the one navigation that can reach it, a
+session expiring with the dashboard open, is a case where a reload is the honest
+outcome.
 
 ## Why Appwrite's tokens rather than our own
 

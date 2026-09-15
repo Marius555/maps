@@ -76,26 +76,44 @@ export function PublishPanel({
       <PageTitle>Publish</PageTitle>
 
       {/*
-        `lg:flex-none` is load-bearing: without it `flex-1`'s `flex-basis: 0%`
-        beats `height` on the main axis and the definite height is silently
-        ignored, leaving the page to grow instead of the column to scroll. The
-        full `100dvh` rather than a subtraction, because this page has no
-        `Container` padding above it and `MobileHeader` is `md:hidden`.
+        `flex-none` is load-bearing: without it `flex-1`'s `flex-basis: 0%` beats
+        `height` on the main axis and the definite height is silently ignored,
+        leaving the page to grow instead of the column to scroll.
+
+        **The height is unconditional now**, where it used to be `lg:` only: the
+        design column is a bottom sheet over the map below `lg`, so there is
+        nothing left to stack and the preview claims the frame. `100dvh` with no
+        subtraction above `md`, because this page has no `Container` padding;
+        below it, less the 3.5rem `MobileHeader`, which is `md:hidden` and so
+        contributes nothing above `md`.
+
+        `relative` and `max-lg:overflow-hidden` are what the sheet needs — a
+        containing block, and a clip for the two thirds of it that hangs below
+        the frame while shut. Without the clip that box grows the document and
+        brings the window's scrollbar in with it.
 
         **`lg` and not `xl`.** The embed decides its own shape with a container
         query at 640px of its own width, and under that it stacks the results
         panel below the map — right on a phone, wrong as the only thing a
         designer ever shows. With the app nav gone, `1024 − 320` leaves the frame
-        704px, which clears it; below `lg` the page stacks and the map takes the
-        full width, clearing it by more. There is deliberately no
+        704px, which clears it; below `lg` the sheet is over the map and the map
+        takes the full width, clearing it by more. There is deliberately no
         `publish/loading.tsx` to keep these strings in step with — see CLAUDE.md
         on why this route has no loading boundary.
       */}
-      <div className="flex min-h-0 flex-1 flex-col lg:h-[100dvh] lg:flex-none lg:flex-row">
+      <div className="relative flex h-[calc(100dvh-3.5rem)] min-h-0 flex-none flex-col max-lg:overflow-hidden md:h-[100dvh] lg:flex-row">
         {/* The map first in source, so a phone gets the subject before the
-            controls; `lg:order-first` puts the column back on the left where
-            the nav was as soon as there are two columns. */}
-        <div className="relative order-1 h-[55dvh] min-h-64 w-full lg:order-2 lg:h-auto lg:min-h-0 lg:flex-1">
+            controls; `lg:order-2` puts the column back on the left where the nav
+            was as soon as there are two columns.
+
+            The bottom padding below `lg` is the sheet's peek strip. The editor
+            lifts MapLibre's bottom corner with `--map-chrome-inset` instead, and
+            that is not available here: the preview is the real embed in an
+            iframe, so a custom property on this document cannot reach the
+            controls inside it. Ending the frame above the strip is the only way
+            the embed's attribution and its zoom stack stay uncovered, and
+            attribution that is covered is attribution that is absent (§12). */}
+        <div className="relative order-1 min-h-64 w-full flex-1 max-lg:pb-[var(--sheet-peek)] lg:order-2 lg:min-h-0 lg:flex-1 lg:pb-0">
           {/* A map of nothing but shapes is a real map — a delivery area needs
               no pins in it — so the empty state waits until both are empty. */}
           {isEmpty ? (

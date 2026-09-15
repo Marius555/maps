@@ -52,12 +52,11 @@
  * asks the viewer, everything else asks the basemap.
  */
 
+import { mapThemeClass, type MapStyleKey } from "@/lib/map/style";
 import {
-  isAutoMapStyle,
-  isDarkMapStyle,
-  resolveMapStyle,
-  type MapStyleKey,
-} from "@/lib/map/style";
+  cardFlipsTheme,
+  type CardGroundInput,
+} from "@/packages/shared/card-ground";
 
 /**
  * `"light"` or `"dark"`, to be put on the element wrapping a card.
@@ -75,8 +74,25 @@ import {
 export function cardThemeClass(
   style: MapStyleKey,
   prefersDark: boolean,
+  layout?: CardGroundInput,
 ): "light" | "dark" {
-  if (isAutoMapStyle(style)) return prefersDark ? "dark" : "light";
+  // The basemap's own answer, which the editor's floating controls and
+  // MapLibre's zoom stack now ask for too — see `mapThemeClass`. A card is the
+  // one thing on a map that may then disagree with it, and only because its
+  // ground is a colour its owner pinned.
+  const mapIsDark = mapThemeClass(style, prefersDark) === "dark";
 
-  return isDarkMapStyle(resolveMapStyle(style)) ? "dark" : "light";
+  /*
+   * A ground the owner pinned outranks the basemap, because the text sits on
+   * *it* and not on the map — see `cardFlipsTheme`, which is also what the
+   * embed asks, so the two renderers cannot come to different answers. False is
+   * "nothing pinned", and then the basemap decides exactly as it always did.
+   *
+   * `layout` is optional so the callers that genuinely have no card in hand —
+   * a drag ghost being told which class to copy — keep the old signature and
+   * the old answer.
+   */
+  const flips = layout ? cardFlipsTheme(layout, mapIsDark) : false;
+
+  return mapIsDark !== flips ? "dark" : "light";
 }

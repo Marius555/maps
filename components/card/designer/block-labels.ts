@@ -147,8 +147,10 @@ type RetiredBlockType = "category" | "details";
  *
  * No shelf is drawn differently from another any more. `compact` used to mark
  * the one whose rows say themselves, back when the others were full-width rows
- * carrying a sentence of hint; every tile is the compact one now, because the
- * palette's job is to show all eleven at once (see `BlockPalette`).
+ * carrying a sentence of hint; every tile is that compact one now — a word and
+ * a glyph, with the sentence in `title`. The rows are full-width again, which
+ * is what the compactness bought and is argued in `BlockPalette`; what has not
+ * come back is the sentence on the tile.
  */
 export const BLOCK_GROUPS = [
   {

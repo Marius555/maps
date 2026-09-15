@@ -63,7 +63,11 @@
  * Only the colour tokens are redefined. Every rule below reads them, so the
  * whole panel system follows from these eight lines.
  */
-.lm-root--dark {
+.lm-root--dark,
+/* And a card whose *own* ground is dark on a map that is not — it wants exactly
+   this palette, so it is a second selector here rather than six values copied
+   out of it. See `.lm-flip` below for what marks one. */
+.lm-root:not(.lm-root--dark) .maplibregl-popup.lm-flip {
   --lm-surface: #17181a;
   --lm-foreground: #f2f3f5;
   --lm-muted: #a2a8b3;
@@ -119,6 +123,32 @@
     transparent
   );
   color: var(--lm-foreground);
+}
+
+/*
+ * A card whose own ground disagrees with the map underneath it.
+ *
+ * The comment above holds only while `--lm-card-bg` is unset. When the owner
+ * *did* pin a colour it cannot follow the theme, and a white card on a dark map
+ * ended up drawing near-white text on itself — measured at roughly a `#a3a3a3`
+ * ground against a `#989898` address, which is the same colour. `styleCard`
+ * marks such a popup `lm-flip`, from `cardGroundTheme`
+ * (packages/shared/card-ground.ts); the dashboard's twin asks that identical
+ * function, so the two renderers cannot come to different answers.
+ *
+ * The dark direction is a selector on the `.lm-root--dark` block above rather
+ * than a rule here, which leaves only this one to write. Three tokens, because
+ * they are the three a card's text falls back through — every rule below reads
+ * `var(--lm-card-color, var(--lm-muted))` or the `--lm-foreground` equivalent,
+ * so a colour the owner pinned on a block still outranks this.
+ *
+ * On the shell, not the content box: custom properties inherit, and a value set
+ * on the element beats one inherited from `.lm-root` whatever its specificity.
+ */
+.lm-root--dark .maplibregl-popup.lm-flip {
+  --lm-foreground: #1b1d21;
+  --lm-muted: #656b76;
+  --lm-border: #e2e5ea;
 }
 
 /*
@@ -213,7 +243,26 @@
    */
   flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  /*
+   * **The type is stated here, once, and it is half of the row's height.**
+   *
+   * These controls were `font: inherit` alone — 14px off `.lm-root` — which with
+   * 7px of padding made a 34px box, and the search field was asked to be a third
+   * smaller. The line box is most of that height, so the type had to come down
+   * with the padding or the box could not: 12px at the inherited 1.45 is a
+   * 17.4px line, and 2px either side plus the hairline is 23px. It cannot come
+   * off `.lm-root` instead — that 14px is the whole embed's, the results rows
+   * and the card included — and `line-height` is deliberately left alone, since
+   * it is the one of the two that can be inherited and still land on 23.
+   *
+   * On the row rather than on each control, because `font: inherit` on the field
+   * and the buttons then picks it up — that declaration exists precisely so a
+   * form control takes its parent's type rather than the UA's — and so does the
+   * search dropdown, which is a `ul` inside it and would otherwise be a 14px
+   * list hanging off a 23px box.
+   */
+  font-size: 12px;
 }
 
 /*
@@ -242,6 +291,11 @@
  * stack having grown a padding at the top rather than as one control being
  * covered.
  *
+ * **The number is `top` plus the control's height, and it moved when the field
+ * did.** The controls are 23px now rather than 34, so 42 became 31 — and it has
+ * to be kept in step, in both places, or the gap is either a phantom band with
+ * nothing in it or the same overlap this rule exists to end.
+ *
  * `:has(> .lm-toolbar)` is exactly the floating case and needs no new state to
  * say so: docked, the toolbar is a child of `.lm-panel` instead (`index.ts`
  * appends it to the root only when there is no list). `:not(:empty)` because a
@@ -268,7 +322,7 @@
   .maplibregl-ctrl-top-left,
 .lm-root[data-lm-side="right"]:has(> .lm-toolbar:not(:empty))
   .maplibregl-ctrl-top-right {
-  padding-top: 42px;
+  padding-top: 31px;
 }
 
 /*
@@ -285,6 +339,9 @@
  *
  * Both fall back to what the control has always drawn, so a snapshot published
  * before any of this renders the solid, unblurred box (§7).
+ *
+ * `font: inherit` is what takes the toolbar's own type rather than the UA's —
+ * see the note on `.lm-toolbar`, which is where the row's size is now stated.
  */
 .lm-search__input,
 .lm-button {
@@ -348,9 +405,22 @@
   min-width: 0;
   /* Room at the end for whatever sits inside the field — the magnifier, or the
      find-nearest button, which is the wider of the two. */
-  padding: 7px 38px 7px 10px;
+  padding: 2px 26px 2px 8px;
   -webkit-appearance: none;
   appearance: none;
+}
+
+/*
+ * Every glyph on the toolbar, scaled to the row.
+ *
+ * `dom.ts`'s `icon()` writes `width`/`height` of 18 as presentation attributes,
+ * which any rule beats — and it has to stay 18 there, because the same helper
+ * draws the card's links and folds, which did not get smaller. 12px is the same
+ * third off as the field around it.
+ */
+.lm-toolbar svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* The type-to-clear cross Safari and Chrome add to `type="search"` lands under
@@ -378,28 +448,29 @@
 .lm-search__icon,
 .lm-search__action {
   position: absolute;
-  inset-inline-end: 9px;
+  inset-inline-end: 6px;
   top: 50%;
   translate: 0 -50%;
+  color: var(--lm-muted);
 }
 
 .lm-search__icon {
   pointer-events: none;
-  color: var(--lm-muted);
 }
 
 .lm-button {
-  padding: 7px 10px;
+  padding: 2px 7px;
   cursor: pointer;
   white-space: nowrap;
 }
 
 /* A control whose whole label is a glyph. Square, and sized to match the height
-   of the search box beside it so the toolbar reads as one row of controls. */
+   of the search box beside it so the toolbar reads as one row of controls —
+   2px + 2px of padding, a 17.4px line box and the hairline, which is 23px. */
 .lm-button--icon {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 23px;
+  height: 23px;
   padding: 0;
   place-items: center;
   color: var(--lm-foreground);
@@ -457,17 +528,16 @@
  * actually needs is therefore restated here.
  */
 .lm-search__action {
-  inset-inline-end: 4px;
+  inset-inline-end: 2px;
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   place-items: center;
   font: inherit;
   border: 0;
   border-radius: 6px;
   background: none;
-  color: var(--lm-muted);
   cursor: pointer;
 }
 
@@ -1652,7 +1722,7 @@
   position: static;
   max-width: none;
   flex-wrap: nowrap;
-  padding: 10px 12px;
+  padding: 7px 10px;
   border-bottom: 1px solid var(--lm-border);
 }
 
@@ -2301,7 +2371,7 @@
     .maplibregl-ctrl-top-right,
   .lm-root[data-lm-side="right"]:has(> .lm-toolbar:not(:empty))
     .maplibregl-ctrl-top-left {
-    padding-top: 42px;
+    padding-top: 31px;
   }
 }
 

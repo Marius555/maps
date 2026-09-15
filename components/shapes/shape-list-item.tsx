@@ -9,7 +9,11 @@ import {
   useRowDragSource,
   type DraggedObject,
 } from "@/components/groups/use-row-drag";
-import { LIST_ROW_CLASS, listRowMotion } from "@/components/ui/list-row-motion";
+import {
+  LIST_ROW_CLASS,
+  LIST_ROW_SURFACE_CLASS,
+  listRowMotion,
+} from "@/components/ui/list-row-motion";
 import { RowMenu, type RowMenuItem } from "@/components/ui/row-menu";
 import { TreeBranch } from "@/components/ui/tree-branch";
 import { shapeSummary } from "@/lib/map/shape-summary";
@@ -133,7 +137,7 @@ export function ShapeListItem({
         data-selected={isSelected || undefined}
         {...targetProps}
         {...rowProps}
-        className={`group flex h-12 min-w-0 flex-1 items-center gap-1 rounded-xl px-2 transition-colors hover:bg-default data-drop-target:inset-ring-2 data-drop-target:inset-ring-accent data-selected:bg-accent-soft${
+        className={`${LIST_ROW_SURFACE_CLASS} min-w-0 flex-1${
           isDraggable ? " is-draggable" : ""
         }`}
       >

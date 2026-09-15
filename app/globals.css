@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "@heroui/styles";
-
+  
 /*
  * Declaring --font-sans in :root alone makes it a CSS variable but NOT a
  * Tailwind v4 theme token — the `font-sans` utility would keep resolving to
@@ -77,6 +77,23 @@
   --overlay-foreground: oklch(21% 0 0);
   --segment: oklch(100% 0 0);
   --segment-foreground: oklch(21% 0 0);
+
+  /*
+   * The ground under chrome that floats *on* a map.
+   *
+   * Both values are read inside a subtree wearing the *basemap's* light/dark
+   * rather than the dashboard's (`mapThemeClass`), so `--surface` here is
+   * already the right one; the only thing this adds is letting the map read
+   * through. 72% is the lowest that keeps a `text-xs` muted label over a busy
+   * basemap above the 4.5:1 floor — measured over the Liberty style's motorway
+   * casing, which is the worst ground either theme has. Backed by a blur on the
+   * element, which is what stops road lines showing *through* a glyph.
+   */
+  --map-chrome: color-mix(in oklch, var(--surface) 72%, transparent);
+  /* A control on that glass, and the one thing on it that must stay opaque:
+     buttons are what the toolbar is for, and a translucent button on
+     translucent glass is two veils over the same pixels. */
+  --map-chrome-control: var(--surface);
 
   --field-background: oklch(100% 0 0);
   --field-foreground: oklch(21% 0 0);
@@ -211,6 +228,12 @@
   --segment: oklch(30% 0 0);
   --segment-foreground: oklch(97% 0 0);
 
+  /* See the light pair. Dark glass needs the extra opacity: the surface it
+     mixes toward is near-black, so the same 72% over a *dark* basemap loses the
+     panel's edge entirely and the buttons read as floating on nothing. */
+  --map-chrome: color-mix(in oklch, var(--surface) 80%, transparent);
+  --map-chrome-control: var(--surface-secondary);
+
   --field-background: oklch(19% 0 0);
   --field-foreground: oklch(97% 0 0);
   --field-placeholder: oklch(60% 0 0);
@@ -336,53 +359,119 @@ html {
 }
 
 /*
- * MapLibre's own chrome in dark mode.
+ * MapLibre's own chrome, in the light/dark **of the map under it**.
  *
  * maplibre-gl.css is light-only — white control groups, dark SVG icons and a
- * translucent-white attribution bar. Over the dark basemap all three read as
+ * translucent-white attribution bar. Over a dark basemap all three read as
  * bright rectangles pasted onto the map.
+ *
+ * **Keyed off `[data-map-theme]`, never off `.dark`, and that is the fix rather
+ * than a tidy-up.** These rules were `.dark .maplibregl-ctrl-group` — the
+ * *dashboard's* theme — so an owner whose phone is in dark mode got a near-black
+ * zoom stack and a near-black toolbar over a white basemap, and no amount of
+ * changing the map style moved either: nothing in the chrome was reading the map
+ * style at all. `map-canvas-impl.tsx` now writes the basemap's own answer onto
+ * the frame (`mapThemeClass`), and it must be an attribute: `<html class="dark">`
+ * is an ancestor of every map on the page, so a descendant selector on the class
+ * would match inside a light frame too.
  *
  * The attribution rules are not cosmetic: OpenStreetMap and tile-provider credit
  * must be visible on every rendered map (§12), and illegible is as good as
  * absent.
  */
-.dark .maplibregl-ctrl-group,
-[data-theme="dark"] .maplibregl-ctrl-group {
-  background: var(--surface);
+[data-map-theme] .maplibregl-ctrl-group {
+  background: var(--map-chrome);
   border: 1px solid var(--border);
+  /* The glass the toolbar above it is made of — see `--map-chrome`. Without the
+     blur, road lines read straight through the zoom glyphs. */
+  backdrop-filter: blur(8px);
 }
 
-.dark .maplibregl-ctrl-group button + button,
-[data-theme="dark"] .maplibregl-ctrl-group button + button {
+[data-map-theme] .maplibregl-ctrl-group button + button {
   border-top-color: var(--border);
 }
 
-.dark .maplibregl-ctrl-group button:not(:disabled):hover,
-[data-theme="dark"] .maplibregl-ctrl-group button:not(:disabled):hover {
+[data-map-theme] .maplibregl-ctrl-group button:not(:disabled):hover {
   background-color: var(--surface-secondary);
 }
 
 /* The icons ship as dark-stroked SVG data URIs, so they cannot be recoloured by
    a property — inverting the rendered result is the only lever. */
-.dark .maplibregl-ctrl-icon,
-[data-theme="dark"] .maplibregl-ctrl-icon {
+[data-map-theme="dark"] .maplibregl-ctrl-icon {
   filter: invert(1) hue-rotate(180deg);
 }
 
-.dark .maplibregl-ctrl-attrib,
-[data-theme="dark"] .maplibregl-ctrl-attrib {
-  background-color: color-mix(in oklch, var(--surface) 80%, transparent);
+[data-map-theme] .maplibregl-ctrl-attrib {
+  background-color: var(--map-chrome);
   color: var(--muted);
 }
 
-.dark .maplibregl-ctrl-attrib a,
-[data-theme="dark"] .maplibregl-ctrl-attrib a {
+[data-map-theme] .maplibregl-ctrl-attrib a {
   color: var(--foreground);
 }
 
-.dark .maplibregl-ctrl-attrib-button,
-[data-theme="dark"] .maplibregl-ctrl-attrib-button {
+[data-map-theme="dark"] .maplibregl-ctrl-attrib-button {
   filter: invert(1) hue-rotate(180deg);
+}
+
+/*
+ * A floating panel of controls that sits **on** a map.
+ *
+ * Two jobs, and they pull in opposite directions. The panel is glass, so the
+ * basemap under it stays readable and the controls do not land on the map as an
+ * opaque slab; the controls themselves are not, so the thing you are actually
+ * aiming at keeps a solid edge against whatever is behind it.
+ *
+ * `--button-bg` is HeroUI's own lever (node_modules/@heroui/styles/…/button.css)
+ * and cascades, so this needs no component change and no wrapper. **Scoped to
+ * `--tertiary` on purpose:** every control in the toolbar is tertiary until it
+ * is armed, and an armed one switches to `primary` — the accent fill is how a
+ * live tool says it is live, and it must not be painted over here.
+ */
+.map-chrome-panel {
+  background-color: var(--map-chrome);
+  backdrop-filter: blur(8px);
+}
+
+.map-chrome-panel .button--tertiary {
+  --button-bg: var(--map-chrome-control);
+  --button-bg-hover: var(--default);
+  --button-bg-pressed: var(--default);
+}
+
+/*
+ * How much of the page a bottom sheet's peek strip covers, below `lg`.
+ *
+ * One constant, read by things that must agree to the pixel: the strip's own
+ * height (`BottomSheet`), the translate that parks the sheet there, and whatever
+ * each caller has to move out from under it — `--map-chrome-inset` on the
+ * editor's map, a `max-lg:pb-*` on the card canvas and on the publish preview.
+ * Measuring it with a ResizeObserver instead would be one frame of the sheet in
+ * the wrong place on every load, and the strip is a fixed two-row box that
+ * nothing can reflow.
+ *
+ * 4rem is the handle rail (1.25rem) plus the title row (2.75rem).
+ */
+:root {
+  --sheet-peek: 4rem;
+}
+
+/*
+ * Everything MapLibre stacks in a bottom corner, lifted clear of whatever the
+ * page has parked there.
+ *
+ * The editor's locations panel is a bottom sheet below `lg`, and its peek strip
+ * sits over the map — directly on top of the zoom stack and the attribution bar
+ * in the default corner. Attribution that is covered is attribution that is
+ * absent (§12), so the frame raises both by exactly the height of the strip.
+ *
+ * Two classes deep, because maplibre-gl.css declares `bottom: 0` on the single
+ * class and rides in on map-canvas-impl's own dynamic chunk — injected *after*
+ * this file, so equal specificity would lose.
+ */
+[data-map-theme] .maplibregl-ctrl-bottom-left,
+[data-map-theme] .maplibregl-ctrl-bottom-right {
+  bottom: var(--map-chrome-inset, 0px);
 }
 
 /*
@@ -1331,6 +1420,15 @@ html {
   cursor: grabbing;
 }
 
+/* Counted by a cluster bubble at this zoom — components/map/clusters decides.
+   `display`, never `opacity`: MapLibre writes opacity inline on every marker
+   (see the note at `.picking-pins .map-pin--checking`). Two classes, so it beats
+   anything that sets `display` on a pin at one. It also takes the pin out of the
+   tab order, which is right — the locations list reaches every one of them. */
+.map-pin.map-pin--clustered {
+  display: none;
+}
+
 /* 1rem to match the embed's `circle-radius: 8`. The two used to differ by 2px,
    which is invisible in isolation and obvious the moment the editor's preview
    panel puts the real embed beside the editor's own canvas. */
@@ -1790,7 +1888,11 @@ html {
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 50;
+  /* Above every overlay, not level with them. HeroUI's own drawers and modals
+     sit at `z-50`, and so does the card designer's Blocks panel — which is the
+     one a row is dragged *out* of, so the copy in your hand has to be over it
+     rather than winning on source order, which is what it was doing. */
+  z-index: 60;
   border-radius: 0.75rem;
   background: var(--surface);
   /* Neutral, not accent. Accent is the drop target's ring, and a copy wearing the
@@ -1811,6 +1913,111 @@ html {
    initial state to animate away from. */
 .row-ghost--lifted {
   opacity: 0.9;
+}
+
+/*
+ * The copy once the card designer has pulled it onto a place it could land
+ * (components/groups/ghost-magnet.ts).
+ *
+ * **No chrome on the root: the place is the frame.** It used to wear an accent
+ * border, an accent ring and a low shadow here, and all of them sat on the slot
+ * mark's own dashed edge — a solid border traced over a dashed one, which read
+ * as a double border — while the white `--surface` ground under the copy was a
+ * pale slab laid over a glass card. Seated, the root draws nothing: the magnet
+ * shrinks the copy just inside the place, the area's dashes are its only edge,
+ * and the copy itself says the rest.
+ *
+ * **Fully opaque, where a carried copy is 0.9.** The 0.9 is there so a drop
+ * target's ring reads through a row held over it. A seated copy is sitting *on*
+ * its target, so there is nothing under it to see, and every step off full
+ * strength is the block in the hand getting harder to read against the veil.
+ *
+ * `border-color` rather than `border-width`, so the copy inside does not reflow
+ * by a pixel the moment it snaps. No transition on the chrome: the spring that
+ * moved it there is the animation, and this is the state it arrives in.
+ */
+.row-ghost--snapped {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+}
+
+/*
+ * A palette tile in the hand, carried: the pill is the copy's only shape.
+ *
+ * `.row-ghost` gives the root a border, a 0.75rem radius and a ground of its own,
+ * sized to whatever was picked up — right for a row, which has no edge of its
+ * own, and wrong for a tile, which does. Measured, a carried Name tile was a
+ * 12px-radius rectangle traced round a pill: two outlines on one object. So the
+ * root hands its ground and its lift shadow to the pill and draws nothing, and
+ * the pill sheds its hairline — one solid shape with no edge drawn on it.
+ *
+ * The glyph's well wears the tile's hover look, which a copy on `<body>` is never
+ * under the pointer to earn.
+ */
+.row-ghost:has(> .palette-tile) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.row-ghost > .palette-tile {
+  border-color: transparent;
+  background: var(--surface);
+  box-shadow: 0 10px 24px oklch(0% 0 0 / 0.28);
+}
+
+.row-ghost > .palette-tile > [aria-hidden] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/*
+ * A block moved on the card: its selection ring stays on the canvas.
+ *
+ * `DesignerBlock` draws *selected* as an inset accent ring on its own root, and
+ * a drop always selects what landed — so the second drag of any block cloned the
+ * ring and seated it inside the place it was aimed at, a solid accent edge inside
+ * the area's dashed one. Selection is the canvas's state, not the block's, and
+ * the copy is the block. Nothing else on that root is a box-shadow: every block's
+ * own look is inside its content element.
+ */
+.row-ghost > [data-block-id] {
+  box-shadow: none;
+}
+
+/*
+ * A seated copy that is a *label* for the block rather than the block — a
+ * palette tile (`SnapBox.fit`) — centred in the place at its own size, and
+ * scaled down by the magnet only as far as the place needs.
+ *
+ * **It keeps its ground.** It used to shed the pill whole — ground, border and
+ * padding — which left an icon and a word laid straight on the drop layer's
+ * veil: on a dark card, dark text on a darkened card, and measured, a seated
+ * Name was a word under 10px at a third of its strength. The pill stays solid
+ * and loses only what made it too tall for a one-line place: the hairline, and
+ * its padding down to the 24px of its glyph well — so a 24px Name place seats it
+ * at 0.75 rather than shrinking a 38px pill to half size.
+ *
+ * The children go `flex: none` because the tile's name is `flex-1`, and a
+ * `flex-1` item in a copy sized to its own content has no width to grow into
+ * and truncates to an ellipsis.
+ */
+.row-ghost--label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.row-ghost--label > .palette-tile {
+  border-width: 0;
+  padding: 0 0.625rem 0 0;
+  box-shadow: 0 2px 8px oklch(0% 0 0 / 0.3);
+}
+
+.row-ghost--label > * > * {
+  flex: none;
 }
 
 /*
@@ -1849,9 +2056,76 @@ body.is-drop-remove .row-ghost {
  * the pointer while the user is aiming at a row two places down. Dim enough to
  * read as "this one is in your hand", solid enough to still say where it came
  * from.
+ *
+ * **No transition of its own, deliberately.** `opacity` is named in
+ * `LIST_ROW_SURFACE_CLASS`, so the row fades at the same 150ms as every other
+ * change it makes — and declaring a second one here would replace that list,
+ * this rule being unlayered where a Tailwind utility is not. It used to snap,
+ * which read as the row blinking out rather than being picked up.
  */
 .row-lifted {
   opacity: 0.35;
+}
+
+/*
+ * A finger resting on a row, while the gesture is still deciding what it is.
+ *
+ * **The bug this exists for did not look like a missing animation, it looked
+ * like a dead feature.** Grouping by drag was reported as doing nothing at all
+ * on a phone, and it was not broken: a mouse starts a drag after 8px of travel,
+ * a finger only after 250ms of *stillness* (`TOUCH_HOLD_MS` in
+ * components/groups/use-row-drag.ts), and any movement before then is correctly
+ * read as a scroll and ends the gesture outright. So someone pressing and
+ * dragging the way they do with a mouse got no ghost, no highlight, no error
+ * and no group — measured in the browser, all four states false. Nothing on
+ * screen had ever said a hold was the gesture, and `.is-draggable`'s cursor
+ * cannot say it: there is no cursor on a touch screen.
+ *
+ * The row now takes the press, so holding *looks* like it is going somewhere
+ * and the hold teaches itself on the first try.
+ *
+ * `transform` and a fill, and nothing that touches the box: this fires under a
+ * finger, mid-list, on the longest list in the app. A scale is composited and
+ * moves no neighbour, and a background-colour change paints without reflowing —
+ * where anything touching the *box* would move every row below it at the exact
+ * moment the user is aiming at one of them.
+ *
+ * **The fill is the hover state, finally given to touch.** A row's only colour
+ * feedback is `hover:bg-default`, which on a touchscreen never fires — so the
+ * device that has to wait 250ms for its gesture was the device with the least
+ * said back to it. Same colour, so a finger and a mouse light the same row the
+ * same way.
+ *
+ * A row that is already *selected* keeps its accent tint instead: Tailwind's
+ * `data-selected:bg-accent-soft` is a class-and-attribute selector and outranks
+ * this one class. That is the right outcome — the scale still fires, and a
+ * selected row does not need telling it is the row you mean.
+ *
+ * The duration is the hold's own, passed down as a custom property from the one
+ * place that knows it, so the cue cannot drift out of step with the timer it is
+ * describing.
+ *
+ * **It is also its own static form**, which is what `prefers-reduced-motion`
+ * needs (§8, and the argument at `.map-pin--stop`). The blanket rule at the
+ * bottom of this file cuts the transition to 0.01ms rather than removing the
+ * declaration, so a reader who asked for no motion gets the pressed state
+ * *immediately* on touch-down instead of over the hold — still a visible answer
+ * to "did that register", just not an animated one.
+ */
+.row-pressing {
+  transform: scale(0.97);
+  background-color: var(--default);
+  /* This rule is unlayered and Tailwind's utilities are not, so whatever is
+     declared here replaces `LIST_ROW_SURFACE_CLASS`'s transition list for the
+     length of the press however it is written. Naming all three properties is
+     what makes that harmless: the pressed row is the drag *source* and never the
+     target, so the `box-shadow` the ring animates is the one property it has no
+     use for — and `opacity` is named so `.row-lifted` still fades if the hold
+     and the lift ever overlap by a frame. */
+  transition-property: transform, background-color, opacity;
+  transition-duration: var(--row-hold, 250ms), var(--duration-fast),
+    var(--duration-fast);
+  transition-timing-function: var(--ease-out-fluid);
 }
 
 /*
@@ -1931,43 +2205,40 @@ body.is-drop-remove .row-ghost {
 }
 
 /*
- * One place the block could go: a dashed box the size of the block, and nothing
- * else in it.
+ * The one place the block goes if it is let go now: a fill the size of the
+ * block, with no edge and nothing in it.
  *
- * **An outline with no fill and no content.** The mark this replaces drew the
- * real block — its text, on an opaque ground mixed from the card's own
- * background — so a card with anything on it had that thing hidden behind a
- * preview of something else, and the whole gesture read as the design being
- * replaced by the chrome for arranging it. The dashes say *where*; the card
- * underneath is still what says *what*.
+ * **A fill, where it was dashes, and the dashes were a bug.** This was a 2px
+ * dashed accent box drawn *inside* a `.card-drop-region`, which has 2px dashes of
+ * its own — for a one-line place the two measured 220×24 inside 222×28, two
+ * dashed edges a pixel apart, breathing against each other with the region's 3%.
+ * The copy in the hand is seated in exactly this box, so the inner edge read as
+ * the block's own border. Dashes mean a place a block can go and the region
+ * already says so; this says *exactly here*, which a stronger tint over the
+ * region's faint one says without a second edge. Still no solid edge anywhere:
+ * that is the one difference the eye reads as *finished*, and the card has not
+ * taken the block yet.
  *
- * `border`, not `outline`. The box is sized by us now (`dropSlots` works out
- * both its top and its height), so there is nothing to avoid adding height to —
- * and a border is clipped by the card's own `overflow: hidden` the way the
- * content is, while an outline offset outwards is shaved off at the edges.
+ * **No content.** The mark this once replaced drew the real block on an opaque
+ * ground, so a card with anything on it had that thing hidden behind a preview
+ * of something else. A tint covers nothing, because a place is free space by
+ * construction. The preview it refuses to draw exists above it anyway — the copy
+ * in the hand is pulled onto this box (ghost-magnet.ts) — and with a
+ * click-to-place carry there is no copy, so this tint under the cursor is the
+ * whole preview.
  *
- * **There is one of these on screen at a time**, and that is why it is drawn at
- * full accent. The overlay draws it for the place the pointer is in and no other
- * (card-drop-overlay.tsx). Every *other* place the block could go is drawn at the
- * same time by `.card-drop-region` below, which is the same vocabulary two steps
- * quieter — a dozen boxes at this weight crowding the design was the thing that
- * had to be kept quiet, and the split is what lets both answers be on screen at
- * once.
+ * **There is one of these on screen at a time** (card-drop-overlay.tsx), which is
+ * why it can be several times stronger than every region at once.
  *
- * **It stays dashed.** A solid edge is the one difference the eye reads as
- * *finished* rather than as *proposed*, and the card has not taken the block
- * yet. Dashes mean a place a block can go, and nothing else on this layer draws
- * an edge.
- *
- * **Nothing here transitions and nothing here transforms.** Motion owns the
- * element's `transform` outright — the settle from 92% as it arrives is its —
- * and the box's own top, height and width are set straight from the measured
- * geometry, so it follows the pointer from place to place instead of easing
- * along behind it.
+ * **Nothing here transitions.** Motion owns the element outright: the settle
+ * from 92% as it arrives, and the spring (`MAGNET_SPRING`) that carries its top,
+ * height, left and width from place to place in step with the copy in the hand
+ * being pulled onto the same place. A CSS transition on any of those would ease
+ * every frame Motion writes.
  */
 .card-drop-slot {
-  border: 2px dashed var(--accent);
   border-radius: 0.375rem;
+  background-color: color-mix(in oklab, var(--accent) 28%, transparent);
 }
 
 /*
@@ -1989,54 +2260,32 @@ body.is-drop-remove .row-ghost {
  * here*. A logo is no exception: one box per area, the full width of the line,
  * with where it sits *across* that line left to the bold square.
  *
- * Nothing transitions: these are set from geometry measured once when the drag
- * begins and they do not move again, so a transition would only be something to
- * catch up with when the next gesture starts.
+ * **Louder than it was, on purpose.** This was a 1px edge at 45% and it said
+ * where a block could go without ever inviting anyone to put it there — so it
+ * is 2px at 70% now, with a faint accent tint. The tint covers nothing: a region
+ * is free space by construction (`dropRegions`), so there is no design under it
+ * to hide. The bold slot mark is a stronger tint of the same colour with no edge
+ * of its own, so a place has one dashed edge and it is this one — see
+ * `.card-drop-slot`.
+ *
+ * Nothing transitions. Its geometry is measured once when the drag begins, and
+ * what moves — the pop as it arrives and the breathing while the block is in
+ * the air — is Motion's, on a wrapper and on this element respectively
+ * (components/card/designer/drop-region.tsx). **This weight and tint are also
+ * the reduced-motion form**: `MotionConfig` stops the scale, and what is left has
+ * to say "here" on its own.
  */
 .card-drop-region {
-  border: 1px dashed color-mix(in oklab, var(--accent) 45%, transparent);
+  border: 2px dashed color-mix(in oklab, var(--accent) 70%, transparent);
   border-radius: 0.375rem;
-}
-
-/*
- * A place with no room in it — the insertion point between two blocks that are
- * already touching, or into a zone with nothing to spare.
- *
- * Drawn as a rule rather than a box, because a box would be promising space the
- * card does not have: dropping here pushes everything below it down, which is
- * the honest outcome, and the mark should look like the thin thing it is.
- *
- * **Only ever drawn under the pointer**, which is why there is one rule here and
- * not a resting pair. A seam always lands on a boundary something else already
- * owns — the bottom edge of the block above it, or, for an empty zone, the card
- * edge where the next zone's first dashed box begins. Shown at rest that was two
- * lines on one pixel at the top, the middle and the bottom of an empty card:
- * chrome ruled across the design rather than a place to put something. Shown
- * only when it is the answer, it is unambiguous and there is exactly one.
- *
- * Dashed, like every other mark on this layer, and that is a rule about the
- * whole overlay rather than about this line. It used to be solid, on the
- * argument that by the time a seam draws it is no longer asking to be noticed —
- * but a solid rule at a block's edge, a solid accent ring on the block itself
- * and a dashed box over the top of both were three vocabularies for one answer,
- * and the card read as three different things happening at once. There is now
- * one vocabulary: **dashes mean a place a block can go**, and nothing else on
- * this layer draws an edge.
- *
- * Two pixels rather than three, since it no longer has to out-shout the dashes
- * around it. No outer ring: a `box-shadow` spread is drawn outside the border
- * box, so on a thin rule it read as a fuzzy band across the card rather than as
- * a line. The same reason `--active` above lost its.
- */
-.card-drop-seam {
-  border-top: 2px dashed var(--accent);
+  background-color: color-mix(in oklab, var(--accent) 8%, transparent);
 }
 
 /*
  * A line that already has something on it — the block in the air cannot go here.
  *
- * **Not dashed, and that is the whole design of it.** Every other mark on this
- * layer is dashed because dashes mean a place a block can go; this is the one
+ * **Not dashed, and that is the whole design of it.** Every area on this layer
+ * is dashed because dashes mean a place a block can go; this is the one
  * answer that is not one, so it may not borrow the vocabulary. A hatch is the
  * opposite reading — a surface ruled out rather than an edge proposed — and it is
  * the hatch `.card-spacer-hint` already uses on this canvas for "this area is a

@@ -33,4 +33,53 @@ describe("cardThemeClass", () => {
     expect(cardThemeClass("fiord", false)).toBe("dark");
     expect(cardThemeClass("liberty", true)).toBe("light");
   });
+
+  /**
+   * The reported bug: a white ground pinned on the card, the basemap switched to
+   * Dark, and every word on the card drawn in the dark set — near-white text on
+   * a card that is still white. The ground has the final say because the text
+   * sits on it. `packages/shared/card-ground.test.ts` holds the rule itself;
+   * these hold the wiring.
+   */
+  describe("a ground the owner pinned", () => {
+    it("outranks a dark basemap", () => {
+      expect(
+        cardThemeClass("dark", false, {
+          background: "#ffffff",
+          backgroundOpacity: 60,
+        }),
+      ).toBe("light");
+    });
+
+    it("outranks a light basemap", () => {
+      expect(cardThemeClass("liberty", false, { background: "#141414" })).toBe(
+        "dark",
+      );
+    });
+
+    it("outranks Auto, which the viewer would otherwise decide", () => {
+      expect(cardThemeClass("auto", true, { background: "#ffffff" })).toBe(
+        "light",
+      );
+    });
+  });
+
+  /**
+   * §0: a card that never touched the Background control has to render exactly
+   * as it did. Passing a layout with no ground must not change a single answer.
+   */
+  it("is unchanged by a layout with no pinned ground", () => {
+    for (const style of CONCRETE_MAP_STYLES) {
+      for (const prefersDark of [true, false]) {
+        expect(cardThemeClass(style, prefersDark, {})).toBe(
+          cardThemeClass(style, prefersDark),
+        );
+      }
+    }
+
+    expect(cardThemeClass("auto", true, {})).toBe(cardThemeClass("auto", true));
+    expect(cardThemeClass("auto", false, {})).toBe(
+      cardThemeClass("auto", false),
+    );
+  });
 });

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -111,5 +114,53 @@ describe("readEmbedSettings drawer and pin colour", () => {
     // published from now on.
     expect(DEFAULT_EMBED_SETTINGS.panelWidth).toBe(25);
     expect(DEFAULT_EMBED_SETTINGS.panelOpacity).toBe(60);
+  });
+
+  /*
+   * The corner, from both ends of the asymmetry §7 forces — and the reason it
+   * is tested at all is that it was not: nothing in the repo named
+   * `controlsCorner`, so the one edit that would quietly move every map already
+   * on a customer's site had no guard on it whatsoever.
+   *
+   * The pair has to be read together. `DEFAULT_EMBED_SETTINGS` is what the next
+   * publish *writes*; `embed/src/map.ts` reads a missing key as the corner the
+   * default replaced. Change the first and a new map moves. Change the second
+   * and maps published before the key existed move, which is the one thing that
+   * must never happen.
+   */
+  it("starts a new map's controls in the lower-left corner", () => {
+    expect(DEFAULT_EMBED_SETTINGS.controlsCorner).toBe("bottom-left");
+    expect(readEmbedSettings({}).controlsCorner).toBe("bottom-left");
+  });
+
+  it("still lets an owner pick any of the four", () => {
+    expect(readEmbedSettings({ controlsCorner: "top-right" }).controlsCorner).toBe(
+      "top-right",
+    );
+    // Free-form JSON: a corner that is not one falls back rather than throwing,
+    // the same rule every other field here follows.
+    expect(readEmbedSettings({ controlsCorner: "middle" }).controlsCorner).toBe(
+      "bottom-left",
+    );
+  });
+
+  it("leaves the embed reading an absent corner as top-right", () => {
+    /*
+     * Asserted against the bundle's own source rather than by importing it,
+     * because `embed/` is closed to `@/lib` and to the test environment's
+     * module graph both — eslint.config.mjs enforces the first half (§4) and
+     * `map.ts` touches `window` at import time.
+     *
+     * A string match is therefore the honest test: it fails if somebody
+     * "tidies" the fallback to match the new default, which is exactly the
+     * edit that silently re-homes the zoom buttons on every map published
+     * before `controlsCorner` existed.
+     */
+    const source = readFileSync(
+      join(import.meta.dirname, "../../embed/src/map.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain('snapshot.settings.controlsCorner ?? "top-right"');
   });
 });

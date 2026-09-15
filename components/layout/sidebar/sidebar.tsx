@@ -5,9 +5,9 @@ import { ChevronsLeft } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { BrandLogo } from "@/components/brand/brand-logo";
 import { IconButton } from "@/components/ui/icon-button";
 import type { AuthUser } from "@/lib/auth/types";
-import { PRODUCT_NAME } from "@/lib/config";
 import { hidesAppNav } from "@/lib/layout/app-nav";
 import { UserMenu } from "../user-menu";
 import { useSidebar } from "./sidebar-context";
@@ -68,7 +68,7 @@ export function Sidebar({ user }: { user: AuthUser }) {
               : "max-w-full px-1.5 opacity-100"
           }`}
         >
-          {PRODUCT_NAME}
+          <BrandLogo />
         </Link>
 
         {/* One icon that rotates, not two that swap. A swap is a cut in the

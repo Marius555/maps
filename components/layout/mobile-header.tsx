@@ -2,8 +2,9 @@
 
 import { Menu } from "lucide-react";
 
+import { BrandLogo } from "@/components/brand/brand-logo";
 import { IconButton } from "@/components/ui/icon-button";
-import { PRODUCT_NAME } from "@/lib/config";
+import { MobileHeaderSlot } from "./mobile-header-slot";
 import { useSidebar } from "./sidebar/sidebar-context";
 
 /**
@@ -16,6 +17,11 @@ import { useSidebar } from "./sidebar/sidebar-context";
  *
  * No bottom border: the header shares the page background, so the chrome reads as
  * one surface instead of a stack of strips.
+ *
+ * The far end of the row is a slot (`MobileHeaderSlot`), so a page that has one
+ * thing to open can put its trigger on this line instead of growing a bar of its
+ * own — the card designer's panel is the first. Empty on every other page, which
+ * costs a flex box with nothing in it.
  */
 export function MobileHeader() {
   const { setMobileOpen } = useSidebar();
@@ -29,8 +35,10 @@ export function MobileHeader() {
         onPress={() => setMobileOpen(true)}
       />
       <span className="truncate text-sm font-semibold tracking-tight text-foreground">
-        {PRODUCT_NAME}
+        <BrandLogo />
       </span>
+
+      <MobileHeaderSlot />
     </header>
   );
 }

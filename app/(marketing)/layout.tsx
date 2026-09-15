@@ -1,7 +1,8 @@
 import Link from "next/link";
 
+import { BrandLogo } from "@/components/brand/brand-logo";
+import { SiteFooter } from "@/components/brand/site-footer";
 import { LinkButton } from "@/components/ui/link-button";
-import { PRODUCT_NAME } from "@/lib/config";
 
 // Annotated explicitly rather than with LayoutProps<"/">: route groups are
 // stripped from the generated route literals, so both group layouts would claim
@@ -16,7 +17,7 @@ export default function MarketingLayout({
       <header className="border-b border-border">
         <nav className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-4">
           <Link href="/" className="font-semibold tracking-tight text-foreground">
-            {PRODUCT_NAME}
+            <BrandLogo className="h-7" />
           </Link>
 
           <div className="flex items-center gap-3">
@@ -34,6 +35,8 @@ export default function MarketingLayout({
       </header>
 
       <main className="flex flex-1 flex-col">{children}</main>
+
+      <SiteFooter />
     </div>
   );
 }

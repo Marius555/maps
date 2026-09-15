@@ -1,5 +1,6 @@
 import type { AuthUser } from "@/lib/auth/types";
 import { MobileHeader } from "./mobile-header";
+import { MobileHeaderSlotProvider } from "./mobile-header-slot";
 import { Sidebar } from "./sidebar/sidebar";
 import { SidebarProvider } from "./sidebar/sidebar-context";
 import { SidebarMobile } from "./sidebar/sidebar-mobile";
@@ -30,10 +31,14 @@ export function AppShell({
         <Sidebar user={user} />
         <SidebarMobile user={user} />
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <MobileHeader />
-          <main className="flex min-h-0 flex-1 flex-col">{children}</main>
-        </div>
+        {/* The provider wraps the header *and* the page, because the trigger a
+            page portals into the header is rendered from inside `children`. */}
+        <MobileHeaderSlotProvider>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <MobileHeader />
+            <main className="flex min-h-0 flex-1 flex-col">{children}</main>
+          </div>
+        </MobileHeaderSlotProvider>
       </div>
     </SidebarProvider>
   );

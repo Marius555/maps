@@ -174,7 +174,7 @@ describe("dropSlots", () => {
     });
   });
 
-  it("still offers the seam between two blocks with nothing between them", () => {
+  it("offers nothing between two blocks with no room between them", () => {
     const layout = cardWith({
       middle: [
         { id: "a", type: "name" },
@@ -194,24 +194,10 @@ describe("dropSlots", () => {
       24,
     );
 
-    // No room for a box, but inserting between them must stay possible — so a
-    // rule at b's own top edge. `nextOffset: 0` is what "nothing rewritten"
-    // actually is for two touching blocks: b has no leading space now and none
-    // after, and saying so beats saying nothing, because a run this branch also
-    // covers can be 112px of real space that a 110px block still does not fit
-    // in. See `settles` in ./drop-slots.ts.
-    const between = slots.filter((slot) => slot.index === 1);
-    expect(between).toEqual([
-      {
-        zone: "middle",
-        index: 1,
-        y: 48,
-        height: 0,
-        offset: 0,
-        widthPct: 100,
-        nextOffset: 0,
-      },
-    ]);
+    // This used to be a seam — a zero-height place on b's top edge that pushed
+    // b down to make room. A block goes where there is space for it, and between
+    // two touching blocks there is none.
+    expect(slots.filter((slot) => slot.index === 1)).toEqual([]);
   });
 
   it("puts the block after it back exactly where it was", () => {
@@ -297,21 +283,30 @@ describe("dropSlots", () => {
   });
 
   it("offers nothing at all in a zone the block may not enter", () => {
-    // Actions are bottom-only, so the top and middle contribute nothing — which
-    // then hands the whole card to the bottom zone's own places.
+    // Actions are bottom-only, so the top and middle contribute nothing however
+    // much room they have — the bottom zone's own 48px is the only place offered.
     const slots = dropSlots(
       cardWith({}),
       newBlock("actions"),
       [
         zoneOf("top", 12, 12),
-        zoneOf("middle", 12, 428),
-        zoneOf("bottom", 428, 428),
+        zoneOf("middle", 12, 380),
+        zoneOf("bottom", 380, 428),
       ],
       24,
     );
 
     expect(slots).toEqual([
-      { zone: "bottom", index: 0, y: 428, height: 0, offset: 0, widthPct: 100 },
+      {
+        zone: "bottom",
+        index: 0,
+        y: 380,
+        height: 24,
+        offset: 0,
+        widthPct: 100,
+        areaTop: 380,
+        areaBottom: 428,
+      },
     ]);
   });
 
@@ -336,9 +331,12 @@ describe("dropSlots", () => {
     expect(slots).toEqual([]);
   });
 
-  it("lets a block already on the card move anywhere it belongs", () => {
-    // A move needs no room — the block is already counted — so a full card can
-    // still be reordered.
+  it("lets a block already on the card go back into the room it leaves", () => {
+    // A move needs no *new* room — the block is already counted — so a full card
+    // still offers the space the block itself is about to free. It does not offer
+    // the bottom zone's 10px: a 408px photo does not fit there, and a block goes
+    // where there is room for it. That used to be a seam, and this test used to
+    // assert it.
     const layout = cardWith({
       top: [{ id: "photo", type: "gallery", heightPct: 25 }],
     });
@@ -353,7 +351,9 @@ describe("dropSlots", () => {
       408,
     );
 
-    expect(slots.some((slot) => slot.zone === "bottom")).toBe(true);
+    expect(slots.map((slot) => [slot.zone, slot.y, slot.height])).toEqual([
+      ["top", 12, 408],
+    ]);
   });
 
   it("clamps a place into its own zone, for the scroller", () => {
@@ -647,9 +647,10 @@ describe("dropSlots with a pair on the card", () => {
     // Nothing lands between the two halves: index 1 is unreachable by a drag,
     // which is deliberate. Un-pairing is the Size toggle's job.
     expect(slots.some((slot) => slot.index === 1)).toBe(false);
-    expect(slots.every((slot) => slot.height >= 0)).toBe(true);
-    // Above the line, and below it — the line's own indices are 0 and 2.
-    expect(new Set(slots.map((slot) => slot.index))).toEqual(new Set([0, 2]));
+    expect(slots.every((slot) => slot.height > 0)).toBe(true);
+    // Below the line only. The line's own indices are 0 and 2, and above it there
+    // is no room — it starts on the zone's content edge — so there is no place.
+    expect(new Set(slots.map((slot) => slot.index))).toEqual(new Set([2]));
   });
 
   it("frees a half-width line whose only block is in the hand", () => {
@@ -953,8 +954,8 @@ describe("sideSlots", () => {
         line: 0,
         pairId: "a",
         pairWidthPct: 50,
-        hitTop: 17.5,
-        hitBottom: 34.5,
+        hitTop: 12,
+        hitBottom: 40,
       },
       {
         zone: "middle",
@@ -969,21 +970,19 @@ describe("sideSlots", () => {
         line: 0,
         pairId: "a",
         pairWidthPct: 50,
-        hitTop: 17.5,
-        hitBottom: 34.5,
+        hitTop: 12,
+        hitBottom: 40,
       },
     ]);
   });
 
-  it("draws the whole column but catches only the middle of it", () => {
+  it("draws the whole column and catches the whole line", () => {
     /*
      * Two different boxes, deliberately. The outline promises the block's real
-     * size, because that is what will land there; the hit area is the middle six
-     * tenths, so the strips at the top and bottom of the block still belong to
-     * the runs above and below it. Without that, a card with no space between
-     * its blocks would have nowhere left to aim to insert a *line* between two.
-     *
-     * 28px of block gives a 17px band, centred: 17.5 to 34.5.
+     * size, because that is what will land there; the hit area is the line the
+     * block already sitting there covers, top to bottom. It used to be only the
+     * middle six tenths, leaving strips at each end for the seams above and
+     * below — and a card has no seams any more.
      */
     const full = cardWith({ middle: [{ id: "a", type: "name" }] });
     const [start] = sideSlots(full, newBlock("address"), [
@@ -994,7 +993,7 @@ describe("sideSlots", () => {
 
     expect(start.y).toBe(12);
     expect(start.height).toBe(28);
-    expect((start.hitBottom ?? 0) - (start.hitTop ?? 0)).toBe(17);
+    expect([start.hitTop, start.hitBottom]).toEqual([12, 40]);
   });
 
   it("offers no pair on a block that cannot hold a column", () => {
@@ -1481,8 +1480,8 @@ describe("sideSlots — a mark pairing with a full-width line", () => {
         line: 0,
         pairId: "a",
         pairWidthPct: 76,
-        hitTop: 17.5,
-        hitBottom: 34.5,
+        hitTop: 12,
+        hitBottom: 40,
         mark: true,
         hitLeft: 12,
         hitWidth: 148,
@@ -1500,8 +1499,8 @@ describe("sideSlots — a mark pairing with a full-width line", () => {
         line: 0,
         pairId: "a",
         pairWidthPct: 76,
-        hitTop: 17.5,
-        hitBottom: 34.5,
+        hitTop: 12,
+        hitBottom: 40,
         mark: true,
         hitLeft: 160,
         hitWidth: 148,
@@ -1670,8 +1669,10 @@ describe("dropSlots — a mark with nowhere to stand but the edge above it", () 
      * pulls it up 31px: the square is drawn at 122 + 8 - 31 = 99, half over the
      * photo, which is where it lands.
      *
-     * The run *above* the photo has no block to straddle, so it stays a seam —
-     * both answers out of the same call.
+     * The run *above* the photo has no block to straddle and no room, so it
+     * offers nothing at all — it used to be a seam. The run below is the zone's
+     * last and closes against nothing, so the square says nothing about what
+     * follows it.
      */
     expect(
       dropSlots(
@@ -1685,19 +1686,6 @@ describe("dropSlots — a mark with nowhere to stand but the edge above it", () 
         62,
       ),
     ).toEqual([
-      // The seam above the photo closes against it, so it says what the photo's
-      // own leading space becomes — nothing, since a run of no span cannot give
-      // it any. The run *below* is the zone's last and closes against nothing,
-      // so it says nothing.
-      {
-        zone: "top",
-        index: 0,
-        y: 12,
-        height: 0,
-        offset: 0,
-        widthPct: 100,
-        nextOffset: 0,
-      },
       {
         zone: "top",
         index: 1,
@@ -1718,9 +1706,10 @@ describe("dropSlots — a mark with nowhere to stand but the edge above it", () 
     ]);
   });
 
-  it("leaves a seam a seam for anything that straddles nothing", () => {
-    // The same card and the same empty run, with a block that has no overlap.
-    // `lift` is zero, so there is nothing to draw and the seam stands.
+  it("offers nothing for anything that straddles nothing", () => {
+    // The same card and the same empty runs, with a block that has no overlap.
+    // `lift` is zero, so there is no square to draw — and with no room either
+    // side of the photo there is no place. Both runs used to come back as seams.
     expect(
       dropSlots(
         photoCard,
@@ -1732,32 +1721,18 @@ describe("dropSlots — a mark with nowhere to stand but the edge above it", () 
         ],
         13,
       ),
-    ).toEqual([
-      {
-        zone: "top",
-        index: 0,
-        y: 12,
-        height: 0,
-        offset: 0,
-        widthPct: 100,
-        nextOffset: 0,
-      },
-      { zone: "top", index: 1, y: 130, height: 0, offset: 0, widthPct: 100 },
-    ]);
+    ).toEqual([]);
   });
 });
 
 describe("blockedFaces", () => {
-  it("covers the middle of a block and leaves a strip at each end", () => {
+  it("covers the whole of a block", () => {
     /*
      * The complaint this answers: releasing over the middle of a photo quietly
      * inserted the block above or below it, because every pixel of the card
-     * belonged to some insertion point. The middle of the photo now belongs to
-     * the photo.
-     *
-     * A 110px block gives a 66px face — six tenths of it, the same fraction a
-     * pair target catches — centred, so 16px is left at each end. Those strips
-     * are what keep "insert between these two touching blocks" reachable.
+     * belonged to some insertion point. The photo now belongs to the photo, top
+     * to bottom. It used to keep a 16px strip at each end, so the seams between
+     * touching blocks could still be reached — and there are no seams any more.
      */
     const card = cardWith({ middle: [{ id: "a", type: "gallery" }] });
 
@@ -1767,16 +1742,15 @@ describe("blockedFaces", () => {
           { id: "a", top: 12, bottom: 122, left: 12, right: 308 },
         ]),
       ]),
-    ).toEqual([{ zone: "middle", line: 0, top: 34, bottom: 100 }]);
+    ).toEqual([{ zone: "middle", line: 0, top: 12, bottom: 122 }]);
   });
 
-  it("refuses nothing on a block too short to spare both strips", () => {
+  it("refuses a block one line tall as well", () => {
     /*
-     * And this is the principled half of it. A blocked face is something you must
-     * not fall *into*, where a pair target is something you aim *at* — so taking
-     * 16px out of a 28px name to say "no" would cost the two insertion points
-     * either side of it, which are real places someone wants. On a block one line
-     * tall, "on it" and "next to it" are the same gesture, and the gaps win.
+     * A 28px name used to have no face at all: on a line that short the two
+     * strips were the whole of it, and the insertion points either side won.
+     * With nothing to insert between, being over the name is being over
+     * something that is already there.
      */
     const card = cardWith({ middle: [{ id: "a", type: "name" }] });
 
@@ -1786,21 +1760,21 @@ describe("blockedFaces", () => {
           { id: "a", top: 12, bottom: 40, left: 12, right: 308 },
         ]),
       ]),
-    ).toEqual([]);
+    ).toEqual([{ zone: "middle", line: 0, top: 12, bottom: 40 }]);
   });
 
-  it("starts refusing at three bands' worth of block", () => {
-    // 48px is the first height with a 16px face and a 16px strip either side of
-    // it, which is the threshold written out rather than described.
+  it("clamps a line into the zone's visible content box", () => {
+    // The middle zone scrolls, so a line can reach past the zone's bottom edge;
+    // the card is not drawing that part of it, and refuses nothing there.
     const card = cardWith({ middle: [{ id: "a", type: "gallery" }] });
 
     expect(
       blockedFaces(card, newBlock("name"), [
-        zoneOf("middle", 12, 428, [
-          { id: "a", top: 12, bottom: 60, left: 12, right: 308 },
+        zoneOf("middle", 12, 100, [
+          { id: "a", top: 60, bottom: 170, left: 12, right: 308 },
         ]),
       ]),
-    ).toEqual([{ zone: "middle", line: 0, top: 28, bottom: 44 }]);
+    ).toEqual([{ zone: "middle", line: 0, top: 60, bottom: 100 }]);
   });
 
   it("does not refuse the line the drag came off", () => {
@@ -1836,7 +1810,7 @@ describe("blockedFaces", () => {
           { id: "b", top: 12, bottom: 122, left: 308 - columnPx(50), right: 308 },
         ]),
       ]),
-    ).toEqual([{ zone: "middle", line: 0, top: 34, bottom: 100 }]);
+    ).toEqual([{ zone: "middle", line: 0, top: 12, bottom: 122 }]);
   });
 
   it("names each line by where it starts, so no two faces share an id", () => {
@@ -1858,7 +1832,7 @@ describe("blockedFaces", () => {
     ]);
 
     expect(faces.map((face) => face.line)).toEqual([0, 1]);
-    expect(faces[1]).toEqual({ zone: "middle", line: 1, top: 152, bottom: 218 });
+    expect(faces[1]).toEqual({ zone: "middle", line: 1, top: 130, bottom: 240 });
   });
 
   it("has nothing to refuse on an empty card", () => {
@@ -2351,9 +2325,9 @@ describe("a narrowed block alone on its line frees it", () => {
       ]),
     ], WIDE_H);
 
-    // The seam at the zone's own content edge is not a run — it has no height,
-    // and inserting between two touching edges has to stay possible.
-    expect(run.every((slot) => slot.height === 0 || slot.y >= 48)).toBe(true);
+    // Nothing is offered above the line: the zone's content edge touches it, so
+    // there is no room there, and a block goes where there is room.
+    expect(run.every((slot) => slot.y >= 48)).toBe(true);
   });
 
   it("still keeps a line whose other half has not been measured yet", () => {
@@ -2378,7 +2352,7 @@ describe("a narrowed block alone on its line frees it", () => {
       ]),
     ], WIDE_H);
 
-    expect(run.every((slot) => slot.height === 0 || slot.y >= 48)).toBe(true);
+    expect(run.every((slot) => slot.y >= 48)).toBe(true);
   });
 });
 
@@ -2849,11 +2823,10 @@ describe("dragging the logo itself does not move the block under it", () => {
   /**
    * A place under the description, and the flush one against the photo.
    *
-   * `height > 0` is what keeps the second off the **seam** at the zone's own
-   * content top, which is also `offset: 0` and also above the description — a
-   * hairline that inserts the logo above the photo, and a different gesture
-   * entirely. A seam is drawn as a rule rather than a box, which is exactly what
-   * a zero height says.
+   * `height > 0` is kept as a guard rather than needed. A zero-height place at
+   * the zone's own content top used to match the same `offset: 0` above the
+   * description — a seam, inserting the logo above the photo — and the card no
+   * longer offers one, but the predicate should still name the square it means.
    */
   const under = (slot: DropSlot, descriptionTop: number) => slot.y > descriptionTop;
   const flush = (slot: DropSlot, descriptionTop: number) =>

@@ -21,6 +21,21 @@ rewritten; it is the record of why this area is shaped as it is.
   visibly different circles on one screen.
 - `useMapAnchor` takes the shape's extent and pushes the card clear of it, clamped to the
   frame.
+- **A shape that fails to save must say so.** `addShape`'s `catch` called only
+  `toastPlanLimit`, which returns false and draws nothing for anything that is not a plan
+  limit — and nothing anywhere renders `createShape.error`, unlike a place, whose other
+  failures reach the sidebar's alert. Since `setMode("browse")` runs *before* the await,
+  the draft is already gone by then: the circle was drawn, then silently vanished, which
+  reads as the gesture never having worked. It falls through to `toastError` now. Group
+  creation had the identical silence and the identical fix. The post-mortem is in
+  `docs/notes/editor-and-layout.md` — the cause was shared with the pins.
+- **Only the circle is written on pointer events.** `use-draw-polygon.ts`,
+  `use-draw-line.ts` and `use-draw-route.ts` bind `instance.on("mousemove")` for the
+  rubber band and `instance.on("dblclick")` to finish. Touch fires no `mousemove` — only a
+  synthesized one per tap — and double-tap collides with MapLibre's own `doubleClickZoom`,
+  so all three are degraded on a phone: vertices land, the band never follows the finger.
+  Known and deliberately not fixed in the pass that fixed the circle; it needs a finish
+  gesture that is not a double-tap, which is a design decision rather than a port.
 
 ### Routes
 
@@ -117,6 +132,18 @@ rewritten; it is the record of why this area is shaped as it is.
   route, which is what stops a drop back where it started spending a metered request
   (§12). Callers resolve the stops first, exactly as the card's × does, so a reorder
   on a stale route never re-commits stale coordinates.
+- **A move is offered by asking `moveStop`, never by asking the index.** The two
+  absolute items were gated on `stopIndex !== 0` and `stopIndex !== stops.length - 1`,
+  which is the same answer as `moveStop` for an out-and-back and the wrong one for a
+  round trip: on A→B→A, "Make this the start" at the last stop builds [A,A,B],
+  `collapseRepeats` folds it to [A,B], and the item silently turned a loop into a
+  one-way trip. The bullet above was already the rule; nothing was asking it.
+- **A stop row offers Edit, and it is the location it edits.** A stop is the only row
+  its location has in the panel, so without it a pin on a route could not be edited
+  from the list at all — by any route. The reason `RouteStopListItem` is not a
+  `PlaceListItem` is about *Delete* ("Delete" under a stop would mean the location);
+  Edit was collateral, and was missing for as long as routes have existed. Labelled
+  "Edit location" because plain "Edit" belongs to the route on the row above.
 - **`routeThrough` lives in `map-editor.tsx`, not in `MapShapes`.** The sidebar
   reorders routes and is a different component tree from the canvas; two copies of
   those four lines would be two chances to forget the profile.
@@ -235,13 +262,21 @@ stops then take that group's colour, which is the whole of "a sub-group recolour
 its pins". `lib/map/group-colors.ts` is where that precedence lives now, and the
 canvas, the PNG export and *publish* all read it.
 
-The reorder gestures are a drag between two rows and two menu items, and the drag
+The reorder gestures are a drag between two rows and four menu items, and the drag
 needed no change to the shared pointer gesture. `components/groups/use-row-drag.ts`
 hit-tests with `elementFromPoint` and hands a target only the payload — there is
 no "which half of the row" in that contract, and the card designer shares the file.
 Two absolutely-positioned halves per row, each its own registered target, answer
 the same question with no change to it at all; they are `pointer-events: none`
 until a stop of that same route is in the air.
+
+**Two menu items, not four, was the original answer, and it was wrong for the same
+reason the drag is hard on a phone.** The argument was that a relative move is what
+the drag is for, so the menu only needed the two ends — and that assumed the drag
+was reachable. It is a learned gesture on touch, behind a still hold that nothing
+on screen announced, so a phone had "make this the start", "make this the end", and
+no way at all to move a stop one place. Move up and Move down are in the menu now.
+The drag is unchanged and is still the faster way to do it with a mouse.
 
 **Shapes are the one thing the editor draws as style layers, and that has a trap.** A location is a DOM `Marker`; an *area* cannot be, so circles and polygons are a GeoJSON source with fill and line layers (`components/map/shapes/`) — the pattern that until now lived only in the embed. `setStyle`, which `use-maplibre.ts` calls on every basemap or theme change, discards every source and layer on the map. Pins survive it precisely because they are DOM; these do not, so `use-shape-layers.ts` re-adds them on `styledata`. That is the first thing to test after touching any of this. The handles *are* DOM markers, so a drag inherits the machinery the pins already use, and a drag paints through a preview channel that writes straight to the source — the PATCH fires once, on release.
 

@@ -14,8 +14,14 @@ import {
   startEdgeAutoScroll,
   type EdgeAutoScroll,
 } from "@/lib/map/edge-autoscroll";
+import { dropTargetAt } from "./drop-target-at";
+import {
+  createGhostMagnet,
+  type GhostExit,
+  type GhostMagnet,
+} from "./ghost-magnet";
 import { useRowDragState } from "./row-drag-context";
-import { mountRowGhost, moveRowGhost, type RowGhost } from "./row-drag-ghost";
+import { mountRowGhost } from "./row-drag-ghost";
 
 /**
  * Dragging one row onto another to group them.
@@ -54,6 +60,42 @@ import { mountRowGhost, moveRowGhost, type RowGhost } from "./row-drag-ghost";
 const DRAG_THRESHOLD = 8;
 
 /**
+ * How long a finished drag goes on refusing the click it leaves behind, in ms.
+ *
+ * A mouse raises that click straight after its `pointerup`, so the window only
+ * has to outlast the release. A finger raises it from the tap gesture after
+ * `touchend`, which can land a little later — and a finger that travelled raises
+ * none at all, so this is also how long a genuine tap straight after a drag
+ * would be ignored. Nobody lifts, aims and taps again inside it.
+ */
+const CLICK_AFTER_DRAG_MS = 300;
+
+/**
+ * Eats the one `click` a drag leaves behind.
+ *
+ * A press that picked something up and let it go is still, to the browser, a
+ * press and a release, so a `click` follows on whatever the two have in common.
+ * Nobody noticed until the card designer's empty image block became a drag
+ * source: its whole surface is the `<label>` for a file input, so a drag let go
+ * on it would open the OS file picker.
+ *
+ * Capture phase on the window, so it is refused before any element hears of it;
+ * `once`, so it takes that one click and no other; and a timeout, so a drag that
+ * left no click behind does not eat the next real one.
+ */
+function swallowNextClick(): void {
+  const swallow = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  window.addEventListener("click", swallow, { capture: true, once: true });
+  window.setTimeout(() => {
+    window.removeEventListener("click", swallow, { capture: true });
+  }, CLICK_AFTER_DRAG_MS);
+}
+
+/**
  * How long a finger has to rest on a row before it becomes a drag.
  *
  * Touch has to choose between two gestures that look identical for their first
@@ -65,8 +107,43 @@ const DRAG_THRESHOLD = 8;
  *
  * So: movement first means scroll, stillness first means drag. 250ms is long
  * enough not to fire on a flick and short enough not to feel like a wait.
+ *
+ * **It stays 250 and the attempt to shorten it is worth recording, because the
+ * number was never the bug.** Grouping by drag was reported as doing nothing
+ * whatsoever on a phone, and it was not broken: measured in the browser, press
+ * and move straight away and the ghost, the lift, the body class and the target
+ * highlight are *all four* false — an early move is read as a scroll and ends
+ * the gesture — while holding 320ms first lights the row the finger is over and
+ * groups on release. The gesture worked and was simply unguessable, which is
+ * what `PRESSING_CLASS` below fixes.
+ *
+ * 180ms was tried on top of that and reverted, because it collides with the
+ * other end of the same dial. A tap is a press with no movement, so the only
+ * thing separating "tap" from "pick up" is this timer, and at 180ms a
+ * **motionless 230ms tap lifts a ghost** — measured; it lands on itself,
+ * `dropAction` refuses it and nothing is grouped, but a row that jumps into the
+ * air and back on a deliberate tap reads as a glitch. 230ms is an ordinary
+ * slow tap. The platform agrees about the direction: Android and iOS both put
+ * their own long press at 500ms, so 250 is already half of what a user's phone
+ * has taught them, and the flick this has to survive is ruled out by *travel*
+ * in `onPointerMove` rather than by time.
  */
 const TOUCH_HOLD_MS = 250;
+
+/**
+ * What the row wears while a finger is resting on it and the hold is building.
+ *
+ * Announcing the hold is the whole of the fix, because a gesture nobody can
+ * discover is a gesture nobody has — see `TOUCH_HOLD_MS`, which was left where
+ * it was once this existed. The rule
+ * is in app/globals.css and is deliberately transform-only: this fires under a
+ * finger, in the longest list in the app, and anything that touched the box
+ * would reflow every row below it at the moment the user is aiming at one.
+ *
+ * Applied by hand rather than through React state, for the reason
+ * `row-lifted` already is: a press must not re-render the panel it is on.
+ */
+const PRESSING_CLASS = "row-pressing";
 
 /**
  * `pan-y`, not `none`.
@@ -84,6 +161,14 @@ const TOUCH_HOLD_MS = 250;
  */
 const ROW_STYLE: CSSProperties = {
   touchAction: "pan-y",
+  /*
+   * The hold's duration, handed to the stylesheet rather than repeated in it.
+   *
+   * `.row-pressing` describes this timer, so the two drifting apart would mean a
+   * cue that finishes before the drag starts or keeps going after it has — and
+   * the one place that knows the number is the constant above.
+   */
+  ["--row-hold" as string]: `${String(TOUCH_HOLD_MS)}ms`,
   /*
    * And `user-select: none` with it, which is not cosmetic.
    *
@@ -194,7 +279,7 @@ export function useRowDragSource({
   onDroppedOutside?: () => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
-  const { setDragged, setOverId, find } = useRowDragState();
+  const { setDragged, setOverId, find, snapFor } = useRowDragState();
 
   const origin = useRef<{ x: number; y: number } | null>(null);
   const latest = useRef({ x: 0, y: 0 });
@@ -208,7 +293,17 @@ export function useRowDragSource({
    * written in the same breath as `setOverId`, so the two cannot disagree.
    */
   const lastOver = useRef<string | null>(null);
-  const ghost = useRef<RowGhost | null>(null);
+  /**
+   * The copy in the hand, and whatever pulls it onto a place it could land —
+   * see ghost-magnet.ts. With no surface pulling it is `moveRowGhost`, exactly.
+   */
+  const magnet = useRef<GhostMagnet | null>(null);
+  /**
+   * How that copy leaves when the gesture ends. Written by `finish`, and read by
+   * the drag-lifetime effect's cleanup, which runs after it in the commit the
+   * gesture ending causes.
+   */
+  const exit = useRef<GhostExit>("remove");
   const autoScroll = useRef<EdgeAutoScroll | null>(null);
 
   /**
@@ -223,10 +318,36 @@ export function useRowDragSource({
     byThreshold: false,
   });
 
+  /**
+   * The row currently wearing `PRESSING_CLASS`, so it can be taken off again.
+   *
+   * Its own ref rather than reading `source.current.element`, and declared up
+   * here rather than beside that one, for the rule `begin` records below: a ref
+   * read inside a hook must not be written after that hook, or the closure and
+   * the writer disagree about which is authoritative.
+   */
+  const pressing = useRef<HTMLElement | null>(null);
+
+  const releasePress = useCallback(() => {
+    pressing.current?.classList.remove(PRESSING_CLASS);
+    pressing.current = null;
+  }, []);
+
+  /*
+   * Takes the press cue off with the timer, which is what makes it correct at
+   * all four exits: the finger travelled and this is a scroll, the drop landed,
+   * Escape abandoned, the pointer was cancelled. Every one of them already came
+   * through here.
+   *
+   * Stable, because `releasePress` is — which the window-listener effect below
+   * depends on: naming `clearHold` in its deps must never re-bind those
+   * listeners mid-gesture.
+   */
   const clearHold = useCallback(() => {
     if (hold.current.timer !== null) window.clearTimeout(hold.current.timer);
     hold.current = { timer: null, byThreshold: false };
-  }, []);
+    releasePress();
+  }, [releasePress]);
 
   /**
    * The row element, and where it was when the press landed.
@@ -256,9 +377,23 @@ export function useRowDragSource({
    * gesture that re-registered its own `pointerup` half-way through would be one
    * `pointerup` away from listening to nothing.
    */
-  const state = useRef({ self, setDragged, setOverId, find, onDroppedOutside });
+  const state = useRef({
+    self,
+    setDragged,
+    setOverId,
+    find,
+    snapFor,
+    onDroppedOutside,
+  });
   useEffect(() => {
-    state.current = { self, setDragged, setOverId, find, onDroppedOutside };
+    state.current = {
+      self,
+      setDragged,
+      setOverId,
+      find,
+      snapFor,
+      onDroppedOutside,
+    };
   });
 
   /**
@@ -331,17 +466,31 @@ export function useRowDragSource({
        * row is what picks up.
        */
       if (event.pointerType === "touch") {
+        /*
+         * Touch is the one device that has to wait, so it is the one that gets
+         * told it is waiting — see `PRESSING_CLASS`. A mouse has nothing to
+         * announce: its drag begins on the 8px it has already travelled, and a
+         * press cue on every row click would be a new animation charged to
+         * every selection in the panel.
+         */
+        element.classList.add(PRESSING_CLASS);
+        pressing.current = element;
+
         // `onPointerMove` cancels this if the finger travels first, which is
         // what lets a swipe scroll the panel instead of dragging a row.
         hold.current.timer = window.setTimeout(() => {
           hold.current.timer = null;
+          // The cue has said what it had to say; the ghost and `row-lifted`
+          // take over from here, and leaving a scale on the row underneath
+          // would be two answers to the same question.
+          releasePress();
           begin();
         }, TOUCH_HOLD_MS);
       } else {
         hold.current.byThreshold = true;
       }
     },
-    [canDrag, begin, clearHold],
+    [canDrag, begin, clearHold, releasePress],
   );
 
   /*
@@ -351,16 +500,8 @@ export function useRowDragSource({
    */
   useEffect(() => {
     /** What is under the pointer that would take this drop, if anything. */
-    const targetAt = (x: number, y: number): string | null => {
-      const element = document.elementFromPoint(x, y);
-      const host = element?.closest<HTMLElement>("[data-drop-id]");
-      const id = host?.dataset.dropId;
-      if (!id) return null;
-
-      const target = state.current.find(id);
-
-      return target?.accepts(state.current.self) ? id : null;
-    };
+    const targetAt = (x: number, y: number): string | null =>
+      dropTargetAt(state.current.find, state.current.self, x, y);
 
     const onPointerMove = (event: PointerEvent) => {
       const from = origin.current;
@@ -404,7 +545,6 @@ export function useRowDragSource({
        */
       if (event.cancelable) event.preventDefault();
       latest.current = { x: event.clientX, y: event.clientY };
-      if (ghost.current) moveRowGhost(ghost.current, event.clientX, event.clientY);
 
       // Reaching a group that is scrolled out of the panel — see edge-autoscroll.
       // `clientX` as well as `clientY`, or the pull's band is an infinite
@@ -421,6 +561,20 @@ export function useRowDragSource({
       const over = targetAt(event.clientX, event.clientY);
       lastOver.current = over;
       state.current.setOverId(over);
+
+      /*
+       * The copy goes under the pointer — or, where the surface under it pulls,
+       * onto the place it would land (ghost-magnet.ts). After the hit test
+       * rather than before it: safe, because the copy is not part of the hit
+       * test (above), and necessary, because the target is what decides where
+       * the copy is drawn.
+       */
+      magnet.current?.follow(
+        event.clientX,
+        event.clientY,
+        over,
+        state.current.snapFor(over),
+      );
     };
 
     const finish = (x: number, y: number, drop: boolean) => {
@@ -432,6 +586,9 @@ export function useRowDragSource({
       started.current = false;
       lastOver.current = null;
       setIsDragging(false);
+
+      // Whatever the drag ended on, the press that began it was not a click.
+      if (wasDragging) swallowNextClick();
 
       const { self: dragged, setDragged, setOverId, find, onDroppedOutside } =
         state.current;
@@ -447,7 +604,13 @@ export function useRowDragSource({
       }
 
       const target = find(id);
-      if (target?.accepts(dragged)) target.onDrop(dragged);
+      if (!target?.accepts(dragged)) return;
+
+      // Landed while the copy was sitting on its slot: it fades into the block
+      // appearing under it, rather than vanishing a frame before that block
+      // exists. Every other ending removes it at once, as it always did.
+      if (magnet.current?.isSnapped()) exit.current = "settle";
+      target.onDrop(dragged);
     };
 
     const onPointerUp = (event: PointerEvent) =>
@@ -486,6 +649,12 @@ export function useRowDragSource({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || !origin.current) return;
 
+      // The press is still down, and letting it go leaves a click behind like
+      // any other drag's ending — see `swallowNextClick`.
+      if (started.current) {
+        window.addEventListener("pointerup", swallowNextClick, { once: true });
+      }
+
       clearHold();
       origin.current = null;
       started.current = false;
@@ -505,10 +674,14 @@ export function useRowDragSource({
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
       window.removeEventListener("keydown", onKeyDown);
+      // A row unmounted mid-press never gets its `pointerup`. The node is going
+      // anyway, so this is about not holding a reference to a detached one.
+      releasePress();
     };
-    // Both are `useCallback(_, [])`, so naming them here never re-binds the
-    // listeners — which is the property the comment above depends on.
-  }, [begin, clearHold]);
+    // All three are `useCallback(_, [])` or built from ones that are, so naming
+    // them here never re-binds the listeners — which is the property the comment
+    // above depends on.
+  }, [begin, clearHold, releasePress]);
 
   /*
    * Everything that is only true while a row is in the air, set up and torn down
@@ -528,14 +701,20 @@ export function useRowDragSource({
     const picked = source.current;
     if (!isDragging || !picked) return;
 
-    const element = mountRowGhost(
+    const copy = mountRowGhost(
       picked.element,
       latest.current.x,
       latest.current.y,
       picked.offset,
       picked.size,
     );
-    ghost.current = element;
+    const pull = createGhostMagnet(
+      copy,
+      picked.size,
+      latest.current.x,
+      latest.current.y,
+    );
+    magnet.current = pull;
 
     /*
      * Set up here rather than in `begin` so it shares the one cleanup path: a
@@ -569,8 +748,11 @@ export function useRowDragSource({
     body.style.userSelect = "none";
 
     return () => {
-      element.root.remove();
-      ghost.current = null;
+      // Faded into the block it landed as, or gone this frame — `exit`, which
+      // `finish` has already written by the time this runs.
+      pull.dispose(exit.current);
+      exit.current = "remove";
+      magnet.current = null;
       autoScroll.current?.stop();
       autoScroll.current = null;
       picked.element.classList.remove("row-lifted");

@@ -1,7 +1,7 @@
 "use client";
 
 import { Map as MapLibreMap, Marker } from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { takeDropped } from "@/lib/map/dropped-pins";
 import type { Place } from "@/lib/repositories/types";
@@ -14,6 +14,7 @@ import {
   createPinElement,
   playDrop,
   setPinChecking,
+  setPinClustered,
   setPinIcon,
   setPinSelected,
   setPinStop,
@@ -124,6 +125,12 @@ export function usePlaceMarkers({
    * hand.
    */
   const dragging = useRef(new Set<string>());
+  /**
+   * The locations drawn as pins right now, or `null` for all of them — the
+   * cluster layer's last answer (components/map/clusters/use-place-clusters.ts).
+   * Kept so a marker created after that answer is told it too.
+   */
+  const visibleIds = useRef<ReadonlySet<string> | null>(null);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -158,6 +165,13 @@ export function usePlaceMarkers({
 
       const element = createPinElement(place.name);
       paint(element, place, pinIcons, colorFor);
+      // The cluster layer's last answer, which this location was not yet part
+      // of. Hidden until the next one arrives rather than shown next to the
+      // bubble that is about to count it.
+      setPinClustered(
+        element,
+        visibleIds.current !== null && !visibleIds.current.has(place.id),
+      );
 
       // Only a location someone just placed, and only once — see
       // lib/map/dropped-pins.ts for why creation is the wrong signal for this.
@@ -307,6 +321,30 @@ export function usePlaceMarkers({
     }
   }, [stopIds, places]);
 
+  /*
+   * Which locations are pins and which a cluster bubble is counting.
+   *
+   * Called from MapLibre's `render` event, so on every frame of a pan — and it
+   * returns before touching the DOM when the answer has not changed, which is
+   * nearly every frame. Written on *every* marker when it has, for the recycled-
+   * marker reason the effects above give.
+   *
+   * A pin in the hand is never hidden: a scroll-zoom mid-drag must not take it
+   * out from under the pointer.
+   */
+  const setVisibleIds = useCallback((ids: ReadonlySet<string> | null) => {
+    if (sameIds(visibleIds.current, ids)) return;
+
+    visibleIds.current = ids;
+
+    for (const [id, marker] of markers.current) {
+      setPinClustered(
+        marker.getElement(),
+        ids !== null && !ids.has(id) && !dragging.current.has(id),
+      );
+    }
+  }, []);
+
   useEffect(() => {
     const current = markers.current;
     const held = dragging.current;
@@ -316,6 +354,19 @@ export function usePlaceMarkers({
       held.clear();
     };
   }, []);
+
+  return { setVisibleIds };
+}
+
+function sameIds(
+  a: ReadonlySet<string> | null,
+  b: ReadonlySet<string> | null,
+): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || a.size !== b.size) return false;
+
+  for (const id of a) if (!b.has(id)) return false;
+  return true;
 }
 
 /**

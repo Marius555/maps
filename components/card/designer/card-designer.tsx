@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, toast } from "@heroui/react";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cardAccentVars } from "@/components/card/card-frame";
@@ -26,6 +26,7 @@ import {
   sameCardLayout,
 } from "@/lib/validation/card-layout.schema";
 import {
+  defaultCardLayout,
   emptyCardLayout,
   isSavedCardLayout,
   type CardLayout,
@@ -33,22 +34,33 @@ import {
 import { resolvePin } from "@/packages/shared/pin-icons";
 import { tagChipsOf } from "@/packages/shared/tags";
 import { previewChips } from "@/lib/card/preview-chips";
+import { SAMPLE_CHIP_COUNT, SAMPLE_PLACE } from "@/lib/card/sample-place";
 import { BlockPalette } from "./block-palette";
 import type { BlockResize } from "./block-resize-handle";
-import { CardCanvas } from "./card-canvas";
-import { CardDesignerTabs, type DesignerTab } from "./card-designer-tabs";
+import { CardCanvas, type LandedBlock } from "./card-canvas";
+import {
+  CardDesignerTabs,
+  TAB_TITLES,
+  UnsavedDot,
+  type DesignerTab,
+} from "./card-designer-tabs";
 import { DesignerCanvasArea } from "./designer-canvas-area";
+import { DesignerSidePanel } from "./designer-side-panel";
 import { CardProperties } from "./properties/card-properties";
 
 /**
- * How long a landing block is marked as landing, in ms.
+ * How long a landing block is marked as landing, in ms — counted from the
+ * commit that draws the landing, not from the drop (see the effect after
+ * `onDrop`).
  *
- * The 150ms every transition in the app runs at, plus a frame — see `TRANSITION`
- * in components/ui/list-row-motion.ts. It is a flag being cleared rather than an
- * animation being stopped, so erring long costs nothing and erring short would
- * cut the settle off halfway.
+ * Clearing it does not stop the landing — the bounce and the impact ring are
+ * started imperatively and run to their own end (components/card/designer/
+ * use-landing.ts). What the flag holds is the rest of the arrival: the block's
+ * own travel switched off (`movingBlockTravel`) and a new block's line fading
+ * in, both decided in the commit the drop causes. It is kept past the landing's
+ * 420ms anyway, so nothing about the block changes while it is still moving.
  */
-const LANDED_MS = 200;
+const LANDED_MS = 450;
 
 /**
  * Where the location card is designed.
@@ -97,16 +109,27 @@ export function CardDesigner({
   const updateCardDesign = useUpdateCardDesign();
 
   /*
-   * "Never touched" and "the untouched default" are different fallbacks on
-   * purpose. A live, unconfigured site still publishes the classic populated
-   * card (defaultCardLayout, via resolveCardLayout) — that contract does not
-   * change here. But this screen is where someone *designs* a card, and
-   * opening it onto a card already half-built by nobody is confusing, not
-   * helpful — so the designer's own starting canvas is blank instead.
+   * An account that has never saved a design opens onto **the same card its
+   * published map already draws**, and that is a correction.
+   *
+   * This used to fall back to `emptyCardLayout()`, on the reasoning that
+   * opening a designer onto a card "already half-built by nobody" is confusing.
+   * The premise was wrong in one specific way: that card is not built by
+   * nobody, it is what the product does. A live unconfigured site publishes
+   * `defaultCardLayout()` through `resolveCardLayout` — name, address,
+   * description, tags, hours, links, photo — so a blank canvas here was the one
+   * screen in the app disagreeing with the thing it exists to show. An owner
+   * arriving to "design my card" was told their card was empty when it was not.
+   *
+   * `isSavedCardLayout` is still what separates the two cases, and still has to
+   * be: a card somebody deliberately *cleared* round-trips as three empty zones
+   * and must come back empty, not be quietly refilled. That is the invariant in
+   * docs/notes/cards.md — these functions may change what a fresh card is, never
+   * what a saved one becomes.
    */
   const saved = useMemo(
     () =>
-      isSavedCardLayout(design) ? readCardLayout(design) : emptyCardLayout(),
+      isSavedCardLayout(design) ? readCardLayout(design) : defaultCardLayout(),
     [design],
   );
 
@@ -133,11 +156,11 @@ export function CardDesigner({
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   /**
-   * The block that arrived from the palette on the last drop, while its settle
-   * animation is still playing. Null the rest of the time, which is nearly all
-   * of it. See `landedBlockMotion` and the note in `onDrop`.
+   * The block the last drop put down, while its landing is still playing. Null
+   * the rest of the time, which is nearly all of it. See `landingBlockMotion`
+   * and the note in `onDrop`.
    */
-  const [justLanded, setJustLanded] = useState<string | null>(null);
+  const [justLanded, setJustLanded] = useState<LandedBlock | null>(null);
 
   /*
    * Which of the sidebar's two jobs is showing. Selecting a block — on the
@@ -152,6 +175,44 @@ export function CardDesigner({
     setSelectedId(id);
     if (id) setActiveTab("modify");
   }, []);
+
+  /*
+   * Whether the sidebar is showing, which only means anything below `lg` —
+   * above it the panel is a column of the page and is simply there. See
+   * `DesignerSidePanel`.
+   *
+   * A plain boolean, where it used to record *how* it opened. There were two
+   * ways in and they differed in whether focus moved with the panel: a trigger
+   * portalled into the app's mobile header was a deliberate move from the other
+   * end of the screen and took focus; a tap on a block was not. The sheet's grab
+   * rail is on screen at every width below `lg` now, so that trigger is gone and
+   * with it the distinction.
+   */
+  const [isPanelOpen, setPanelOpen] = useState(false);
+
+  /*
+   * Selecting a block **on the canvas** also brings the panel out, which
+   * `select` alone deliberately does not do.
+   *
+   * The two paths cannot share one rule, and that is why this is a second
+   * function rather than two more lines inside `select`. A *drop* selects what
+   * landed too, and a drop must leave the panel shut — `DesignerSidePanel`
+   * closes it at the end of every palette drag precisely so the card is visible
+   * at the moment it has just changed. Since `use-row-drag.ts` clears `dragged`
+   * *before* it calls the target's `onDrop`, an open requested from inside
+   * `select` would land in the same commit as that close and the two would
+   * fight over one boolean. Only the canvas asks; the drop path never does.
+   *
+   * Above `lg` this is a no-op in effect: the panel is a column of the page and
+   * `isPanelOpen` means nothing there.
+   */
+  const selectOnCanvas = useCallback(
+    (id: string | null) => {
+      select(id);
+      if (id) setPanelOpen(true);
+    },
+    [select],
+  );
 
   /*
    * A local stand-in photo for a gallery block, when today's sample location
@@ -179,8 +240,20 @@ export function CardDesigner({
    * real card shows every tag its location wears; this only changes what is
    * being *looked at* while a layout is arranged, which is the one thing the
    * Tags block could not be checked against before (lib/card/preview-chips.ts).
+   *
+   * **It starts at a count rather than at `null` on a map with no locations**,
+   * and that is the whole of how the stand-in gets tags. `SAMPLE_PLACE` carries
+   * none of its own on purpose — a fresh map has no tag vocabulary for an
+   * invented id to resolve against, and a chip with a made-up colour in front
+   * would paint the sample pin a colour the map has never heard of. So the tags
+   * come from the mechanism already built for exactly this, whose stand-ins are
+   * colourless and carry ids no `newTagId` can mint. `null` the moment there is
+   * a real location, because then the honest answer is that location's own
+   * tags. Either way the control still sets it; this is only where it opens.
    */
-  const [chipPreview, setChipPreview] = useState<number | null>(null);
+  const [chipPreview, setChipPreview] = useState<number | null>(
+    places.length === 0 ? SAMPLE_CHIP_COUNT : null,
+  );
 
   const isDirty = !sameCardLayout(draft, baseline);
 
@@ -231,6 +304,20 @@ export function CardDesigner({
   }, []);
 
   /*
+   * Clear the card back to nothing.
+   *
+   * Lifted out because it is drawn twice: beside the panel's heading at `lg`,
+   * and in the sheet's peek strip below it, where that heading is hidden. One
+   * of the two is always `display: none`, so nothing is offered twice — but
+   * both have to do the same thing, and a second copy of the body is how that
+   * stops being true.
+   */
+  const resetCard = useCallback(() => {
+    setSelectedId(null);
+    commit(emptyCardLayout());
+  }, [commit]);
+
+  /*
    * Worked out here, not inside a `setDraft` updater, and that is the fix for a
    * real bug rather than a tidy-up.
    *
@@ -262,28 +349,52 @@ export function CardDesigner({
       if (landed) select(landed);
 
       /*
-       * And, for a block that came off the palette, let it settle into place.
+       * And let it drop into place — a block off the palette *and* one moved
+       * across the card.
        *
-       * Only for a new one: a block being moved is already on the card, so its
-       * own `layoutId` glides it from where it was, and a scale on top of that
-       * would be two arrivals for one gesture.
+       * A move used to be left out, because its own `layoutId` glided it from
+       * where it was and a bounce on top would be two arrivals for one gesture.
+       * That stopped being true when the drag started pulling the copy onto its
+       * slot (components/groups/ghost-magnet.ts): at release the copy is already
+       * sitting where the block lands, so a glide in from the block's old place
+       * would be a second block crossing the card towards the first. The flag
+       * now also turns that glide off for this one block (`movingBlockTravel`),
+       * and the bounce is the whole arrival. The Position control does not come
+       * through here, so it still glides.
        *
        * Cleared on a timer rather than on the animation's end, because the
        * element that plays it is several components down and the flag has to
        * stop being true for the *next* render of this block whatever happens to
        * it — a re-pair rebuilds its row, and a block still marked as landing
-       * would pop a second time. The delay is the transition's own 150ms with a
-       * frame's slack, and a stale timer is harmless: it only ever clears.
+       * would bounce a second time. The timer is the effect below, not a
+       * `setTimeout` here.
        */
-      if (dragged.kind === "new" && landed) {
-        setJustLanded(landed);
-        window.setTimeout(() => {
-          setJustLanded((current) => (current === landed ? null : current));
-        }, LANDED_MS);
-      }
+      if (landed) setJustLanded({ id: landed, isNew: dragged.kind === "new" });
     },
     [draft, select],
   );
+
+  /*
+   * The landing's clock starts when the landing is *drawn*, not when the drop
+   * happened.
+   *
+   * It used to start in `onDrop`, and measured in the browser the commit a drop
+   * causes — the new layout, the selection, the Modify tab mounting — took 277ms
+   * in development before the first frame of the bounce. A window opened at the
+   * release therefore closed with the bounce half played: the block was
+   * switched to `rest` mid-squash and the impact ring unmounted at 60% opacity.
+   * An effect runs after that commit, which is when Motion starts the animation.
+   *
+   * A new landing replaces the timer rather than racing it: the cleanup cancels
+   * the last one, where a stale timeout comparing ids would clear a second drop
+   * of the same block early.
+   */
+  useEffect(() => {
+    if (!justLanded) return;
+
+    const timer = window.setTimeout(() => setJustLanded(null), LANDED_MS);
+    return () => window.clearTimeout(timer);
+  }, [justLanded]);
 
   /*
    * What the block in the hand would free, kept for the removal wall.
@@ -324,10 +435,21 @@ export function CardDesigner({
     setDraft((current) => resizeCardBlock(current, id, patch));
   }, []);
 
-  // First with a photo, so a card built with a gallery block already has
-  // something to show — falling back to the first location rather than none,
-  // so a map with no photos yet still gets a real sample.
-  const sample = places.find((place) => place.photoUrl) ?? places[0] ?? null;
+  /*
+   * First with a photo, so a card built with a gallery block already has
+   * something to show — falling back to the first location rather than none, so
+   * a map with no photos yet still gets a real sample.
+   *
+   * `ownSample` is that real location or null; `sample` is what the canvas
+   * draws, which on a map with no locations at all is the stand-in in
+   * lib/card/sample-place.ts. The two are separate because one control cares
+   * which it is: the Logo panel can *upload* to the location it names, and
+   * uploading to a frozen constant is not a thing. `logoSample` below keeps
+   * `ownSample`, so on an empty map that control correctly offers nothing.
+   */
+  const ownSample = places.find((place) => place.photoUrl) ?? places[0] ?? null;
+  const sample = ownSample ?? SAMPLE_PLACE;
+  const isSample = ownSample === null;
 
   /*
    * The sample's tags as the canvas will draw them, and whether its pin has a
@@ -369,28 +491,28 @@ export function CardDesigner({
        * switching between Elements and Modify, re-centred the card underneath
        * the pointer.
        *
-       * `lg:flex-none` is what makes the height apply at all. This is a flex
-       * item of `Container`, which is a column, so its height is its main size —
-       * and `flex-1` sets `flex-basis: 0%`, which beats `height` there. Below
-       * `lg` the columns stack and it goes back to `flex-1`: a phone cannot show
-       * a 440px card and a properties panel at once, so that page scrolls, as
-       * the editor's does.
+       * `flex-none` is what makes the height apply at all. This is a flex item
+       * of `Container`, which is a column, so its height is its main size — and
+       * `flex-1` sets `flex-basis: 0%`, which beats `height` there.
        *
-       * `100dvh - 3rem` is exact rather than approximate — 3rem is `Container`'s
-       * own `py-6`, and at `lg` there is nothing else above this.
+       * **The height is unconditional now**, where it used to be `lg:` only. The
+       * sidebar was in flow below `lg` and the page was allowed to grow to hold
+       * a 440px card stacked on a column of controls; it is a bottom sheet over
+       * the card at those widths, so there is nothing left to stack and the
+       * canvas claims the rest. The two numbers are the editor's, exactly: 3rem
+       * is `Container`'s own `py-6`, and 6.5rem adds the 3.5rem `MobileHeader`,
+       * which is `md:hidden` and so contributes nothing above `md`.
        */}
       <div
-        className="flex min-h-0 flex-1 flex-col gap-3 lg:h-[calc(100dvh-3rem)] lg:flex-none"
+        className="flex h-[calc(100dvh-3rem)] min-h-0 flex-none flex-col gap-3 max-md:h-[calc(100dvh-6.5rem)]"
         /* The map's accent, so a Button nobody gave a Background is drawn in
            the colour it will be drawn in on the published map rather than in
            the dashboard's own. See `cardAccentVars`. */
         style={cardAccentVars(initialMap.settings)}
       >
-        {/* `lg:flex-1` and not `flex-1`: filling the row is what makes the two
-            columns share one viewport height, and below `lg` there is only one
-            column — stretching it there would squeeze a 440px card and a
-            properties panel into a phone screen and make both scroll inside
-            themselves instead of letting the page scroll past them. */}
+        {/* Filling the row is what makes the two columns share one viewport
+            height at `lg`; below it there is one column, and the sheet is out of
+            flow over the top of it. */}
         {/* 24rem and not 20: the sidebar holds a two-column palette of chips
             and a column of sliders, colour fields and segmented rows, and at
             20rem every one of them was at its floor — palette labels truncating
@@ -400,7 +522,19 @@ export function CardDesigner({
             scrollbar was taking the last of the margin. The extra 16px here and
             the reserved gutter in `DesignerTabPanel` are one fix in two places.
             `app/(dashboard)/maps/[id]/card/loading.tsx` repeats this number. */}
-        <div className="grid min-h-0 gap-4 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_24rem]">
+        {/* Below `lg` this row is the sheet's containing block, and both of the
+            classes that make it one are load-bearing. `relative`, or the sheet
+            positions itself against the viewport instead. And
+            `max-lg:overflow-hidden`, because two thirds of the sheet hangs below
+            the frame while it is shut — an absolutely positioned box past the
+            bottom of the page grows the document and brings the window's
+            scrollbar in with it. The editor row carries the same pair for the
+            same reason.
+
+            `max-lg:flex-1` with a single 1fr row: the panel is out of flow there
+            and the card is the only thing in here, so it should have the screen
+            rather than sit in the top half of it. */}
+        <div className="relative grid min-h-0 gap-4 max-lg:flex-1 max-lg:grid-rows-[minmax(0,1fr)] max-lg:overflow-hidden lg:flex-1 lg:grid-cols-[minmax(0,1fr)_24rem]">
           {/* Nothing but a block itself stops the deselect from firing — see
               DesignerBlock's own onClick. */}
           <DesignerCanvasArea
@@ -414,11 +548,24 @@ export function CardDesigner({
             onBackdropClick={() => setSelectedId(null)}
             onRemove={onRemove}
           >
-            {sample ? (
+            {/* One child, so the caption travels with the card rather than
+                beside it: `DesignerCanvasArea` centres its children in a flex
+                *row*, and a `<p>` dropped in as a second child would sit next
+                to the card and push it off centre. A column keeps the two as
+                one centred unit at every height, which an absolutely
+                positioned caption would not — the box can be shorter than a
+                440px card, and `bottom-0` would then be printed across it.
+
+                Safe to wrap because nothing here measures the card against its
+                parent: every rect in `use-drop-bands.ts` is
+                `getBoundingClientRect`, and the removal strip is positioned
+                from the `cardWidth`/`cardHeight` props above rather than from
+                the DOM. */}
+            <div className="flex flex-col items-center gap-2">
               <CardCanvas
                 /* The map's own light/dark, so the card being designed is
                    the card a visitor gets — see `cardThemeClass`. */
-                theme={cardThemeClass(initialMap.style, prefersDark)}
+                theme={cardThemeClass(initialMap.style, prefersDark, draft)}
                 layout={draft}
                 place={sample}
                 tagChips={tagChips}
@@ -426,113 +573,156 @@ export function CardDesigner({
                 pinIcons={initialMap.pinIcons}
                 selectedId={selectedId}
                 justLanded={justLanded}
-                onSelect={select}
+                onSelect={selectOnCanvas}
                 onDrop={onDrop}
                 onVacate={onVacate}
                 onResize={onResize}
                 sampleImageUrl={sampleImageUrl}
                 onSampleImage={onSampleImage}
               />
-            ) : (
-              <p className="max-w-xs text-center text-sm text-muted">
-                Add a location first — the card is drawn from a real one, so
-                you can see what it will actually look like.
-              </p>
-            )}
+
+              {/* Said only when it is true, and said under the card rather than
+                  in place of it. This used to be the whole of what an empty map
+                  got — "add a location first" — which turned the one screen for
+                  looking at a card into a screen with no card on it. The card
+                  is real now and the sentence is a caption, so nobody designs
+                  believing the address on it is theirs. */}
+              {isSample ? (
+                <p className="max-w-[var(--card-w)] text-center text-xs text-muted">
+                  An example location — add your own and the card draws those
+                  instead.
+                </p>
+              ) : null}
+            </div>
           </DesignerCanvasArea>
 
           {/* The panel itself is built inside `CardDesignerTabs` — the tab strip
               lives in its header, and React Aria needs one context around the
               strip and the panels both. Everything the section wears is passed
-              through from here. */}
-          <CardDesignerTabs
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            // Reset stays beside the title, where it has always been: it is the
-            // section's own secondary control, and it is a draft edit like any
-            // other — an accidental press is undone by walking away rather than
-            // by a confirmation.
-            action={
-              <IconButton
-                label="Reset card"
-                icon={RotateCcw}
-                onPress={() => {
-                  setSelectedId(null);
-                  commit(emptyCardLayout());
-                }}
-              />
-            }
-            // Which is what the Elements tab's dot is drawn from — see there.
-            isDirty={isDirty}
+              through from here; `DesignerSidePanel` only decides where on the
+              screen the whole of it sits. */}
+          <DesignerSidePanel
+            isOpen={isPanelOpen}
+            onOpenChange={setPanelOpen}
             /*
-             * Save goes under the controls, not beside the title — and on the
-             * **Elements** tab only.
-             *
-             * `footer` is a sibling of the panel's body rather than a child of
-             * it, and the body is the scroller (`lg:flex-1 lg:min-h-0`), so it
-             * stays on screen however far someone has scrolled. What it also
-             * did was take a footer's worth of height off the Modify tab, which
-             * is the one that needs it: a block with text and chips now draws
-             * six groups of controls in a 24rem column, and Save is not one of
-             * them — it is a decision about the whole design, which is what the
-             * Elements tab is already about.
-             *
-             * The cost is that Save is one tab away while a block is selected,
-             * and `isDirty` above is what pays it: the strip carries a dot, and
-             * this button is dead until there is something for it to do.
+             * What the shut sheet says, and it is the panel's heading moved
+             * rather than a second one invented: below `lg` the tab strip and
+             * the header row are inside the part that is shut, so the strip has
+             * to carry the open tab's name, the unsaved dot and the two controls
+             * that act on the whole design.
              */
-            footer={
-              activeTab === "elements" ? (
-                <Button
-                  size="sm"
-                  onPress={onSave}
-                  isPending={updateCardDesign.isPending}
-                  // Dead while there is nothing to save, which is also what
-                  // tells someone at a glance that their last change landed.
-                  isDisabled={!isDirty}
-                >
-                  Save changes
-                </Button>
-              ) : null
+            peek={
+              <>
+                <h2 className="flex min-w-0 items-center text-sm font-semibold text-foreground">
+                  {TAB_TITLES[activeTab]}
+                  {isDirty ? <UnsavedDot /> : null}
+                </h2>
+
+                <div className="flex shrink-0 items-center gap-1">
+                  <IconButton
+                    label="Reset card"
+                    icon={RotateCcw}
+                    onPress={resetCard}
+                  />
+                  {/* The way back out. Escape does it too, and so does the rail
+                      above; this is the one a thumb can reach without leaving
+                      the controls. */}
+                  <IconButton
+                    label="Close panel"
+                    icon={X}
+                    onPress={() => setPanelOpen(false)}
+                  />
+                </div>
+              </>
             }
-            elementsPanel={<BlockPalette layout={draft} />}
-            modifyPanel={
-              <CardProperties
-                layout={draft}
-                selectedId={selectedId}
-                logoHasImage={logoHasImage}
-                logoSample={sample}
-                mapId={initialMap.id}
-                fields={initialMap.fields}
-                chipPreview={chipPreview}
-                onChipPreview={setChipPreview}
-                onCard={(patch) => commit({ ...draft, ...patch })}
-                onBlock={(id, patch) => commit(resizeCardBlock(draft, id, patch))}
-                /*
-                 * Through `dropCardBlock` and not a hand-written splice, on the
-                 * rule the per-pin menu already follows for patches: it is the
-                 * same function the drag ends in, so this inherits `acceptsBlock`
-                 * and every clamp behind it rather than growing a second opinion
-                 * about where a block may go.
-                 *
-                 * It lands at the end of the band it is sent to, with `offset: 0`
-                 * — a stored lead is empty space *above* a block, and the whole
-                 * reason for sending one to the bottom band is that it should
-                 * hang off the card's own edge rather than off whatever happens
-                 * to be above it. Null is a move the layout refused; there is
-                 * nothing to write for it.
-                 */
-                onMoveBlockZone={(id, zone) => {
-                  const next = dropCardBlock(
-                    draft,
-                    { kind: "move", id },
-                    { zone, index: draft.zones[zone].length, offset: 0 },
-                  );
-                  if (next) commit(next);
-                }}
-              />
-            }
-          />
+          >
+            <CardDesignerTabs
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              // Reset stays beside the title, where it has always been: it is the
+              // section's own secondary control, and it is a draft edit like any
+              // other — an accidental press is undone by walking away rather than
+              // by a confirmation. This row is `max-lg:hidden`; the sheet's peek
+              // strip carries the same control below that.
+              action={
+                <IconButton
+                  label="Reset card"
+                  icon={RotateCcw}
+                  onPress={resetCard}
+                />
+              }
+              // Which is what the Elements tab's dot is drawn from — see there.
+              isDirty={isDirty}
+              /*
+               * Save goes under the controls, not beside the title — and on the
+               * **Elements** tab only.
+               *
+               * `footer` is a sibling of the panel's body rather than a child of
+               * it, and the body is the scroller (`lg:flex-1 lg:min-h-0`), so it
+               * stays on screen however far someone has scrolled. What it also
+               * did was take a footer's worth of height off the Modify tab, which
+               * is the one that needs it: a block with text and chips now draws
+               * six groups of controls in a 24rem column, and Save is not one of
+               * them — it is a decision about the whole design, which is what the
+               * Elements tab is already about.
+               *
+               * The cost is that Save is one tab away while a block is selected,
+               * and `isDirty` above is what pays it: the strip carries a dot, and
+               * this button is dead until there is something for it to do.
+               */
+              footer={
+                activeTab === "elements" ? (
+                  <Button
+                    size="sm"
+                    onPress={onSave}
+                    isPending={updateCardDesign.isPending}
+                    // Dead while there is nothing to save, which is also what
+                    // tells someone at a glance that their last change landed.
+                    isDisabled={!isDirty}
+                  >
+                    Save changes
+                  </Button>
+                ) : null
+              }
+              elementsPanel={<BlockPalette layout={draft} />}
+              modifyPanel={
+                <CardProperties
+                  layout={draft}
+                  selectedId={selectedId}
+                  logoHasImage={logoHasImage}
+                  logoSample={ownSample}
+                  mapId={initialMap.id}
+                  fields={initialMap.fields}
+                  chipPreview={chipPreview}
+                  onChipPreview={setChipPreview}
+                  onCard={(patch) => commit({ ...draft, ...patch })}
+                  onBlock={(id, patch) => commit(resizeCardBlock(draft, id, patch))}
+                  /*
+                   * Through `dropCardBlock` and not a hand-written splice, on the
+                   * rule the per-pin menu already follows for patches: it is the
+                   * same function the drag ends in, so this inherits `acceptsBlock`
+                   * and every clamp behind it rather than growing a second opinion
+                   * about where a block may go.
+                   *
+                   * It lands at the end of the band it is sent to, with `offset: 0`
+                   * — a stored lead is empty space *above* a block, and the whole
+                   * reason for sending one to the bottom band is that it should
+                   * hang off the card's own edge rather than off whatever happens
+                   * to be above it. Null is a move the layout refused; there is
+                   * nothing to write for it.
+                   */
+                  onMoveBlockZone={(id, zone) => {
+                    const next = dropCardBlock(
+                      draft,
+                      { kind: "move", id },
+                      { zone, index: draft.zones[zone].length, offset: 0 },
+                    );
+                    if (next) commit(next);
+                  }}
+                />
+              }
+            />
+          </DesignerSidePanel>
         </div>
       </div>
     </RowDragProvider>

@@ -16,6 +16,11 @@ import { AnimatePresence, motion } from "motion/react";
  * `bottom-left` either way, but an RTL host would want the gap on the other
  * side and `ps` moves with it.
  *
+ * `--map-chrome-inset` is the same offset MapLibre's own corners take, for the
+ * same reason: below `lg` the locations sheet's peek strip is parked along the
+ * bottom of the frame, and this pill shares that edge. Unset — at `lg`, and on
+ * the three small canvases with no sheet — it is `0px` and nothing moves.
+ *
  * Animated because it appears and disappears in response to a mode the user just
  * switched — that is feedback, not decoration (§8). It needs `AnimatePresence`
  * rather than a CSS transition for one reason: React unmounts the element the
@@ -40,10 +45,10 @@ export function MapHintBar({
           // Matches --duration-fast / --ease-out from globals.css. Motion takes
           // numbers and a cubic-bezier array, not CSS variables.
           transition={{ duration: 0.15, ease: [0, 0, 0.2, 1] }}
-          className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-3 ps-12"
+          className="pointer-events-none absolute inset-x-0 bottom-[calc(0.75rem+var(--map-chrome-inset,0px))] z-10 flex justify-center px-3 ps-12"
         >
           <p
-            className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-foreground shadow-sm"
+            className="map-chrome-panel rounded-full border border-border px-3 py-1.5 text-xs text-foreground shadow-sm"
             role="status"
           >
             {message}

@@ -333,6 +333,7 @@ async function render(
 
   map = createMap(canvas, snapshot, {
     style,
+    isDark,
     focusPlaceId: readFocusPlaceId(),
     onSelect: (placeId) => list?.select(placeId),
     getMe: () => me,

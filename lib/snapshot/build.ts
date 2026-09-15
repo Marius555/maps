@@ -19,6 +19,7 @@ import type {
   Place,
   Shape,
 } from "@/lib/repositories/types";
+import { tagGroupsInUse, wornTagIds } from "@/lib/tags/tag-usage";
 import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { isDefaultCardLayout } from "@/lib/validation/card-layout.schema";
 import { readMapAppearance } from "@/lib/validation/map-appearance.schema";
@@ -480,19 +481,24 @@ function usedTagGroups(
   groups: MapTagGroup[],
   places: Place[],
 ): SnapshotTagGroup[] {
-  const worn = new Set(places.flatMap((place) => place.tags));
-
-  return groups
-    .map((group) => ({
-      id: group.id,
-      label: group.label,
-      tags: group.tags
-        .filter((tag) => worn.has(tag.id))
-        // The colour travels, because since categories merged into tags it is
-        // what the embed draws the *pin* from, not only the chip.
-        .map((tag) => ({ id: tag.id, label: tag.label, color: tag.color })),
-    }))
-    .filter((group) => group.tags.length > 0);
+  /*
+   * The narrowing itself is `lib/tags/tag-usage.ts`, not a second copy of it.
+   * The dashboard's own filter menu asks the same question now, and two
+   * answers to "is anybody wearing this tag" is how the owner's Tags menu and
+   * the visitor's would come to offer different chips for one map.
+   */
+  return tagGroupsInUse(groups, wornTagIds(places)).map((group) => ({
+    id: group.id,
+    label: group.label,
+    // Narrowed to the three fields a snapshot carries. The colour travels,
+    // because since categories merged into tags it is what the embed draws the
+    // *pin* from, not only the chip.
+    tags: group.tags.map((tag) => ({
+      id: tag.id,
+      label: tag.label,
+      color: tag.color,
+    })),
+  }));
 }
 
 /**

@@ -38,6 +38,33 @@ rewritten; it is the record of why this area is shaped as it is.
   silently disappears (§12).
 - `lib/map/tile-style.test.ts` is the only thing holding the app's constants equal to
   `scripts/tile-style.mjs`. Each drift is silent in production.
+- **Chrome that sits *on* a map wears the map's light/dark, never the dashboard's**, and
+  `mapThemeClass(style, prefersDark)` in `lib/map/style.ts` is the single answer — Auto
+  asks the viewer, everything else asks the basemap. Two elements declare it, both in
+  `map-canvas-impl.tsx` and `map-editor.tsx`: the **class** (`light`/`dark`), which
+  re-declares every colour token for the subtree, and `data-map-theme`, which is what
+  MapLibre's own zoom stack and attribution bar are styled against. The attribute is not
+  redundant — those rules used to be `.dark .maplibregl-ctrl-group`, and `<html class="dark">`
+  is an ancestor of every map on the page, so a descendant selector on the class matches
+  inside a *light* frame too and can never be overridden from below.
+- **`text-foreground` goes beside the theme class every time, and forgetting it fails
+  visibly but confusingly.** Re-declaring a *variable* is not re-stating a *property*:
+  `color` stays whatever `<body>` computed under the dashboard's theme, so every
+  `currentColor` glyph in the subtree is drawn in the page's ink. Measured on the first
+  cut of this: a correct white toolbar over the Liberty basemap with near-white icons on
+  it. `card-frame.tsx` has carried the same line, for the same reason, since the card
+  became its own colour context.
+- **The reported symptom was "the toolbar is always black on mobile, whatever map style I
+  pick", and nothing about it was mobile.** The chrome read the dashboard's tokens, the
+  owner's phone was in system dark mode, and the theme switch is in the account menu —
+  so a phone showed black controls over a white basemap and no amount of changing the map
+  style moved them, because nothing in the chrome was reading the map style at all.
+- The floating panels are **glass** — `.map-chrome-panel` in `app/globals.css`,
+  `--map-chrome` at 72% (light) / 80% (dark) of `--surface` plus an 8px backdrop blur —
+  while the controls on them stay opaque (`--map-chrome-control`, applied through
+  HeroUI's own `--button-bg` and scoped to `--tertiary` so an armed tool keeps its accent
+  fill). Both numbers are floors, not preferences: below them a `text-xs` muted label over
+  the Liberty style's motorway casing drops under 4.5:1.
 
 ## Notes
 

@@ -257,7 +257,7 @@
     "rowAddress": true,
     "rowDistance": true,
     "rowActions": true,
-    "controlsCorner": "top-left",
+    "controlsCorner": "bottom-left",
     "compass": false,
     "geolocate": true,
     "fullscreen": false,

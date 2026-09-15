@@ -3,11 +3,14 @@ import Link from "next/link";
 
 import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginForm } from "@/components/auth/login-form";
+import { redirectIfSignedIn } from "@/lib/auth/redirect-if-signed-in";
 import { safeRedirect } from "@/lib/utils/safe-redirect";
 
 export const metadata: Metadata = { title: "Log in" };
 
 export default async function LoginPage(props: PageProps<"/login">) {
+  await redirectIfSignedIn();
+
   const { next } = await props.searchParams;
 
   return (

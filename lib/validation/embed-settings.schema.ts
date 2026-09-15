@@ -256,8 +256,14 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   rowLinkStyle: "outline",
   rowLinkRadius: 999,
 
-  // Left, so the controls are not underneath a right-hand panel.
-  controlsCorner: "top-left",
+  // Lower left, which is where the editor's own zoom stack already sits
+  // (components/map/use-maplibre.ts, reasoned at docs/notes/editor-and-layout.md):
+  // the two canvases now agree, so a map does not move its buttons between the
+  // screen its owner builds it on and the one a visitor gets. The corner was the
+  // only empty one either way — MapLibre builds its attribution bottom-right, the
+  // floating search toolbar wraps into the top corners, and left keeps the stack
+  // out from under a right-hand results panel.
+  controlsCorner: "bottom-left",
   compass: false,
   geolocate: true,
   fullscreen: false,

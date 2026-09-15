@@ -16,6 +16,7 @@ import {
 import { useMap } from "@/lib/query/maps";
 import { usePlaces } from "@/lib/query/places";
 import type { AppMap, Place } from "@/lib/repositories/types";
+import { tagGroupsInUse, wornTagIds } from "@/lib/tags/tag-usage";
 import { tagGroupIndex } from "@/packages/shared/tags";
 import { AttentionBadge } from "./attention-badge";
 import { PlaceCountBadge } from "./place-count-badge";
@@ -90,6 +91,34 @@ export function PlacesManager({
     [places],
   );
 
+  /*
+   * What the Tags menu offers: the vocabulary, narrowed to tags somebody
+   * actually wears.
+   *
+   * Nothing prunes `maps.tagGroups` — deleting a location leaves its tags
+   * behind, an import that stopped half way leaves tags for rows it never
+   * saved — so the menu offered chips that could only ever return an empty
+   * list. Measured on a real map: seven locations, fourteen chips. The publish
+   * path has narrowed for the same reason since it was written
+   * (`usedTagGroups`), which is why only this screen was wrong; both call the
+   * one function now (lib/tags/tag-usage.ts).
+   *
+   * **Selected tags are kept whether or not anybody wears them**, and that is
+   * the part that is not merely a filter. A tag id arrives from the URL, and
+   * the last location wearing it may have been deleted since the link was
+   * made — narrowed away, the filter would still be applied with no chip left
+   * on screen to switch it off.
+   *
+   * Only the *menu* is narrowed. `listProps.tagGroups` below stays the whole
+   * vocabulary, because that is what a row draws its own chips from.
+   */
+  const filterTagGroups = useMemo(() => {
+    const keep = wornTagIds(places);
+    for (const id of tagIds) keep.add(id);
+
+    return tagGroupsInUse(map.tagGroups, keep);
+  }, [map.tagGroups, places, tagIds]);
+
   // Otherwise the pending and failed sets grow for the lifetime of the page.
   useEffect(() => {
     retainOnly(placeIds);
@@ -143,7 +172,7 @@ export function PlacesManager({
       <PlacesToolbar
         query={query}
         filter={filter}
-        tagGroups={map.tagGroups}
+        tagGroups={filterTagGroups}
         tagIds={tagIds}
         hasPlaces={places.length > 0}
         actions={

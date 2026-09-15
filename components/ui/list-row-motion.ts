@@ -1,6 +1,10 @@
 "use client";
 
-import type { HTMLMotionProps } from "motion/react";
+import type {
+  HTMLMotionProps,
+  TargetAndTransition,
+  Transition,
+} from "motion/react";
 
 import { findBlock, type CardLayout } from "@/packages/shared/card-layout";
 
@@ -69,6 +73,34 @@ export function listRowMotion(
  * 2px of nothing behind it.
  */
 export const LIST_ROW_CLASS = "overflow-hidden pb-0.5";
+
+/**
+ * The row's own surface — the box that highlights, lifts and takes the drop.
+ *
+ * One string, because it was four copies: the locations panel draws places,
+ * shapes, group headers and route stops, and the four had drifted only in the
+ * extras each one needs (`min-w-0 flex-1` everywhere but a group header,
+ * `relative` on a stop, which has two drop bands laid over it). Those stay at
+ * the call sites; everything they share is here.
+ *
+ * **`transition-colors` was not enough, and that is the bug this constant was
+ * extracted to fix once.** Tailwind v4 draws `inset-ring` as a `box-shadow`, and
+ * `transition-colors` resolves to `color, background-color, border-color,
+ * outline-color, text-decoration-color, fill, stroke` — no `box-shadow` in it.
+ * So the accent ring that says "this row will take the drop" snapped on and off
+ * with no animation at all. Measured in the browser: `getComputedStyle(row)
+ * .transitionProperty` listed seven properties and none of them was the one
+ * being changed. Naming the properties explicitly is the only fix; there is no
+ * Tailwind utility that means "colours *and* shadow".
+ *
+ * `opacity` is in the list for `.row-lifted`, which dims the row a drag was
+ * started from and declares no transition of its own.
+ */
+export const LIST_ROW_SURFACE_CLASS =
+  "group flex h-12 items-center gap-1 rounded-xl px-2 " +
+  "transition-[color,background-color,border-color,box-shadow,opacity] duration-150 " +
+  "hover:bg-default data-drop-target:inset-ring-2 data-drop-target:inset-ring-accent " +
+  "data-selected:bg-accent-soft";
 
 /**
  * One line of the card designer: no gap of its own, and **no clip**.
@@ -158,36 +190,58 @@ export function movingBlockMotion(
 }
 
 /**
- * How a block that has **just landed** from the palette settles into the card.
+ * How a block **drops into place** on the card designer — off the palette, or
+ * moved across the card — like a piece set down in a game.
  *
- * The one arrival that is not a travel. A block being *moved* is already on
- * screen, so `movingBlockTravel` glides it from where it was and that is the
- * whole story; a block coming off the palette has no previous position on the
- * card at all, and used to simply be there at full size the moment the pointer
- * came up — the row's opacity fade underneath it says something arrived, but not
- * that it arrived *here*.
+ * It starts a little large and a little high, lands past its own size, and
+ * settles: scale 1.08 → 0.96 → 1 with an 8px fall. The squash is what reads as
+ * weight, where the fade-and-grow this replaced read as something appearing. By
+ * the time it plays the copy in the hand is already sitting on the slot
+ * (components/groups/ghost-magnet.ts) and fading out over it, so the block is
+ * not arriving from anywhere: it is being put down.
  *
- * A little scale is what says it. Same 150ms and same curve as everything else,
- * so it reads as the block settling rather than as a separate flourish, and the
- * neighbours sliding down to make room for it are their own `layout="position"`.
+ * Keyframes rather than a spring, because a spring has two ends and a squash
+ * needs three.
+ *
+ * **Plain keyframes for an imperative `animate`, not variants**, and
+ * `components/card/designer/use-landing.ts` has the reason at length: a block
+ * remounted into a line the canvas has had since page load inherits
+ * `initial: false` from that line's `AnimatePresence` and skips every mount
+ * animation it declares.
  *
  * **It goes on the block's inner content box, never on the block itself.** That
  * element's transform belongs to `movingBlockTravel`'s `layoutId` projection,
- * and two animators on one property is the bug `card-drop-overlay.tsx` spells
- * out at length. `scale` is also a transform, so Motion's own reduced-motion
- * handling covers it without an opt-out here.
+ * and two animators on one property is a fight neither wins.
  *
- * No `exit`: a block that is leaving is either being dragged away — where the
- * ghost under the pointer is the thing that moves — or removed, where the row's
- * own fade is the whole animation.
+ * `LANDING_FROM` is the first keyframe as a transform string, written by hand
+ * before the animation starts so no frame paints the block at rest first. Motion
+ * composes `y` before `scale`, which is the order it is written in here.
  */
-export function landedBlockMotion(): HTMLMotionProps<"div"> {
-  return {
-    initial: { opacity: 0, scale: 0.94 },
-    animate: { opacity: 1, scale: 1 },
-    transition: TRANSITION,
-  };
-}
+export const LANDING_FROM = "translateY(-8px) scale(1.08)";
+export const LANDING_KEYFRAMES = { scale: [1.08, 0.96, 1], y: [-8, 1, 0] };
+export const LANDING_TRANSITION = {
+  duration: 0.38,
+  times: [0, 0.55, 1],
+  ease: "easeOut" as const,
+};
+
+/**
+ * The ring that flashes round a block at the moment it lands.
+ *
+ * It peaks at the squash rather than at the release — 45% of the way through,
+ * where the bounce bottoms out — and spreads as it fades, so it reads as the
+ * impact. Opacity keyframes, so reduced motion still gets the flash without the
+ * spread.
+ */
+export const LANDING_RING_KEYFRAMES = {
+  opacity: [0, 0.85, 0],
+  scale: [0.98, 1, 1.07],
+};
+export const LANDING_RING_TRANSITION = {
+  duration: 0.42,
+  times: [0, 0.45, 1],
+  ease: "easeOut" as const,
+};
 
 /**
  * How one block of the card designer travels, and the only thing that does.
@@ -208,12 +262,65 @@ export function landedBlockMotion(): HTMLMotionProps<"div"> {
  * The id is namespaced because `layoutId` matches across the whole tree, and a
  * block id is only unique within one card.
  */
-export function movingBlockTravel(id: string): HTMLMotionProps<"div"> {
+export function movingBlockTravel(
+  id: string,
+  /**
+   * Whether a drag just put this block down. Its own travel is then instant.
+   *
+   * At release the copy in the hand is already sitting on the slot, so a glide
+   * in from the block's old place would be a second block crossing the card
+   * towards the first. Its neighbours still slide, on their own `layout`.
+   *
+   * **The transition is what changes, never `layout` or `layoutId`.** Taking
+   * the id off for a commit and putting it back leaves Motion's shared-layout
+   * stack holding a snapshot of the block where it used to be, and the next
+   * element to claim the id can animate from there.
+   */
+  isLanding = false,
+): HTMLMotionProps<"div"> {
   return {
     layout: "position",
     layoutId: `card-block:${id}`,
-    transition: TRANSITION,
+    transition: isLanding ? LANDING_TRAVEL : TRANSITION,
   };
+}
+
+/** `TRANSITION` for everything but the block's own layout, which is instant. */
+const LANDING_TRAVEL: Transition = { ...TRANSITION, layout: { duration: 0 } };
+
+/**
+ * How each area a dragged block could go into arrives: it pops up to full size
+ * on the magnet's spring, so picking something up reads as the card opening its
+ * places to it.
+ *
+ * On an element of its own, outside the one that breathes
+ * (`dropRegionBreathMotion`) — two elements, one property each, the rule
+ * `wallMotion` states — so the pop and the loop never fight over `scale`.
+ */
+const REGION_HIDDEN: TargetAndTransition = { scale: 0.85 };
+const REGION_SHOWN: TargetAndTransition = { scale: 1 };
+
+export function dropRegionMotion(): HTMLMotionProps<"div"> {
+  return { initial: REGION_HIDDEN, animate: REGION_SHOWN, transition: MAGNET_SPRING };
+}
+
+/**
+ * The breathing an area does for as long as a block is in the air — 3% and
+ * back, every 1.2s, all of them together.
+ *
+ * Motion for the length of a gesture only: the layer it is on is unmounted when
+ * the drag ends. `MotionConfig reducedMotion="user"` stops it, and
+ * `.card-drop-region`'s own weight and tint are the static form that is left.
+ */
+const BREATH: TargetAndTransition = { scale: [1, 1.03, 1] };
+const BREATH_TRANSITION: Transition = {
+  duration: 1.2,
+  ease: "easeInOut",
+  repeat: Infinity,
+};
+
+export function dropRegionBreathMotion(): HTMLMotionProps<"div"> {
+  return { animate: BREATH, transition: BREATH_TRANSITION };
 }
 
 /**
@@ -241,6 +348,31 @@ export function collapseMotion(): HTMLMotionProps<"div"> {
 export const COLLAPSE_CLASS = "overflow-hidden pb-2 last:pb-0";
 
 /**
+ * The line that says a dragged thing will land *here*, between two rows.
+ *
+ * The route's insertion line was a bare conditional render — it appeared and
+ * disappeared in one frame while everything else in the panel moved at 150ms, so
+ * the one mark that answers "where exactly" was the one mark with no arrival.
+ *
+ * It grows from its own centre rather than fading alone: a 2px rule that only
+ * fades reads as a rendering artefact at the moment it is thinnest, and the
+ * widening is what makes it read as a gap being opened. `scaleX` and `opacity`
+ * are both transforms as far as Motion's reduced-motion handling is concerned,
+ * so there is nothing to opt out of here.
+ *
+ * The caller must give the element `transform-origin: center` — which is the
+ * default — and must not also animate its width, or the two fight.
+ */
+export function insertLineMotion(): HTMLMotionProps<"span"> {
+  return {
+    initial: { opacity: 0, scaleX: 0.6 },
+    animate: { opacity: 1, scaleX: 1 },
+    exit: { opacity: 0, scaleX: 0.6 },
+    transition: TRANSITION,
+  };
+}
+
+/**
  * How something that arrives *because a gesture started* moves.
  *
  * The one spring in the app, and deliberately not the 150ms curve everything
@@ -255,6 +387,25 @@ export const GESTURE_SPRING = {
   type: "spring",
   stiffness: 520,
   damping: 30,
+  mass: 0.6,
+} as const;
+
+/**
+ * How the card designer's drag pulls things onto a place — the copy in the hand
+ * jumping into a slot, and the outline travelling with it.
+ *
+ * `GESTURE_SPRING`'s family, deliberately less damped: that one settles with a
+ * barely visible overshoot, which is right for a wall arriving and too polite
+ * for a magnet. At a damping ratio of about 0.7 the copy passes its slot by a
+ * few percent and comes back, and that small *thunk* is what says it caught.
+ *
+ * One definition for both the ghost (`components/groups/ghost-magnet.ts`) and
+ * the bold mark under it (`SlotMark`), so the two cannot drift apart mid-hop.
+ */
+export const MAGNET_SPRING = {
+  type: "spring",
+  stiffness: 600,
+  damping: 26,
   mass: 0.6,
 } as const;
 

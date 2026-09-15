@@ -100,6 +100,12 @@ export default function HeatMapImpl({
   return (
     <div
       ref={frame}
+      /* MapLibre's zoom stack and attribution bar are styled against this, so
+         they follow the basemap under them rather than the dashboard's theme —
+         see `mapThemeClass` and the `[data-map-theme]` rules in globals.css.
+         `isDarkGround` is the same answer, already computed above for the
+         heat layer's own ramp. */
+      data-map-theme={isDarkGround ? "dark" : "light"}
       className="relative h-full w-full overflow-hidden rounded-xl bg-surface-secondary"
     >
       <div

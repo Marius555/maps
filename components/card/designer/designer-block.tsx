@@ -4,10 +4,7 @@ import { motion } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { useRowDragSource } from "@/components/groups/use-row-drag";
-import {
-  landedBlockMotion,
-  movingBlockTravel,
-} from "@/components/ui/list-row-motion";
+import { movingBlockTravel } from "@/components/ui/list-row-motion";
 import {
   hasControl,
   isSelfSized,
@@ -22,6 +19,7 @@ import {
   resizeEdges,
   type BlockResize,
 } from "./block-resize-handle";
+import { useLanding } from "./use-landing";
 
 /**
  * One block on the designer canvas: the real block, selectable and draggable,
@@ -85,8 +83,9 @@ export function DesignerBlock({
    */
   onRow?: boolean;
   /**
-   * Whether this block has just arrived from the palette, and should settle
-   * into place rather than simply be there. See `landedBlockMotion`.
+   * Whether a drag has just put this block down — off the palette or from
+   * elsewhere on the card — and it should drop into place rather than simply be
+   * there. See `useLanding`.
    */
   justLanded?: boolean;
   onSelect: () => void;
@@ -98,12 +97,16 @@ export function DesignerBlock({
     self: { type: "card-block", id: block.id },
   });
 
+  const { contentRef, ringRef } = useLanding(justLanded);
+
   const { label } = BLOCK_LABELS[block.type];
 
   return (
     <motion.div
       {...rowProps}
-      {...movingBlockTravel(block.id)}
+      // Instant for the block a drop just put down — the copy in the hand is
+      // already sitting where it lands. See `movingBlockTravel`.
+      {...movingBlockTravel(block.id, justLanded)}
       /*
        * **Which renders count as layout changes.**
        *
@@ -130,8 +133,8 @@ export function DesignerBlock({
        * On the block rather than on the `motion.div` wrapping it, because that
        * wrapper carries the reorder animation's own `overflow-hidden` and a
        * couple of pixels of gap — so its box is not this block's box, and the
-       * seams either side of it would sit slightly off what is drawn. See
-       * use-drop-bands.ts.
+       * free space measured either side of it would sit slightly off what is
+       * drawn. See use-drop-bands.ts.
        */
       data-block-id={block.id}
       /*
@@ -196,16 +199,26 @@ export function DesignerBlock({
       {/* `rounded-md` repeated rather than inherited, so the clip mask lines up
           with the selection ring drawn on the root around it.
 
-          It is a `motion.div` so a block that has just landed can grow into
-          place. The scale belongs here rather than on the root, because the
-          root's transform is `movingBlockTravel`'s and two animators on one
-          property is a fight neither wins — see `landedBlockMotion`. */}
-      <motion.div
-        className="h-full w-full overflow-hidden rounded-md"
-        {...(justLanded ? landedBlockMotion() : {})}
-      >
+          The landing's bounce is drawn on this element, not on the root,
+          because the root's transform is `movingBlockTravel`'s and two
+          animators on one property is a fight neither wins — see
+          `useLanding`. */}
+      <div ref={contentRef} className="h-full w-full overflow-hidden rounded-md">
         {children}
-      </motion.div>
+      </div>
+
+      {/* The impact ring. Always in the tree and invisible at rest, so the
+          landing animates an element that already exists rather than mounting
+          one — a mount animation is exactly what this canvas's
+          `AnimatePresence` can silently skip (`useLanding`). Outside the
+          content box so its clip cannot cut the ring off, and
+          `pointer-events-none` so a block picked up again straight away is
+          picked up rather than pressed through it. */}
+      <span
+        ref={ringRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 rounded-md opacity-0 ring-2 ring-accent"
+      />
 
       {/* Only where there is a height worth dragging. A block that grows with its
           content has nothing for a handle to change.

@@ -8,11 +8,63 @@ rewritten; it is the record of why this area is shaped as it is.
 ### Editor layout
 
 - **Exactly one element in the editor has a real height**, and everything below depends on
-  it: `lg:h-[calc(100dvh-3rem)]` on the editor row in `map-editor.tsx`, where the 3rem is
+  it: `h-[calc(100dvh-3rem)]` on the editor row in `map-editor.tsx`, where the 3rem is
   `Container`'s own `py-6`. Everything else is `min-h-*` or `flex-1`, and a percentage
   flex-basis against an indefinite parent resolves to `content` — so without it the panel's
   `overflow-y: auto` sat on a box that always grew, scrolling the page and stretching the
-  map. Below `lg` the row stacks and the panel caps at `max-h-[60dvh]`.
+  map. **`flex-none` is what makes the height apply at all**: the row is a flex item of a
+  column, so its height is its main size, and `flex-1`'s `flex-basis: 0%` beats `height`
+  there — with both, the height is silently ignored.
+- **That height is now unconditional, and `max-md:h-[calc(100dvh-6.5rem)]` is the one
+  variant.** It used to be `lg:` only, because below `lg` the row stacked a `55dvh` map on
+  a `60dvh` panel and the page was allowed to grow to hold the sum. The panel is out of
+  flow below `lg` now (see the next bullet), so there is nothing left to stack and the map
+  claims the rest. The 6.5rem is 3rem of `Container` padding plus the 3.5rem `MobileHeader`,
+  which is `md:hidden` and so contributes nothing above `md`; `PageTitle` is `sr-only`,
+  absolutely positioned, and contributes no height at any width.
+- **Below `lg` the locations panel is a bottom sheet over the map, and it must never
+  become a modal.** `components/ui/bottom-sheet.tsx` is the same "one element, positioned
+  two ways" bargain for one of the same two reasons: grouping is a drag from row to row,
+  `useRowDragSource` resolves every drop with `elementFromPoint`, and React Aria marks the
+  rest of the page `inert` while a modal is open — an `inert` subtree cannot be found by
+  that call. The second reason is the sheet's own: shut, it owns a 4rem strip and the map
+  behind it still works, which a scrim would end.
+- **The sheet is shared by three screens now, and each owes it two things.**
+  `BottomSheet` + `components/ui/use-sheet-drag.ts` are the editor's own two files moved
+  up; `LocationsDrawer` is what is left of the editor's — a title, a count badge and the
+  `lg:w-80` column. The card designer (`DesignerSidePanel`) and the publish designer
+  (`DesignSidebar`) are the other two, both at the same `lg`. What a caller must supply is
+  **a containing block and a clip** — `relative` plus `max-lg:overflow-hidden` on the row
+  it sits in — and **room for the strip**, since it is parked over the bottom of whatever
+  is behind it.
+- **`--sheet-peek` is one constant read by things that must agree to the pixel** — the
+  strip's own height, the `translate` that parks the sheet there
+  (`calc(100% - var(--sheet-peek))`, a percentage of the sheet's own height, so nothing
+  has to be measured), and whatever each caller moves out from under it: here
+  `--map-chrome-inset`, which lifts everything MapLibre stacks in a bottom corner clear of
+  it; on `/card` and `/publish` a `max-lg:pb-*`. Attribution that is covered is
+  attribution that is absent (§12), and the zoom buttons sit in the same corner. A
+  ResizeObserver instead would be one frame of the sheet in the wrong place on every load.
+  Measured after the rename, at 502x732: the zoom stack ends at y=644 and the attribution
+  at y=643, against a strip starting at 645.
+- **The editor row carries `max-lg:overflow-hidden`, and it is load-bearing.** Two thirds
+  of the sheet hangs below the frame while it is shut; an absolutely positioned box past
+  the bottom of the page grows the document and brings the window's scrollbar in with it.
+  Measured with the clip in place: `scrollHeight === clientHeight` at 502x732.
+- **The sheet's grab strip is `touch-action: none`, declaratively, and that is the only
+  thing that works.** `preventDefault()` on a pointer event is a no-op for panning — the
+  post-mortem three bullets down in Drag — and unlike a list row there is no stillness
+  test to hang a non-passive `touchmove` off: a sheet handle has nothing of its own to
+  scroll, so giving the whole strip to the drag costs nothing. `use-sheet-drag.ts` is
+  otherwise the pattern `use-drag-to-add.ts` runs: 6px of slop, three window listeners,
+  and a 48px snap on release with no velocity test (a flick has already passed 48px
+  before the finger lifts; a slow deliberate half-drag is the one case where distance is
+  the honest reading).
+- **A drag that ends over the handle must not also be a press on it.** The handle is a
+  real `<button>` so keyboard and mouse both toggle through `onClick`, and a pointer
+  released after 200px of dragging fires a click too. `swallowClick` is armed only when
+  the gesture actually moved and is reset on the next press rather than on a timer, so a
+  drag that ended elsewhere cannot leave it armed against an unrelated click later.
 - **A modal's actions go in `Modal.Footer`, never at the end of `Modal.Body`.** HeroUI's
   modal is `scroll: "inside"` by default, so the body is the scroller and the dialog is
   capped at `max-h-full` and centred by `sm:my-auto`. Buttons inside the scroller are
@@ -55,6 +107,21 @@ rewritten; it is the record of why this area is shaped as it is.
   under-scrolls exactly the rows near the bottom of the screen. **It honours
   `scroll-margin-top` by hand**, since the arithmetic path never reaches `scrollIntoView`
   — that is what keeps an opened review row from landing behind the `lg:sticky` map.
+- **A page's own trigger goes in the mobile header, not in a bar of its own — and
+  nothing needs one today.** `MobileHeaderSlot` is an empty flex box at the far end of
+  `MobileHeader`, and `MobileHeaderActions` portals into it. The card designer's panel
+  trigger was its one user and is gone: a grab rail along the bottom of the frame is its
+  own trigger at every width, so a second way in at the far end of the header was a
+  control for a thing already on screen. The mechanism stays for the next page with
+  exactly one thing to open, and the argument for it is below. The header's docblock already argued that a second horizontal band is the thing
+  it exists to avoid, and that argument does not stop applying because a page has one
+  control to add. A portal rather than a prop because the header is rendered by the
+  dashboard layout and pages by `children`; React context crosses a portal, so the button
+  still sits inside the page's own providers. The slot node is held in **state**, not a
+  ref: the page renders in the same pass as the header, so a ref is still null when the
+  portal first wants it and nothing re-renders to correct that. Anything put in it
+  disappears at `md` for free, because `MobileHeader` is `md:hidden` — no media query, no
+  first-paint flash.
 - **A `<div>` inside a `<p>` is a hydration error, not a lint nit.** `SidebarGroupLabel`
   was a `<p>` and holds a `Skeleton` (a div) while the map name loads; the parser closes
   the paragraph early, the DOM is not the one React rendered, and the whole subtree
@@ -139,8 +206,85 @@ rewritten; it is the record of why this area is shaped as it is.
   coordinate. It always *ends* the gesture either way: no further move or up is delivered for
   a cancelled pointer, so a drag kept alive would be a ghost stuck under a finger already off
   the glass.
+- **A gesture only touch has to wait for is a gesture only touch has to be told about.**
+  Grouping by drag was reported as doing nothing at all on a phone, and nothing was
+  broken. Measured in the browser with synthetic touch pointers: press and move straight
+  away and the ghost, the lift, `body.is-row-dragging` and the target highlight are *all
+  four* false, because an early move is correctly read as a scroll and drops `origin`
+  outright; hold 320ms first and the identical drag lights the row it is over. The gesture
+  worked and was simply unguessable — and `.is-draggable`'s cursor, the only affordance
+  there was, does not exist on a touch screen. `.row-pressing` now takes the press while
+  the hold builds. **Transform only**: this fires under a finger in the longest list in
+  the app, and anything touching the box reflows every row below it at the moment the
+  user is aiming at one. It is also its own static form — the blanket reduced-motion
+  rule cuts the transition to 0.01ms rather than removing it, so a reader who asked for
+  no motion gets the pressed state immediately instead of over the hold.
+- **`TOUCH_HOLD_MS` stays 250, and the attempt to shorten it is the other half of that
+  measurement.** 180ms was tried once the cue existed and reverted: a tap is a press with
+  no movement, so this timer is the only thing separating "tap" from "pick up", and at
+  180ms a **motionless 230ms tap lifts a ghost** — it lands on itself, `dropAction`
+  refuses it and nothing is grouped, but a row that jumps into the air and back on a
+  deliberate tap reads as a glitch, and 230ms is an ordinary slow tap. Android and iOS
+  both put their own long press at 500ms, so 250 is already half of what the user's phone
+  has taught them; the flick this has to survive is ruled out by *travel* in
+  `onPointerMove`, never by time. The discoverability was the bug, not the duration.
+- **`inset-ring` is a `box-shadow`, and `transition-colors` does not cover it.** The drop
+  highlight is `data-drop-target:inset-ring-2 data-drop-target:inset-ring-accent`, and
+  Tailwind v4 draws that as a box-shadow — while `transition-colors` resolves to `color,
+  background-color, border-color, outline-color, text-decoration-color, fill, stroke` and
+  not one of them is the property being changed. So the one mark that says "this row will
+  take the drop" snapped on and off with no animation at all, on every device. Measured:
+  `getComputedStyle(row).transitionProperty` listed seven properties and none of them was
+  `box-shadow`. There is no utility meaning "colours *and* shadow", so the list is named
+  explicitly, once, in `LIST_ROW_SURFACE_CLASS` (components/ui/list-row-motion.ts) — which
+  is also what stopped the four row components carrying four copies of a string that had
+  already drifted. Every *other* `inset-ring` in the app is a `focus-visible:` ring and
+  should keep snapping; a focus ring that fades in is worse, not better.
+- **On touch, the drop ring was the only feedback there was.** A mouse gets
+  `hover:bg-default` on the way to a target and a cursor the whole time; a finger gets
+  neither, so "nothing animates on my phone" was largely true and largely this. `.row-pressing`
+  now paints the row `--default` as well as scaling it — the hover state, finally given to
+  the device that has to wait 250ms for its gesture. Background-colour paints without
+  reflowing, so the rule's "nothing that touches the box" constraint still holds. An
+  already-selected row keeps its accent tint instead, `data-selected:bg-accent-soft` being
+  a class-and-attribute selector that outranks one class.
+- **`.row-lifted` declares no transition and must not.** It is on the same element as the
+  Tailwind list above, which now names `opacity`, so the source row fades to 0.35 at the
+  same 150ms as everything else. Declaring a transition on `.row-lifted` itself would
+  *replace* that list, this rule being unlayered where a Tailwind utility is not — which is
+  the same cascade fact that makes `.row-pressing`'s own transition override it for the
+  length of a press (harmless: the pressed row is the drag source, never the target).
+- **Two things in the panel used to appear rather than arrive.** The route's insertion line
+  was a bare conditional render, so the one mark answering "where exactly" was the one mark
+  with no entrance; it is `insertLineMotion()` under an `AnimatePresence` now, growing from
+  its own centre, because a 2px rule that only fades reads as an artefact at the moment it
+  is thinnest. And the **Groups** heading was the single row kind in the list with no motion
+  wrapper, so it popped in over rows that were politely sliding down to make room for it.
+- **A stop row is a drop target for its route.** The two reorder bands accept nothing but
+  a stop of their own route, so a route dropped on another route's *stop* row silently did
+  nothing and the drop had to land on the route's 48px header — the row you are least
+  likely to be over on a phone with an open route. The row now publishes the same target
+  its header does (`route-stop-row:<routeId>:<index>`, a third id because the registry is
+  keyed and 25 rows cannot all register `shape:<id>`). The bands still win for a stop,
+  because `accepts` skips a target that refuses the payload rather than letting it swallow
+  the drop.
+- **Nothing client-side may call `crypto.randomUUID`; use `newId()` (`lib/utils/id.ts`).**
+  It is `[SecureContext]`-gated, and while `http://localhost` is a trustworthy origin,
+  `http://<LAN-IP>` — the address a phone reaches `next dev` on, and the one in
+  `next.config.ts`'s `allowedDevOrigins` — is not. There the property is plainly
+  `undefined`. See the post-mortem below; `crypto.getRandomValues` is *not* gated and is
+  what the fallback uses.
+- **A throw inside an optimistic `onMutate` reads to the user as a server error.**
+  TanStack Query treats it as the mutation failing, so `mutationFn` never runs, the error
+  is a raw `TypeError` rather than an `ApiError`, and `resolveMessage`
+  (`components/ui/error-message.tsx`) falls through to "Something broke on our side" — a
+  sentence about a server that was never asked anything. Anything that can throw belongs
+  outside `onMutate`, or must not be able to throw.
 - **Edit means the dialog, and only the dialog.** The row menu must not call `focusPlace`
   before `setEditingId` — that drew the card behind the modal and flew the camera away.
+  It is also now on the *stop* rows, which had no Edit at all: a stop is its location's
+  only row in the panel, so a pin on a route could not be edited from the list by any
+  route. See docs/notes/shapes-and-routes.md.
 
 ### The editor map's own controls
 
@@ -321,3 +465,54 @@ What it buys beyond the counter: progress survives a closed *laptop*, not just a
 and an import can be picked up on another machine. What it costs: an Appwrite schema change,
 a polling UI, and a cron or queue on a platform whose Hobby tier caps cron at once daily
 (§12). Which is why the client hardening came first.
+
+## An insecure origin took out every pin and every shape on a phone
+
+Reported as three things — dropping a pin said "Something broke on our side", a circle
+could be drawn but never appeared, nothing else worked either — and it was one cause.
+
+`crypto.randomUUID` is `[SecureContext]`-gated. Measured on the phone's actual origin,
+`http://192.168.1.212:3000`:
+
+```
+isSecureContext:               false
+typeof crypto.randomUUID:      "undefined"
+crypto.randomUUID():           TypeError: crypto.randomUUID is not a function
+typeof crypto.getRandomValues: "function"
+```
+
+`http://localhost` *is* a trustworthy origin, which is the whole reason this never showed
+up on the desktop. The LAN address is not, and that is the address a phone has to use.
+
+It was called to mint the optimistic row's temporary id, inside `onMutate`, in
+`lib/query/places.ts`, `shapes.ts` and `groups.ts`. A throw there is the mutation failing
+before it starts, which is why the two symptoms looked so different:
+
+- **The pin said too much.** `createPlace.error` is rendered by the sidebar's alert, and a
+  raw `TypeError` is not an `ApiError`, so it printed the generic fallback. The app
+  reported a server failure for a request no server ever saw.
+- **The circle said nothing at all.** `addShape`'s `catch` called only
+  `toastPlanLimit(error, "Shape")`, which returns false and draws nothing for anything
+  that is not a plan limit — and unlike a place, nothing anywhere renders
+  `createShape.error`. Meanwhile `setMode("browse")`, which runs *before* the await, had
+  already nulled `drawMode` and `use-draw-circle`'s cleanup had wiped the draft. So the
+  circle was drawn, and then vanished, and the app had nothing to say about it. Group
+  creation had the identical silence, from the identical shape of `catch`.
+
+Both halves are fixed and neither fix depends on the other. `newId()` prefers
+`randomUUID` and falls back to `getRandomValues` — sixteen bytes with the version and
+variant nibbles set by hand, a real v4 rather than a lookalike, because an id that is a
+UUID everywhere except on a phone is a difference waiting to be depended on. And the two
+silent `catch`es now fall through to `toastError` when `toastPlanLimit` declines, which is
+what `lib/query/toast-error.ts` was written for.
+
+**The general rule is the second invariant above, not the first.** The id was one API that
+happens to be gated; what made it cost a day is that an optimistic mutation swallows the
+distinction between "the server refused" and "our own code threw before asking". A failure
+that draws nothing is worse than a wrong message, because it reads as the gesture never
+having worked.
+
+Two things this deliberately does not do. It does not serve dev over HTTPS — the id is the
+real bug and would be one on any origin the moment something else is gated. And it does not
+touch `scripts/migrate-categories-to-tags.mjs`, which also calls `randomUUID`: that is a
+Node CLI script, where it has always existed and always will.

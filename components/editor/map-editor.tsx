@@ -22,6 +22,8 @@ import { PreviewDialog } from "@/components/preview/preview-dialog";
 import { ImportShapesDialog } from "@/components/shapes/import/import-shapes-dialog";
 import type { GeocodeCandidate } from "@/lib/geocoding/types";
 import { isDefaultView } from "@/lib/map/default-view";
+import { mapThemeClass } from "@/lib/map/style";
+import { usePrefersDark } from "@/lib/theme/use-prefers-dark";
 import { roundCoord } from "@/lib/map/geo";
 import { groupAction, groupActionLabel } from "@/lib/map/group-action";
 import { groupColorIndex } from "@/lib/map/group-colors";
@@ -40,8 +42,10 @@ import {
   type GroupMembers,
 } from "@/lib/query/groups";
 import { useMap, useUpdateMap } from "@/lib/query/maps";
+import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { readMapAppearance } from "@/lib/validation/map-appearance.schema";
 import { isPlanLimit, toastPlanLimit } from "@/lib/query/plan-limit-toast";
+import { toastError } from "@/lib/query/toast-error";
 import {
   useAddTagToPlaces,
   useRemoveTagFromPlaces,
@@ -344,6 +348,16 @@ export function MapEditor({
     (place: Place) =>
       colorFor(place, resolvePin(place.icon, map.pinIcons)?.color ?? undefined),
     [colorFor, map.pinIcons],
+  );
+
+  /*
+   * The Publish tab's Clustering switch, read here too, so the map you edit
+   * gathers its pins exactly when the map you publish does — the preview draws
+   * the real embed beside this canvas.
+   */
+  const clustering = useMemo(
+    () => readEmbedSettings(map.settings).clustering,
+    [map.settings],
   );
 
   /*
@@ -688,11 +702,24 @@ export function MapEditor({
 
         selectShape(created.id);
       } catch (error) {
-        // Same reasoning as addPlace: the plan limit is the case that matters and
-        // there is nowhere inline on a map to put a sentence about it. Named,
-        // because "Location limit reached" over a circle you just drew is a
-        // heading about the wrong thing.
-        toastPlanLimit(error, "Shape");
+        /*
+         * Same reasoning as addPlace: the plan limit is the case that matters and
+         * there is nowhere inline on a map to put a sentence about it. Named,
+         * because "Location limit reached" over a circle you just drew is a
+         * heading about the wrong thing.
+         *
+         * **And everything else has to be said too.** `toastPlanLimit` returns
+         * false for anything that is not a plan limit, and nothing anywhere
+         * renders `createShape.error` — unlike a place, whose other failures
+         * reach the sidebar's alert. So a failed create drew nothing at all,
+         * while `setMode("browse")` at the top of this function had already
+         * dropped the draft: the circle was drawn, and then silently vanished.
+         * That is the worst shape a failure can take, because it reads as the
+         * gesture never having worked.
+         */
+        if (!toastPlanLimit(error, "Shape")) {
+          toastError(error, "Couldn't add the shape");
+        }
       }
     },
     [
@@ -870,7 +897,12 @@ export function MapEditor({
 
         await assignToGroup(members, created.id);
       } catch (error) {
-        toastPlanLimit(error, "Group");
+        // The same silence as a shape's, and the same answer: nothing renders
+        // `createGroup.error` either, and the rows have already animated out of
+        // the group by the time this runs.
+        if (!toastPlanLimit(error, "Group")) {
+          toastError(error, "Couldn't create the group");
+        }
       } finally {
         setIsGrouping(false);
       }
@@ -1121,6 +1153,14 @@ export function MapEditor({
     [places, selectPlace],
   );
 
+  /*
+   * The basemap's own light/dark, worn by the map frame below. The same source
+   * the canvas itself reads (`usePrefersDark` off `<html>`, not the OS), so the
+   * chrome and the tiles under it cannot come to different answers.
+   */
+  const prefersDark = usePrefersDark();
+  const mapTheme = mapThemeClass(map.style, prefersDark);
+
   const [savedViewAt, setSavedViewAt] = useState<number | null>(null);
 
   /**
@@ -1159,33 +1199,43 @@ export function MapEditor({
   return (
     /*
      * `lg`, not `md`: with a 240px nav sidebar and a 320px locations panel, a
-     * 768px viewport would leave the map about 200px wide. It stacks until there
-     * is genuinely room for both.
+     * 768px viewport would leave the map about 200px wide. Below it the panel
+     * stops being a column and becomes a bottom sheet over the map — see
+     * `LocationsDrawer` — so the map has the frame to itself at every width.
      *
-     * **`lg:h-[...]` is a definite height, and that is the whole point.** Every
-     * other step from `<body>` down to the locations list is `min-h-*` or
-     * `flex-1` — a floor or a ratio, never a ceiling — and a percentage
-     * flex-basis against an indefinite parent resolves to `content`. So the
-     * panel's `overflow-y: auto` sat on a box that always grew to fit, adding a
-     * location scrolled the *page*, and the map got taller with it. One real
-     * height here gives everything below something to divide up.
+     * **The height is definite at every width now, and that is the whole
+     * point.** Every other step from `<body>` down to the locations list is
+     * `min-h-*` or `flex-1` — a floor or a ratio, never a ceiling — and a
+     * percentage flex-basis against an indefinite parent resolves to `content`.
+     * So the panel's `overflow-y: auto` sat on a box that always grew to fit,
+     * adding a location scrolled the *page*, and the map got taller with it. One
+     * real height here gives everything below something to divide up. It used to
+     * be `lg:` only, because below that the row stacked a `55dvh` map on a
+     * `60dvh` panel and the page was allowed to grow; with the panel out of flow
+     * there is nothing left to stack, and the map claims the rest.
      *
-     * **`lg:flex-none` is what makes that height apply at all**, and its absence
+     * **`flex-none` is what makes that height apply at all**, and its absence
      * fails silently. This row is a flex item of `Container`, which is a column,
      * so its height *is* its main size — and `flex-1` sets `flex-basis: 0%`,
      * which beats `height` on the main axis. With both, the height is simply
      * ignored and everything above grows exactly as it did before. `flex-none`
-     * restores `flex-basis: auto`, and below `lg` the row goes back to `flex-1`
-     * because there it stacks and has nothing to fill.
+     * restores `flex-basis: auto`.
      *
-     * `100dvh - 3rem` is exact rather than approximate: 3rem is `Container`'s
-     * own `py-6` top and bottom, and at `lg` there is nothing else above this —
-     * `MobileHeader` is `md:hidden` and `PageTitle` is `sr-only`, which is
-     * absolutely positioned and contributes no height. dvh, not vh, so mobile
-     * browser chrome doesn't push the bottom of the panel out of reach.
+     * The two subtractions are exact rather than approximate. 3rem is
+     * `Container`'s own `py-6` top and bottom, and `PageTitle` is `sr-only`,
+     * which is absolutely positioned and contributes no height. Below `md` the
+     * `MobileHeader` is on screen as well, and it is `min-h-14` holding one line
+     * — 3.5rem, for 6.5rem in total. dvh, not vh, so mobile browser chrome
+     * doesn't push the bottom of the sheet out of reach.
+     *
+     * `relative` and `max-lg:overflow-hidden` are the sheet's: the first is what
+     * it is positioned against, and the second clips the two thirds of it that
+     * hang below the frame while it is shut. Without the clip an absolutely
+     * positioned box past the bottom of the page grows the document and brings
+     * the window's scrollbar in with it.
      */
     <div
-      className="flex min-h-0 flex-1 flex-col gap-4 lg:h-[calc(100dvh-3rem)] lg:flex-none lg:flex-row"
+      className="relative flex h-[calc(100dvh-3rem)] min-h-0 flex-none flex-col gap-4 max-lg:overflow-hidden max-md:h-[calc(100dvh-6.5rem)] lg:flex-row"
       /* The map's accent, inherited by every place card drawn inside — a Button
          nobody gave a Background wears it, exactly as it does on the published
          map. Here rather than on the card, because the card design is per
@@ -1196,7 +1246,39 @@ export function MapEditor({
        * A framed panel rather than a slab bled to the window edges. dvh, not vh:
        * mobile browser chrome would clip the canvas otherwise.
        */}
-      <div className="relative h-[55dvh] min-h-64 w-full overflow-hidden rounded-xl border border-border lg:h-auto lg:min-h-0 lg:flex-1">
+      {/*
+       * `--map-chrome-inset` lifts everything MapLibre stacks in a bottom corner
+       * — the zoom buttons and the attribution bar — clear of the sheet's peek
+       * strip, which sits directly on top of both. Attribution that is covered
+       * is attribution that is absent (§12). Zero at `lg`, where the panel is a
+       * column and the corner is empty again.
+       */}
+      <div
+        /*
+         * The frame is the *map's* colour context, not the dashboard's.
+         *
+         * Everything in it floats on the basemap — the toolbar, the hint bar,
+         * the selection bar, MapLibre's own zoom stack — and all of it used to
+         * read the dashboard's tokens, so an owner whose phone is in system dark
+         * mode got black chrome over a white basemap and no change of map style
+         * moved it. The class re-declares every token for this subtree, which is
+         * the same one-line mechanism `cardThemeClass` already uses for the place
+         * card. See `mapThemeClass`.
+         *
+         * Popovers and tooltips opened from the toolbar portal to the document
+         * and stay in the dashboard's theme, which is correct: they are dashboard
+         * surfaces that happen to have been opened from a map.
+         *
+         * **`text-foreground` is not decoration**, and leaving it off is the one
+         * way to get this half right and still have it look broken: re-declaring
+         * a *variable* is not re-stating a *property*, so `color` stays whatever
+         * `<body>` computed under the dashboard's theme and every toolbar glyph
+         * — `currentColor`, all of them — is drawn in the page's ink. Measured:
+         * a white toolbar over the Liberty basemap with near-white icons on it.
+         * `card-frame.tsx` carries the same line for the same reason.
+         */
+        className={`relative min-h-64 w-full flex-1 overflow-hidden rounded-xl border border-border text-foreground max-lg:[--map-chrome-inset:var(--sheet-peek)] lg:min-h-0 ${mapTheme}`}
+      >
         <MapToolbar
           isAdding={isAdding}
           addIcon={addIcon}
@@ -1315,6 +1397,7 @@ export function MapEditor({
           addIcon={addIcon}
           colorFor={colorFor}
           pinIcons={map.pinIcons}
+          clustering={clustering}
           /* Only here. The three small maps built on this same canvas — the pin
              field, the import review, the heatmap — take the two zoom buttons
              and nothing else. */

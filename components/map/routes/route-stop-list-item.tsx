@@ -1,7 +1,14 @@
 "use client";
 
-import { ArrowDownToLine, ArrowUpToLine, X } from "lucide-react";
-import { motion } from "motion/react";
+import {
+  ArrowDownToLine,
+  ArrowUpToLine,
+  ChevronDown,
+  ChevronUp,
+  Pencil,
+  X,
+} from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 
 import {
   NO_DRAG_PROPS,
@@ -11,7 +18,12 @@ import {
 } from "@/components/groups/use-row-drag";
 import { PinPreview } from "@/components/map/pin-preview";
 import { PlaceRowLabel } from "@/components/places/place-row-label";
-import { LIST_ROW_CLASS, listRowMotion } from "@/components/ui/list-row-motion";
+import {
+  insertLineMotion,
+  LIST_ROW_CLASS,
+  LIST_ROW_SURFACE_CLASS,
+  listRowMotion,
+} from "@/components/ui/list-row-motion";
 import { RowMenu, type RowMenuItem } from "@/components/ui/row-menu";
 import { TreeBranch, TreeRail } from "@/components/ui/tree-branch";
 import { moveStop } from "@/lib/map/route-order";
@@ -35,12 +47,40 @@ import type { RouteStop } from "@/packages/shared/shapes";
  * Edit and Delete; two rows for one location would collide on the key, and
  * "Delete" under a stop would mean the location itself, not the stop.
  *
+ * **Edit is the exception, and it took a bug report to notice.** That argument
+ * is about Delete and always was — but a stop row is this location's *only*
+ * row in the panel (`one row per location`, lib/map/sidebar-rows.ts), so
+ * leaving Edit out of it meant a pin on a route could not be edited from the
+ * list at all, by any route. It is here now, spelled "Edit location" so it
+ * cannot be read as editing the route, and only for a stop that resolves to
+ * one.
+ *
  * **Order is the route.** The stops are the only part of a route anybody
  * decided — the hundreds of points between them came from an engine — so moving
  * one is a different question to ask, and every gesture here goes back through
  * the engine. `lib/map/route-order.ts` holds the rules and returns null for a
  * move that changes nothing, which is what stops a drop back where it started
  * spending a metered request.
+ *
+ * **Four move items, not two, and the drag as well.** The menu used to offer
+ * only the two ends, on the reasoning that a relative move is what the drag
+ * between rows is for. That reasoning assumed the drag was reachable; on touch
+ * it is a learned gesture behind a still hold (components/groups/use-row-drag.ts),
+ * so a phone had the two absolute moves and nothing in between. Every one of
+ * the four now asks `moveStop` whether it would change anything, rather than
+ * asking the index — see the comment over `canMove`.
+ *
+ * **The row itself takes a drop too, and it means "group with this route".**
+ * It did not for a long time, and the gap was invisible: the bands below accept
+ * nothing but a stop of this same route, so dragging a *route* onto one of
+ * another route's stop rows silently did nothing and the drop had to land on
+ * the route's own 48px header row. On a phone, where the panel shows a handful
+ * of rows and an open route fills most of them, that is the row you are most
+ * likely to be over. It follows `dropAction`'s own sentence — dropping onto
+ * something means joining whatever that something belongs to — and a stop
+ * belongs to its route, so this target is the one the route's header already
+ * publishes. The bands still win for a stop, because a target that refuses the
+ * payload is skipped rather than allowed to swallow the drop.
  *
  * **Two drop bands, not one drop target.** The shared gesture
  * (`components/groups/use-row-drag.ts`) hit-tests with `elementFromPoint` and
@@ -68,7 +108,10 @@ export function RouteStopListItem({
   isAddressPending,
   hasAddressFailed,
   animateMoves = false,
+  onDropObject,
+  acceptsDrop,
   onSelect,
+  onEdit,
   onMove,
   onMakeStart,
   onMakeEnd,
@@ -106,7 +149,23 @@ export function RouteStopListItem({
   /** That lookup came back with nothing, and the row has to say so. */
   hasAddressFailed?: boolean;
   animateMoves?: boolean;
+  /**
+   * Another row was dropped on this one — which means its route, not this stop.
+   * Omit and the row is not a target; the bands below are unaffected either way.
+   */
+  onDropObject?: (dragged: DraggedObject) => void;
+  /** Whether the route would do anything with what is in the air. */
+  acceptsDrop?: (dragged: DraggedObject) => boolean;
   onSelect: () => void;
+  /**
+   * Edit the location this stop resolves to.
+   *
+   * Omitted for a free waypoint and for a stop whose location has been deleted
+   * — there is no row behind either to open a form on. The menu item follows
+   * it, which is why this is the prop rather than a flag: a caller that cannot
+   * answer the question does not pass one.
+   */
+  onEdit?: () => void;
   /** Put this stop before the one currently at `insertBefore`. */
   onMove: (insertBefore: number) => void;
   onMakeStart: () => void;
@@ -143,6 +202,20 @@ export function RouteStopListItem({
   });
 
   /*
+   * The whole row, standing in for its route — see the docblock.
+   *
+   * A third id rather than reusing the route's own, because `useDropTarget`
+   * keys a registry: two elements registering `shape:<id>` would be one
+   * overwriting the other, and an open route has up to 25 rows that would all
+   * try.
+   */
+  const row = useDropTarget({
+    id: `route-stop-row:${routeId}:${String(stopIndex)}`,
+    accepts: acceptsDrop ?? (() => false),
+    onDrop: onDropObject,
+  });
+
+  /*
    * What the menu calls this row, and the whole of what the row says when the
    * bond is dangling.
    *
@@ -161,10 +234,67 @@ export function RouteStopListItem({
 
   const items: RowMenuItem[] = [];
 
-  // Offered only where they would change the route. `makeStart` on the first
-  // stop and `makeEnd` on the last both return null, and a menu item that does
-  // nothing is worse than one that is not there.
-  if (stopIndex !== 0) {
+  /*
+   * The location, not the stop — which is why the label says so.
+   *
+   * This row is the *only* row that location has in the panel (`one row per
+   * location`, lib/map/sidebar-rows.ts), so without this item a pin on a route
+   * had no way to be edited from the list at all. The docblock above argues
+   * Delete away, and rightly: "Delete" under a stop would ambiguously mean the
+   * location itself. It never argued Edit away — that was collateral.
+   *
+   * Plain "Edit" belongs to the *route*, on `ShapeListItem` one row up, so this
+   * one is spelled out to say which of the two it opens.
+   */
+  if (onEdit) {
+    items.push({
+      id: "edit",
+      label: "Edit location",
+      icon: Pencil,
+      onAction: onEdit,
+    });
+  }
+
+  /*
+   * The four moves, each offered only where it would change the route.
+   *
+   * **Asked of `moveStop`, never of the index**, and that is the part worth
+   * keeping. The two absolute items used to be gated on `stopIndex !== 0` and
+   * `stopIndex !== stops.length - 1`, which is the same answer as `moveStop`
+   * for a plain out-and-back and the wrong one for a round trip: on A→B→A,
+   * "Make this the start" at the last stop builds [A,A,B], `collapseRepeats`
+   * folds it to [A,B], and the item silently turned somebody's loop into a
+   * one-way trip. `moveStop` has always returned null for that (see `settle`
+   * in lib/map/route-order.ts); nothing was asking it.
+   *
+   * Relative before absolute, because that is the order they read in: one step
+   * is the common edit and the two ends are the decisions.
+   */
+  const canMove = (insertBefore: number) =>
+    moveStop(stops, stopIndex, insertBefore) !== null;
+
+  // `stopIndex - 1` and `stopIndex + 2`: `insertBefore` indexes the list as it
+  // is now, so "one further down" is past the stop's own row *and* the one
+  // below it. `moveStop` compensates for the hole the removal leaves.
+  if (canMove(stopIndex - 1)) {
+    items.push({
+      id: "up",
+      label: "Move up",
+      icon: ChevronUp,
+      onAction: () => onMove(stopIndex - 1),
+    });
+  }
+
+  if (canMove(stopIndex + 2)) {
+    items.push({
+      id: "down",
+      label: "Move down",
+      icon: ChevronDown,
+      onAction: () => onMove(stopIndex + 2),
+    });
+  }
+
+  if (canMove(0)) {
     items.push({
       id: "start",
       label: "Make this the start",
@@ -173,7 +303,7 @@ export function RouteStopListItem({
     });
   }
 
-  if (stopIndex !== stops.length - 1) {
+  if (canMove(stops.length)) {
     items.push({
       id: "end",
       label: "Make this the end",
@@ -210,8 +340,9 @@ export function RouteStopListItem({
           this div and not the `li`, for `PlaceListItem`'s reason. */}
       <div
         data-selected={isSelected || undefined}
+        {...row.targetProps}
         {...rowProps}
-        className={`group relative flex h-12 min-w-0 flex-1 items-center gap-1 rounded-xl px-2 transition-colors hover:bg-default data-selected:bg-accent-soft${
+        className={`${LIST_ROW_SURFACE_CLASS} relative min-w-0 flex-1${
           isDraggable ? " is-draggable" : ""
         }`}
       >
@@ -311,14 +442,21 @@ function DropBand({
         isActive ? "" : "pointer-events-none"
       }`}
     >
-      {isTarget ? (
-        <span
-          aria-hidden="true"
-          className={`absolute inset-x-1 h-0.5 rounded-full bg-accent ${
-            edge === "top" ? "top-0" : "bottom-0"
-          }`}
-        />
-      ) : null}
+      {/* The line grows out of its own centre rather than appearing — see
+          `insertLineMotion`. `AnimatePresence` is what gives it an exit at all:
+          the band stops being the target the instant the pointer leaves it, and
+          a bare conditional would take the mark with it in the same frame. */}
+      <AnimatePresence>
+        {isTarget ? (
+          <motion.span
+            {...insertLineMotion()}
+            aria-hidden="true"
+            className={`absolute inset-x-1 h-0.5 rounded-full bg-accent ${
+              edge === "top" ? "top-0" : "bottom-0"
+            }`}
+          />
+        ) : null}
+      </AnimatePresence>
     </span>
   );
 }

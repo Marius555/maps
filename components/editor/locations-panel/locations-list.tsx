@@ -1,7 +1,7 @@
 "use client";
 
 import { toast } from "@heroui/react";
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
 import { GroupListItem } from "@/components/groups/group-list-item";
@@ -14,6 +14,10 @@ import { PlaceListItem } from "@/components/places/place-list-item";
 import { DeleteShapeDialog } from "@/components/shapes/delete-shape-dialog";
 import { ShapeListItem } from "@/components/shapes/shape-list-item";
 import { RouteStopListItem } from "@/components/map/routes/route-stop-list-item";
+import {
+  LIST_ROW_CLASS,
+  listRowMotion,
+} from "@/components/ui/list-row-motion";
 import { dropAction, type DropTargetRow } from "@/lib/map/drop-action";
 import { placeIndex } from "@/lib/map/line-endpoints";
 import { makeEnd, makeStart, moveStop } from "@/lib/map/route-order";
@@ -395,11 +399,22 @@ export function LocationsList({
           {rows.map((row) => {
             if (row.kind === "heading") {
               return (
-                <li key={row.key} className="px-2 py-1.5">
+                /*
+                 * Animated like every other row, and it was the one that was
+                 * not. This appears the moment a map gets its first group and
+                 * disappears when the last one goes — both of them things the
+                 * user just did — so a bare `<li>` popped a heading in over
+                 * rows that were politely sliding down to make room for it.
+                 */
+                <motion.li
+                  key={row.key}
+                  {...listRowMotion(animateMoves)}
+                  className={`${LIST_ROW_CLASS} px-2 py-1.5`}
+                >
                   <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">
                     Groups
                   </h3>
-                </li>
+                </motion.li>
               );
             }
 
@@ -509,6 +524,31 @@ export function LocationsList({
 
             if (row.kind === "route-stop") {
               const { shape, stopIndex } = row;
+              // Read out here rather than narrowed inside each closure below:
+              // TypeScript drops a property narrowing at a callback boundary,
+              // and three handlers want the same answer.
+              const stopPlaceId = row.place?.id;
+
+              /*
+               * A drop on a stop row means its **route**, which is why this
+               * target names the shape and not the stop.
+               *
+               * The same object the route's own row publishes below, so the two
+               * cannot disagree about what dropping on this route does — and
+               * `groupOf` rather than a `groupId` off the row, because the
+               * route-stop row does not carry one and this is the same
+               * resolution (a groupId naming a group that is gone reads as
+               * ungrouped) the rest of the panel uses.
+               */
+              const routeObject: DraggedObject = {
+                type: "shape",
+                id: shape.id,
+              };
+              const routeTarget: DropTargetRow = {
+                kind: "object",
+                object: routeObject,
+                groupId: groupOf(routeObject),
+              };
 
               return (
                 <RouteStopListItem
@@ -551,11 +591,21 @@ export function LocationsList({
                       : false
                   }
                   animateMoves={animateMoves}
+                  onDropObject={(dragged) => drop(routeTarget, dragged)}
+                  acceptsDrop={accepts(routeTarget)}
                   onSelect={() => {
                     if (!row.place) return;
                     setPressedStop({ key: row.key, placeId: row.place.id });
                     onSelectPlace(row.place.id);
                   }}
+                  /* The dialog and only the dialog — no `onSelectPlace` first,
+                     which would draw the card behind the modal and fly the
+                     camera away. The loose row at the top of this file follows
+                     the same rule. Absent for a waypoint or a deleted bond:
+                     there is no location to open. */
+                  onEdit={
+                    stopPlaceId ? () => onEditPlace(stopPlaceId) : undefined
+                  }
                   onMove={(insertBefore) =>
                     reroute(shape, (stops) =>
                       moveStop(stops, stopIndex, insertBefore),

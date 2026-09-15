@@ -52,9 +52,18 @@ async function loadCard(userId: string, mapId: string) {
   /*
    * The locations come with the page, and are not optional.
    *
-   * The card is drawn from a real one — an invented sample would show a card
-   * that looks finished against data nobody has, and the first thing an owner
-   * needs to know is what their card does when a location has no photo.
+   * The card is drawn from a real one wherever there *is* one — an invented
+   * sample would show a card that looks finished against data nobody has, and
+   * the first thing an owner needs to know is what their card does when a
+   * location has no photo. That is still why these are loaded here and still
+   * why the first real location wins.
+   *
+   * **Where it used to go too far is the empty map**, which got the sentence
+   * "add a location first" and no card at all — on the one screen whose job is
+   * to show what a card looks like, for the account most in need of seeing it.
+   * `lib/card/sample-place.ts` is the stand-in that case now draws, captioned
+   * as an example and carrying no photo, so the half of the argument above that
+   * was right is kept: the gallery block still shows its own empty state.
    *
    * The design itself is the account's, not this map's — see
    * lib/repositories/card-design.repository.ts — but this page still needs a

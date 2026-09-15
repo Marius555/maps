@@ -26,6 +26,23 @@ rewritten; it is the record of why this area is shaped as it is.
   crop, popup offset, symbol anchor).
 - A group has no pin. "Change pins" writes each member's own `icon` through one
   `setGroupPin` `updateRows` scoped by `mapId` *and* `groupId` — not one PATCH per member.
+- **The editor clusters, and its bubbles are style layers while its pins stay DOM**
+  (`components/map/clusters/`). A clustered GeoJSON source draws the bubbles only; on
+  `render` `unclusteredPlaceIds` reads the source's own tiles and the marker layer hides
+  every other pin with `.map-pin--clustered` (`display`, because MapLibre writes `opacity`
+  inline). Same numbers and paint as the embed, from `packages/shared/clusters.ts`.
+- While the source is still tiling the last answer is **kept**, not replaced by the partial
+  one — replacing it blinks every pin off and on at each pan edge and each data change.
+- It follows the Publish tab's **Clustering** switch, is **absent on every other canvas**
+  (the import review needs every pin), is **suspended while a shape or route tool is
+  armed** (stops are pins, the line tool snaps to pins), and never hides the selected pin
+  or one being dragged. The selected place stays *in* the source: taking it out re-runs
+  supercluster's greedy pass and can re-form the bubble next to the pin just clicked.
+- **The export strips the cluster source** (`withoutClusterLayers` in `getExportView`) —
+  it draws every location itself, so a copied bubble would sit over the pins it counts.
+- Carried across a style swap by `STACK_ON_TOP` metadata, which `carryRuntimeLayers`
+  appends to the **end** of the list rather than under the labels, so a theme change and
+  the `styledata` rebuild stack the bubbles the same way.
 
 ### Tags
 
@@ -43,6 +60,26 @@ rewritten; it is the record of why this area is shaped as it is.
 - **Dangling tag ids are the normal state**, not an error — nothing sweeps a deleted tag
   off the places wearing it. `placeTagsSchema` deliberately does not validate against the
   map's list, `buildSnapshot` narrows them away, and the drawing helpers drop them.
+- **And the inverse is normal too: a tag the map defines that nobody wears.** Nothing
+  prunes `maps.tagGroups` either — `deletePlace` deletes a row and touches nothing else,
+  an import that stopped half way has already written the tags for rows it never saved,
+  and `migrate:tags` folds in every category whether or not one was ever used. Measured on
+  a real map: seven locations, **fourteen tags in the /places filter menu, nine of them
+  worn by nobody**, most of them typing tests from a deleted import.
+  That is data behaving correctly and a *filter* behaving wrongly: a chip that can only
+  ever return an empty list is a dead control, which is the argument `buildSnapshot` has
+  always made about a published map. `lib/tags/tag-usage.ts` is that rule, and both the
+  snapshot (`usedTagGroups`) and the dashboard's Tags menu call it, so the owner's filter
+  and the visitor's cannot come to offer different chips for one map.
+- **Only the *filter* narrows.** `listProps.tagGroups` in `places-manager.tsx` stays the
+  whole vocabulary, because that is what a row draws its own chips from, and the location
+  form's picker stays whole too — an unworn tag is still assignable, still editable in
+  Settings → Filters, and still deletable there. Nothing sweeps it, deliberately: sweeping
+  vocabulary on delete would destroy tags an owner is about to re-import into.
+- **A selected tag is kept whether or not anybody wears it.** The menu's keep-set is the
+  worn ids *plus* the current selection. A tag id arrives from the URL, and the last
+  location wearing it may have been deleted since the link was made — narrowed away, the
+  filter would still be applied with no chip left on screen to switch it off.
 - `pinColorOfTags` **walks** rather than reading `tags[0]`, or a dangling id at the front
   leaves a pin grey while the card draws three chips.
 - **An untagged pin has three answers, not two, and only the last is a constant.** The

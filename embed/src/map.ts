@@ -51,6 +51,14 @@ import {
   dotSpacingFor,
   dotWidthFilter,
 } from "@/packages/shared/dot-line";
+import { cardFlipsTheme } from "@/packages/shared/card-ground";
+import {
+  CLUSTER_BUBBLE_RADIUS,
+  CLUSTER_COLOR,
+  CLUSTER_FONT,
+  CLUSTER_MAX_ZOOM,
+  CLUSTER_RADIUS,
+} from "@/packages/shared/clusters";
 import { pinColorOfTags, tagChipsOf } from "@/packages/shared/tags";
 
 import { buildPopup, buildShapePopup } from "./popup";
@@ -132,9 +140,6 @@ const OUTLINE_LAYERS: {
   { id: SHAPE_DASHED_LINE_LAYER, stroke: "dashed", cap: "butt", dash: [2, 2] },
 ];
 
-/** Past this zoom, show individual pins rather than bubbles. */
-const CLUSTER_MAX_ZOOM = 14;
-const CLUSTER_RADIUS = 50;
 const FIT_PADDING = 48;
 const FOCUS_ZOOM = 15;
 /**
@@ -219,6 +224,16 @@ export type CreateMapOptions = {
    */
   style: string | StyleSpecification;
   /**
+   * Whether the map's own chrome is dark — the snapshot's `theme`, or what the
+   * visitor's browser answered for an Auto map. Already resolved by the caller
+   * for the same reason `style` is.
+   *
+   * Read for one thing: a card's ground is composited over the map before its
+   * light/dark is decided, so a half-transparent card needs to know what it is
+   * half-transparent *over*. See `styleCard`.
+   */
+  isDark: boolean;
+  /**
    * A place to open on instead of the whole map, from `?place=<id>` on the host
    * page. Unknown ids are ignored, which is what lets several maps share a page.
    */
@@ -269,6 +284,7 @@ export function createMap(
   snapshot: MapSnapshot,
   {
     style,
+    isDark,
     focusPlaceId = null,
     onSelect,
     getMe,
@@ -316,10 +332,14 @@ export function createMap(
    * `external` in embed/vite.config.mts, so its dist files ship whole whether we
    * name these or not. What a switch costs is the line that reads it.
    *
-   * `top-right` stays the fallback rather than becoming `top-left`, because a
-   * snapshot published last year says nothing about corners and must keep
-   * putting its zoom buttons where its owner last saw them (§7). The new
-   * default reaches a map through DEFAULT_EMBED_SETTINGS, on their next publish.
+   * `top-right` stays the fallback whatever the designer's default becomes —
+   * it is `bottom-left` now — because a snapshot published last year says
+   * nothing about corners and must keep putting its zoom buttons where its
+   * owner last saw them (§7). The new default reaches a map through
+   * DEFAULT_EMBED_SETTINGS, on their next publish. Which is also why nothing
+   * strips a default-valued `controlsCorner` out of a snapshot to save the
+   * bytes: absent does not mean the default here, it means the corner the
+   * default replaced.
    */
   const corner = snapshot.settings.controlsCorner ?? "top-right";
 
@@ -365,6 +385,12 @@ export function createMap(
     // Bottom-left whatever the stack does: a scale bar is a ruler read against
     // the map's edge, and stacking it under the zoom buttons puts a 100px bar in
     // the middle of the chrome.
+    //
+    // Added last, which is what keeps that true now that `bottom-left` is also
+    // where the stack lands by default: MapLibre appends a corner's controls in
+    // the order they are given, so the ruler sits *below* the buttons and still
+    // reads against the bottom edge. Move this call above them and the bar is
+    // back in the middle of the chrome, from the other direction.
     map.addControl(new ScaleControl({ maxWidth: 96 }), "bottom-left");
   }
 
@@ -663,7 +689,7 @@ export function createMap(
 
     // After `addTo`, which is when the shell element exists — the card's own
     // background, radius and padding live on MapLibre's container, not on ours.
-    styleCard(popup, cardLayout);
+    styleCard(popup, cardLayout, isDark);
     resetCard(popup);
     placeCard(map, popup);
   };
@@ -757,9 +783,21 @@ export function createMap(
  * readable when the visitor's map is dark. Writing `#ffffff` for a card the
  * owner never recoloured would break exactly that.
  */
-function styleCard(popup: Popup, layout: CardLayout): void {
+function styleCard(popup: Popup, layout: CardLayout, isDark: boolean): void {
   const shell = popup.getElement();
   if (!shell) return;
+
+  /*
+   * A pinned ground decides the card's own light/dark, because the text sits on
+   * it and not on the map. False is "nothing pinned", which is every card that
+   * never touched the Background control — those keep taking the map's answer,
+   * so nothing about them changes.
+   *
+   * One class, meaning "this card disagrees with the map under it". Which of the
+   * two palettes that resolves to is the stylesheet's business, since it already
+   * knows which theme the root is in — see `.lm-flip` in styles.css.
+   */
+  shell.classList.toggle("lm-flip", cardFlipsTheme(layout, isDark));
 
   const set = (name: string, value: string | undefined) => {
     if (value === undefined) shell.style.removeProperty(name);
@@ -1228,20 +1266,12 @@ function addLayers(map: MapLibreMap, snapshot: MapSnapshot): void {
       source: SOURCE_ID,
       filter: ["has", "point_count"],
       paint: {
-        // Neutral, so a cluster never looks like it belongs to one category.
-        "circle-color": "#3f4756",
+        // Shared with the editor's own bubbles — see packages/shared/clusters.ts.
+        "circle-color": CLUSTER_COLOR,
         "circle-opacity": 0.9,
         "circle-stroke-width": 2,
         "circle-stroke-color": "#ffffff",
-        "circle-radius": [
-          "step",
-          ["get", "point_count"],
-          16,
-          25,
-          21,
-          100,
-          27,
-        ],
+        "circle-radius": CLUSTER_BUBBLE_RADIUS,
       },
     });
 
@@ -1252,9 +1282,7 @@ function addLayers(map: MapLibreMap, snapshot: MapSnapshot): void {
       filter: ["has", "point_count"],
       layout: {
         "text-field": ["get", "point_count_abbreviated"],
-        // Fonts have to exist in the style's glyph set; Noto Sans is the one
-        // every OpenFreeMap style ships.
-        "text-font": ["Noto Sans Regular"],
+        "text-font": [CLUSTER_FONT],
         "text-size": 12,
       },
       paint: { "text-color": "#ffffff" },

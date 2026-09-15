@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import { markDropped } from "@/lib/map/dropped-pins";
+import { newId } from "@/lib/utils/id";
 import type { Place } from "@/lib/repositories/types";
 import type {
   CreatePlaceInput,
@@ -110,7 +111,7 @@ export function useCreatePlace(mapId: string) {
 
       const now = new Date().toISOString();
       const optimistic: Place = {
-        id: `${TEMP_PLACE_ID_PREFIX}${crypto.randomUUID()}`,
+        id: `${TEMP_PLACE_ID_PREFIX}${newId()}`,
         mapId,
         name: input.name,
         lat: input.lat,

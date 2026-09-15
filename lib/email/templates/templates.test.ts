@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { parseBrand } from "@/lib/brand";
+import { emailShell, emailText, type EmailShellInput } from "./layout";
 import { resetPasswordMessage } from "./reset-password";
 import { verifyEmailMessage } from "./verify-email";
 import { welcomeMessage } from "./welcome";
@@ -78,5 +80,70 @@ describe("the three messages are distinguishable", () => {
   it("does not reuse a subject line", () => {
     const subjects = MESSAGES.map(([, message]) => message.subject);
     expect(new Set(subjects).size).toBe(subjects.length);
+  });
+});
+
+/**
+ * The brand.json half of the shell, with brands built here rather than read from
+ * the committed file, whose values are somebody's to change.
+ */
+describe("brand", () => {
+  const MINIMAL = { name: "Acme Maps", tagline: "Maps for shops." };
+  const CONTENT: EmailShellInput = {
+    title: "Confirm your email",
+    intro: ["Hi Ada."],
+    cta: { label: "Confirm email", url: "https://app.example.com/api/auth/x?y=1" },
+  };
+
+  it("draws only what brand.json has set", () => {
+    const html = emailShell(CONTENT, parseBrand(MINIMAL));
+
+    expect(html).toContain("Acme Maps");
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("mailto:");
+    expect(html).not.toContain("Privacy policy");
+  });
+
+  it("resolves a logo in /public against the button's origin", () => {
+    const brand = parseBrand({ ...MINIMAL, logo: { light: "/brand/logo.png" } });
+
+    expect(emailShell(CONTENT, brand)).toContain(
+      'src="https://app.example.com/brand/logo.png"',
+    );
+  });
+
+  it("sends the name instead of an SVG logo, which mail clients drop", () => {
+    const brand = parseBrand({
+      ...MINIMAL,
+      logo: { light: "https://cdn.example.com/logo.svg" },
+    });
+    const html = emailShell(CONTENT, brand);
+
+    expect(html).not.toContain("<img");
+    expect(html).toContain("Acme Maps");
+  });
+
+  it("carries the company, support address and privacy link in both bodies", () => {
+    const brand = parseBrand({
+      ...MINIMAL,
+      company: { legalName: "Acme UAB", address: "Gedimino pr. 1, Vilnius" },
+      contact: { supportEmail: "help@acme.example" },
+      legal: { privacyUrl: "/privacy" },
+    });
+
+    for (const body of [emailShell(CONTENT, brand), emailText(CONTENT, brand)]) {
+      expect(body).toContain("Acme UAB");
+      expect(body).toContain("Gedimino pr. 1, Vilnius");
+      expect(body).toContain("help@acme.example");
+      expect(body).toContain("https://app.example.com/privacy");
+    }
+  });
+
+  it("leaves out a path link when there is no button to take an origin from", () => {
+    const brand = parseBrand({ ...MINIMAL, legal: { privacyUrl: "/privacy" } });
+    const content = { ...CONTENT, cta: undefined };
+
+    expect(emailShell(content, brand)).not.toContain("/privacy");
+    expect(emailText(content, brand)).not.toContain("/privacy");
   });
 });

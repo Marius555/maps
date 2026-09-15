@@ -1,13 +1,17 @@
+import { BRAND } from "@/lib/brand";
+
 /**
  * App-wide constants that are safe on the client.
  *
- * PRODUCT_NAME is a placeholder — renaming the product is a one-line change here.
+ * The name and tagline live in `brand.json` at the repo root, with the logo,
+ * company and legal links — rename the product there, not here. They are
+ * re-exported under these names so the places that already read them did not
+ * have to change.
  */
 
-export const PRODUCT_NAME = "Map Embed";
+export const PRODUCT_NAME = BRAND.name;
 
-export const PRODUCT_TAGLINE =
-  "Put your locations on a map and embed it on your site.";
+export const PRODUCT_TAGLINE = BRAND.tagline;
 
 /**
  * Where a new map opens before the owner moves it: the whole world.

@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 
+import { retryImport } from "@/lib/ui/retry-import";
+
 import { MapSkeleton } from "./map-skeleton";
 import type { MapCanvasProps } from "./map-canvas-impl";
 
@@ -11,8 +13,11 @@ import type { MapCanvasProps } from "./map-canvas-impl";
  * MapLibre touches `window` at module load, and in Next 16 `ssr: false` throws
  * if `dynamic()` is called from a Server Component — so the call has to live in
  * a "use client" module. map-canvas-impl is never imported anywhere else.
+ *
+ * `retryImport` is what keeps a chunk that 404s once from being fatal forever —
+ * see its own file for why React.lazy makes that the default.
  */
-const MapCanvasImpl = dynamic(() => import("./map-canvas-impl"), {
+const MapCanvasImpl = dynamic(retryImport(() => import("./map-canvas-impl")), {
   ssr: false,
   loading: () => <MapSkeleton />,
 });

@@ -42,6 +42,16 @@ import { DesignerBlock } from "./designer-block";
 import { useCardDropBands } from "./use-drop-bands";
 
 /**
+ * The block a drop has just put down, while it is landing.
+ *
+ * `isNew` because the two arrivals share the bounce but not the line's fade:
+ * only a block off the palette is new to the *card*, and a moved block's rebuilt
+ * line fading in would fade its partner in with it — a block that never moved.
+ * See `movingBlockMotion`.
+ */
+export type LandedBlock = { id: string; isNew: boolean };
+
+/**
  * The card, with handles on it.
  *
  * Not a preview of the card — the card itself, through the same `CardFrame` and
@@ -107,10 +117,10 @@ export function CardCanvas({
   theme?: "light" | "dark";
   selectedId: string | null;
   /**
-   * The block that arrived from the palette on the last drop, if the settle
-   * animation for it has not finished yet. See `landedBlockMotion`.
+   * The block the last drop put down, while its landing is still playing — and
+   * whether it came off the palette. See `useLanding`.
    */
-  justLanded: string | null;
+  justLanded: LandedBlock | null;
   onSelect: (id: string | null) => void;
   onDrop: (dragged: CardDrag, target: CardDropTarget) => void;
   /**
@@ -251,7 +261,7 @@ export function CardCanvas({
         zone={zone}
         isSelected={selectedId === block.id}
         onRow={onRow}
-        justLanded={justLanded === block.id}
+        justLanded={justLanded?.id === block.id}
         onSelect={() => onSelect(block.id)}
         onResize={(patch, commit) => onResize(block.id, patch, commit)}
         style={style}
@@ -377,7 +387,8 @@ export function CardCanvas({
                 // real — a block off the palette.
                 {...movingBlockMotion(
                   row.blocks[0].id,
-                  row.blocks.some((block) => block.id === justLanded),
+                  justLanded?.isNew === true &&
+                    row.blocks.some((block) => block.id === justLanded.id),
                 )}
                 // Not the Locations panel's own row class: that one carries
                 // its list's gap as 2px of padding inside the animated element,

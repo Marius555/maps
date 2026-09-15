@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import type { Group, Place, Shape } from "@/lib/repositories/types";
+import { newId } from "@/lib/utils/id";
 import {
   DEFAULT_GROUP_COLOR,
   type CreateGroupInput,
@@ -99,7 +100,7 @@ export function useCreateGroup(mapId: string) {
 
       const now = new Date().toISOString();
       const optimistic: Group = {
-        id: `${TEMP_GROUP_ID_PREFIX}${crypto.randomUUID()}`,
+        id: `${TEMP_GROUP_ID_PREFIX}${newId()}`,
         mapId,
         name: input.name,
         color: input.color ?? DEFAULT_GROUP_COLOR,

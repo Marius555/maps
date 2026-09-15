@@ -148,6 +148,12 @@ one exists: `docs/notes/environment.md`.
   §6's rule that the checks live in the repositories is intact; warns once per process.
   **Delete it with the pricing work.**
 
+**Not env, but configured the same way: `brand.json`** at the root — name, tagline, logo,
+favicon, company, contact and legal links. `lib/brand.ts` validates it at module load, so a bad
+value fails the build with the field named; an empty string means "not set" and nothing it
+feeds is drawn. **It ships to the browser** (client components import it): public values only.
+Changes go live on the next deploy.
+
 `STORAGE_ID` never reaches the browser: photo URLs are composed on the server in
 `lib/storage/photo-url.ts` and handed to clients as `place.photoUrl`. If you need a bucket
 id in a component, that's the signal you're building it in the wrong layer.

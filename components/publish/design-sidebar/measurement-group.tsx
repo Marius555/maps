@@ -4,6 +4,8 @@ import {
   PropertySwitch,
   PropertySwitches,
 } from "@/components/ui/properties/property-switch";
+import { BrandLink } from "@/components/brand/brand-link";
+import { BRAND } from "@/lib/brand";
 import type { EmbedDesign } from "./use-embed-design";
 
 /**
@@ -57,14 +59,29 @@ export function MeasurementGroup({ settings, set }: EmbedDesign) {
       </p>
 
       {/*
-        No link out to a docs page, deliberately: there isn't one yet (Week 4),
-        and this panel already follows the rule that a link is only worth
-        drawing where it goes somewhere useful.
+        The data processing agreement is linked here and nowhere else in this
+        panel: this switch is the moment the owner becomes the controller of
+        their visitors' data and we become their processor, so this is where the
+        paper covering that belongs. Drawn only once brand.json has one — the
+        panel's rule is that a link is only worth drawing where it goes
+        somewhere useful.
       */}
       {settings.analytics ? (
         <p className="text-xs leading-relaxed text-muted">
           Telling your own visitors is your job, wherever your privacy policy
           lives.
+          {BRAND.legal.dpaUrl ? (
+            <>
+              {" "}
+              <BrandLink
+                href={BRAND.legal.dpaUrl}
+                className="text-foreground underline"
+              >
+                Read our data processing agreement
+              </BrandLink>
+              .
+            </>
+          ) : null}
         </p>
       ) : null}
     </div>

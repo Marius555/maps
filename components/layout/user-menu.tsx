@@ -13,6 +13,7 @@ import { Monitor, Moon, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import type { AuthUser } from "@/lib/auth/types";
+import { BRAND } from "@/lib/brand";
 import { useLogout } from "@/lib/query/auth";
 
 const THEMES = [
@@ -86,6 +87,11 @@ export function UserMenu({
       <Dropdown.Popover placement="top start" className="min-w-56">
         <Dropdown.Menu
           onAction={async (key) => {
+            if (key === "support") {
+              window.location.href = `mailto:${BRAND.contact.supportEmail}`;
+              return;
+            }
+
             if (key !== "logout") return;
 
             await logout.mutateAsync();
@@ -120,6 +126,14 @@ export function UserMenu({
           </Dropdown.Section>
 
           <Separator />
+
+          {/* Only once brand.json has an address: an item that opens an empty
+              email to nobody is a control that does nothing. */}
+          {BRAND.contact.supportEmail ? (
+            <Dropdown.Item id="support" textValue="Contact support">
+              <Label>Contact support</Label>
+            </Dropdown.Item>
+          ) : null}
 
           <Dropdown.Item id="logout" textValue="Log out" variant="danger">
             <Label>Log out</Label>

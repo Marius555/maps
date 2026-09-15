@@ -84,6 +84,15 @@ export function mountRowGhost(
   copy.style.alignSelf = "auto";
 
   /*
+   * And the dimming the source wears for being left behind, which is not the
+   * copy's to keep. The source is cloned in the commit that dimmed it — the card
+   * designer's palette tile and placed block both take `opacity-35` from
+   * `isDragging` — so the thing in the hand was measured at 0.35 of the root's
+   * 0.9, faint enough that over the card's drop areas it could barely be seen.
+   */
+  copy.style.opacity = "1";
+
+  /*
    * The two attributes the hit test looks for.
    *
    * `use-row-drag.ts` resolves a drop with `elementFromPoint(...).closest(
@@ -120,6 +129,28 @@ export function moveRowGhost(ghost: RowGhost, x: number, y: number): void {
   ghost.root.style.transform = `translate3d(${Math.round(x - ghost.offset.x)}px, ${Math.round(
     y - ghost.offset.y,
   )}px, 0)`;
+}
+
+/** The copy's whole box, in viewport px. */
+export type GhostBox = { left: number; top: number; width: number; height: number };
+
+/**
+ * Position *and* size — for `ghost-magnet.ts`, which pulls the copy onto a place
+ * it could land and lets it go again.
+ *
+ * Only ever called while that is happening. A drag no surface pulls on is moved
+ * by `moveRowGhost` alone, sample for sample, exactly as before the magnet
+ * existed.
+ *
+ * The position is rounded like `moveRowGhost`'s; the size is not, because it is
+ * being interpolated and a whole-pixel staircase reads as the copy stuttering.
+ */
+export function placeRowGhost(ghost: RowGhost, box: GhostBox): void {
+  const { style } = ghost.root;
+
+  style.transform = `translate3d(${Math.round(box.left)}px, ${Math.round(box.top)}px, 0)`;
+  style.width = `${box.width}px`;
+  style.height = `${box.height}px`;
 }
 
 /**
