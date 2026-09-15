@@ -23,11 +23,9 @@ import {
   defaultMarginOf,
   findBlock,
   hasControl,
-  isPairable,
   isSelfSized,
   lineTakes,
   rowOffsetHolder,
-  shareOf,
   shareOfAny,
   type CardBlock,
   type CardBlockAlign,
@@ -112,39 +110,21 @@ export type CardDropTarget = {
    * narrowed block ends up when it crosses its own line, since nothing about its
    * position in the array changes.
    *
-   * Deliberately one-way about the width itself: a target that offers a column
-   * sets it (see `widthPct`), and a full-width mark sets 100. Crossing your own
-   * line is the one drop that names neither, because nothing about that gesture
-   * is a width — see the early return in `dropCardBlock`.
+   * **Nothing about a width, on any target.** A drop never resizes a block —
+   * neither the one in the hand nor one already on the card — so a block lands at
+   * the width it already has and only the Width control changes one. There used
+   * to be a `widthPct` here, which let a run widen a narrowed block to the whole
+   * line and a column shrink a full-width one into it, and a `pairId` that
+   * narrowed the block already sitting on a line to make room beside it. Both
+   * were reported as drop marks that did not make sense: an outline the size of
+   * the space rather than of the block, promising a block that was not the one
+   * being dragged. See `sideSlots` in lib/card/drop-slots.ts.
    *
-   * `side` is not one-way, and cannot be: a full-width drop mark is drawn across
-   * the whole card, so a block released on one has to land at the line's start.
-   * Absent here therefore means the start, not "leave it".
+   * `side` is still not one-way: a drop mark on a run is drawn at the line's
+   * start, so a block released on one has to land there. Absent here therefore
+   * means the start, not "leave it".
    */
   half?: "start" | "end";
-  /**
-   * How wide the place being landed in is, as a percentage of the card.
-   *
-   * The reserved space is not always half a line — narrow a photo to 40% and what
-   * is left beside it is 60% — so the target has to carry the number, and the
-   * block that lands takes it.
-   *
-   * **A full-width mark says 100, and that is a real edit.** A block that lands
-   * alone on a line takes the whole line: the outline drawn for a run spans the
-   * card, and a 50%-wide block released on one used to land at 50% with reserved
-   * space beside it, which is an outline promising a block twice the size of the
-   * one that arrived. So a drag can widen a block back out; only the Width slider
-   * can narrow one.
-   *
-   * Absent leaves the block's own width alone, which is now just the one gesture:
-   * a block crossing the line it owns alone changes which column it draws in and
-   * nothing else, reserved space and all.
-   *
-   * Measured off the card rather than derived from the sitting block's stored
-   * percentage, so a column and the mark drawn over it are the same box at every
-   * card width. See `sideSlots` in lib/card/drop-slots.ts.
-   */
-  widthPct?: number;
   /**
    * The insertion index of the **line** this target is on — that is, of the
    * first block already sitting on it.
@@ -154,25 +134,13 @@ export type CardDropTarget = {
    * on": those two are the same `(zone, index, side)` and differ in nothing else
    * (see `dropCardBlock`), which is also what let two of them register under one
    * id and light each other up.
+   *
+   * And it is what tells joining a line from not moving at all. A block alone on
+   * the line directly above or below the one it joins is already at the index a
+   * column target names, and before drops stopped carrying a width the only field
+   * that told the two apart was the width itself.
    */
   line?: number;
-  /**
-   * The block already on this line, which has to narrow for this drop to fit.
-   *
-   * A **pair** target and nothing else — the two columns offered over a block
-   * that is currently the full width of the card (`pairTargets` in
-   * lib/card/drop-slots.ts). Every other column target lands in room a narrowed
-   * block already reserved, so the block beside it is untouched; this is the
-   * gesture that creates the room, and creating it is what the block already
-   * there pays for.
-   *
-   * An id rather than an index, because the index moves: the drop is applied as
-   * a remove and an insert, and "the second block in the middle zone" is a
-   * different block on either side of that.
-   */
-  pairId?: string;
-  /** What `pairId` becomes. Half — the only split a drop can ask for. */
-  pairWidthPct?: number;
   /**
    * Where a **self-sized** block sits across the line it lands on.
    *
@@ -246,38 +214,15 @@ export function makeCardBlock(type: CardBlockType): CardBlock {
  * it already was.
  */
 export function dropCardBlock(
-  stored: CardLayout,
+  layout: CardLayout,
   dragged: CardDrag,
   target: CardDropTarget,
 ): CardLayout | null {
-  /*
-   * A pair drop narrows the block already on the line *before* anything else
-   * happens, and the order is load-bearing rather than tidy: `insert` runs
-   * `preserveRows`, which decides lines by width, so a resident still at the
-   * full width of the card would push the newcomer onto a line of its own and
-   * the whole gesture would read as having been ignored.
-   */
-  const layout = pair(stored, dragged, target);
-  /*
-   * Whether it actually did. Reference equality, because `pair` hands back the
-   * layout it was given in every case where there was nothing to do — a target
-   * that names no block, one naming a block that is not on the card, or one
-   * naming the block in the hand.
-   *
-   * The non-move check below reads it. A pair that happened changed the card
-   * whatever else the drop did; a pair target that came to nothing has to fall
-   * through to the ordinary rules rather than force a no-op through them.
-   */
-  const paired = layout !== stored;
-
   if (dragged.kind === "new") {
     if (!acceptsBlock(layout, dragged.type, target.zone)) return null;
 
     const block = withAlign(
-      withShare(
-        withOffset(makeCardBlock(dragged.type), target.offset, layout),
-        target.widthPct,
-      ),
+      withOffset(makeCardBlock(dragged.type), target.offset, layout),
       target.align,
     );
 
@@ -391,21 +336,19 @@ export function dropCardBlock(
    * empty card would silently do nothing.
    */
   if (
-    /*
-     * Never once a pair has been made: the block already on that line has just
-     * narrowed to half the card, so the drop changed something even when the
-     * block in the hand ends up at an index it could have reached without
-     * moving. That is the *whole* case a half sitting directly above a
-     * full-width block makes — same index, same width, same end of its line.
-     */
-    !paired &&
     !shares &&
+    /*
+     * Landing in a column beside another block is never a non-move: the block
+     * goes from owning a line to sharing one. Its own line was handled above, so
+     * a `line` here names somebody else's — and a block alone on the line
+     * directly above or below it is already at the index that target names, with
+     * the same offset and the same side. The target's width used to be what told
+     * the two apart, and a drop no longer carries one.
+     */
+    target.line === undefined &&
     found.zone === target.zone &&
     (target.index === found.index || target.index === found.index + 1) &&
     (target.offset ?? found.block.offset ?? 0) === (found.block.offset ?? 0) &&
-    // Landing in a column beside another block is not a non-move: the block goes
-    // from owning a line to sharing one, and takes that column's width with it.
-    (target.widthPct ?? shareOf(found.block)) === shareOf(found.block) &&
     // And, for a mark, which column of the run it was released in. Sliding a
     // logo from the middle of a run to its left-hand column is the same zone,
     // the same index and the same leading space — the alignment is the entire
@@ -440,7 +383,7 @@ export function dropCardBlock(
       ? target.index - 1
       : target.index;
   const block = withAlign(
-    withShare(withOffset(found.block, target.offset, layout), target.widthPct),
+    withOffset(found.block, target.offset, layout),
     target.align,
   );
 
@@ -1133,47 +1076,6 @@ function maxShareFor(
   return Math.max(0, 100 - spent);
 }
 
-/**
- * The layout with the block a pair target names narrowed to make room for it.
- *
- * The whole of what a pair drop adds to an ordinary one. Everything after it —
- * the index arithmetic, `insert`'s line bookkeeping, `preserveRows` — is the
- * code that already puts a block into a column beside another, and it works
- * unchanged once the block already there has a column too.
- *
- * `withShare` refuses a type with no `width` control and clamps to its own
- * floor, so this does not re-ask what `pairTargets` asked before drawing the
- * target. Belt and braces on purpose: this is the edit path, and the edit path
- * is where a rule has to be true rather than merely observed.
- */
-function pair(
-  layout: CardLayout,
-  dragged: CardDrag,
-  target: CardDropTarget,
-): CardLayout {
-  if (target.pairId === undefined) return layout;
-  // A block cannot pair with itself. No target says so, but nothing downstream
-  // would survive it either.
-  if (dragged.kind === "move" && dragged.id === target.pairId) return layout;
-
-  const resident = findBlock(layout, target.pairId);
-  if (!resident) return layout;
-  /*
-   * And a block a drop may not narrow — `isPairable` in
-   * packages/shared/card-layout.ts. `pairTargets` refuses to draw the target at
-   * all, so this is the second of the two asks that rule gets: an offer can go
-   * stale between the measurement and the release, and this is the edit path.
-   */
-  if (!isPairable(resident.block.type)) return layout;
-
-  return replace(
-    layout,
-    resident.zone,
-    resident.index,
-    withShare(resident.block, target.pairWidthPct),
-  );
-}
-
 /** Which column a target puts the block in. Absent is the line's start. */
 function sideOf(half: "start" | "end" | undefined): "end" | undefined {
   return half === "end" ? "end" : undefined;
@@ -1339,49 +1241,6 @@ function withAlign(
   if (block.align === align) return block;
 
   return { ...block, align };
-}
-
-/**
- * The same block, as wide as the place it landed in.
- *
- * `undefined` leaves it alone, which is now one target only: a block crossing the
- * line it owns alone, where the width is the whole point of what is *not*
- * changing. Every other target names a number — a column names its own, and a
- * full-width mark names 100, which is what widens a narrowed block that has
- * landed somewhere it has the line to itself. See `widthPct` on
- * `CardDropTarget`. Which of two columns it is is `withSide`'s business, not
- * this one's.
- *
- * It refuses on a type that does not declare the control, which is what keeps a
- * logo dropped on a run from being handed a share it has nothing to do with. It
- * clamps to the type's own floor for the same reason: this is the edit path, and
- * the edit path is where a rule has to be true rather than merely observed.
- *
- * At full width it `widen`s rather than only deleting `widthPct`, so the line
- * rules go with the width. `preserveRows` and `withSide` downstream would each
- * clear one of them on this path anyway; doing it here is what makes the block
- * this function returns describable on its own, rather than correct only because
- * of what happens to run next.
- */
-function withShare(
-  block: CardBlock,
-  widthPct: number | undefined,
-): CardBlock {
-  if (widthPct === undefined || !hasControl(block.type, "width")) return block;
-
-  const spec = CARD_BLOCKS[block.type];
-  const width = clamp(widthPct, spec.minWidthPct ?? 25, 100);
-  const next = { ...block };
-  delete next.half;
-
-  if (width >= 100) {
-    // Full width is the *absence* of a width, so there is one way to say it and
-    // the renderers do not have to treat 100 and undefined as the same thing.
-    delete next.widthPct;
-    widen(next);
-  } else next.widthPct = width;
-
-  return next;
 }
 
 /**

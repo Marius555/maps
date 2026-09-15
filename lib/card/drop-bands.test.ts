@@ -5,10 +5,9 @@ import {
   MIN_BAND,
   areaBands,
   dropBands,
-  dropRegions,
+  fitRunsToBlock,
   splitAlignColumns,
   toCardDrag,
-  type DropBand,
 } from "./drop-bands";
 
 import type { DropSlot } from "./drop-slots";
@@ -243,8 +242,8 @@ describe("splitAlignColumns", () => {
    *
    * The line is the default card's: 296px across, running from 12 to 308. The
    * mark is a 62px square — a logo at its default 14% of a 440px card — so it
-   * has 234px of travel across that line, and each column catches a third of it
-   * (98.67px).
+   * has 234px of travel across that line, room for three squares that do not
+   * touch, and each column catches a third of the line (98.67px).
    */
   const line = { left: 12, width: 296 };
   const banded = (slots: DropSlot[]) => dropBands(slots, 0, 440);
@@ -295,16 +294,52 @@ describe("splitAlignColumns", () => {
     expect(splitAlignColumns(bands, 62, line)).toEqual(bands);
   });
 
-  it("does not offer three places to a mark that fills its line", () => {
+  it("offers only the two ends when a middle square would touch them", () => {
     /*
-     * Three squares within a few pixels of each other are three separate drop
-     * targets stacked on one box, which is worse than not offering the gesture
-     * at all. Above about 280px of a 296px line there is nothing left to move
-     * the mark *to*, and the Alignment buttons stay the way to do it.
+     * Every square is outlined at rest now, so they may not overlap. A 100px
+     * logo has 196px of travel: the centred one would run from 110 to 210 and
+     * cover the inside 8px of both others. The two ends do not touch, so those
+     * are the places, and each catches half of the line.
      */
-    const bands = banded([box(100, 290)]);
+    const columns = splitAlignColumns(banded([box(100, 100)]), 100, line);
 
-    expect(splitAlignColumns(bands, 290, line)).toEqual(bands);
+    expect(columns.map((band) => band.align)).toEqual(["start", "end"]);
+    expect(columns.map((band) => band.left)).toEqual([12, 208]);
+    expect(columns.map((band) => band.hitLeft)).toEqual([12, 160]);
+    expect(columns.every((band) => band.hitWidth === 148)).toBe(true);
+  });
+
+  it("offers one square where the logo already sits once two would touch", () => {
+    /*
+     * A 200px logo has 96px of travel, so any two of its squares overlap. The
+     * one place across the line is the one it is already in — the Alignment
+     * buttons stay the way to move a logo that large — and that place catches
+     * the whole line.
+     */
+    const [only, ...rest] = splitAlignColumns(banded([box(100, 200)]), 200, line, "end");
+
+    expect(rest).toEqual([]);
+    expect(only).toMatchObject({
+      align: "end",
+      left: 12 + 96,
+      width: 200,
+      hitLeft: 12,
+      hitWidth: 296,
+    });
+  });
+
+  it("never draws a square smaller than the logo", () => {
+    /*
+     * It used to clamp the square to whatever it was drawn in, which drew a
+     * logo that was not the one being dragged. A mark wider than the line has no
+     * place on a run at all; a column slot, which knows its own box, stays.
+     */
+    const column: DropSlot = { ...box(300, 62), left: 12, width: 140, half: "start" };
+    const bands = banded([box(40, 62), column]);
+
+    expect(splitAlignColumns(bands, 300, line)).toEqual([
+      bands.find((band) => band.half === "start"),
+    ]);
   });
 
   it("is a no-op for a drag that is not a mark", () => {
@@ -316,114 +351,38 @@ describe("splitAlignColumns", () => {
   });
 });
 
-describe("dropRegions", () => {
-  /** A band as `dropBands` leaves one: a drawn box and the share it catches. */
-  const band = (
-    y: number,
-    height: number,
-    top: number,
-    bottom: number,
-    rest: Partial<DropBand> = {},
-  ): DropBand => ({
-    zone: "middle",
-    index: 0,
-    y,
-    height,
-    offset: y - 12,
-    top,
-    bottom,
-    ...rest,
+describe("fitRunsToBlock", () => {
+  /*
+   * A narrowed block keeps its width wherever it lands, so a run offers it a
+   * spot as wide as it is. A 50% block on the default card is 144px:
+   * `calc(50% - 4px)` of a 296px line.
+   */
+  const line = { left: 12, width: 296 };
+  const banded = (slots: DropSlot[]) => dropBands(slots, 0, 440);
+
+  it("draws the spot at the block's width and catches the whole line", () => {
+    const [band] = fitRunsToBlock(banded([box(100, 28)]), 144, line);
+
+    expect(band).toMatchObject({
+      y: 100,
+      height: 28,
+      left: 12,
+      width: 144,
+      hitLeft: 12,
+      hitWidth: 296,
+    });
   });
 
-  it("merges a run's places into the one area they came from", () => {
-    /*
-     * The whole reason this exists. Three names' worth of free space is three
-     * places to `dropSlots`, and three stacked outlines is what made drawing
-     * every place unreadable. It is one area: 12 to 100, which is the first
-     * box's top to the last one's bottom.
-     */
-    expect(
-      dropRegions([
-        band(12, 24, 12, 44),
-        band(44, 24, 44, 76),
-        band(76, 24, 76, 100),
-      ]),
-    ).toEqual([{ key: "middle:0::", y: 12, height: 88 }]);
+  it("leaves a column slot, which knows its own box, alone", () => {
+    const column: DropSlot = { ...box(100, 28), left: 164, width: 144, half: "end" };
+    const bands = banded([column]);
+
+    expect(fitRunsToBlock(bands, 144, line)).toEqual(bands);
   });
 
-  it("keeps two runs of the same zone apart", () => {
-    // Different insertion indexes, so different places — the free space above a
-    // block and the free space below it are not one area with the block in it.
-    const regions = dropRegions([
-      band(12, 24, 12, 44),
-      band(160, 24, 150, 190, { index: 2, offset: 0 }),
-    ]);
+  it("is a no-op for a block as wide as the line", () => {
+    const bands = banded([box(100, 28)]);
 
-    expect(regions).toHaveLength(2);
-    expect(regions.map((region) => region.y)).toEqual([12, 160]);
-  });
-
-  it("draws nothing for a place with no height", () => {
-    // Nothing to outline is nothing drawn. The card no longer offers such a
-    // place — this is the guard, not a case anyone reaches.
-    expect(dropRegions([band(220, 0, 0, 440)])).toEqual([]);
-  });
-
-  it("draws the free space a run names, not the boxes drawn inside it", () => {
-    /*
-     * The user-visible bug this whole change is: with a logo in hand the faint
-     * outlines were tall dashed columns, and the top of each sat *inside* the
-     * photo above it.
-     *
-     * A mark is drawn where it lands, and the first of a run lands half over the
-     * block above — so its box starts 31px higher than the room does. The area
-     * is the room: 130 down to 428, whatever the marks in it are doing.
-     */
-    const regions = dropRegions([
-      band(99, 62, 90, 170, { areaTop: 130, areaBottom: 428 }),
-      band(209, 62, 170, 248, { areaTop: 130, areaBottom: 428 }),
-      band(366, 62, 248, 440, { areaTop: 130, areaBottom: 428 }),
-    ]);
-
-    expect(regions).toEqual([{ key: "middle:0::", y: 130, height: 298 }]);
-  });
-
-  it("gives a place with no room of its own no area either", () => {
-    /*
-     * A mark straddling the block above it: the run has no span, the square is
-     * drawn half over that block, and the area is empty to say so. Drawn at rest
-     * it was a faint box over a photo — a place offered on top of something that
-     * is already on the card.
-     */
-    expect(dropRegions([band(99, 62, 90, 170, { areaTop: 130, areaBottom: 130 })])).toEqual(
-      [],
-    );
-  });
-
-  it("keeps a column beside a block out of the run below it", () => {
-    // Both are "insert at index 1, with no leading space"; `half` is the only
-    // thing that says one is across a line and the other is down the card. It is
-    // the same collision `slotId` had to grow a suffix for.
-    const regions = dropRegions([
-      band(12, 28, 12, 40, { index: 1, half: "end", line: 0, left: 160, width: 144 }),
-      band(48, 24, 40, 80, { index: 1, offset: 0 }),
-    ]);
-
-    expect(regions).toHaveLength(2);
-    expect(regions[0]).toMatchObject({ left: 160, width: 144 });
-    // And the run keeps the card's own padding, which is what `left: undefined`
-    // means to the overlay.
-    expect(regions[1].left).toBeUndefined();
-  });
-
-  it("unions the boxes sideways as well as down", () => {
-    // Not a shape any run produces today, and the arithmetic should not care:
-    // a region is the box its members fit inside, on both axes.
-    expect(
-      dropRegions([
-        band(12, 24, 12, 44, { left: 12, width: 100 }),
-        band(44, 24, 44, 76, { left: 60, width: 120 }),
-      ]),
-    ).toEqual([{ key: "middle:0::", y: 12, height: 56, left: 12, width: 168 }]);
+    expect(fitRunsToBlock(bands, 296, line)).toEqual(bands);
   });
 });

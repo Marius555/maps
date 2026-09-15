@@ -154,6 +154,21 @@ describe("hasRoomFor", () => {
     expect(hasRoomFor(roomy, "middle", { kind: "new", type: "name" }, {})).toBe(true);
   });
 
+  it("asks for the height the new block really draws, when it was measured", () => {
+    /*
+     * An open week of opening hours is 154px, and its type implies one line.
+     * Asked with the line, a card with 108px left said yes and let a week be
+     * dropped into it; the designer measures the incoming block and asks with
+     * that. 440 less 24 of padding less a 308px photo is 108.
+     */
+    const roomy = cardWith({ top: [{ id: "g", type: "gallery", heightPct: 70 }] });
+
+    expect(hasRoomFor(roomy, "middle", { kind: "new", type: "hours" }, {})).toBe(true);
+    expect(
+      hasRoomFor(roomy, "middle", { kind: "new", type: "hours" }, {}, 154),
+    ).toBe(false);
+  });
+
   it("opens a zone whose only fullness is the gap somebody left", () => {
     /*
      * The card this was reported on: a logo and an address paired at the top,

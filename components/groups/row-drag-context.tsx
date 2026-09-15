@@ -70,11 +70,11 @@ export type SnapBox = {
   /**
    * How the copy sits in the box. `"block"` when the copy *is* the thing
    * landing (a block moved on the card): it is laid out at the box's size and
-   * shrunk just inside it. `"label"` for a palette tile, which only stands for
-   * the block: it sheds its pill, keeps its own size and is centred, shrunk only
-   * as far as the box needs.
+   * shrunk just inside it. `"preview"` for a palette tile, which only stands
+   * for the block: the surface draws the real block in the box itself, so the
+   * copy fades out while it is seated and comes back when the pointer leaves.
    */
-  fit: "block" | "label";
+  fit: "block" | "preview";
 };
 
 /** Which box a target id pulls the ghost into — null lets it follow the pointer. */

@@ -37,10 +37,15 @@ import {
  * used to be pulled onto a slot at exactly the slot's size wearing an accent
  * border and ring, so its solid edge sat on the slot mark's dashed one — one
  * border drawn twice — and the white ground under it read as a grey slab on a
- * glass card. Now the root draws nothing (`.row-ghost--snapped`), the area's
+ * glass card. Now the root draws nothing (`.row-ghost--snapped`), the spot's
  * dashes are the only edge, and the copy is *scaled*, never laid out again,
  * until it sits `SNAP_INSET` inside the slot. The scale rides the same
  * `progress` as the box, so shrinking in and growing back out are one movement.
+ *
+ * **A copy that only stands for the block steps aside instead** (`fit:
+ * "preview"`). A palette tile is a pill, and seated in a spot the size of a
+ * photo it was a small label lost in a large box; the surface draws the real
+ * block in the spot, so the pill fades out while it is there.
  *
  * **`prefers-reduced-motion` keeps the snap and loses the spring.** Being pulled
  * onto a slot is information — it says *here* — so it still happens, in one
@@ -52,19 +57,19 @@ import {
 const SNAPPED_CLASS = "row-ghost--snapped";
 
 /**
- * Worn with it while the copy is a *label* for the block rather than the block
- * itself — a palette tile. See `SnapBox.fit`.
+ * Worn with it while the surface is drawing the block itself and the copy is
+ * only a stand-in for it — a palette tile. See `SnapBox.fit`.
  */
-const LABEL_CLASS = "row-ghost--label";
+const PREVIEW_CLASS = "row-ghost--previewed";
 
 /**
  * How far inside a slot the seated copy stops, in px on every side.
  *
  * It was the slot mark's 2px of dashes and one pixel of air. The mark is a tint
- * with no edge now (`.card-drop-slot`), and the number stayed: the area's own
- * dashes sit a pixel or two outside the mark, and a copy flush with the mark's
- * box would crowd them. Not more: the copy shrinks uniformly to fit, and on a
- * 24px name every pixel here comes off the text as well.
+ * with no edge now (`.card-drop-slot`), and the number stayed: the spot's own
+ * dashes sit on the mark's edge, and a copy flush with the mark's box would
+ * cover them. Not more: the copy shrinks uniformly to fit, and on a 24px name
+ * every pixel here comes off the text as well.
  */
 const SNAP_INSET = 3;
 
@@ -144,51 +149,44 @@ export function createGhostMagnet(
   }
 
   /**
-   * How small the copy has to be drawn to sit inside a slot's dashes.
+   * How small the copy has to be drawn to sit inside a slot.
    *
    * A block's copy is laid out at the slot's own size — the width and height
-   * that will land — so it is fitted from that. A label keeps its natural size,
-   * measured here once per change of target rather than per frame (with its
-   * label dressing already on, so it is the size it will actually be), and it
-   * only ever shrinks: a Name label blown up to fill a photo-sized slot would be
-   * promising a block that large.
+   * that will land — so it is fitted from that. A stand-in is not fitted at all:
+   * it is fading out while the surface draws the block, and scaling a pill into
+   * a box that is not its shape would only be a second picture of the wrong
+   * thing on the way out.
    */
   function fitScale(box: SnapBox): number {
+    if (box.fit === "preview") return 1;
+
     const width = box.width - SNAP_INSET * 2;
     const height = box.height - SNAP_INSET * 2;
     if (width <= 0 || height <= 0) return 1;
 
-    if (box.fit === "block") {
-      return Math.min(width / box.width, height / box.height);
-    }
-
-    const natural = copy
-      ? { width: copy.offsetWidth, height: copy.offsetHeight }
-      : null;
-    if (!natural || natural.width <= 0 || natural.height <= 0) return 1;
-
-    return Math.min(1, width / natural.width, height / natural.height);
+    return Math.min(width / box.width, height / box.height);
   }
 
   /**
-   * The copy's look for a target: seated as a block, seated as a label, or
-   * carried.
+   * The copy's look for a target: seated as a block, stepping aside for the
+   * surface's preview, or carried.
    *
    * `mountRowGhost` stretches the copy over its root, which is right for a block
-   * — the root is the slot, and the block fills it — and wrong for a label: a
-   * pill stretched to a 24px slot is a pill squashed. A label is laid out at its
-   * own size instead and the root centres it (`.row-ghost--label`).
+   * — the root is the slot, and the block fills it — and wrong for a stand-in: a
+   * pill stretched to a photo-sized slot while it fades is a pill squashed. It is
+   * laid out at its own size instead and the root centres it
+   * (`.row-ghost--previewed`).
    */
   function dress(next: SnapBox | null) {
-    const isLabel = next?.fit === "label";
+    const isPreview = next?.fit === "preview";
 
     ghost.root.classList.toggle(SNAPPED_CLASS, next !== null);
-    ghost.root.classList.toggle(LABEL_CLASS, isLabel);
+    ghost.root.classList.toggle(PREVIEW_CLASS, isPreview);
 
     if (!copy || !rest) return;
 
-    copy.style.width = isLabel ? "auto" : rest.width;
-    copy.style.height = isLabel ? "auto" : rest.height;
+    copy.style.width = isPreview ? "auto" : rest.width;
+    copy.style.height = isPreview ? "auto" : rest.height;
     if (next) copy.style.transformOrigin = "50% 50%";
   }
 
@@ -259,7 +257,6 @@ export function createGhostMagnet(
       animation?.stop();
 
       dress(nextSnap);
-      // After `dress`, so a label is measured in the clothes it will be seated in.
       scaleTo = nextSnap ? fitScale(nextSnap) : 1;
 
       if (reduced) {

@@ -230,13 +230,24 @@ export function hasRoomFor(
   zone: CardZone,
   drag: CardDrag,
   heights: BlockHeights,
+  /**
+   * How tall the new block really draws, in px, when the caller could measure
+   * it. Absent is what its type implies (`newBlockHeight`), which for anything
+   * that grows to its content is one line — and an open week of opening hours
+   * is 154px, so asking with one line let a card be designed to overflow.
+   *
+   * The designer measures a hidden copy of the incoming block
+   * (`useCardDropBands`) and passes the same number it draws the drop marks
+   * with, so the refusal and the outlines cannot disagree about its size.
+   */
+  newHeight?: number,
 ): boolean {
   if (drag.kind === "move") return true;
 
   // The gap the new block brings with it counts too — a block that fits only by
   // ignoring the space either side of it does not fit.
   const needed =
-    newBlockHeight(layout, drag.type) +
+    (newHeight ?? newBlockHeight(layout, drag.type)) +
     (layout.zones[zone].length > 0 ? layout.gap : 0);
 
   return roomForNew(layout, heights) >= needed;

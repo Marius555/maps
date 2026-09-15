@@ -25,7 +25,7 @@ import type { DropSlot } from "./drop-slots";
  *
  * - **Nothing on the card moves.** The chrome is not in the layout at all, so it
  *   cannot resize, reflow or clip anything, and a target is free to be larger
- *   than what it draws — which is what lets the *drawn* mark be the size of the
+ *   than what it draws — which is what lets the *drawn* spot be the size of the
  *   block while the *hit area* is its share of a whole run of free space.
  * - **They cannot overlap.** `dropBands` *partitions* whatever it is given:
  *   every pixel of it belongs to exactly one slot, however close two slots sit.
@@ -62,10 +62,12 @@ export function canDrop(
   dragged: DraggedObject,
   zone: CardZone,
   heights: BlockHeights,
+  /** How tall a new block really draws — see `hasRoomFor`. */
+  newHeight?: number,
 ): boolean {
   const drag = toCardDrag(dragged);
   if (!drag) return false;
-  if (!hasRoomFor(layout, zone, drag, heights)) return false;
+  if (!hasRoomFor(layout, zone, drag, heights, newHeight)) return false;
 
   if (drag.kind === "new") return acceptsBlock(layout, drag.type, zone);
 
@@ -80,38 +82,43 @@ export function canDrop(
 export type DropBand = DropSlot & { top: number; bottom: number };
 
 /**
- * Every full-width band, divided into the three places a **mark** could sit
- * across it: the start of the line, its middle, and its end.
+ * Every full-width band, divided into the places a **mark** could sit across
+ * it: the start of the line, its middle, and its end.
  *
  * A logo is the one block whose position has two degrees of freedom. Everything
  * else fills the line it lands on, so "where does this go" is one number and one
  * band down the card answers it; a mark is a square, so the same band is really
- * three places and offering it as one meant the only way to move a logo sideways
- * was the Alignment buttons in the sidebar. Dragging it did nothing at all,
- * which on a canvas you arrange by dragging reads as the block being stuck.
+ * several places, and offering it as one meant the only way to move a logo
+ * sideways was the Alignment buttons in the sidebar.
  *
- * So a mark in the hand turns the card's runs of free space into a **grid** —
- * three square outlines across, however many rows of them the free space holds.
- * The square is the size the logo actually draws at, which is the same promise
- * every other mark makes about the block it stands for, and it is the whole of
- * "the outline should be the shape of the thing you are dragging".
+ * So a mark in the hand turns the card's runs of free space into a **grid** of
+ * squares the size the logo actually draws at — which is the whole of "the
+ * outline is the shape of the thing you are dragging".
  *
- * **The drawn square and the box that catches the pointer are not the same**, in
- * exactly the way `hitTop`/`hitBottom` already separates them vertically. A 62px
- * square is not something anyone can aim at with a moving pointer, so each
- * column catches a full third of the line and the square is drawn where the
- * block will actually land. The partition survives: this only ever subdivides a
- * band that `dropBands` already owns outright, so every pixel still belongs to
- * exactly one slot.
+ * **The square is never smaller than the logo.** It used to be clamped to fit
+ * whatever it was drawn in, which drew squares a logo would never land as and
+ * read as a drop that shrinks the block. A line too narrow for the mark offers
+ * nothing at all.
+ *
+ * **And the squares never overlap**, because every one of them is outlined at
+ * rest now rather than only the one under the pointer. Three across needs the
+ * mark's travel to be at least two squares; two across (start and end) needs one;
+ * below that the band is one square at the block's own alignment, and the
+ * Alignment buttons stay the way to move a logo that large.
+ *
+ * **The drawn square and the box that catches the pointer are not the same.** A
+ * 62px square is not something anyone can aim at with a moving pointer, so each
+ * column catches an equal share of the line and the square is drawn where the
+ * block will actually land. The vertical partition survives: this only ever
+ * subdivides a band that `dropBands` already owns outright.
  *
  * Runs **after** `dropBands`, never before it — that function partitions the
- * card top to bottom by each slot's centre, and three slots sharing one centre
+ * card top to bottom by each slot's centre, and several slots sharing one centre
  * would collapse its arithmetic.
  *
  * A column slot is left alone: it already knows its own box, because it is the
  * room beside a block rather than a share of a run. So is anything with no
- * height, which has no square to draw in it — the card offers no such place any
- * more, and this is not the function to start doing so.
+ * height, which has no square to draw in it.
  */
 export function splitAlignColumns(
   bands: readonly DropBand[],
@@ -119,145 +126,81 @@ export function splitAlignColumns(
   markSize: number,
   /** The line's own box: where a share of the card starts, and how wide it is. */
   line: { left: number; width: number },
-): DropBand[] {
-  const size = Math.min(markSize, line.width);
-  const travel = line.width - size;
-
-  /*
-   * A mark that fills its line has nowhere to be aligned *to*: the three squares
-   * would be drawn within a few pixels of each other, three separate drop
-   * targets stacked on one box. The band stays whole, and the Alignment buttons
-   * remain the way to move a logo that large.
+  /**
+   * Where the mark sits across its line now — the one place offered when the
+   * line has room for only one. Absent is the centre, which is where a fresh
+   * logo arrives.
    */
-  if (size <= 0 || travel < MIN_BAND) return [...bands];
+  align: CardBlockAlign = "center",
+): DropBand[] {
+  if (markSize <= 0) return [...bands];
 
-  const third = line.width / 3;
-  const columns: { align: CardBlockAlign; left: number; hitLeft: number }[] = [
-    { align: "start", left: line.left, hitLeft: line.left },
-    {
-      align: "center",
-      left: line.left + travel / 2,
-      hitLeft: line.left + third,
-    },
-    { align: "end", left: line.left + travel, hitLeft: line.left + third * 2 },
-  ];
+  const travel = line.width - markSize;
+  const fits = (band: DropBand) => band.left === undefined && band.height > 0;
+
+  // Wider than the line it would land on: there is no square to offer, and a
+  // smaller one would be a promise about a block that is not this one.
+  if (travel < 0) return bands.filter((band) => !fits(band));
+
+  const aligns: readonly CardBlockAlign[] =
+    travel >= markSize * 2
+      ? ["start", "center", "end"]
+      : travel >= markSize
+        ? ["start", "end"]
+        : [align];
+
+  const share = line.width / aligns.length;
+  const at = { start: 0, center: travel / 2, end: travel } as const;
 
   return bands.flatMap((band) =>
-    band.left !== undefined || band.height <= 0
-      ? [band]
-      : columns.map((column) => ({
+    fits(band)
+      ? aligns.map((column, i) => ({
           ...band,
           mark: true,
-          align: column.align,
-          left: column.left,
-          width: size,
-          hitLeft: column.hitLeft,
-          hitWidth: third,
-        })),
+          align: column,
+          left: line.left + at[column],
+          width: markSize,
+          hitLeft: line.left + share * i,
+          hitWidth: share,
+        }))
+      : [band],
   );
 }
 
 /**
- * One contiguous area of the card a block may go into, as the resting layer
- * draws it.
+ * Every full-width band, drawn at the width of the block being moved.
  *
- * **A region is not a slot, and the difference is the whole reason this exists.**
- * A run of free space is divided into as many slots as the block in hand fits
- * into (`run` in ./drop-slots.ts), so an empty 440px card with a name in the air
- * is *thirteen* places. Drawing thirteen stacked outlines is what made the
- * all-marks-at-once overlay unreadable, and drawing none of them is what made
- * the gesture undiscoverable — you had to sweep the card to find out where a
- * block could go. A region is the union of a run's slots: one faint outline
- * saying *anywhere in here*, with the bold mark still saying *exactly here* as
- * the pointer moves inside it.
+ * A narrowed block keeps its width wherever it lands — a drop never resizes
+ * anything — so a run offers it a spot as wide as it is, at the start of the
+ * line, which is where a block alone on a line with no `side` sits. It used to
+ * be offered the whole line and widened to it on release, which drew an outline
+ * twice the size of the block in the hand.
  *
- * Column and pair targets each come out as a region of their own, because they
- * differ in the fields the key is built from: the room beside a narrowed block
- * is drawn as the box that block will actually fill. The align grid does not.
- * Where a mark sits *across* a line is a fact about aiming, and it belongs to
- * the hit areas and the bold mark; the resting layer answers "where is there
- * room", and for a logo the answer is the same run every other block gets —
- * three tall dashed columns down a card is what the other reading looked like.
- * See `useCardDropBands`, which is where the two volumes part company.
+ * The pointer still aims at the whole line (`hitLeft`/`hitWidth`), because the
+ * room beside the spot is not somewhere else the block could go.
+ *
+ * A no-op for a block that is already the width of the line, and for a column
+ * slot, which already knows its own box.
  */
-export type DropRegion = {
-  /** What distinguishes it from the next region, and its React key. */
-  key: string;
-  /** Where it is drawn, in px from the card's top. */
-  y: number;
-  height: number;
-  /**
-   * Where it is drawn horizontally, in px from the card's left. Absent spans the
-   * card's own padding, which is what a full-width block's box does.
-   */
-  left?: number;
-  width?: number;
-};
+export function fitRunsToBlock(
+  bands: readonly DropBand[],
+  /** How wide the block in the hand draws, in px. */
+  width: number,
+  line: { left: number; width: number },
+): DropBand[] {
+  if (width <= 0 || width >= line.width) return [...bands];
 
-/**
- * Every place this drag could go, as areas rather than as slots.
- *
- * Grouped by everything that makes two slots mean different *places* — the zone,
- * the insertion index, and the two fields that put a target across a line rather
- * than down the card. Every slot one run emits carries that run's own index, and
- * no two runs in a zone share one, so a group is exactly a run.
- *
- * **Drawn from the area a slot names, not from the box drawn for it.** A run's
- * marks are spread through their free space and the first is lifted over the
- * block above them, so their union both starts higher than the room does and
- * stops short of the end of it — see `areaTop` on `DropSlot`. A column target
- * names no area, and there its own box is the honest answer: the room beside a
- * block *is* what it stands for.
- *
- * **One place shows nothing at rest.** A mark straddling the block above it
- * spends no room at all, so its area is empty and any outline would be drawn
- * over a block that is already on the card. It stays a mark under the pointer
- * alone.
- */
-export function dropRegions(bands: readonly DropBand[]): DropRegion[] {
-  const regions = new Map<string, DropRegion>();
-
-  for (const band of bands) {
-    const bandTop = band.areaTop ?? band.y;
-    const bandBottom = band.areaBottom ?? band.y + band.height;
-
-    // Nothing to show: a straddling mark, whose area is empty because it spends
-    // no room of its own.
-    if (bandBottom - bandTop <= 0) continue;
-
-    const key = [band.zone, band.index, band.half ?? "", band.line ?? ""].join(":");
-
-    const region = regions.get(key);
-
-    if (!region) {
-      regions.set(key, {
-        key,
-        y: bandTop,
-        height: bandBottom - bandTop,
-        ...(band.left === undefined
-          ? {}
-          : { left: band.left, width: band.width ?? 0 }),
-      });
-      continue;
-    }
-
-    const top = Math.min(region.y, bandTop);
-    const bottom = Math.max(region.y + region.height, bandBottom);
-    region.y = top;
-    region.height = bottom - top;
-
-    if (band.left !== undefined && region.left !== undefined) {
-      const left = Math.min(region.left, band.left);
-      const right = Math.max(
-        region.left + (region.width ?? 0),
-        band.left + (band.width ?? 0),
-      );
-      region.left = left;
-      region.width = right - left;
-    }
-  }
-
-  return [...regions.values()];
+  return bands.map((band) =>
+    band.left === undefined
+      ? {
+          ...band,
+          left: line.left,
+          width,
+          hitLeft: line.left,
+          hitWidth: line.width,
+        }
+      : band,
+  );
 }
 
 /**
@@ -355,9 +298,8 @@ export function dropBands(
  * nothing: the copy follows the hand there, and a release is caught by the
  * card's own catch-all (`card:frame` in card-canvas.tsx) and does nothing.
  *
- * **Grouped by run**, `zone:index` — `dropRegions`' key for one. Every slot
- * `run` emits carries its run's index and its run's area, and no two runs in a
- * zone share an index.
+ * **Grouped by run**, `zone:index`. Every slot `run` emits carries its run's
+ * index and its run's area, and no two runs in a zone share an index.
  *
  * **A place with no free space of its own catches its own box.** A logo
  * straddling the block above it names an empty area (`areaTop === areaBottom`)

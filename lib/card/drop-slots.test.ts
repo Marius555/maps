@@ -86,10 +86,8 @@ describe("dropSlots", () => {
       y: 12,
       height: 24,
       offset: 0,
-      // A run mark spans the card, so what lands on it is the card's own width.
-      widthPct: 100,
       // And every one of the thirteen names the same free space it came out of,
-      // which is what the resting outline draws instead of thirteen boxes.
+      // which is what each one's share of the pointer is cut from.
       areaTop: 12,
       areaBottom: 428,
     });
@@ -165,10 +163,8 @@ describe("dropSlots", () => {
       y: 48,
       height: 24,
       offset: 0,
-      // A run mark spans the card, so what lands on it is the card's own width.
-      widthPct: 100,
-      // The area pays the same gap the first place does, so the outline starts
-      // below the block rather than against it.
+      // The area pays the same gap the first place does, so the pointer's share
+      // starts below the block rather than against it.
       areaTop: 48,
       areaBottom: 428,
     });
@@ -270,7 +266,6 @@ describe("dropSlots", () => {
         height: 28,
         offset: 0,
         nextOffset: 0,
-        widthPct: 100,
         // Closed at both ends, so the area is the run less a gap at each: the
         // 40–84 hole between a and b, held off both of them.
         areaTop: 48,
@@ -303,7 +298,6 @@ describe("dropSlots", () => {
         y: 380,
         height: 24,
         offset: 0,
-        widthPct: 100,
         areaTop: 380,
         areaBottom: 428,
       },
@@ -427,7 +421,6 @@ describe("dropSlots", () => {
       y: 99,
       height: 62,
       offset: 0,
-      widthPct: 100,
       areaTop: 130,
       areaBottom: 428,
     });
@@ -473,7 +466,6 @@ describe("dropSlots", () => {
         height: 62,
         offset: 0,
         nextOffset: 118,
-        widthPct: 100,
         areaTop: 12,
         areaBottom: 192,
       },
@@ -484,7 +476,6 @@ describe("dropSlots", () => {
         height: 62,
         offset: 118,
         nextOffset: 0,
-        widthPct: 100,
         areaTop: 12,
         areaBottom: 192,
       },
@@ -493,8 +484,8 @@ describe("dropSlots", () => {
 
   it("names the free space itself, which is neither where the marks start nor where they end", () => {
     /*
-     * What the *resting* outline is drawn from, and the reason it is a field of
-     * its own rather than the union of the boxes above.
+     * What each place's share of the pointer is cut from, and the reason it is a
+     * field of its own rather than the union of the boxes above.
      *
      * Both ends are wrong in the union. The first mark is lifted 31px over the
      * photo, so the union starts inside a block that is already on the card —
@@ -707,237 +698,147 @@ describe("dropSlots with a pair on the card", () => {
 });
 
 describe("sideSlots", () => {
-  const lone = cardWith({
-    middle: [{ id: "a", type: "name", widthPct: 50 }],
-  });
+  /*
+   * A narrowed block keeps its width wherever it lands, and nothing already on
+   * a line moves or narrows to make room for it — so every place here is offered
+   * to a block that already fits, at the width it already has.
+   *
+   * The card is the default one: a line 296px across from 12 to 308 with an 8px
+   * gap, so a 50% block is 144px (`columnPx(50)`).
+   */
 
-  /** One 50% block sitting at the start of its line, so 144px wide. */
-  const loneMeasure = [
-    zoneOf("middle", 12, 428, [
-      { id: "a", top: 12, bottom: 40, left: 12, right: 12 + columnPx(50) },
-    ]),
-  ];
-
-  it("offers the room beside a block that is sharing with nobody", () => {
-    const slots = sideSlots(lone, newBlock("address"), loneMeasure);
-
-    // Both columns of the line — the free one first, then the occupied one.
-    // See the case below.
-    expect(slots).toHaveLength(2);
-    expect(slots[0]).toEqual({
-      zone: "middle",
-      // Immediately after the block it joins — which is what makes the two
-      // consecutive, and therefore what makes `cardRows` pair them.
-      index: 1,
-      y: 12,
-      height: 28,
-      offset: 0,
-      half: "end",
-      // A narrowed block sits at its line's start unless it says otherwise, so
-      // the free column is the right one, and it runs to the line's own edge.
-      left: 12 + columnPx(50) + 8,
-      width: columnPx(50),
-      widthPct: 50,
-      line: 0,
-    });
-  });
-
-  it("offers whatever is actually left, not half a line", () => {
-    /*
-     * The point of the whole change. A photo narrowed to 40% reserves 60%, and
-     * the block that lands there takes that 60% — so the line adds up, and the
-     * mark drawn is exactly the box the newcomer will fill.
-     */
-    const narrow = cardWith({
-      middle: [{ id: "a", type: "gallery", widthPct: 40 }],
-    });
-
-    const slots = sideSlots(narrow, newBlock("address"), [
-      zoneOf("middle", 12, 428, [
-        { id: "a", top: 12, bottom: 40, left: 12, right: 12 + columnPx(40) },
-      ]),
-    ]);
-
-    expect(slots[0]).toMatchObject({
-      half: "end",
-      widthPct: 60,
-      width: columnPx(60),
-    });
-    // The two columns and the gap between them are the line, exactly.
-    expect(columnPx(40) + 8 + columnPx(60)).toBe(296);
-  });
-
-  it("offers no column too narrow for what is in the hand", () => {
-    // A block at 80% leaves 20%, which is under every type's own floor — so
-    // there is nothing to drop there and no mark promising otherwise.
-    const wide = cardWith({
-      middle: [{ id: "a", type: "gallery", widthPct: 80 }],
-    });
-
-    const slots = sideSlots(wide, newBlock("address"), [
-      zoneOf("middle", 12, 428, [
-        { id: "a", top: 12, bottom: 40, left: 12, right: 12 + columnPx(80) },
-      ]),
-    ]);
-
-    // The occupied column is still offered — 80% is wide enough to land in.
-    expect(slots.map((slot) => slot.half)).toEqual(["start"]);
-  });
-
-  it("offers the empty half on the left of a block sitting at the line's end", () => {
-    // The other side of `side`. A block moved across its own line leaves the
-    // space it came from, and that space has to be droppable or the move is
-    // one-way.
-    const atEnd = cardWith({
-      middle: [{ id: "a", type: "name", widthPct: 50, side: "end" }],
-    });
-
-    const slots = sideSlots(atEnd, newBlock("address"), [
-      zoneOf("middle", 12, 428, [
-        { id: "a", top: 12, bottom: 40, left: 308 - columnPx(50), right: 308 },
-      ]),
-    ]);
-
-    expect(slots).toHaveLength(2);
-    expect(slots[0]).toMatchObject({
-      // Immediately *before* the block it joins, which is the whole difference
-      // an index alone cannot carry.
-      index: 0,
-      half: "start",
-      left: 12,
-      width: columnPx(50),
-      widthPct: 50,
-    });
-  });
-
-  it("also offers the column the block is already in", () => {
-    /*
-     * Which is what stops a half-width line being handed a card-width mark as
-     * well: with both columns drawn, the line is described in full by two marks
-     * the width of the columns they stand for, and `dropSlots` no longer merges
-     * the line away into a run. Before this there was one mark on the line and
-     * one across it, saying two different things about the same place.
-     *
-     * Dropping on it means what it looks like — put it here, push the one
-     * already there across — which is `insert`'s `"start"` case in card-edits.ts
-     * and needed no new code.
-     */
-    const slots = sideSlots(lone, newBlock("address"), loneMeasure);
-
-    expect(slots[1]).toMatchObject({
-      // The line's own start: the newcomer takes it and displaces the block
-      // sitting there into the column beside it.
-      index: 0,
-      half: "start",
-      // Drawn exactly over the block it would displace, and worth exactly what
-      // that block is worth — so the line still adds up afterwards.
-      left: 12,
-      width: columnPx(50),
-      widthPct: 50,
-    });
-  });
-
-  it("offers the occupied column on the other side of a line that ends", () => {
-    const atEnd = cardWith({
-      middle: [{ id: "a", type: "name", widthPct: 50, side: "end" }],
-    });
-
-    const slots = sideSlots(atEnd, newBlock("address"), [
-      zoneOf("middle", 12, 428, [
-        { id: "a", top: 12, bottom: 40, left: 308 - columnPx(50), right: 308 },
-      ]),
-    ]);
-
-    expect(slots[1]).toMatchObject({
-      // Joining the block before it, which leaves that block starting the line.
-      index: 1,
-      half: "end",
-      left: 308 - columnPx(50),
-      width: columnPx(50),
-    });
-  });
-
-  it("offers only the empty column to the block already on the line", () => {
-    /*
-     * A mark over where a block already is would promise a move
-     * `dropCardBlock` answers `null` to — same zone, same index, same offset,
-     * same side. One column, and it is the one it can actually cross to.
-     */
-    const slots = sideSlots(lone, moveBlock("a"), loneMeasure);
-
-    expect(slots).toHaveLength(1);
-    expect(slots[0]).toMatchObject({ index: 0, half: "end" });
-    // And it takes no width with it: crossing a line does not resize anything.
-    expect(slots[0].widthPct).toBeUndefined();
-  });
-
-  it("offers nothing to a block that cannot be narrowed", () => {
-    // A week of opening times in half a 320px card is the thing `CARD_BLOCKS`
-    // refuses, and it has to be refused here too or the target lights up and
-    // then the drop does something else.
-    expect(sideSlots(lone, newBlock("hours"), loneMeasure)).toEqual([]);
-  });
-
-  const pair = cardWith({
+  /** A 50% name alone at the start of its line, and a 50% address on the next. */
+  const stacked = cardWith({
     middle: [
       { id: "a", type: "name", widthPct: 50 },
-      { id: "b", type: "address", widthPct: 50 },
+      { id: "b", type: "address", widthPct: 50, newLine: true },
     ],
   });
 
-  /** The same line, with both columns occupied. */
-  const pairMeasure = [
+  const stackedMeasure = [
     zoneOf("middle", 12, 428, [
       { id: "a", top: 12, bottom: 40, left: 12, right: 12 + columnPx(50) },
-      { id: "b", top: 12, bottom: 40, left: 308 - columnPx(50), right: 308 },
+      { id: "b", top: 48, bottom: 76, left: 12, right: 12 + columnPx(50) },
     ]),
   ];
 
-  it("offers nothing beside a line that is already full", () => {
-    expect(sideSlots(pair, newBlock("category"), pairMeasure)).toEqual([]);
-  });
+  it("offers a narrowed block the room beside another, at its own width", () => {
+    const beside = sideSlots(stacked, moveBlock("b"), stackedMeasure).filter(
+      (slot) => slot.line === 0,
+    );
 
-  it("offers each member of a pair the column the other one is in", () => {
-    // Swapping two halves. There is no empty column to aim at, so the target is
-    // the block being traded with — which is also where the mark is drawn, so
-    // the gesture reads as "put it here".
-    expect(sideSlots(pair, moveBlock("a"), pairMeasure)).toEqual([
+    expect(beside).toEqual([
       {
         zone: "middle",
-        // After the partner, which is what puts it in the second column.
-        index: 2,
+        // Immediately after the block it joins — which is what makes the two
+        // consecutive, and therefore what makes `cardRows` put them on one line.
+        index: 1,
         y: 12,
         height: 28,
         offset: 0,
         half: "end",
-        left: 308 - columnPx(50),
+        left: 12 + columnPx(50) + 8,
         width: columnPx(50),
         line: 0,
+        // The free run of the line it sits in, which here is exactly its box.
+        hitLeft: 12 + columnPx(50) + 8,
+        hitWidth: 308 - (12 + columnPx(50) + 8),
       },
-    ]);
-
-    expect(sideSlots(pair, moveBlock("b"), pairMeasure)).toMatchObject([
-      { index: 0, half: "start", left: 12, width: columnPx(50) },
     ]);
   });
 
-  it("offers the two halves of a full-width line, as a way to pair with it", () => {
+  it("offers nothing to a block too wide for the room left", () => {
+    // 50% and 60% make 110. It is not cut down to fit, so that line offers it
+    // nowhere at all.
+    const wide = cardWith({
+      middle: [
+        { id: "a", type: "name", widthPct: 50 },
+        { id: "b", type: "address", widthPct: 60, newLine: true },
+      ],
+    });
+
+    const slots = sideSlots(wide, moveBlock("b"), [
+      zoneOf("middle", 12, 428, [
+        { id: "a", top: 12, bottom: 40, left: 12, right: 12 + columnPx(50) },
+        { id: "b", top: 48, bottom: 76, left: 12, right: 12 + columnPx(60) },
+      ]),
+    ]);
+
+    expect(slots.filter((slot) => slot.line === 0)).toEqual([]);
+  });
+
+  it("offers a full-width block no room beside anything", () => {
+    // A block that fills its line has no column to go in, and a drop does not
+    // narrow it to make one.
+    expect(sideSlots(stacked, newBlock("address"), stackedMeasure)).toEqual([]);
+    expect(sideSlots(stacked, newBlock("button"), stackedMeasure)).toEqual([]);
+  });
+
+  it("offers the room before a block at its line's end only to a block that fills it", () => {
     /*
-     * The gesture the Locations panel teaches, brought to the card: drop a block
-     * onto a block and they share the line. A full-width block used to offer
-     * nothing at all here, so two columns only existed once someone had found
-     * the Width slider — which is a thing you have to be told about.
-     *
-     * Both columns are 144px: half of the 296px line, less each one's half of
-     * the 8px gap between them. Exactly the box `blockBox` gives a 50% share,
-     * which is what the block that lands actually becomes.
+     * A line of two is packed from its start, so a block landing before one that
+     * sat at the end would push it across — unless it fills the room exactly. A
+     * 50% block does; a 40% one would move the name, and is offered nothing.
      */
-    const full = cardWith({ middle: [{ id: "a", type: "name" }] });
+    const atEnd = (share: number) =>
+      cardWith({
+        middle: [
+          { id: "a", type: "name", widthPct: 50, side: "end" },
+          { id: "b", type: "address", widthPct: share, newLine: true },
+        ],
+      });
+    const measure = (share: number) => [
+      zoneOf("middle", 12, 428, [
+        { id: "a", top: 12, bottom: 40, left: 308 - columnPx(50), right: 308 },
+        { id: "b", top: 48, bottom: 76, left: 12, right: 12 + columnPx(share) },
+      ]),
+    ];
+    const onFirstLine = (share: number) =>
+      sideSlots(atEnd(share), moveBlock("b"), measure(share)).filter(
+        (slot) => slot.line === 0,
+      );
+
+    expect(onFirstLine(50)).toMatchObject([
+      { index: 0, half: "start", left: 12, width: columnPx(50) },
+    ]);
+    expect(onFirstLine(40)).toEqual([]);
+  });
+
+  it("pushes nothing already on the line across it", () => {
+    // What used to be offered as the occupied column: landing where the name
+    // already is and shoving it to the other side. The name would move, so the
+    // only place is after it.
+    const narrow = cardWith({
+      middle: [
+        { id: "a", type: "name", widthPct: 50 },
+        { id: "b", type: "address", widthPct: 25, newLine: true },
+      ],
+    });
+
+    const slots = sideSlots(narrow, moveBlock("b"), [
+      zoneOf("middle", 12, 428, [
+        { id: "a", top: 12, bottom: 40, left: 12, right: 12 + columnPx(50) },
+        { id: "b", top: 48, bottom: 76, left: 12, right: 12 + columnPx(25) },
+      ]),
+    ]).filter((slot) => slot.line === 0);
+
+    expect(slots.map((slot) => [slot.half, slot.left, slot.width])).toEqual([
+      ["end", 12 + columnPx(50) + 8, columnPx(25)],
+    ]);
+  });
+
+  it("offers a block alone on its line the other end of it", () => {
+    /*
+     * Crossing its own line. Its index does not change — it is still the only
+     * block on that line — so the whole edit is the side the drop names, and it
+     * keeps its width: the space it leaves opens on the other side.
+     */
+    const lone = cardWith({ middle: [{ id: "a", type: "name", widthPct: 50 }] });
 
     expect(
-      sideSlots(full, newBlock("address"), [
+      sideSlots(lone, moveBlock("a"), [
         zoneOf("middle", 12, 428, [
-          { id: "a", top: 12, bottom: 40, left: 12, right: 308 },
+          { id: "a", top: 12, bottom: 40, left: 12, right: 12 + columnPx(50) },
         ]),
       ]),
     ).toEqual([
@@ -947,299 +848,189 @@ describe("sideSlots", () => {
         y: 12,
         height: 28,
         offset: 0,
-        half: "start",
-        left: 12,
-        width: columnPx(50),
-        widthPct: 50,
-        line: 0,
-        pairId: "a",
-        pairWidthPct: 50,
-        hitTop: 12,
-        hitBottom: 40,
-      },
-      {
-        zone: "middle",
-        index: 1,
-        y: 12,
-        height: 28,
-        offset: 0,
         half: "end",
-        left: 12 + columnPx(50) + 8,
+        left: 308 - columnPx(50),
         width: columnPx(50),
-        widthPct: 50,
         line: 0,
-        pairId: "a",
-        pairWidthPct: 50,
-        hitTop: 12,
-        hitBottom: 40,
+        hitLeft: 12 + columnPx(50) + 8,
+        hitWidth: 308 - (12 + columnPx(50) + 8),
       },
     ]);
   });
 
-  it("draws the whole column and catches the whole line", () => {
-    /*
-     * Two different boxes, deliberately. The outline promises the block's real
-     * size, because that is what will land there; the hit area is the line the
-     * block already sitting there covers, top to bottom. It used to be only the
-     * middle six tenths, leaving strips at each end for the seams above and
-     * below — and a card has no seams any more.
-     */
-    const full = cardWith({ middle: [{ id: "a", type: "name" }] });
-    const [start] = sideSlots(full, newBlock("address"), [
+  it("offers each member of a pair the other's place", () => {
+    // Swapping two blocks that share a line. Neither width changes.
+    const pair = cardWith({
+      middle: [
+        { id: "a", type: "name", widthPct: 50 },
+        { id: "b", type: "address", widthPct: 50 },
+      ],
+    });
+    const pairMeasure = [
       zoneOf("middle", 12, 428, [
-        { id: "a", top: 12, bottom: 40, left: 12, right: 308 },
+        { id: "a", top: 12, bottom: 40, left: 12, right: 12 + columnPx(50) },
+        { id: "b", top: 12, bottom: 40, left: 308 - columnPx(50), right: 308 },
       ]),
+    ];
+
+    expect(sideSlots(pair, moveBlock("a"), pairMeasure)).toMatchObject([
+      // After the partner, which is what puts it second on the line.
+      { index: 2, half: "end", left: 308 - columnPx(50), width: columnPx(50), line: 0 },
     ]);
-
-    expect(start.y).toBe(12);
-    expect(start.height).toBe(28);
-    expect([start.hitTop, start.hitBottom]).toEqual([12, 40]);
-  });
-
-  it("offers no pair on a block that cannot hold a column", () => {
-    // A week of opening times in half a card is a week nobody can read, which is
-    // the rule `CARD_BLOCKS` writes down for the Width slider — asked here of the
-    // block already on the line rather than of the one in the air.
-    const full = cardWith({ middle: [{ id: "a", type: "hours" }] });
-
-    expect(
-      sideSlots(full, newBlock("name"), [
-        zoneOf("middle", 12, 428, [
-          { id: "a", top: 12, bottom: 40, left: 12, right: 308 },
-        ]),
-      ]),
-    ).toEqual([]);
-  });
-
-  it("offers no pair to a block that cannot hold a column", () => {
-    // And the same question the other way round.
-    const full = cardWith({ middle: [{ id: "a", type: "name" }] });
-
-    expect(
-      sideSlots(full, newBlock("hours"), [
-        zoneOf("middle", 12, 428, [
-          { id: "a", top: 12, bottom: 40, left: 12, right: 308 },
-        ]),
-      ]),
-    ).toEqual([]);
-  });
-
-  it("never offers a block a pair with itself", () => {
-    // It would have to be in both columns at once. The mark would also be drawn
-    // over exactly where the block already is.
-    const full = cardWith({ middle: [{ id: "a", type: "name" }] });
-
-    expect(
-      sideSlots(full, moveBlock("a"), [
-        zoneOf("middle", 12, 428, [
-          { id: "a", top: 12, bottom: 40, left: 12, right: 308 },
-        ]),
-      ]),
-    ).toEqual([]);
-  });
-
-  it("offers no pair on a line with no middle to aim at", () => {
-    /*
-     * A fresh divider is 13px tall, and a band of at least `MIN_BAND` inside it
-     * would be the whole block — which would take the insertion points above and
-     * below it away entirely. A line that short is paired with the slider or not
-     * at all.
-     */
-    const thin = cardWith({ middle: [{ id: "a", type: "divider" }] });
-
-    expect(
-      sideSlots(thin, newBlock("name"), [
-        zoneOf("middle", 12, 428, [
-          { id: "a", top: 12, bottom: 25, left: 12, right: 308 },
-        ]),
-      ]),
-    ).toEqual([]);
-  });
-
-  it("offers a lone half its own empty column, as a way across its line", () => {
-    /*
-     * This used to be refused outright, on the reading that a block cannot be
-     * dropped where it already is. It is not where it already is: the block
-     * moves from one column of the line to the other, and the space it leaves
-     * opens behind it. Refusing it left a half stuck at the start of its line
-     * with no gesture that could move it.
-     *
-     * Its index does not change — it is still the only block on that line — so
-     * the whole edit is the column the drop names.
-     */
-    expect(sideSlots(lone, moveBlock("a"), loneMeasure)).toEqual([
-      {
-        zone: "middle",
-        index: 0,
-        y: 12,
-        height: 28,
-        offset: 0,
-        half: "end",
-        left: 12 + columnPx(50) + 8,
-        width: columnPx(50),
-        line: 0,
-      },
+    expect(sideSlots(pair, moveBlock("b"), pairMeasure)).toMatchObject([
+      { index: 0, half: "start", left: 12, width: columnPx(50), line: 0 },
     ]);
+    // And a line that is already full has nowhere for anything new.
+    expect(sideSlots(pair, newBlock("logo"), pairMeasure)).toEqual([]);
+  });
+
+  it("offers nothing to a block that cannot be narrowed", () => {
+    // A week of opening times has no width to keep in a column.
+    expect(sideSlots(stacked, newBlock("hours"), stackedMeasure)).toEqual([]);
   });
 
   it("offers nothing when the caller could not measure horizontally", () => {
-    // An honest degradation rather than a guess at where the free column is.
+    // An honest degradation rather than a guess at where the room is.
     expect(
-      sideSlots(lone, newBlock("address"), [
-        zoneOf("middle", 12, 428, [{ id: "a", top: 12, bottom: 40 }]),
+      sideSlots(stacked, moveBlock("b"), [
+        zoneOf("middle", 12, 428, [
+          { id: "a", top: 12, bottom: 40 },
+          { id: "b", top: 48, bottom: 76 },
+        ]),
       ]),
     ).toEqual([]);
   });
 
   it("refuses a zone the block may not enter at all", () => {
-    // Links only ever go at the bottom, so the half beside a name in the middle
-    // is not a place one can land — the same rule `acceptsBlock` enforces for
-    // every other target.
-    const withActions = cardWith({
-      middle: [{ id: "a", type: "name", widthPct: 50 }],
-    });
-
-    expect(sideSlots(withActions, newBlock("actions"), loneMeasure)).toEqual([]);
+    // Links only ever go at the bottom, and are never narrowed either.
+    expect(sideSlots(stacked, newBlock("actions"), stackedMeasure)).toEqual([]);
   });
 
-  it("still offers it in a zone that has run out of vertical room", () => {
+  it("offers the room beside a photo narrowed by hand, whatever its zone's height", () => {
     /*
-     * Deliberately not gated on `hasRoomFor`. That check is about the card's
-     * *height*, and landing beside a block already on the card spends none of it
-     * — so a top zone filled by a photo still offers the space next to that
-     * photo, which is exactly where someone would want to put a name.
+     * Landing beside a block already on the card spends none of the card's
+     * height, so a top zone filled by a photo still offers the space next to
+     * that photo — which is exactly where someone would want to put a name.
      */
-    const full = cardWith({
+    const photo = cardWith({
       top: [{ id: "g", type: "gallery", widthPct: 50, heightPct: 70 }],
+      middle: [{ id: "n", type: "name", widthPct: 50 }],
     });
 
-    const slots = sideSlots(full, newBlock("name"), [
+    const slots = sideSlots(photo, moveBlock("n"), [
       zoneOf("top", 12, 320, [
         { id: "g", top: 12, bottom: 320, left: 12, right: 12 + columnPx(50) },
       ]),
-    ]);
+      zoneOf("middle", 328, 428, [
+        { id: "n", top: 328, bottom: 356, left: 12, right: 12 + columnPx(50) },
+      ]),
+    ]).filter((slot) => slot.zone === "top");
 
-    expect(slots).toHaveLength(2);
-    expect(slots[0].half).toBe("end");
+    expect(slots).toMatchObject([
+      {
+        index: 1,
+        half: "end",
+        left: 12 + columnPx(50) + 8,
+        width: columnPx(50),
+        y: 12,
+        height: 308,
+      },
+    ]);
   });
 
   it("reads a stored `half` as a 50% line, for the cards published with it", () => {
     // The back-compat path through the drop geometry: a customer's saved design
     // still says `half: true`, and the room beside it is still droppable.
     const legacy = cardWith({
-      middle: [{ id: "a", type: "name", half: true }],
-    });
-
-    const slots = sideSlots(legacy, newBlock("address"), loneMeasure);
-
-    expect(slots).toHaveLength(2);
-    expect(slots[0]).toMatchObject({ half: "end", widthPct: 50 });
-  });
-
-  it("gives two adjacent lines distinct targets, even at the same index", () => {
-    /*
-     * The duplicate-key bug, in the geometry that caused it. Every column target
-     * on somebody else's line uses `row.end` for `"end"`, which is unique
-     * because rows are consecutive — but a block crossing *its own* line stays
-     * put and uses `row.index`. Two adjacent lone lines with the lower one in
-     * the hand therefore both emitted `(middle, 1, "end")`, and the overlay keyed
-     * its marks on exactly that: React warned, the two collapsed into one entry
-     * in the transform map, and hovering either lit both.
-     *
-     * `line` is what separates them, and it is why it is part of the id.
-     */
-    const stacked = cardWith({
       middle: [
-        { id: "a", type: "name", widthPct: 50 },
+        { id: "a", type: "name", half: true },
         { id: "b", type: "address", widthPct: 50, newLine: true },
       ],
     });
 
-    const slots = sideSlots(stacked, moveBlock("b"), [
-      zoneOf("middle", 12, 428, [
-        { id: "a", top: 12, bottom: 40, left: 12, right: 12 + columnPx(50) },
-        { id: "b", top: 48, bottom: 76, left: 12, right: 12 + columnPx(50) },
-      ]),
-    ]);
+    expect(
+      sideSlots(legacy, moveBlock("b"), stackedMeasure).filter((slot) => slot.line === 0),
+    ).toMatchObject([{ half: "end", width: columnPx(50) }]);
+  });
 
-    const clashing = slots.filter(
+  it("gives two adjacent lines distinct targets, even at the same index", () => {
+    /*
+     * The duplicate-key bug, in the geometry that caused it. A place on somebody
+     * else's line uses `row.end` for `"end"`, which is unique because rows are
+     * consecutive — but a block crossing *its own* line stays put and uses
+     * `row.index`. Two adjacent lone lines with the lower one in the hand
+     * therefore both emit `(middle, 1, "end")`, and the overlay keyed its marks
+     * on exactly that: React warned, the two collapsed into one entry in the
+     * drag context's map, and hovering either lit both.
+     *
+     * `line` is what separates them, and it is why it is part of the id.
+     */
+    const clashing = sideSlots(stacked, moveBlock("b"), stackedMeasure).filter(
       (slot) => slot.index === 1 && slot.half === "end",
     );
 
     expect(clashing).toHaveLength(2);
-    // Same zone, index, offset and side — and different lines, which is the one
-    // thing that tells them apart.
     expect(clashing.map((slot) => slot.line)).toEqual([0, 1]);
-    expect(new Set(clashing.map((slot) => slot.line)).size).toBe(2);
   });
 
   it("can land on the same index and offset as a vertical slot", () => {
     /*
      * Which is why `slotId` in card-drop-overlay.tsx carries the half flag. The
-     * free column beside a lone block and the run of free space below that line
-     * are both "insert at 1, with no leading space" — two genuinely different
-     * places that would otherwise register as one drop target, one silently
-     * shadowing the other.
+     * place beside a lone block and the run of free space below that line are
+     * both "insert at 1, with no leading space" — two genuinely different places
+     * that would otherwise register as one drop target, one silently shadowing
+     * the other.
      */
-    const side = sideSlots(lone, newBlock("address"), loneMeasure)[0];
-    const below = dropSlots(lone, newBlock("address"), loneMeasure, 24).find(
+    const side = sideSlots(stacked, moveBlock("b"), stackedMeasure).find(
+      (slot) => slot.line === 0,
+    );
+    const below = dropSlots(stacked, moveBlock("b"), stackedMeasure, 28).find(
       (slot) => slot.index === 1 && slot.offset === 0,
     );
 
     expect(below).toBeDefined();
-    expect(side.index).toBe(below?.index);
-    expect(side.offset).toBe(below?.offset);
+    expect(side?.index).toBe(below?.index);
+    expect(side?.offset).toBe(below?.offset);
   });
 });
 
 describe("sideSlots beside a mark", () => {
   /*
    * The room either side of a logo, which is the whole of "put a name next to
-   * it". A mark has no width to narrow, so the Width slider cannot open a column
-   * beside it and `pairTargets` rightly refuses a resident with no `width`
-   * control — the room has to be *measured* instead.
-   *
-   * The card is the default one: a line 296px across running from 12 to 308,
-   * with an 8px gap. The logo is 62px, centred, so it sits from 129 to 191.
+   * it". A mark has no width to narrow, so the room is measured: a centred 62px
+   * logo on the default card sits from 129 to 191, leaving 109px either side of
+   * it once the gap is paid. A 38% block is 108.48px, which fits either side
+   * without moving the logo.
    */
+  const NAME_W = columnPx(38);
+
+  /** A centred logo, and a 38% name on a line of its own below it. */
   const withLogo = cardWith({
-    middle: [{ id: "logo", type: "logo", heightPct: 14, align: "center" }],
+    middle: [
+      { id: "logo", type: "logo", heightPct: 14, align: "center" },
+      { id: "name", type: "name", widthPct: 38, newLine: true },
+    ],
   });
 
   const logoMeasure = (top = 12, bottom = 74) => [
     zoneOf("middle", 12, 428, [
       { id: "logo", top, bottom, left: 129, right: 191 },
+      { id: "name", top: 120, bottom: 148, left: 12, right: 12 + NAME_W },
     ]),
   ];
 
-  it("offers the run on each side, as wide as the run actually is", () => {
-    const slots = sideSlots(withLogo, newBlock("name"), logoMeasure());
+  const onLogoLine = (slots: DropSlot[]) => slots.filter((slot) => slot.line === 0);
+
+  it("offers each side the block fits, at its own width", () => {
+    const slots = onLogoLine(sideSlots(withLogo, moveBlock("name"), logoMeasure()));
 
     expect(slots).toHaveLength(2);
-
-    // Left of the mark: 12 to 121, which is 109px, and it takes the line by
-    // pushing the logo along — `insert`'s `"start"`.
-    expect(slots[0]).toMatchObject({
-      zone: "middle",
-      index: 0,
-      half: "start",
-      left: 12,
-      width: 109,
-      line: 0,
-    });
-
-    // Right of it: 199 to 308, and it joins the block before it.
-    expect(slots[1]).toMatchObject({
-      index: 1,
-      half: "end",
-      left: 199,
-      width: 109,
-      line: 0,
-    });
-
-    // Both are 109px of a 296px line, which is 38% once the half-gap a column
-    // basis gives up is counted back in.
-    expect(slots.map((slot) => slot.widthPct)).toEqual([38, 38]);
+    // Before the mark, taking the line: a line led by a name packs from its start.
+    expect(slots[0]).toMatchObject({ index: 0, half: "start", left: 12, line: 0 });
+    // After it: a line led by a centred mark packs to its end, so the logo stays.
+    expect(slots[1]).toMatchObject({ index: 1, half: "end", line: 0 });
+    expect(slots[1].left).toBeCloseTo(308 - NAME_W);
+    for (const slot of slots) expect(slot.width).toBeCloseTo(NAME_W);
   });
 
   it("stops at the zone's edge, so the room never reaches into the photo", () => {
@@ -1247,10 +1038,12 @@ describe("sideSlots beside a mark", () => {
      * A mark pulled up over its neighbour has a rect that reaches into the
      * *previous zone* — that is what an overlap is, and `measuredRows` takes a
      * line's top as the topmost of its members. So the room beside a logo
-     * straddling a photo measured as starting inside the photo, and the column
+     * straddling a photo measured as starting inside the photo, and the place
      * drawn for it promised a block half buried in a picture.
      */
-    const slots = sideSlots(withLogo, newBlock("name"), logoMeasure(-19, 43));
+    const slots = onLogoLine(
+      sideSlots(withLogo, moveBlock("name"), logoMeasure(-19, 43)),
+    );
 
     expect(slots).toHaveLength(2);
     for (const slot of slots) {
@@ -1261,33 +1054,33 @@ describe("sideSlots beside a mark", () => {
 
   it("stops at the photo above it, even inside one zone", () => {
     /*
-     * The same overlap without a zone boundary to catch it, which is the shape
-     * it actually has on a card: a gallery and a logo are both blocks of the
-     * middle zone, so the zone's own top is 12 and clamping to it changes
-     * nothing. What the room has to clear is the *block* — a column drawn from
-     * the mark's top would run its first 19px under the picture.
+     * The same overlap without a zone boundary to catch it, which is the shape it
+     * actually has on a card: a gallery and a logo are both blocks of the middle
+     * zone, so the zone's own top is 12 and clamping to it changes nothing. What
+     * the room has to clear is the *block* — a place drawn from the mark's top
+     * would run its first 11px under the picture.
      */
     const withPhoto = cardWith({
       middle: [
         { id: "gallery", type: "gallery", heightPct: 25 },
         { id: "name", type: "name", widthPct: 38 },
         { id: "logo", type: "logo", heightPct: 14 },
+        { id: "address", type: "address", widthPct: 38, newLine: true },
       ],
     });
 
-    const slots = sideSlots(withPhoto, newBlock("address"), [
+    const slots = sideSlots(withPhoto, moveBlock("address"), [
       zoneOf("middle", 12, 428, [
         { id: "gallery", top: 12, bottom: 122, left: 12, right: 308 },
         { id: "name", top: 130, bottom: 174, left: 12, right: 121 },
-        // Pulled up 19px over the photo's bottom edge, which is the default
-        // 50% overlap on a 62px mark rounded to this fixture's numbers.
+        // Pulled up 19px over the photo's bottom edge.
         { id: "logo", top: 111, bottom: 173, left: 129, right: 191 },
+        { id: "address", top: 182, bottom: 210, left: 12, right: 12 + NAME_W },
       ]),
     ]);
 
-    // The photo is a full-width line of its own, so it offers the two columns
-    // any full-width block does. The one under test is the room on the logo's
-    // line, which is the line after it.
+    // The photo is a full-width line of its own and offers nothing. The one
+    // place is past the logo, on the line after the photo.
     const beside = slots.filter((slot) => slot.line === 1);
 
     expect(beside).toHaveLength(1);
@@ -1298,94 +1091,104 @@ describe("sideSlots beside a mark", () => {
 
   it("is not pushed down by a block that is merely beside it", () => {
     /*
-     * The reason the clearance is asked per column rather than per line. A mark
-     * hanging down into the line below obstructs the room *under itself* and
-     * none of the room beside it, so a column that never passes under it starts
-     * where its own line does.
+     * The reason the clearance is asked per place rather than per line. A mark
+     * hanging down into the line below obstructs the room *under itself* and none
+     * of the room beside it.
      */
-    const hanging = cardWith({
-      middle: [
-        { id: "logo", type: "logo", heightPct: 14 },
-        // Its own line, or the two would share one and there would be no line
-        // below for the logo to hang into.
-        { id: "name", type: "name", widthPct: 38, newLine: true },
-      ],
-    });
+    const hanging = (nameSide: "start" | "end", share: number) =>
+      cardWith({
+        middle: [
+          { id: "logo", type: "logo", heightPct: 14 },
+          {
+            id: "name",
+            type: "name",
+            widthPct: 38,
+            newLine: true,
+            ...(nameSide === "end" ? { side: "end" as const } : {}),
+          },
+          { id: "address", type: "address", widthPct: share, newLine: true },
+        ],
+      });
 
-    const slots = sideSlots(hanging, newBlock("address"), [
+    // A logo on its own line, hanging 18px into the line below.
+    const logo = { id: "logo", top: 12, bottom: 120, left: 12, right: 74 };
+
+    // Beside a name at its line's start, the room to its right is clear of the
+    // logo, so the place starts where its own line does.
+    const right = sideSlots(hanging("start", 38), moveBlock("address"), [
       zoneOf("middle", 12, 428, [
-        // A logo on its own line, hanging 18px into the line below.
-        { id: "logo", top: 12, bottom: 120, left: 12, right: 74 },
+        logo,
         { id: "name", top: 102, bottom: 146, left: 12, right: 121 },
+        { id: "address", top: 160, bottom: 188, left: 12, right: 12 + NAME_W },
       ]),
-    ]);
+    ]).find((slot) => slot.line === 1);
 
-    // The room to the right of the name, which the logo above sits clear of:
-    // its own line's top, not the logo's bottom edge.
-    const right = slots.find((slot) => slot.line === 1 && slot.left === 129);
+    expect(right).toMatchObject({ left: 129, y: 102 });
 
-    expect(right?.y).toBe(102);
+    // Beside a name at its line's end, the room to its left runs under the logo,
+    // and the place is pushed clear of it.
+    const left = sideSlots(hanging("end", 62), moveBlock("address"), [
+      zoneOf("middle", 12, 428, [
+        logo,
+        { id: "name", top: 102, bottom: 146, left: 199, right: 308 },
+        { id: "address", top: 160, bottom: 188, left: 12, right: 12 + columnPx(62) },
+      ]),
+    ]).find((slot) => slot.line === 1);
 
-    // And the far column of the same line, which the logo *does* hang over, is
-    // pushed clear of it — the other half of "per column, not per line".
-    const left = slots.find((slot) => slot.line === 1 && slot.left === 12);
-
-    expect(left?.y).toBe(120);
+    expect(left).toMatchObject({ left: 12, y: 120 });
   });
 
-  it("never offers more of the line than the line has left", () => {
+  it("puts three on one line, exactly", () => {
     /*
-     * The run is measured in pixels and the share is worked back out of it, so
-     * the two roundings disagree by a point: a mark reserves `ceil` of its
-     * square, and a run inverted off the measured line rounds to nearest. Left
-     * uncapped the room beside a 38% name and a 24% mark came back as 40, the
-     * line summed to 102, and `cardRows` did the only honest thing with a line
-     * over 100 — it started a new one. The block dropped *beside* the logo
-     * landed underneath it, which is the gesture failing at the last step.
+     * The rounding the old column arithmetic had to cap: a mark reserves `ceil`
+     * of its square, so a 38% name, a 24% logo and a 38% address are exactly one
+     * line. The address is offered the place past the two of them, and the drop
+     * that place makes really does put all three on one line.
      */
     const paired = cardWith({
       middle: [
         { id: "name", type: "name", widthPct: 38 },
         { id: "logo", type: "logo", heightPct: 14 },
+        { id: "address", type: "address", widthPct: 38, newLine: true },
       ],
     });
 
-    const slots = sideSlots(paired, newBlock("address"), [
+    const [slot, ...others] = sideSlots(paired, moveBlock("address"), [
       zoneOf("middle", 12, 428, [
         { id: "name", top: 12, bottom: 74, left: 12, right: 115 },
         { id: "logo", top: 12, bottom: 74, left: 123, right: 185 },
+        { id: "address", top: 82, bottom: 110, left: 12, right: 12 + NAME_W },
       ]),
-    ]);
+    ]).filter((each) => each.line === 0);
 
-    expect(slots).toHaveLength(1);
-    // 115px of a 296px line inverts to 40, and 38 + 24 + 40 is 102.
-    expect(slots[0].widthPct).toBe(38);
+    expect(others).toEqual([]);
+    expect(slot).toMatchObject({ index: 2, half: "end", left: 193 });
 
-    // Which is exactly a line: the three of them land on one.
-    const landed = dropCardBlock(paired, { kind: "new", type: "address" }, {
+    const landed = dropCardBlock(paired, { kind: "move", id: "address" }, {
       zone: "middle",
-      index: slots[0].index,
-      offset: slots[0].offset,
-      half: slots[0].half,
-      widthPct: slots[0].widthPct,
-      line: slots[0].line,
+      index: slot.index,
+      offset: slot.offset,
+      half: slot.half,
+      line: slot.line,
     });
 
-    expect(
-      cardRows(landed?.zones.middle ?? [], defaultCardLayout()),
-    ).toHaveLength(1);
+    expect(cardRows(landed?.zones.middle ?? [], defaultCardLayout())).toHaveLength(1);
+    expect(landed?.zones.middle[2]).toMatchObject({ id: "address", widthPct: 38 });
   });
 
-  it("does not offer a run too narrow for what is in the hand", () => {
-    // A block declares how narrow it may go, and a run under that is not a
-    // place it can be — the same floor the Width slider stops at.
-    const wide = sideSlots(withLogo, newBlock("name"), [
-      zoneOf("middle", 12, 428, [
-        { id: "logo", top: 12, bottom: 74, left: 30, right: 290 },
+  it("offers nothing where the logo would have to move", () => {
+    // Measured off-centre, the logo leaves no side a 38% name fits without
+    // shoving it along its line.
+    const slots = onLogoLine(
+      sideSlots(withLogo, moveBlock("name"), [
+        zoneOf("middle", 12, 428, [
+          { id: "logo", top: 12, bottom: 74, left: 30, right: 92 },
+          { id: "name", top: 120, bottom: 148, left: 12, right: 12 + NAME_W },
+        ]),
       ]),
-    ]);
+    );
 
-    expect(wide).toEqual([]);
+    expect(slots).toEqual([]);
   });
 
   it("offers nothing to a block that may not be narrowed at all", () => {
@@ -1394,258 +1197,117 @@ describe("sideSlots beside a mark", () => {
     expect(sideSlots(withLogo, newBlock("hours"), logoMeasure())).toEqual([]);
   });
 
-  it("offers nothing to the mark itself", () => {
+  it("offers nothing to the mark on its own line", () => {
     /*
      * There is only ever one logo on a card, so the only mark that could land
-     * beside this one is this one. Where a mark goes across its line is the
-     * align grid's business (`splitAlignColumns`), not a column's.
+     * beside this one is this one. Where a mark goes across its own line is the
+     * align grid's business (`splitAlignColumns`), not a place's.
      */
-    expect(sideSlots(withLogo, moveBlock("logo"), logoMeasure())).toEqual([]);
-  });
-
-  it("offers only the run that is left once a column has taken one side", () => {
-    // A name already sitting to the left of the logo leaves one run, on the
-    // right, and the newcomer joins the mark it sits after.
-    const paired = cardWith({
-      middle: [
-        { id: "name", type: "name", widthPct: 38 },
-        { id: "logo", type: "logo", heightPct: 14 },
-      ],
-    });
-
-    const slots = sideSlots(paired, newBlock("address"), [
-      zoneOf("middle", 12, 428, [
-        { id: "name", top: 12, bottom: 74, left: 12, right: 121 },
-        { id: "logo", top: 12, bottom: 74, left: 129, right: 191 },
-      ]),
-    ]);
-
-    expect(slots).toHaveLength(1);
-    expect(slots[0]).toMatchObject({
-      // After both of them, which is what makes the three consecutive and
-      // therefore what makes `cardRows` put them on one line.
-      index: 2,
-      half: "end",
-      left: 199,
-      width: 109,
-    });
+    expect(onLogoLine(sideSlots(withLogo, moveBlock("logo"), logoMeasure()))).toEqual([]);
   });
 });
 
-describe("sideSlots — a mark pairing with a full-width line", () => {
-  /** One full-width name, 28px tall, on a line of its own. */
-  const full = cardWith({ middle: [{ id: "a", type: "name" }] });
-  const fullMeasure = [
+describe("sideSlots — a logo in the hand", () => {
+  /** A 50% name alone on its line, and nothing else on the card. */
+  const lone = (side?: "end") =>
+    cardWith({
+      middle: [
+        { id: "a", type: "name", widthPct: 50, ...(side ? { side } : {}) },
+      ],
+    });
+
+  const measure = (left: number) => [
     zoneOf("middle", 12, 428, [
-      { id: "a", top: 12, bottom: 40, left: 12, right: 308 },
+      { id: "a", top: 12, bottom: 40, left, right: left + columnPx(50) },
     ]),
   ];
 
-  it("offers a logo the square it reserves, at each end of the line", () => {
+  it("offers the square on the free side of a narrowed block, at the logo's own size", () => {
     /*
-     * The bug this fixes, in the arithmetic that caused it. The floor used to be
-     * `max(minWidthPct of both)`, and a logo has no `width` control and therefore
-     * no `minWidthPct` — so the floor came out at 100, `50 < 100`, and dragging a
-     * logo onto a block offered nothing at all. It was the right sum answering the
-     * wrong question: a logo does not narrow into a column, it reserves the square
-     * it draws at and leaves the rest.
-     *
-     * A default logo is 14% of a 440px card — 62px — and `selfShareOf` adds the
-     * column gap and rounds up: ceil(100 × 70 / 296) = 24%. So the name pays 76%,
-     * which clears its own floor of 25, and the two make one line.
-     *
-     * 24% of a 296px line is 71px, drawn at each end of it; the pointer aims at a
-     * whole half of the line instead, because nobody hits 71px with a moving hand.
-     *
-     * **71 on both axes**, and the name's own 28px height does not come into it.
-     * A column is as tall as the line it joins, which is the right box for
-     * anything that fills the column it lands in and the wrong one for a mark:
-     * this used to come back 71 wide and as tall as whatever was underneath, so
-     * over a 110px photo it drew a bar in a shape the logo never takes. Taller
-     * than the line is the honest answer — a logo joining a line of text is what
-     * makes that line as tall as the logo.
+     * A default logo is 62px. It lands after a name at its line's start — the
+     * line stays packed from the start, so the name does not move — and it is
+     * drawn at 62 on both axes, however short the line of text beside it is.
      */
-    const slots = sideSlots(full, newBlock("logo"), fullMeasure);
-
-    expect(slots).toEqual([
-      {
-        zone: "middle",
-        index: 0,
-        y: 12,
-        height: 71,
-        offset: 0,
-        half: "start",
-        left: 12,
-        width: 71,
-        line: 0,
-        pairId: "a",
-        pairWidthPct: 76,
-        hitTop: 12,
-        hitBottom: 40,
-        mark: true,
-        hitLeft: 12,
-        hitWidth: 148,
-      },
+    expect(sideSlots(lone(), newBlock("logo"), measure(12))).toEqual([
       {
         zone: "middle",
         index: 1,
         y: 12,
-        height: 71,
+        height: 62,
         offset: 0,
         half: "end",
-        // The far end of the line, not the middle of it: 12 + 296 - 71.
-        left: 237,
-        width: 71,
+        left: 12 + columnPx(50) + 8,
+        width: 62,
         line: 0,
-        pairId: "a",
-        pairWidthPct: 76,
-        hitTop: 12,
-        hitBottom: 40,
+        hitLeft: 12 + columnPx(50) + 8,
+        hitWidth: 308 - (12 + columnPx(50) + 8),
         mark: true,
-        hitLeft: 160,
-        hitWidth: 148,
       },
     ]);
   });
 
-  it("gives the logo itself no width", () => {
-    // It has no `width` control, so there is nothing for a share to be a share
-    // of — and `withShare` in card-edits.ts would refuse to write one anyway.
-    // A number here would be a target promising an edit the drop cannot make.
-    const [start] = sideSlots(full, newBlock("logo"), fullMeasure);
+  it("offers the square before a block that sits at its line's end", () => {
+    // A line led by a centred logo packs towards its end, which is where the name
+    // already is — so the square sits just before it and nothing moves.
+    const [slot, ...others] = sideSlots(
+      lone("end"),
+      newBlock("logo"),
+      measure(308 - columnPx(50)),
+    );
 
-    expect(start.widthPct).toBeUndefined();
+    expect(others).toEqual([]);
+    expect(slot).toMatchObject({
+      index: 0,
+      half: "start",
+      width: 62,
+      height: 62,
+      mark: true,
+    });
+    expect(slot.left).toBe(308 - columnPx(50) - 8 - 62);
   });
 
-  it("refuses a mark that would leave the block nothing to stand in", () => {
+  it("offers no square where it would reach into the line below", () => {
     /*
-     * The floor still applies, from the other side. On a 110px card the line is
-     * 86px, and the same 62px logo reserves ceil(100 × 70 / 86) = 82% of it —
-     * which leaves the name 18%, under its own floor of 25. There is no pair to
-     * be had, so none is offered.
+     * A logo joining a line of text makes that line as tall as the logo. With a
+     * description 8px under the name there is no room for that, and a square
+     * there would promise a landing that shoves the card down.
      */
-    const narrow = { ...full, width: 110 };
+    const crowded = cardWith({
+      middle: [
+        { id: "a", type: "name", widthPct: 50 },
+        { id: "d", type: "description" },
+      ],
+    });
 
     expect(
-      sideSlots(narrow, newBlock("logo"), [
-        zoneOf(
-          "middle",
-          12,
-          428,
-          [{ id: "a", top: 12, bottom: 40, left: 12, right: 98 }],
-          12,
-          98,
-        ),
+      sideSlots(crowded, newBlock("logo"), [
+        zoneOf("middle", 12, 428, [
+          { id: "a", top: 12, bottom: 40, left: 12, right: 12 + columnPx(50) },
+          { id: "d", top: 48, bottom: 120, left: 12, right: 308 },
+        ]),
       ]),
     ).toEqual([]);
   });
 
-  it("still pairs a gallery down the middle, as the block in the hand", () => {
+  it("offers nothing beside a full-width block, whatever is in the hand", () => {
     /*
-     * The regression guard for the branch above. A gallery carries a
-     * `minWidthPct` and a `width` control like any other narrowable block, so it
-     * is not a mark and must keep taking half the line — the self-sized branch
-     * may not swallow it.
-     *
-     * And it is the *newcomer* here, which is the direction `isPairable` leaves
-     * alone: the target is drawn on the name underneath, which is allowed. What
-     * is refused is the mirror image — see "refuses to split a gallery's line"
-     * below.
+     * The report: a Button across the whole card offered a logo a square at each
+     * end of its line, on a line that plainly had no room — and landing there
+     * narrowed the Button to make some, which is a drop resizing a block nobody
+     * picked up. A full-width line is refused outright now.
      */
-    const slots = sideSlots(full, newBlock("gallery"), fullMeasure);
-
-    expect(slots).toHaveLength(2);
-    expect(slots[0]).toMatchObject({
-      half: "start",
-      left: 12,
-      width: columnPx(50),
-      widthPct: 50,
-      pairId: "a",
-      pairWidthPct: 50,
+    const full = cardWith({
+      bottom: [{ id: "button", type: "button", buttonFull: true }],
     });
-    expect(slots[0].mark).toBeUndefined();
-  });
-});
-
-describe("sideSlots — the blocks a drop may not narrow", () => {
-  /**
-   * A photo filling the top zone: 25% of a 440px card is 110px, and it bleeds,
-   * so its own rect reaches the card's edges while the *line* still runs 12→308.
-   */
-  const photoCard = cardWith({
-    top: [{ id: "photo", type: "gallery", heightPct: 25 }],
-  });
-  const photoMeasure = [
-    zoneOf("top", 12, 122, [
-      { id: "photo", top: 12, bottom: 122, left: 0, right: 320 },
-    ]),
-  ];
-
-  it("refuses to split a gallery's line, whatever is in the hand", () => {
-    /*
-     * The whole of `isPairable`. A photo is the one block whose job is its size,
-     * so halving it is a change to the design rather than a way of making room —
-     * and a drop is not how someone asks for that. Nothing is offered over it,
-     * which is what leaves `blockedFaces` as the answer there and the drop a
-     * no-op.
-     */
-    expect(sideSlots(photoCard, newBlock("name"), photoMeasure)).toEqual([]);
-    expect(sideSlots(photoCard, newBlock("divider"), photoMeasure)).toEqual([]);
-    expect(sideSlots(photoCard, newBlock("logo"), photoMeasure)).toEqual([]);
-  });
-
-  it("still refuses the line while the photo is on somebody else's card half", () => {
-    // The same photo, in the middle zone with a name under it, so the refusal is
-    // about the block rather than about the zone it happens to be in.
-    const layout = cardWith({
-      middle: [
-        { id: "photo", type: "gallery", heightPct: 25 },
-        { id: "name", type: "name" },
-      ],
-    });
-
-    const slots = sideSlots(layout, newBlock("address"), [
-      zoneOf("middle", 12, 428, [
-        { id: "photo", top: 12, bottom: 122, left: 0, right: 320 },
-        { id: "name", top: 130, bottom: 158, left: 12, right: 308 },
+    const fullMeasure = [
+      zoneOf("bottom", 380, 428, [
+        { id: "button", top: 380, bottom: 408, left: 12, right: 308 },
       ]),
-    ]);
+    ];
 
-    // Two columns over the name and none at all over the photo.
-    expect(slots.map((slot) => slot.index)).toEqual([1, 2]);
-    expect(slots.every((slot) => slot.y >= 130)).toBe(true);
-  });
-
-  it("still offers the room beside a gallery its owner narrowed by hand", () => {
-    /*
-     * The other half of the rule, and the reason it is about *pairing* rather
-     * than about the gallery sharing a line at all. Take the photo to 50% with
-     * the Width slider and the 50% beside it is real free space — a column like
-     * any other, which is exactly what the Width slider is for.
-     */
-    const narrowed = cardWith({
-      top: [{ id: "photo", type: "gallery", heightPct: 25, widthPct: 50 }],
-    });
-
-    const slots = sideSlots(narrowed, newBlock("name"), [
-      zoneOf("top", 12, 122, [
-        { id: "photo", top: 12, bottom: 122, left: 12, right: 12 + columnPx(50) },
-      ]),
-    ]);
-
-    expect(slots).toContainEqual(
-      expect.objectContaining({
-        zone: "top",
-        index: 1,
-        half: "end",
-        left: 12 + columnPx(50) + 8,
-        width: columnPx(50),
-        widthPct: 50,
-      }),
-    );
-    // And nothing narrows: the room was already reserved, so no target names a
-    // block to pay for it and the photo keeps the width its owner chose.
-    expect(slots.some((slot) => slot.pairId !== undefined)).toBe(false);
+    expect(sideSlots(full, newBlock("logo"), fullMeasure)).toEqual([]);
+    expect(sideSlots(full, newBlock("divider"), fullMeasure)).toEqual([]);
+    expect(sideSlots(full, newBlock("button"), fullMeasure)).toEqual([]);
   });
 });
 
@@ -1661,9 +1323,9 @@ describe("dropSlots — a mark with nowhere to stand but the edge above it", () 
   it("draws the square straddling the edge rather than a hairline", () => {
     /*
      * The run below the photo is 0px tall, so it used to come back as a seam —
-     * height zero, which `dropRegions` drops outright, so nothing was drawn at
-     * rest and the one place a logo could go looked like no place at all. The
-     * drop always worked; it just never said so.
+     * height zero, which has nothing to outline, so nothing was drawn at rest
+     * and the one place a logo could go looked like no place at all. The drop
+     * always worked; it just never said so.
      *
      * A default logo is 62px and arrives with `overlapPct: 50`, so `blockEdges`
      * pulls it up 31px: the square is drawn at 122 + 8 - 31 = 99, half over the
@@ -1692,13 +1354,11 @@ describe("dropSlots — a mark with nowhere to stand but the edge above it", () 
         y: 99,
         height: 62,
         offset: 0,
-        widthPct: 100,
         /*
          * And an **empty** area, which is the other half of the same fact: this
-         * run has no free space at all, so there is nothing for the resting
-         * layer to outline. Drawn from the square instead, the faint box would
-         * sit half over the photo — a place offered on top of a block that is
-         * already there. It is shown under the pointer alone. See `dropRegions`.
+         * run has no free space at all, so the place catches the pointer with its
+         * own square (`areaBands`). It is outlined at that square, half over the
+         * photo, because that is where the logo lands.
          */
         areaTop: 130,
         areaBottom: 130,
@@ -1720,6 +1380,57 @@ describe("dropSlots — a mark with nowhere to stand but the edge above it", () 
           ]),
         ],
         13,
+      ),
+    ).toEqual([]);
+  });
+
+  it("offers no straddle where the half below the edge would push the next line down", () => {
+    /*
+     * An address 8px under the photo. The square would spend 31px below the
+     * photo's edge and the address has none to give, so the edge between them is
+     * no place for a logo — where the address's own bottom edge, with the zone's
+     * room under it, still is.
+     */
+    const crowded = cardWith({
+      top: [
+        { id: "photo", type: "gallery", heightPct: 25 },
+        { id: "address", type: "address" },
+      ],
+    });
+
+    const slots = dropSlots(
+      crowded,
+      newBlock("logo"),
+      [
+        zoneOf("top", 12, 150, [
+          { id: "photo", top: 12, bottom: 122, left: 0, right: 320 },
+          { id: "address", top: 130, bottom: 150, left: 12, right: 308 },
+        ]),
+      ],
+      62,
+    );
+
+    expect(slots.filter((slot) => slot.index === 1)).toEqual([]);
+    expect(slots.filter((slot) => slot.index === 2)).toMatchObject([
+      { y: 150 + 8 - 31, height: 62 },
+    ]);
+  });
+
+  it("offers no straddle that would hang off the bottom of the card", () => {
+    // A Button at the foot of a 440px card: a square straddling its bottom edge
+    // would reach 467, past the card, on the one line that has no room at all.
+    const footer = cardWith({ bottom: [{ id: "button", type: "button" }] });
+
+    expect(
+      dropSlots(
+        footer,
+        newBlock("logo"),
+        [
+          zoneOf("bottom", 400, 428, [
+            { id: "button", top: 400, bottom: 428, left: 12, right: 308 },
+          ]),
+        ],
+        62,
       ),
     ).toEqual([]);
   });
@@ -2067,7 +1778,6 @@ describe.each([20, 28])(
         index: slot.index,
         offset: slot.offset,
         ...(slot.nextOffset === undefined ? {} : { nextOffset: slot.nextOffset }),
-        ...(slot.widthPct === undefined ? {} : { widthPct: slot.widthPct }),
         ...(vacate === null
           ? {}
           : { vacateId: vacate.id, vacateOffset: vacate.offset }),
@@ -2194,13 +1904,11 @@ describe("a narrowed block alone on its line frees it", () => {
    * indices shift, so the block landed a line-and-a-gap above the mark someone
    * had aimed at: 26px on this card, and the description under it moved with it.
    *
-   * The heights below are what the browser measures for this card: a name is
-   * 20px on a line of its own, 36px when it is half the card and its text wraps
-   * to two lines. Both appear, because the whole point of this gesture is that
-   * the block changes width — and therefore height — as it lands.
+   * A narrowed name is 36px here — half the card, its text wrapping to two lines
+   * — and it stays that: a drop keeps a block's width, so it keeps the height
+   * that width gives it too.
    */
-  const NARROW_H = 36;
-  const WIDE_H = 20;
+  const NAME_H = 36;
   const DESCRIPTION_H = 72;
 
   const start = cardWith({
@@ -2210,23 +1918,17 @@ describe("a narrowed block alone on its line frees it", () => {
     ],
   });
 
-  /** 12 + 36 + 8 + 200 — the name's line is the narrow one while it is drawn. */
+  /** 12 + 36 + 8 + 200. */
   const DESC_TOP = 256;
 
   const measure = [
     zoneOf("middle", 12, 428, [
-      { id: "name", top: 12, bottom: 12 + NARROW_H, left: 12, right: 12 + columnPx(50) },
+      { id: "name", top: 12, bottom: 12 + NAME_H, left: 12, right: 12 + columnPx(50) },
       { id: "description", top: DESC_TOP, bottom: DESC_TOP + DESCRIPTION_H },
     ]),
   ];
 
-  /*
-   * The height the block will draw *where the mark puts it*, which is a line of
-   * its own — every slot `dropSlots` returns is full width. Measuring the block
-   * as it is drawn now would divide the run by 36 and charge the description 36
-   * for a block about to be 20.
-   */
-  const slots = () => dropSlots(start, moveBlock("name"), measure, WIDE_H);
+  const slots = () => dropSlots(start, moveBlock("name"), measure, NAME_H);
   /*
    * The run above the description — the one the block is being lifted out of.
    * There is a second below it, running to the zone's own bottom edge, and it
@@ -2248,11 +1950,11 @@ describe("a narrowed block alone on its line frees it", () => {
 
     expect(run.length).toBeGreaterThan(1);
     for (const slot of run) {
-      expect(slot.y + WIDE_H + 8 + slot.nextOffset!).toBe(DESC_TOP);
+      expect(slot.y + NAME_H + 8 + slot.nextOffset!).toBe(DESC_TOP);
     }
   });
 
-  it("lands the block on the mark it drew, and leaves the description alone", () => {
+  it("lands the block on the mark it drew, at its own width, and leaves the description alone", () => {
     /*
      * The assertion the browser was making by hand. A slot's `y` is a promise
      * about where the block goes; `offset` is how that promise is stored, and
@@ -2266,19 +1968,25 @@ describe("a narrowed block alone on its line frees it", () => {
         index: slot.index,
         offset: slot.offset,
         ...(slot.nextOffset === undefined ? {} : { nextOffset: slot.nextOffset }),
-        ...(slot.widthPct === undefined ? {} : { widthPct: slot.widthPct }),
         ...(vacate === null ? {} : { vacateId: vacate.id, vacateOffset: vacate.offset }),
-      })!;
+      });
 
-      const [name, description] = landed.zones.middle;
+      // The first place is where the name already is, at the width it already
+      // has — a drop there changes nothing.
+      if (slot.offset === 0) {
+        expect(landed).toBeNull();
+        continue;
+      }
+
+      const [name, description] = landed!.zones.middle;
 
       // Where the mark was drawn, in the card the drop actually produces.
       expect(name.id).toBe("name");
       expect(12 + (name.offset ?? 0)).toBe(slot.y);
-      // Full width, because the mark was drawn across the whole card.
-      expect(name.widthPct).toBeUndefined();
+      // Still half the card: the spot was drawn at its width, not across it.
+      expect(name.widthPct).toBe(50);
       // And the description's own top edge, unmoved.
-      expect(12 + (name.offset ?? 0) + WIDE_H + 8 + (description.offset ?? 0)).toBe(
+      expect(12 + (name.offset ?? 0) + NAME_H + 8 + (description.offset ?? 0)).toBe(
         DESC_TOP,
       );
     }
@@ -2289,7 +1997,7 @@ describe("a narrowed block alone on its line frees it", () => {
     // face anything is refused for.
     expect(
       blockedFaces(start, moveBlock("name"), measure).some(
-        (face) => face.top < 12 + NARROW_H,
+        (face) => face.top < 12 + NAME_H,
       ),
     ).toBe(false);
   });
@@ -2304,10 +2012,9 @@ describe("a narrowed block alone on its line frees it", () => {
 
   it("still keeps a line whose other half is staying", () => {
     /*
-     * The guard for dropping `!row.shared`. A pair is not freed by picking up
-     * one of its halves — the partner is still drawn there, still holding the
-     * line's height — and treating it as free would draw a run straight over a
-     * block that is not moving.
+     * A pair is not freed by picking up one of its halves — the partner is
+     * still drawn there, still holding the line's height — and treating it as
+     * free would draw a run straight over a block that is not moving.
      */
     const paired = cardWith({
       middle: [
@@ -2323,7 +2030,7 @@ describe("a narrowed block alone on its line frees it", () => {
         { id: "address", top: 12, bottom: 48, left: 12 + columnPx(50) + 8, right: 308 },
         { id: "description", top: DESC_TOP, bottom: DESC_TOP + DESCRIPTION_H },
       ]),
-    ], WIDE_H);
+    ], NAME_H);
 
     // Nothing is offered above the line: the zone's content edge touches it, so
     // there is no room there, and a block goes where there is room.
@@ -2334,8 +2041,8 @@ describe("a narrowed block alone on its line frees it", () => {
     /*
      * The guard for adding `count`. `row.blocks` holds only what was measured,
      * so a pair whose partner has not rendered passes `every` on the dragged
-     * block alone — and `!row.shared` used to refuse it by accident. Freeing
-     * that line would hand a run the pixels of a block still drawn in them.
+     * block alone. Freeing that line would hand a run the pixels of a block
+     * still drawn in them.
      */
     const paired = cardWith({
       middle: [
@@ -2350,7 +2057,7 @@ describe("a narrowed block alone on its line frees it", () => {
         { id: "name", top: 12, bottom: 48, left: 12, right: 12 + columnPx(50) },
         { id: "description", top: DESC_TOP, bottom: DESC_TOP + DESCRIPTION_H },
       ]),
-    ], WIDE_H);
+    ], NAME_H);
 
     expect(run.every((slot) => slot.y >= 48)).toBe(true);
   });
@@ -2394,11 +2101,11 @@ describe("a shared line that shrinks when one of its blocks leaves", () => {
     ]),
   ];
 
-  /** What the name draws once it is back across the whole card. */
-  const WIDE_H = 28;
+  /** The name's own height, which it keeps: a drop does not change its width. */
+  const NAME_H = 44;
 
   const slots = () =>
-    dropSlots(start, moveBlock("name"), measure, WIDE_H).filter(
+    dropSlots(start, moveBlock("name"), measure, NAME_H).filter(
       (slot) => slot.y > LOGO_BOTTOM && slot.y < DESC_TOP,
     );
 
@@ -2413,7 +2120,7 @@ describe("a shared line that shrinks when one of its blocks leaves", () => {
 
     expect(run.length).toBeGreaterThan(1);
     for (const slot of run) {
-      expect(slot.y + WIDE_H + 8 + slot.nextOffset!).toBe(DESC_TOP);
+      expect(slot.y + NAME_H + 8 + slot.nextOffset!).toBe(DESC_TOP);
     }
   });
 
@@ -2426,7 +2133,6 @@ describe("a shared line that shrinks when one of its blocks leaves", () => {
         index: slot.index,
         offset: slot.offset,
         ...(slot.nextOffset === undefined ? {} : { nextOffset: slot.nextOffset }),
-        ...(slot.widthPct === undefined ? {} : { widthPct: slot.widthPct }),
         ...(vacate === null ? {} : { vacateId: vacate.id, vacateOffset: vacate.offset }),
       })!;
 
@@ -2434,12 +2140,12 @@ describe("a shared line that shrinks when one of its blocks leaves", () => {
       const name = middle.find((block) => block.id === "name")!;
       const description = middle.find((block) => block.id === "description")!;
 
-      // Full width, off the logo's line, and where the mark said it would be.
-      expect(name.widthPct).toBeUndefined();
+      // At its own width, off the logo's line, and where the mark said it would be.
+      expect(name.widthPct).toBe(36);
       expect(LOGO_BOTTOM + 8 + (name.offset ?? 0)).toBe(slot.y);
       // And the description's top edge, unmoved — measured the way the card
       // stacks it: the logo's line, the gap, the name, the gap, its own space.
-      expect(slot.y + WIDE_H + 8 + (description.offset ?? 0)).toBe(DESC_TOP);
+      expect(slot.y + NAME_H + 8 + (description.offset ?? 0)).toBe(DESC_TOP);
     }
   });
 
@@ -2482,21 +2188,21 @@ describe("a shared line that shrinks when one of its blocks leaves", () => {
  */
 describe("sideSlots — the line below a column landing", () => {
   /*
-   * The reported card: a photo, a logo with a name beside it, and a category at
-   * the bottom. Here the name is out on a line of its own and about to be
-   * dropped back into the room beside the logo.
+   * The reported card: a photo, a logo, a 38% name and a category at the
+   * bottom. The name is out on a line of its own and about to be dropped back
+   * into the room beside the logo.
    *
    * The logo is 14% of a 440px card — 62px — pulled up 31 by `overlapPct: 50`,
-   * so its line sits at 118 and draws from 87. In flow it is 31px tall, so the
-   * line ends at 149; the name at 39% is 37px, so once it lands the line ends at
-   * 155 instead. The category has to give up those 6px of leading space to stay
+   * so its line sits at 130 and draws from 99. In flow it is 31px tall, so the
+   * line ends at 161; the name at 38% is 37px, so once it lands the line ends at
+   * 167 instead. The category has to give up those 6px of leading space to stay
    * where it is, and giving up nothing is the bug.
    */
   const card = cardWith({
     middle: [
       { id: "photo", type: "gallery", heightPct: 25 },
       { id: "logo", type: "logo", heightPct: 14, overlapPct: 50, align: "center" },
-      { id: "name", type: "name" },
+      { id: "name", type: "name", widthPct: 38, newLine: true },
       { id: "category", type: "category", offset: 40 },
     ],
   });
@@ -2504,15 +2210,15 @@ describe("sideSlots — the line below a column landing", () => {
   const measured = [
     zoneOf("middle", 12, 452, [
       { id: "photo", top: 12, bottom: 122, left: 12, right: 308 },
-      { id: "logo", top: 99, bottom: 161, left: 150, right: 212 },
-      { id: "name", top: 169, bottom: 189, left: 12, right: 308 },
+      { id: "logo", top: 99, bottom: 161, left: 129, right: 191 },
+      { id: "name", top: 169, bottom: 206, left: 12, right: 12 + columnPx(38) },
       { id: "category", top: 237, bottom: 261, left: 12, right: 308 },
     ]),
   ];
 
-  /** The name is 37px in a column and 20px across the whole line. */
-  const heightAt = (id: string, widthPct: number, _px: number, fallback: number) =>
-    id === "name" ? (widthPct >= 100 ? 20 : 37) : fallback;
+  /** The name is 37px at 38% of the line, which is the width it keeps. */
+  const heightAt: HeightAt = (id, _widthPct, _widthPx, fallback) =>
+    id === "name" ? 37 : fallback;
 
   it("charges the line below for the room the newcomer takes", () => {
     const beside = sideSlots(card, moveBlock("name"), measured, heightAt).filter(
@@ -2528,24 +2234,17 @@ describe("sideSlots — the line below a column landing", () => {
 
   it("charges a mark landing on a zone's first line in full", () => {
     /*
-     * The same card with the logo in the hand instead, landing beside a name
-     * that is already narrow — and the name's line is the **first** of its zone,
-     * so there is nothing above for the logo to be pulled over. `blockEdges`
-     * refuses that overlap (see `upwardLiftOf`), so the mark really does take
-     * all 62 of its own pixels and the line below really does owe them.
-     *
-     * Charging only half here is what pushed the card down by an overlap that
-     * was never applied: on the reported card — a photo in the top zone and
-     * `[address][logo]` opening the middle — every move of the logo walked the
-     * block under it 31px further down until it fell out of the card.
+     * The same idea with the logo in the hand, landing beside a name that is
+     * already narrow — and the name's line is the **first** of its zone, so there
+     * is nothing above for the logo to be pulled over. `blockEdges` refuses that
+     * overlap (see `upwardLiftOf`), so the mark really does take all 62 of its
+     * own pixels and the line below really does owe them.
      */
     const withNarrow = cardWith({
       middle: [
         { id: "name", type: "name", widthPct: 39 },
         { id: "category", type: "category", offset: 40 },
-        // Last, so it is on a line of its own — next to the name it would
-        // already be on that line, and `selfTargets` rightly offers a mark
-        // nothing on the line it is standing in.
+        // Last, so it is on a line of its own.
         { id: "logo", type: "logo", heightPct: 14, overlapPct: 50, align: "center" },
       ],
     });
@@ -2571,23 +2270,17 @@ describe("sideSlots — the line below a column landing", () => {
 
   it("charges only for the half of a mark that has a line above it", () => {
     /*
-     * The other side of the same rule, and the one the arithmetic exists for.
      * Put a photo above and the name's line is no longer the zone's first, so a
      * logo landing on it *is* pulled up: 62px of ink, 31px of line, because half
      * of it hangs over the photo. Charging the full 62 would push the card down
      * by an overlap that takes no room.
-     *
-     * The name is measured short on purpose. At 20px its line ends at 150 and
-     * the mark's half ends at 161, so the mark is what decides the answer —
-     * with the whole 62 it would end at 192 and the category would be charged
-     * 31px less. On a longer name the two are indistinguishable.
      */
     const under = cardWith({
       middle: [
         { id: "photo", type: "gallery", heightPct: 25 },
         { id: "name", type: "name", widthPct: 39 },
         { id: "category", type: "category", offset: 46 },
-        // Last, so it is on a line of its own — see the note above.
+        // Last, so it is on a line of its own.
         { id: "logo", type: "logo", heightPct: 14, overlapPct: 50, align: "center" },
       ],
     });
@@ -2597,7 +2290,7 @@ describe("sideSlots — the line below a column landing", () => {
         { id: "photo", top: 12, bottom: 122, left: 12, right: 308 },
         { id: "name", top: 130, bottom: 150, left: 12, right: 127 },
         { id: "category", top: 215, bottom: 239, left: 12, right: 308 },
-        { id: "logo", top: 216, bottom: 278, left: 12, right: 74 },
+        { id: "logo", top: 250, bottom: 312, left: 12, right: 74 },
       ]),
     ];
 
@@ -2615,17 +2308,18 @@ describe("sideSlots — the line below a column landing", () => {
     const alone = cardWith({
       middle: [
         { id: "logo", type: "logo", heightPct: 14, align: "center" },
-        { id: "name", type: "name" },
+        { id: "name", type: "name", widthPct: 38, newLine: true },
       ],
     });
 
     const slots = sideSlots(alone, moveBlock("name"), [
       zoneOf("middle", 12, 452, [
-        { id: "logo", top: 12, bottom: 74, left: 150, right: 212 },
-        { id: "name", top: 82, bottom: 102, left: 12, right: 308 },
+        { id: "logo", top: 12, bottom: 74, left: 129, right: 191 },
+        { id: "name", top: 82, bottom: 102, left: 12, right: 12 + columnPx(38) },
       ]),
     ]);
 
+    expect(slots.length).toBeGreaterThan(0);
     for (const slot of slots) expect(slot.nextOffset).toBeUndefined();
   });
 
@@ -2633,15 +2327,14 @@ describe("sideSlots — the line below a column landing", () => {
     /*
      * The name's own line sits between the logo's and the category's, and it is
      * about to go — so the line that ends up under the logo is the category's,
-     * and it is the category the number has to be about. Charging the name would
-     * be writing onto a block the drop is in the middle of moving.
+     * and it is the category the number has to be about.
      */
     const beside = sideSlots(card, moveBlock("name"), measured, heightAt).filter(
       (slot) => slot.line === 1,
     );
 
-    // 62 is measured to the category at 237. To the name's own line at 169 it
-    // would have been 0, and the card would have collapsed under the drop.
+    // 62 is measured to the category at 237. Measured to the name's own line at
+    // 169 there would have been no room at all, and no place offered.
     expect(beside[0].nextOffset).toBe(62);
   });
 });
@@ -2813,7 +2506,6 @@ describe("dragging the logo itself does not move the block under it", () => {
       index: slot.index,
       offset: slot.offset,
       ...(slot.nextOffset === undefined ? {} : { nextOffset: slot.nextOffset }),
-      ...(slot.widthPct === undefined ? {} : { widthPct: slot.widthPct }),
       ...(vacate === null
         ? {}
         : { vacateId: vacate.id, vacateOffset: vacate.offset }),
@@ -2962,7 +2654,7 @@ describe("lendToEndZones", () => {
   /*
    * The bug this answers, in numbers: on the default card the bottom zone is the
    * only band that pins, and while it is empty it measures nothing at all — so
-   * `dropSlots` produced a zero-span run for it, `dropRegions` drew nothing, and
+   * `dropSlots` produced a zero-span run for it, nothing was outlined, and
    * every "put this at the bottom" gesture landed in the middle instead, held
    * there by an `offset` that is space *above* a block rather than a promise
    * about the card's edge.

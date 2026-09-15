@@ -47,11 +47,13 @@ export function useGhostSnap(
 
     /*
      * How the copy is seated. A block moved on the card is cloned, so its copy
-     * *is* the block about to land and is fitted as one; a palette tile is a
-     * label standing in for one, and squashing the pill into a 24px line would
-     * draw something that is neither. See `SnapBox.fit`.
+     * *is* the block about to land and is fitted as one. A palette tile is only
+     * a pill standing in for one — seated in a spot the size of a photo it was a
+     * small label lost in a large box — so the overlay draws the real block in
+     * the spot instead (`DropBlockPreview`) and the pill steps aside. See
+     * `SnapBox.fit`.
      */
-    const fit = toCardDrag(dragged)?.kind === "move" ? "block" : "label";
+    const fit = toCardDrag(dragged)?.kind === "move" ? "block" : "preview";
 
     return registerSnap((id) => {
       const band = byId.get(id);

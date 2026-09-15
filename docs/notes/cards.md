@@ -92,6 +92,11 @@ building the same card from the same functions in `packages/shared/`.
 - `emptyBlockHeight` is the reservation an empty block holds, read off the block's own
   settings. **Its numbers were measured in the browser, not derived.** The floor lands on
   the block's **content** element in every renderer, never on its box.
+- **An empty Description draws the sample location's text on the designer's canvas**,
+  faded (`.card-text--stand-in`), and nothing anywhere else. A Description that renders
+  nothing is one empty line with no words in it, and was reported as a block that does
+  not work. `hasBlockContent` still answers false, so the reservation and the editor's
+  `+` slot are unchanged.
 - `removeCardBlock` takes a `VacatedSpace`, so a delete refunds what the arrival was
   charged and the card survives a round trip. `CardCanvas` reports `geometry.vacate`
   upward; `CardDesigner` holds it in a **ref**, not state.
@@ -153,8 +158,9 @@ building the same card from the same functions in `packages/shared/`.
 - **One spring on a progress value, drawing `mix(from, to)` with `to` read live.** A
   spring per coordinate aimed at the pointer chases a target that moved after it was
   aimed; the live mix converges on the hand exactly and then hands back to
-  `moveRowGhost`. A moved block's copy takes the slot's height (`fillHeight`); a palette
-  tile keeps its own and is centred, because it is a label and not the block.
+  `moveRowGhost`. A moved block's copy takes the slot's box; a palette tile's copy fades
+  out while it is seated (`fit: "preview"`), because the overlay draws the real block
+  there — see the preview bullet below.
 - **The landed block's travel is turned off by its transition — `layout: { duration: 0
   }` — never by removing `layout` or `layoutId`.** At release the copy is already on the
   slot, so the block gliding in from its old place draws a second block crossing the
@@ -189,11 +195,49 @@ building the same card from the same functions in `packages/shared/`.
   vanilla `animate`, so `ghost-magnet.ts` asks `matchMedia` itself and jumps. The
   resting regions' 2px / 70% / tinted look is their static form once `MotionConfig`
   stops the breathing.
-- **A region pops and breathes on two nested elements**, one `scale` each
-  (`DropRegionOutline`). It now carries a faint accent tint, which reverses "outlines
-  and nothing else" for the resting layer only — a region is free space by construction,
-  so the tint covers nothing. The bold mark is a stronger tint with no edge at all — see
-  the bullet on one edge below.
+- **A spot pops and breathes on two nested elements**, one `scale` each
+  (`DropSpotOutline`), with a faint accent tint that covers nothing — a spot is free
+  space by construction. The bold mark is a stronger tint at the same box with no edge
+  of its own — see the bullet on one edge below.
+- **Every place is outlined at the size of the block, and nothing is outlined at the
+  size of the space.** `DropSpotOutline` draws one dashed box per band, from the box the
+  block will fill — the straddling logo's square included. The resting layer used to be
+  `dropRegions` (deleted): one box per run of free space, which drew a tall box for a
+  small logo, three for a logo across a line, and nothing at all for the straddle, whose
+  area is empty. It was reported as dashes where nothing could go and none where it
+  could. `.card-drop-spot` is lighter than the region was, because a Name on an empty
+  card is a column of a dozen of them.
+- **A drop never resizes a block — the one in the hand or one already on the card.**
+  `CardDropTarget` has no `widthPct` and no `pairId`. A run keeps a narrowed block's
+  width and draws it that wide (`fitRunsToBlock`); `sideSlots` lays each line out again
+  with the block in it and keeps a position only where every block already on that line
+  stays where it was drawn (its own line excepted — rearranging that is the gesture).
+  That deleted pairing by drop — a Button across the card offered a logo a square at
+  each end, and landing there narrowed the Button — the occupied column, which shoved
+  the block sitting there across its line, and `isPairable`. Side by side is the Width
+  control first, then a drop into the room it leaves.
+- **Joining a line is never a non-move.** With no width on a target, a block alone on
+  the line directly above or below the one it joins is already at the index, offset and
+  side the target names; `dropCardBlock`'s guard asks `target.line === undefined`, or
+  it swallows that drop.
+- **A logo's square is never smaller than the logo, and squares never overlap.**
+  `splitAlignColumns` offers three across when the travel is two squares, the two ends
+  when it is one, and otherwise the one square at the block's own alignment. A place on
+  a line is refused when the line it grows into would reach the line below it less the
+  gap — a logo joining a line of text makes that line as tall as the logo. A straddle
+  (`run`'s no-room branch) is offered only where the half below the edge fits before the
+  next line, or, at a zone's end, where the square stays on the card: measured on a real
+  card, every edge had been offered one, and outlined at rest they overlapped each other
+  over the text they straddled, with a row under a full-width Button hanging off the card.
+- **A block off the palette is measured, not guessed.** `CardCanvas` renders a hidden
+  copy (`DropBlockProbe`, `[data-drop-probe]`) in the commit that sets `dragged`, and
+  `draggedHeight` reads it for every type without a height control; `hasRoomFor` takes
+  the same number as `newHeight`. One line of guess gave an open week of hours a 24px
+  spot, and a yes on a card with no room for its 154px.
+- **The spot under the pointer draws the block off the palette** (`DropBlockPreview`
+  inside `SlotMark`), for a drag and a click carry alike — the click carry has no copy in
+  the hand, so it showed nothing before the drop. It is `inert`, and it covers nothing
+  because a spot is free space. A moved block keeps its own seated clone instead.
 - **A block drops only into free space. There are no seams.** A run with no room for the
   block offers nothing (`run` returns `[]`). It used to offer a zero-height "seam" that
   pushed everything below it down — hairline places at the top of every zone, between
@@ -207,10 +251,11 @@ building the same card from the same functions in `packages/shared/`.
   draw as the block landing somewhere other than under the pointer. Blocked faces and
   pair targets span the **whole line** for the same reason — the 16px strips `faceBand`
   used to leave at each end existed only to keep the seams reachable.
-- **One edge on a place, and it is the area's.** The bold mark (`.card-drop-slot`) is a
-  tint, not dashes: it sits inside a region with dashes of its own — measured 220×24
-  inside 222×28 — and two edges a pixel apart, breathing against each other, read as a
-  border on the block seated between them. The copy wears no edge either:
+- **One edge on a place, and it is the spot's.** The bold mark (`.card-drop-slot`) is a
+  tint, not dashes, at the same box as the spot's dashed outline. It used to sit inside a
+  region with dashes of its own — measured 220×24 inside 222×28 — and two edges a pixel
+  apart, breathing against each other, read as a border on the block seated between
+  them. The copy wears no edge either:
   `.row-ghost--snapped` clears the root's ground, border and shadow; a carried palette
   tile hands the root's chrome to the pill (`.row-ghost:has(> .palette-tile)`), where it
   otherwise traced a 12px-radius rectangle round a pill; and a moved block's clone drops
@@ -220,10 +265,9 @@ building the same card from the same functions in `packages/shared/`.
   `opacity-35`, so the copy measured 0.35 of the root's 0.9; `mountRowGhost` sets the
   copy's own opacity to 1, and a seated root is 1 as well. The magnet *scales* the copy —
   it never lays it out again — to sit `SNAP_INSET` inside the slot, on the same spring as
-  the box. A moved block (`fit: "block"`) is laid out at the slot's size; a palette tile
-  (`fit: "label"`) is centred at its own size **and keeps its pill ground** — shedding it
-  left dark text on the veil — losing only the hairline and its padding, so a 24px Name
-  place seats it at 0.75.
+  the box. A moved block (`fit: "block"`) is laid out at the slot's size. A palette tile
+  (`fit: "preview"`) is the one exception to "never dimmed": seated, it fades to nothing
+  (`.row-ghost--previewed`), because it is a pill and the spot is drawing the block.
 - **The empty image block is a drag source, and it is not dashed.** Its file-drop
   `<label>` carried `NO_DRAG_PROPS` over the whole block, so an image block with no photo
   could not be moved or removed at all. Dashes on this canvas mean a place a block can
@@ -1795,3 +1839,20 @@ every keystroke — and a space typed while composing is always a *trailing* spa
 at that instant, so `Book now` came out `Booknow`. The blank test stays and the
 normalisation goes; `readBlock` still collapses and trims on the way in, which is
 the moment a stored label is read.
+
+**Drop spots are the size of the block, and a drop resizes nothing (2026-09-15).**
+Reported together: the thing being dragged was a pill lost inside a much larger dashed
+box; a click carry showed nothing at all before the drop; a Logo was offered dashed
+areas beside a full-width Button and squares smaller than itself, while the one place
+it straddles the gallery had no dashes; and a Description dropped onto a location with
+no description was an empty strip. Every one was the geometry answering "where is there
+space" when the question on screen was "where does this block, at this size, go". The
+answer was chosen with the owner — outline every place at the block's size, and never
+offer a place that changes a size — and the bullets under "Dropping a block" are the
+rules that came out of it. Three reversals are worth naming. The resting layer is no
+longer areas: the "thirteen outlines is unreadable" argument lost to outlines that were
+the wrong shape. Pairing by drop is gone, and with it the gesture the Locations panel
+teaches; the Width control is how room is made. And a drop no longer widens a narrowed
+block to its line — that was introduced so a full-width outline would not promise a
+block twice the size of the one landing, and the outline is drawn at the block's width
+instead.

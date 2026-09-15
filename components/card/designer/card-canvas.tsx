@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 
 import { useRowDragState } from "@/components/groups/row-drag-context";
 import { useDropTarget } from "@/components/groups/use-row-drag";
@@ -9,7 +9,12 @@ import {
   CARD_BLOCK_ROW_CLASS,
   movingBlockMotion,
 } from "@/components/ui/list-row-motion";
-import type { CardDrag, CardDropTarget } from "@/lib/card/card-edits";
+import {
+  makeCardBlock,
+  type CardDrag,
+  type CardDropTarget,
+} from "@/lib/card/card-edits";
+import { toCardDrag } from "@/lib/card/drop-bands";
 import type { VacatedSpace } from "@/lib/card/drop-slots";
 import type { MapField, Place } from "@/lib/repositories/types";
 import type { TagChip } from "@/packages/shared/tags";
@@ -39,6 +44,7 @@ import {
 import type { BlockResize } from "./block-resize-handle";
 import { CardDropOverlay } from "./card-drop-overlay";
 import { DesignerBlock } from "./designer-block";
+import { DropBlockProbe } from "./drop-preview";
 import { useCardDropBands } from "./use-drop-bands";
 
 /**
@@ -141,6 +147,19 @@ export function CardCanvas({
   onSampleImage: (file: File) => void;
 }) {
   const { dragged } = useRowDragState();
+
+  /*
+   * The block a palette tile is carrying, made once per gesture exactly as the
+   * drop will make it — so the hidden copy the geometry measures and the preview
+   * drawn in the spot under the pointer are the block that lands. It is never
+   * put in the layout, and the id it mints goes with the gesture.
+   */
+  const carried = dragged ? toCardDrag(dragged) : null;
+  const incomingType = carried?.kind === "new" ? carried.type : null;
+  const incoming = useMemo(
+    () => (incomingType ? makeCardBlock(incomingType) : null),
+    [incomingType],
+  );
 
   /*
    * Where this drag could land, measured off the card once when it starts.
@@ -492,9 +511,25 @@ export function CardCanvas({
        * mounted with its last props for the length of the fade; the `key` is
        * what identifies it across that removal.
        */}
+      {/*
+       * The block a palette tile is carrying, laid out out of sight so the drop
+       * geometry can measure it (`draggedHeight` in use-drop-bands.ts). In the
+       * same commit that sets `dragged`, which is the commit the measurement's
+       * layout effect runs after.
+       */}
+      {incoming ? (
+        <DropBlockProbe block={incoming} layout={layout} data={data} />
+      ) : null}
       <AnimatePresence>
         {geometry ? (
-          <CardDropOverlay key="drop" geometry={geometry} onDrop={onDrop} />
+          <CardDropOverlay
+            key="drop"
+            geometry={geometry}
+            onDrop={onDrop}
+            preview={
+              incoming ? { block: incoming, layout, data } : undefined
+            }
+          />
         ) : null}
       </AnimatePresence>
     </CardFrame>

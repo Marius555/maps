@@ -33,6 +33,7 @@ import {
 } from "@/packages/shared/card-layout";
 import { buttonTargetOf } from "@/packages/shared/card-button";
 import { directionsUrl } from "@/packages/shared/directions";
+import { SAMPLE_PLACE } from "@/lib/card/sample-place";
 
 /**
  * One block of a location card, in React.
@@ -230,19 +231,42 @@ export function CardBlockContent({
         <p className="card-text card-text--body line-clamp-2">{place.address}</p>
       ) : null;
 
-    case "description":
-      if (!place.description) return null;
+    case "description": {
+      /*
+       * A location with no description still shows one on the designer's
+       * canvas — the sample location's, faded — for the reason an untagged one
+       * still draws a chip there: a Description block that renders nothing is
+       * one empty line with no words in it, and someone who drops it sees a gap
+       * and concludes the block is broken. It was reported exactly that way. It
+       * is never this location's text, so it is drawn as a stand-in; a real card
+       * renders nothing, and `hasBlockContent` still says the block is empty.
+       */
+      const isStandIn = !place.description && data.isDesigner === true;
+      const text = place.description || (isStandIn ? SAMPLE_PLACE.description : "");
+      if (!text) return null;
 
       /* Clipped means folded — see `clampLines`. A paragraph nobody has clipped
          is the plain `<p>` it has always been, which is every card published so
-         far. */
+         far.
+
+         **A stand-in is held to the lines an empty block reserves** — one when
+         unclipped, the clamp's own when clipped (`emptyBlockHeight`). The sample
+         paragraph is five lines at the default width, and drawn whole it made an
+         unfilled Description 88px tall: measured, the card then refused to take
+         one at all on a design with a line of room. The stand-in says what the
+         block is; it must not change how much of the card the block costs. */
       return block.clampLines ? (
-        <Description text={place.description} />
+        <Description text={text} isStandIn={isStandIn} />
       ) : (
-        <p className="card-text card-text--strong whitespace-pre-line">
-          {place.description}
+        <p
+          className={`card-text card-text--strong whitespace-pre-line${
+            isStandIn ? " card-text--stand-in line-clamp-1" : ""
+          }`}
+        >
+          {text}
         </p>
       );
+    }
 
     case "hours":
       return (
@@ -321,7 +345,14 @@ export function CardBlockContent({
  * is a fact about this reading, not about the design. Nothing here is ever
  * written to the layout.
  */
-function Description({ text }: { text: string }) {
+function Description({
+  text,
+  isStandIn = false,
+}: {
+  text: string;
+  /** The designer's sample text standing in for a location with none. */
+  isStandIn?: boolean;
+}) {
   const [isOpen, setOpen] = useState(false);
 
   return (
@@ -349,7 +380,7 @@ function Description({ text }: { text: string }) {
       <span
         className={`card-text card-text--strong min-w-0 flex-1 whitespace-pre-line${
           isOpen ? "" : " card-clamp"
-        }`}
+        }${isStandIn ? " card-text--stand-in" : ""}`}
       >
         {text}
       </span>
@@ -531,7 +562,7 @@ function Gallery({
  * the picker.
  *
  * **Filled, never dashed.** On this canvas dashes mean a place a *block* can go
- * (`.card-drop-slot`, `.card-drop-region`), and a dashed box that says "drop"
+ * (`.card-drop-slot`, `.card-drop-spot`), and a dashed box that says "drop"
  * was taken for one of those. It is the plain fill a published card's empty
  * gallery already draws, and lights with a solid accent ring only while a file
  * is actually over it.

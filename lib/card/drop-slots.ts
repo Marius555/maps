@@ -1,25 +1,22 @@
 import type { DraggedObject } from "@/components/groups/use-row-drag";
 import {
-  CARD_BLOCKS,
   acceptsBlock,
+  cardRowBox,
   cardRows,
   findBlock,
   hasControl,
-  isPairable,
   isSelfSized,
+  lineTakes,
   rowOffsetHolder,
-  selfShareOf,
   shareOf,
-  shareOfAny,
   upwardLiftOf,
   type CardBlock,
   type CardBlockAlign,
-  type CardBlockType,
   type CardLayout,
   type CardZone,
 } from "@/packages/shared/card-layout";
 import { makeCardBlock, type CardDrag } from "./card-edits";
-import { MIN_BLOCK_HEIGHT, newBlockHeight } from "./card-space";
+import { MIN_BLOCK_HEIGHT } from "./card-space";
 import { canDrop, MIN_BAND, toCardDrag } from "./drop-bands";
 
 /**
@@ -29,7 +26,7 @@ import { canDrop, MIN_BAND, toCardDrag } from "./drop-bands";
  * was the one place a block could not be dropped. A zone with no blocks is
  * content-sized and therefore zero pixels tall (`CardZoneBox`'s `hasBlocks`), so
  * it measured `top === bottom`; `dropSlots` emitted a zero-span run for it,
- * `dropRegions` skipped it outright — nothing was drawn — and `dropBands` left it
+ * which had nothing to outline — nothing was drawn — and `dropBands` left it
  * a `MIN_BAND` sliver at the very edge of the card that nobody could aim at. The
  * middle zone's `flex-1` had meanwhile swallowed every leftover pixel, so the
  * empty space a person sees in the lower half of a card *is the middle zone*, and
@@ -617,8 +614,8 @@ export type DropSlot = {
   /** How wide the mark is. Absent goes with an absent `left`. */
   width?: number;
   /**
-   * This slot lands the block on a shared line, in the column named — beside the
-   * block already there, or in place of it.
+   * This slot lands the block on a line that already has something on it, at
+   * the end named — beside what is there, or across a line it owns alone.
    *
    * A side rather than a flag, because the index alone cannot say which: a slot
    * that puts the block *after* its partner and one that puts it *before* are
@@ -627,28 +624,6 @@ export type DropSlot = {
    * line. See `sideSlots`.
    */
   half?: "start" | "end";
-  /**
-   * How wide the block that lands here becomes, as a percentage of the card.
-   *
-   * **Every slot that is drawn full width says 100**, which is the rule that
-   * makes the mark honest: a run slot carries no `left`/`width`, so it is
-   * painted across the whole card, and a 50%-wide block released on one
-   * used to land at 50% with reserved space beside it — an outline promising a
-   * block twice the size of the one that arrived. Landing alone on a line is now
-   * how a block gets its full width back, and the Width slider is the only way to
-   * reserve room beside one.
-   *
-   * Column slots carry the width of the column they draw, worked out from
-   * `width` above against the line's own measured width, so the number stored and
-   * the box drawn are the same thing. It is absent on some of those, and that is
-   * still deliberate: a swap and a flip move a block between columns that already
-   * fit it, so neither touches a width.
-   *
-   * `withShare` in lib/card/card-edits.ts is what applies it, and it ignores a
-   * type with no `width` control — so a logo dropped on a run is not silently
-   * given a share it has no way to hold.
-   */
-  widthPct?: number;
   /**
    * The insertion index of the line this slot is on. Column slots only.
    *
@@ -660,31 +635,9 @@ export type DropSlot = {
    */
   line?: number;
   /**
-   * The block already on this line that has to narrow for this drop to fit.
-   *
-   * Present only on a **pair** target — the two columns offered over a block
-   * that is currently the full width of the card. Every other column target
-   * lands in room a narrowed block already reserved, so nothing about the block
-   * beside it changes; a pair target is the gesture that *creates* the reserved
-   * room, and the block already there is the other half of it.
-   */
-  pairId?: string;
-  /** What `pairId` becomes. Half, which is the only split a drop can ask for. */
-  pairWidthPct?: number;
-  /**
-   * The slice of the card that aims at this slot, when it is not the box drawn
-   * for it. Absent means the two are the same, which is every other slot.
-   *
-   * A pair target draws the whole column it will fill, so the outline promises
-   * the block's real size — which, for a logo joining a line of text, is taller
-   * than the line. What it *catches* is the line itself, top to bottom: the part
-   * of the card the block already sitting there covers.
-   */
-  hitTop?: number;
-  hitBottom?: number;
-  /**
-   * The free space this slot is one place in — what the *resting* outline draws,
-   * where `y`/`height` are what the bold mark under the pointer draws.
+   * The free space this slot is one place in — what its share of the pointer is
+   * cut from (`areaBands`), where `y`/`height` are the box the block lands in,
+   * which is what is outlined at rest and filled under the pointer.
    *
    * They differ in two ways and both matter. A mark straddling the block above
    * it is drawn half over that block, so an area merged from the slots' own
@@ -694,8 +647,8 @@ export type DropSlot = {
    *
    * An **empty** area — top and bottom equal — is a place with no free space of
    * its own: a mark landing on the bottom edge of the block above borrows that
-   * block and spends nothing. It is a real drop, it draws no resting outline, and
-   * it catches the pointer with its own box (`areaBands`). Absent means the
+   * block and spends nothing. It is a real drop, and it catches the pointer with
+   * its own box (`areaBands`). Absent means the
    * slot's own box is the area, which is every column target: the room beside a
    * block *is* what it stands for.
    */
@@ -705,11 +658,12 @@ export type DropSlot = {
    * The same distinction on the other axis: the slice of the *line* that aims at
    * this slot, when it is not the box drawn for it.
    *
-   * A self-sized drag is the only thing that needs it, and it needs it because a
-   * mark is small. The box drawn is a square the size of the logo, sitting at
-   * one end of the line or in the middle of it; the box that catches the pointer
-   * is a whole third of the line, so aiming at "the left of this row" does not
-   * mean hitting a 62px target. See `splitAlignColumns` in ./drop-bands.ts.
+   * Needed wherever the box drawn is smaller than anything someone can aim at
+   * with a moving pointer: a logo's square across a run, which catches its share
+   * of the line (`splitAlignColumns` in ./drop-bands.ts); a narrowed block on a
+   * run, which catches the whole line (`fitRunsToBlock`); and a place on a line
+   * that already has something on it, which catches the free run it sits in
+   * (`sideSlots`).
    */
   hitLeft?: number;
   hitWidth?: number;
@@ -739,9 +693,6 @@ export type DropSlot = {
    */
   mark?: boolean;
 };
-
-/** The one split a pair drop makes. Everything else is the Width slider's. */
-const PAIR_SHARE = 50;
 
 /**
  * The parts of the card that are **occupied**, and therefore the parts no run of
@@ -998,10 +949,26 @@ export function dropSlots(
   const slots: DropSlot[] = [];
 
   for (const measure of zones) {
-    // A zone this block may not enter, or one with no room left, contributes
-    // nothing at all — not a disabled mark, not a greyed one. `dropBands` then
-    // hands its area to whichever valid slot is nearest.
-    if (!canDrop(layout, dragged, measure.zone, heights)) continue;
+    /*
+     * A zone this block may not enter, or one with no room left, contributes
+     * nothing at all — not a disabled mark, not a greyed one.
+     *
+     * The room is asked about with the height the places are drawn at, which for
+     * a block off the palette is now what it really measures (`draggedHeight` in
+     * use-drop-bands.ts) rather than one line: an open week of opening hours was
+     * offered a line's worth of spot on a card with no room for the week.
+     */
+    if (
+      !canDrop(
+        layout,
+        dragged,
+        measure.zone,
+        heights,
+        drag.kind === "new" ? height : undefined,
+      )
+    ) {
+      continue;
+    }
 
     const { zone, top: contentTop, bottom: contentBottom } = measure;
     /*
@@ -1210,8 +1177,8 @@ export function dropSlots(
        * not refuse it.
        *
        * It was once a zero-height slot like every other run with no room, and
-       * that is the one thing this landing does not look like: `dropRegions`
-       * drops a zero-height band outright, so nothing was drawn at rest at all,
+       * that is the one thing this landing does not look like: a zero-height
+       * band has nothing to outline, so nothing was drawn at rest at all,
        * and the card most likely to hit this — a photo filling its zone, with no
        * run under it — is exactly the card someone drops a logo onto. The gesture
        * worked and looked refused.
@@ -1219,13 +1186,28 @@ export function dropSlots(
        * Drawn as the square that lands, so `splitAlignColumns` can divide it
        * into the three places across the line the mark could sit.
        *
-       * Its **area** is empty, and deliberately. This run has no free space of
-       * its own — that is the whole case — so there is nothing to outline at
-       * rest, and an outline drawn from the square would sit half over the very
-       * block being straddled. It is the one place offered under the pointer
-       * alone, and it catches the pointer with its own square (`areaBands`).
+       * Its **area** is empty, and deliberately: this run has no free space of
+       * its own — that is the whole case — so it catches the pointer with its
+       * own square (`areaBands`) rather than with a share of a run. At rest it is
+       * outlined like every other place, at the square, half over the block it
+       * straddles, because that is where the logo lands. It used to be shown
+       * under the pointer alone, and was reported as the one place a logo could
+       * go with no dashed edge to say so.
        */
-      if (pulls) {
+      /*
+       * **And only where the square fits.** The half of the logo below the edge
+       * spends room: before the line below it, that room has to be there, or
+       * landing shoves that line down; at the end of a zone the square has to
+       * stay on the card. Offered everywhere it was drawn, measured, three rows
+       * of squares that overlapped one another over the text blocks they
+       * straddled, and a row under a full-width Button hanging 31px off the
+       * bottom of the card — every one of them outlined at rest.
+       */
+      const fits = closes
+        ? span - lead - trail >= spent - lift
+        : from + lead - lift + spent <= layout.maxHeight;
+
+      if (pulls && fits) {
         const area = from + lead;
 
         return [
@@ -1235,7 +1217,6 @@ export function dropSlots(
             y: area - lift,
             height,
             offset: 0,
-            widthPct: 100,
             areaTop: area,
             areaBottom: area,
             // Flush: it stores no offset and is drawn `lift` above the run, so
@@ -1277,13 +1258,10 @@ export function dropSlots(
         index,
         y: flush ? from + lead + offset - lift : from + lead + offset,
         height,
-        // This mark is drawn across the whole card, so what lands on it is the
-        // whole card wide — see `widthPct` on `DropSlot`.
-        widthPct: 100,
-        // The run's own free span, which is what the resting outline draws. The
-        // marks inside it are spread apart and the first is lifted over the
-        // block above, so their union is neither where the room starts nor how
-        // far it reaches.
+        // The run's own free span, which is what the pointer's share is cut from
+        // (`areaBands`). The places inside it are spread apart and the first is
+        // lifted over the block above, so their union is neither where the room
+        // starts nor how far it reaches.
         areaTop: from + lead,
         areaBottom: to - trail,
         // Cancelling the pull costs the room check `lift` px it will not
@@ -1337,68 +1315,6 @@ function liftOf(layout: CardLayout, drag: CardDrag): number {
 }
 
 /**
- * The columns of a shared line: the room left beside a block that is narrower
- * than the card, and — for a block already on that line — the column it is not
- * currently in.
- *
- * **This is what makes narrowing a block mean something.** Take a photo to 40%
- * and the other 60% of its line is not decoration, it is a place another block
- * goes; without this it would be a narrow block with a permanent hole beside it.
- * The Width slider and these targets are two halves of one feature, which is why
- * there is no longer a separate Half control to keep in step with either.
- *
- * Separate from `dropSlots`, and deliberately **not** fed through `dropBands`.
- * That function's whole contract is that it partitions the card — every pixel to
- * exactly one slot — and a target that is part of a line has no place in a
- * one-dimensional partition. A column slot needs no partitioning anyway: its
- * band *is* its own rect. The caller appends these after the partitioned ones,
- * and the overlay paints them last, which is what makes them win the pointer
- * inside their own box.
- *
- * **A line has two columns, and both of them are drawn.** The free one used to
- * be assumed to be the right one, because a row is a plain flex row and a
- * narrowed block never carries an `alignSelf` — so it could only sit at the
- * start. `side` (packages/shared/card-layout.ts) is what changed that, and it is
- * what makes the rest of this table reachable at all:
- *
- * | line | drag | the slot(s) drawn | `index` | `half` |
- * |---|---|---|---|---|
- * | one block, at the start | anything else | the free right column | `row.end` | `"end"` |
- * | " | " | **and** the occupied left one | `row.index` | `"start"` |
- * | one block, at the end | anything else | the free left column | `row.index` | `"start"` |
- * | " | " | **and** the occupied right one | `row.end` | `"end"` |
- * | one block | **itself** | the free column only | `row.index` | that column |
- * | two blocks | one of the two | the *other* member's column | either | that column |
- *
- * The occupied column is the reason a shared line no longer gets a card-width
- * mark across it: with both columns drawn, the line is fully described by two
- * marks the width of the columns they stand for, and `dropSlots` stops handing
- * the same pixels to a run as well. Dropping on it means what it looks like —
- * put it here, push the one already there across — which `insert` in
- * card-edits.ts has always done for a `"start"` landing.
- *
- * It is offered to everything *except* the block already sitting there: a mark
- * over where a block already is promises a move `dropCardBlock` answers `null`
- * to. That block gets its free column and nothing else, which is a block
- * crossing its own line; a member of a pair gets its partner's column, which is
- * two blocks swapping. Both were impossible, and both are the same gesture as
- * the first — drop it where you want it to be.
- *
- * **Every column slot carries the width it stands for, and the line it is on.**
- * The width is what the landing block becomes, because the room reserved is no
- * longer always half of anything. The line is what tells "join the block above"
- * from "cross my own line" — see `line` on `DropSlot`, and the id it keeps
- * unique in card-drop-overlay.tsx.
- *
- * Gated on `acceptsBlock` alone rather than on the full `canDrop`. The room
- * check is about the card's *height*, and landing beside a block that is already
- * there spends none — so a top zone whose photo has filled it still offers the
- * space next to that photo, which is exactly where someone would want to put a
- * name. The row can grow if the newcomer is taller than the block it joins,
- * which is honest: it is the block that was dropped, drawn at its own size. A
- * swap and a flip spend nothing at all.
- */
-/**
  * How tall a block on the card would draw at a given share of the line, in px.
  *
  * The one question this file cannot answer for itself. How tall a paragraph is
@@ -1422,6 +1338,65 @@ export type HeightAt = (
 const MEASURED_ALREADY: HeightAt = (_id, _widthPct, _widthPx, fallback) =>
   fallback;
 
+/**
+ * The places on a line that already has something on it — beside a narrowed
+ * block, beside a logo, at the other end of a line a block owns alone, or in
+ * its partner's place.
+ *
+ * **Only where the block lands at the size it already is, and nothing already
+ * on the line moves or changes size.** That is the whole rule, and it replaced
+ * three kinds of target that each broke it:
+ *
+ * - **Pairing** — dropping onto a full-width block to split its line in half,
+ *   or, for a logo, to take a square off its end — narrowed the block that was
+ *   already there. A full-width Button offered a logo two squares beside it, on
+ *   a line that visibly had no room.
+ * - **The free column** gave the block that landed the column's width, so a
+ *   full-width name dropped beside a 40% photo became 60%, and the outline was
+ *   the size of the space rather than of the name.
+ * - **The occupied column** pushed the block sitting there across its line.
+ *
+ * All three were reported together as drop marks that made no sense, and the
+ * fix is one test rather than three: lay the line out again with the block in
+ * it, at every position, and keep a position only where every block already on
+ * the line is still where it was drawn. The line is a flex row, so that is
+ * arithmetic — the measured widths, the card's gap, and which end `cardRowBox`
+ * packs the row towards.
+ *
+ * | the line | in the hand | offered |
+ * |---|---|---|
+ * | one full-width block | anything | nothing |
+ * | a narrowed block at its start | a narrowed block that fits | the room after it |
+ * | a narrowed block at its end | a block as wide as the room before it | that room |
+ * | a narrowed block | a logo | the square on its free side |
+ * | a logo | a narrowed block that fits without moving it | each side it fits |
+ * | itself, narrowed and alone | — | the other end of its line |
+ * | itself and others | — | every other order of that line |
+ *
+ * Its own line is the one exception to "nothing moves": rearranging a line is
+ * the gesture, so its other members may.
+ *
+ * **Every place carries its own box and the room it sits in.** The box is what
+ * lands and what is outlined; the room — the free run of the line it is in — is
+ * what catches the pointer (`hitLeft`/`hitWidth`), because a 108px column is not
+ * something anyone should have to aim at with a moving hand.
+ *
+ * **And it must fit down the card as well as across it.** A logo joining a line
+ * of text makes that line as tall as the logo, and a narrowed block can be taller
+ * than the line it joins. A place is offered only where the line it grows into
+ * still clears the line below it by the card's gap — so the block under it keeps
+ * its place — or, with nothing below, the zone's own bottom edge.
+ *
+ * Separate from `dropSlots`, and deliberately **not** fed through `dropBands`.
+ * That function partitions the card top to bottom, and a place that is part of a
+ * line has no place in a one-dimensional partition. The caller appends these
+ * after the partitioned ones, and the overlay paints them last, which is what
+ * makes them win the pointer inside their own box.
+ *
+ * Gated on `acceptsBlock` alone rather than on the full `canDrop`. The room
+ * check is about the card's *height* as a whole, and the vertical fit above is
+ * this function's own, line by line.
+ */
 export function sideSlots(
   layout: CardLayout,
   dragged: DraggedObject,
@@ -1433,34 +1408,30 @@ export function sideSlots(
   if (!drag) return [];
 
   const moving = drag.kind === "move" ? findBlock(layout, drag.id) : null;
-  const type = drag.kind === "new" ? drag.type : moving?.block.type;
-
-  // A block that cannot be narrowed is offered nothing here — Opening hours has
-  // no business in a column, which is the rule `CARD_BLOCKS` writes down. A
-  // self-sized mark is the exception: it has no width to narrow, but it is
-  // exactly the block that can sit in the room a column leaves.
-  if (!type || !(hasControl(type, "width") || isSelfSized(type))) return [];
-
   /*
-   * The narrowest column this drag can land in, as a share of the line.
-   *
-   * For an ordinary block that is the floor its type declares. For a mark it is
-   * the share the mark itself *reserves* (`selfShareOf`), which is a different
-   * question with the same answer's shape: a logo does not narrow to fit a
-   * column, so a column narrower than the logo is not a column it can go in —
-   * and offering one would put a line over 100% and push its members apart.
+   * The block that lands, as it will be. A new one is made the way the drop
+   * makes it, so a logo arrives at its default size and alignment and a Button
+   * at full width — which is what decides, below, that it goes in no column.
+   * The id it mints is thrown away.
    */
-  const floor = isSelfSized(type)
-    ? selfShareOf(
-        moving?.block ?? { id: "", type, heightPct: CARD_BLOCKS[type].defaultHeightPct },
-        layout,
-      )
-    : (CARD_BLOCKS[type].minWidthPct ?? 25);
+  const landing =
+    drag.kind === "new" ? makeCardBlock(drag.type) : moving?.block;
+  if (!landing) return [];
+
+  const mark = isSelfSized(landing.type);
+
+  // A block that fills its line has no column to go in, and a drop does not
+  // narrow it to make one. Opening hours cannot be narrowed at all.
+  if (!mark && (!hasControl(landing.type, "width") || shareOf(landing) >= 100)) {
+    return [];
+  }
 
   const slots: DropSlot[] = [];
 
   for (const measure of zones) {
-    if (!acceptsBlock(layout, type, measure.zone, moving?.block.id)) continue;
+    if (!acceptsBlock(layout, landing.type, measure.zone, moving?.block.id)) {
+      continue;
+    }
     // Nothing measured horizontally is no columns, rather than guessed ones.
     if (measure.left === undefined || measure.right === undefined) continue;
 
@@ -1471,90 +1442,88 @@ export function sideSlots(
 
     for (const [r, row] of rows.entries()) {
       /*
-       * Everything on an earlier line of this zone, which is what the room
-       * beside this one has to stay clear of. Flattened here rather than asked
-       * per target, so a zone of many lines costs one pass instead of one per
-       * column offered.
+       * Everything on an earlier line of this zone, which the room beside this
+       * one has to stay clear of. Flattened here rather than asked per target,
+       * so a zone of many lines costs one pass instead of one per place.
        */
       const above = rows.slice(0, r).flatMap((earlier) => earlier.blocks);
-      /*
-       * Three shapes of line, one shape of answer.
-       *
-       * A line holding a self-sized mark is described by the room left over
-       * beside it — which is not half of anything, because the mark's width is
-       * its own. A line that already holds a narrowed block is described by its
-       * columns. One holding a single full-width block is offered the two
-       * columns it *would* have. All three come back as the same target, which
-       * is what lets the overlay draw and apply them without knowing which it is
-       * looking at.
-       */
-      const targets = holdsMark(layout, measure.zone, row)
-        ? selfTargets(layout, measure.zone, row, line, type, floor)
-        : row.shared
-          ? sideTargets(layout, measure.zone, row, drag, line, floor)
-          : pairTargets(layout, measure.zone, row, drag, line, type, floor);
 
-      for (const target of targets) {
+      for (const target of lineTargets(layout, measure.zone, row, drag, landing, line)) {
         /*
-         * Clear of everything above it, which is the whole of "it must not reach
-         * into the picture".
+         * Where the block starts, down the card.
          *
-         * A mark pulled up over its neighbour has a rect that reaches over
-         * whatever is above it — that is what an overlap *is* — and
-         * `measuredRows` takes a line's top as the topmost of its members. So
-         * the room beside a logo straddling a photo measured as starting inside
-         * the photo, and the column drawn for it promised a block half buried in
-         * a picture.
-         *
-         * Two things bound it, because the photo can be on either side of a zone
-         * boundary and only one of them is a boundary at all: the zone's own
-         * content box, and the blocks on this zone's earlier lines. The second is
-         * asked per column rather than per line — a logo hanging *down* into the
-         * line below obstructs the room under itself and none of the room beside
-         * it, and clamping the whole line for it would refuse a column that is
-         * genuinely empty.
+         * A logo is drawn where its line sits less the overlap it pulls itself
+         * up by — straddling whatever is above, which is what the overlap is
+         * for, and what `blockEdges` does to a mark on a shared line exactly as
+         * it does to one alone. Everything else is clear of whatever is above
+         * it: a mark pulled up over a photo has a rect that reaches into the
+         * photo, and `measuredRows` takes a line's top as the topmost of its
+         * members, so the room beside that logo would otherwise start inside
+         * the picture. That clearance is asked per column (`clearOf`) — a logo
+         * hanging *down* into the line below obstructs the room under itself
+         * and none of the room beside it.
          */
-        const top = clearOf(target, Math.max(row.top, measure.top), above);
-        const bottom = Math.min(row.bottom, measure.bottom);
-        if (bottom <= top) continue;
+        const top = mark
+          ? Math.max(
+              measure.top,
+              row.flowTop - upwardLiftOf(landing, layout, r > 0),
+            )
+          : clearOf(target, Math.max(row.top, measure.top), above);
+        const lineBottom = Math.min(row.bottom, measure.bottom);
+
+        /*
+         * How tall the block is. A mark is a square of its own size, which no
+         * line changes. Anything else is asked of the layout engine at the
+         * width it is keeping, and drawn at least as tall as the line — a line
+         * is `align-items: stretch`, so that is the box it will be given.
+         */
+        const own = mark
+          ? sizedHeight(landing, layout)
+          : heightAt(
+              landing.id,
+              shareOf(landing),
+              target.width,
+              Math.max(0, lineBottom - top),
+            );
+        const height = mark ? own : Math.max(lineBottom - top, own);
+        if (height <= 0) continue;
+
+        const landed = landedLine(layout, drag, rows, r, landing, own);
+        const floor = landed.below
+          ? landed.below.flowTop - layout.gap
+          : measure.bottom;
+        // Grows into the block below it: not a place this block fits.
+        if (landed.bottom > floor + 0.5) continue;
 
         slots.push({
           zone: measure.zone,
           index: target.index,
           y: top,
-          // A column is as tall as its line unless the target says otherwise,
-          // which only a mark does — see `height` on `SideTarget`.
-          height: target.height ?? bottom - top,
-          // The row's leading space is already spent by the block sitting there.
+          height,
+          // The row's leading space is already spent by the blocks sitting there.
           offset: 0,
           half: target.side,
           left: target.left,
           width: target.width,
           line: row.index,
-          ...(target.widthPct === undefined ? {} : { widthPct: target.widthPct }),
-          ...(target.pairId === undefined
-            ? {}
-            : {
-                pairId: target.pairId,
-                pairWidthPct: target.pairWidthPct ?? PAIR_SHARE,
-                hitTop: Math.max(target.hitTop ?? top, top),
-                hitBottom: Math.min(target.hitBottom ?? bottom, bottom),
-              }),
-          // A target that has already cut its own square says so, and `markBox`
-          // in components/card/designer/use-drop-bands.ts then leaves it alone.
-          ...(target.mark === true ? { mark: true } : {}),
-          ...(target.hitLeft === undefined
-            ? {}
-            : { hitLeft: target.hitLeft, hitWidth: target.hitWidth }),
-          ...settlesBelow(
-            layout,
-            drag,
-            rows,
-            r,
-            target,
-            line.width,
-            heightAt,
-          ),
+          hitLeft: target.hitLeft,
+          hitWidth: target.hitWidth,
+          ...(mark ? { mark: true } : {}),
+          /*
+           * What the line below has to become so its own top edge does not
+           * move — the number a run states for every place it draws
+           * (`nextOffset` in `run`). A block joining a line and making it taller
+           * used to push the card down with nothing to pay it back, which on the
+           * reported card walked a block a few pixels further down every trip.
+           */
+          ...(landed.below
+            ? {
+                nextOffset: Math.max(
+                  0,
+                  Math.round(landed.below.flowTop - landed.bottom - layout.gap),
+                ),
+              }
+            : {}),
         });
       }
     }
@@ -1564,123 +1533,48 @@ export function sideSlots(
 }
 
 /**
- * What the line **below** a column landing has to become, so its own top edge
- * does not move.
+ * Where a line ends once a block has landed on it, and the line below it that
+ * will still be there — in flow, measured from the line's own flow top.
  *
- * The half `sideSlots` never had. A run says this for every slot it draws
- * (`nextOffset` in `run`), and `settle` in ./card-edits.ts writes it onto the
- * row below the one that was landed in — but a column named no number at all, so
- * a block joining a line and making it taller pushed the whole card down and
- * nothing paid it back. Out and back was therefore charged once and refunded
- * never: a name rejoining a logo's line cost six pixels every trip, and twenty
- * trips put the block at the bottom of the card below the fold.
+ * Three things decide the bottom: the members that stay, which keep the height
+ * they are drawn at; the block that lands, at its own height less any overlap it
+ * pulls itself up by (`upwardLiftOf` — a mark hanging half above its line
+ * contributes only the half inside it); and nothing else, because a drop resizes
+ * nothing. It starts at the line's flow top rather than at its current bottom: a
+ * block leaving this very line — a flip, or a swap — takes its height with it.
  *
- * Three things can change the line's height, and all three are asked here:
- *
- * - the **newcomer**, at the width of the column it is landing in — which is a
- *   reflow, so it is measured (`HeightAt`) rather than computed;
- * - the members that **stay**, which keep the height they are drawn at;
- * - and, for a *pair* target only, the block already there, which **narrows** to
- *   make the room and so reflows as well.
- *
- * Everything is in flow rather than ink: a mark hanging half above its line
- * contributes only the half of itself that is inside it, which is what
- * `upwardLiftOf` takes back off. See `flowTop` on `MeasuredRow`.
+ * The line below skips the drag's own line when that is about to go: charging a
+ * line that is being deleted would write a number onto a block the drop then
+ * moves. `freedBy` is the same test `dropSlots` cuts its runs with.
  */
-function settlesBelow(
+function landedLine(
   layout: CardLayout,
   drag: CardDrag,
   rows: readonly MeasuredRow[],
-  /** Which of them the column is on. */
+  /** Which of them the block lands on. */
   at: number,
-  target: SideTarget,
-  lineWidth: number,
-  heightAt: HeightAt,
-): { nextOffset?: number } {
-  /*
-   * The next line **that will still be there** — the drag's own line is about to
-   * go, and charging a line that is being deleted writes a number onto a block
-   * the drop then moves. `freedBy` is the same test `dropSlots` uses to decide
-   * which lines its runs are cut between, and skipping past one here lands on
-   * exactly the block `settle` will look for once the edit has been applied.
-   *
-   * That block is also the one `vacatedSpace` charges for the hole the departure
-   * leaves, which is correct rather than a collision: `settle` runs last and its
-   * answer is the local one. See `dropCardBlock`.
-   */
+  landing: CardBlock,
+  /** How tall the landing block draws. */
+  height: number,
+): { bottom: number; below?: MeasuredRow } {
   let next = at + 1;
   while (next < rows.length && freedBy(rows[next], drag)) next += 1;
-
   const below = rows[next] as MeasuredRow | undefined;
-  if (!below) return {};
 
   const row = rows[at];
   const dragId = drag.kind === "move" ? drag.id : undefined;
-  const { gap } = layout;
-  // Whether the line being landed on has one above it in its zone, which is the
-  // only thing that lets a mark on it be pulled up. See `upwardLiftOf`.
-  const hasLineAbove = at > 0;
 
-  const landing =
-    drag.kind === "new"
-      ? makeCardBlock(drag.type)
-      : findBlock(layout, drag.id)?.block;
-  if (!landing) return {};
-
-  /*
-   * How far the line reaches once the drop has landed, measured from its own
-   * flow top. It starts at nothing rather than at the row's current bottom: a
-   * block leaving this very line — a flip, or a swap — takes its height with it,
-   * and a line that ends up shorter owes the one below it the difference just as
-   * much as a line that grows.
-   */
   let bottom = row.flowTop;
-
   for (const rect of row.blocks) {
-    if (rect.id === dragId) continue;
-
-    if (rect.id === target.pairId) {
-      // The block being paired with narrows to make the room, so it reflows —
-      // the other column of the line the newcomer is taking half of.
-      const sitting = findBlock(layout, rect.id)?.block;
-      const height = heightAt(
-        rect.id,
-        target.pairWidthPct ?? PAIR_SHARE,
-        Math.max(0, lineWidth - gap - target.width),
-        rect.bottom - rect.flowTop,
-      );
-
-      bottom = Math.max(
-        bottom,
-        row.flowTop +
-          height -
-          (sitting ? upwardLiftOf(sitting, layout, hasLineAbove) : 0),
-      );
-      continue;
-    }
-
-    bottom = Math.max(bottom, rect.bottom);
+    if (rect.id !== dragId) bottom = Math.max(bottom, rect.bottom);
   }
-
-  /*
-   * A mark does not reflow — it is a square of its own size, and no width can
-   * change that — so it is the one block here whose height is arithmetic.
-   */
-  const height = isSelfSized(landing.type)
-    ? sizedHeight(landing, layout)
-    : heightAt(
-        landing.id,
-        target.widthPct ?? 100,
-        target.width,
-        newBlockHeight(layout, landing.type),
-      );
 
   bottom = Math.max(
     bottom,
-    row.flowTop + height - upwardLiftOf(landing, layout, hasLineAbove),
+    row.flowTop + height - upwardLiftOf(landing, layout, at > 0),
   );
 
-  return { nextOffset: Math.max(0, Math.round(below.flowTop - bottom - gap)) };
+  return below ? { bottom, below } : { bottom };
 }
 
 /** A block with a height of its own, in px — the same number `blockBox` draws. */
@@ -1729,166 +1623,156 @@ function clearOf(
   return top;
 }
 
-/** One column of a line, as somewhere a block can land. */
+/** One place on a line: where it goes in the layout, and where on the line. */
 type SideTarget = {
   index: number;
   side: "start" | "end";
+  /** The box the block will fill, across the line, in px from the card's left. */
   left: number;
   width: number;
-  /**
-   * How tall the drawn box is, when that is not the line's own height. Marks
-   * only, and absent everywhere else.
-   *
-   * A column is as tall as the line it is part of, which is right for anything
-   * that fills the column it lands in and wrong for a mark: a logo is a square
-   * of its own size, so a target as tall as the block underneath promises a
-   * block that is never drawn. That was the 71x110 bar at each end of a photo —
-   * the logo's width with the photo's height, which is neither shape.
-   *
-   * It may come out *taller* than the line, and that is the honest number: a
-   * logo joining a line of text makes that line as tall as the logo.
-   *
-   * The **hit** band is untouched by it. A pair target carries `hitTop` and
-   * `hitBottom`, and those are what `useCardDropBands` reads for the pointer, so
-   * the aim stays the line itself however the box is drawn.
-   */
-  height?: number;
-  /** What the landing block becomes. Absent leaves its own width alone. */
-  widthPct?: number;
-  /** The full-width block this target splits the line with. Pair targets only. */
-  pairId?: string;
-  /**
-   * What `pairId` becomes. Absent falls back to half, which is the split every
-   * pair between two share-bearing blocks makes. A **mark** is the one thing that
-   * asks for another number: a logo takes the square it reserves and leaves the
-   * rest, so the block it lands beside narrows to whatever that rest is.
-   */
-  pairWidthPct?: number;
-  /** The line itself, top to bottom, which is what a pair target catches. */
-  hitTop?: number;
-  hitBottom?: number;
-  /**
-   * Draw this target as the square a self-sized block makes, and catch the
-   * pointer with `hitLeft`/`hitWidth` instead of with the drawn box.
-   *
-   * Set only where the target has already cut its own square — which is the mark
-   * half of `pairTargets`, the one place here that knows how wide a logo will be
-   * before `markBox` gets a chance to work it out from the measured DOM.
-   */
-  mark?: boolean;
-  hitLeft?: number;
-  hitWidth?: number;
+  /** The free run of the line this place sits in, which is what catches the pointer. */
+  hitLeft: number;
+  hitWidth: number;
 };
 
-/** The line's own box: where it starts, and how wide a share of it is a share of. */
-type LineBox = { left: number; width: number };
-
-/** Whether this line holds a self-sized mark — see `selfTargets`. */
-function holdsMark(
-  layout: CardLayout,
-  zone: CardZone,
-  row: MeasuredRow,
-): boolean {
-  return layout.zones[zone]
-    .slice(row.index, row.end)
-    .some((block) => isSelfSized(block.type));
-}
-
 /**
- * The room left beside a self-sized mark: every run of the line no block on it
- * is standing in.
+ * Every position on one line the block in the hand can take without anything
+ * else on the line moving — see `sideSlots` for the rule and the table.
  *
- * **This is what makes a logo something you can put a name next to.** A mark
- * reserves its own square and nothing more, so the rest of its line was empty
- * and unreachable — the Width slider cannot open a column beside something that
- * has no width, and `pairTargets` refuses a resident with no `width` control
- * for exactly the right reason. The room is measured instead: whatever the line
- * is, less the boxes actually drawn on it, less a gap either side of each.
- *
- * The runs are found by walking the line's members left to right, which is the
- * order the flex row draws them and therefore the order the zone's array holds
- * them. A run before the *k*-th member inserts at that member's index, and which
- * of the two blocks starts the line follows from where it is: a run at the head
- * of the line means the newcomer takes the line and everything already on it
- * shuffles along (`half: "start"`), and a run anywhere else means it joins the
- * block before it (`half: "end"`). That is `insert`'s own vocabulary in
- * card-edits.ts, unchanged.
- *
- * A mark in the hand is offered nothing here. There is only ever one logo on a
- * card (`acceptsBlock`), so the only mark that could land beside this one is
- * this one — and where a mark goes across its line is the align grid's business
- * (`splitAlignColumns`), not a column's.
+ * The line is laid out again for each position rather than reasoned about case
+ * by case. A line is a flex row packed from its start, or from its end when
+ * `cardRowBox` says so — a lone block moved to the end of its line, or a logo
+ * leading a line it shares — so the left edge of every member is the sum of the
+ * widths and gaps before it, from whichever end that is. Members keep their
+ * measured widths; the block that lands takes the width its share gives it
+ * (`calc(share% - gap/2)`, the basis `blockBox` writes), or its own square.
  */
-function selfTargets(
+function lineTargets(
   layout: CardLayout,
   zone: CardZone,
   row: MeasuredRow,
-  line: LineBox,
-  type: CardBlockType,
-  /** The narrowest column this drag can land in — see `sideSlots`. */
-  floor: number,
+  drag: CardDrag,
+  landing: CardBlock,
+  line: { left: number; width: number },
 ): SideTarget[] {
-  if (isSelfSized(type)) return [];
-
   const members = layout.zones[zone].slice(row.index, row.end);
   // Every member has to be on screen for the arithmetic below to mean anything:
-  // a run is the space between two measured boxes, and a member the measurement
-  // pass beat would make one run out of two.
+  // a member the measurement pass beat would be a block of no width.
   if (members.length !== row.blocks.length) return [];
 
   const rects = new Map(row.blocks.map((block) => [block.id, block]));
-  const boxes: { left: number; right: number }[] = [];
+  const boxes = new Map<string, { left: number; right: number }>();
 
   for (const member of members) {
     const rect = rects.get(member.id);
     if (!rect || rect.left === undefined || rect.right === undefined) return [];
-    boxes.push({ left: rect.left, right: rect.right });
+    boxes.set(member.id, { left: rect.left, right: rect.right });
   }
 
   const { gap } = layout;
   const lineEnd = line.left + line.width;
-  const targets: SideTarget[] = [];
+  const boxOf = (block: CardBlock) =>
+    boxes.get(block.id) ?? { left: line.left, right: line.left };
+
+  const dragId = drag.kind === "move" ? drag.id : undefined;
+  const current = members.findIndex((member) => member.id === dragId);
+  const others = members.filter((member) => member.id !== dragId);
 
   /*
-   * What the line can still give away, in share.
-   *
-   * The run is measured in pixels and the share is worked back out of it, and
-   * the two rounds disagree by a point: a mark reserves `ceil` of its square so
-   * a row can never come out wider than the card, and a run inverted off the
-   * measured line rounds to nearest. On a name of 38 and a logo of 24 the room
-   * left measures as 39, which is 101 — and `cardRows` then does the only
-   * honest thing with a line over 100 and starts a new one, so the block landed
-   * *under* the mark it was dropped beside. The cap is the same number
-   * `maxShareFor` gives the Width slider, applied to the drop that creates the
-   * column rather than to the one that resizes it.
+   * A narrowed block alone on its line: the one place is the other end of it.
+   * Its index does not change — it is still the only block on the line — so the
+   * whole edit is the side the drop names (`dropCardBlock`). A logo alone on its
+   * line has no such place; where a mark sits across a line is the align grid's
+   * business (`splitAlignColumns`).
    */
-  const room =
-    100 - members.reduce((total, block) => total + shareOfAny(block, layout), 0);
+  if (others.length === 0) {
+    if (current < 0 || isSelfSized(landing.type)) return [];
 
-  for (let k = 0; k <= boxes.length; k += 1) {
-    const from = k === 0 ? line.left : boxes[k - 1].right + gap;
-    const to = k === boxes.length ? lineEnd : boxes[k].left - gap;
-    const width = to - from;
-    if (width <= 0) continue;
+    const box = boxOf(landing);
+    const width = box.right - box.left;
+    if (line.width - width < 1) return [];
 
-    /*
-     * The share the block that lands here becomes, inverted from the pixels the
-     * run actually measures — the same arithmetic `sideTargets` runs, and for
-     * the same reason: a column and the mark drawn over it have to be one box,
-     * not two numbers that agree today.
-     */
-    const widthPct = Math.min(
-      room,
-      Math.round((100 * (width + gap / 2)) / line.width),
+    const toEnd = landing.side !== "end";
+    const left = toEnd ? lineEnd - width : line.left;
+    const room = toEnd
+      ? { left: box.right + gap, right: lineEnd }
+      : { left: line.left, right: box.left - gap };
+
+    return [
+      {
+        index: row.index,
+        side: toEnd ? "end" : "start",
+        left,
+        width,
+        ...hitOf(room, left, width),
+      },
+    ];
+  }
+
+  // Somebody else's line has to have room for the block at all — the same
+  // question `cardRows` asks, so a place offered here is a line it will join.
+  if (current < 0 && !lineTakes(others, landing, layout)) return [];
+
+  const width = isSelfSized(landing.type)
+    ? sizedHeight(landing, layout)
+    : (line.width * shareOf(landing)) / 100 - gap / 2;
+  if (width <= 0) return [];
+
+  const targets: SideTarget[] = [];
+
+  for (let k = 0; k <= others.length; k += 1) {
+    // Putting a block back into the very order its line already has.
+    if (k === current) continue;
+
+    const list = [...others.slice(0, k), landing, ...others.slice(k)];
+    const widths = list.map((block) => {
+      if (block === landing) return width;
+      const box = boxOf(block);
+      return box.right - box.left;
+    });
+    const total =
+      widths.reduce((sum, each) => sum + each, 0) + gap * (list.length - 1);
+    if (total > line.width + 1) continue;
+
+    const packedToEnd =
+      cardRowBox(
+        { blocks: list, index: row.index, end: row.index + list.length, shared: true },
+        layout,
+      ).justifyContent === "flex-end";
+
+    let x = packedToEnd ? lineEnd - total : line.left;
+    const lefts = widths.map((each) => {
+      const at = x;
+      x += each + gap;
+      return at;
+    });
+
+    // On somebody else's line, nothing already there may move.
+    const moves = list.some(
+      (block, i) => block !== landing && Math.abs(lefts[i] - boxOf(block).left) > 1,
     );
-    if (widthPct < floor) continue;
+    if (current < 0 && moves) continue;
+
+    const before = others[k - 1] as CardBlock | undefined;
+    const after = others[k] as CardBlock | undefined;
+    const room = {
+      left: before ? boxOf(before).right + gap : line.left,
+      right: after ? boxOf(after).left - gap : lineEnd,
+    };
 
     targets.push({
-      index: row.index + k,
-      side: k === 0 ? "start" : "end",
-      left: from,
+      /*
+       * `insert`'s vocabulary in card-edits.ts: `"start"` at the line's own
+       * index takes the line and the block there joins it; `"end"` straight
+       * after a member joins that member. Indices are into the zone's array
+       * with the block in the hand still in it, which `dropCardBlock` corrects
+       * for once it has lifted the block out.
+       */
+      index: before ? layout.zones[zone].indexOf(before) + 1 : row.index,
+      side: before ? "end" : "start",
+      left: lefts[k],
       width,
-      widthPct,
+      ...hitOf(room, lefts[k], width),
     });
   }
 
@@ -1896,328 +1780,16 @@ function selfTargets(
 }
 
 /**
- * The two halves of a line that one full-width block currently owns.
- *
- * **This is the gesture that makes a pair.** Narrowing a block and dropping into
- * the room it leaves has always worked, but it needs you to know that a Width
- * slider is where two columns come from — and nothing on the card says so. Here
- * the answer is the obvious one: drop a block onto another block and they share
- * the line, half each. The Locations panel teaches exactly this gesture, one row
- * onto another, and a card is the other place in the app where things are
- * arranged by dragging them at each other.
- *
- * Half, and only half. Every other split is the slider's, because a drop has one
- * degree of freedom and it is already spent saying *which* column.
- *
- * Both blocks have to be able to hold a column, which is `hasControl(_,
- * "width")` on the block already there and each of the two clearing its own
- * floor — the same rule `CARD_BLOCKS` writes down for the slider, asked of two
- * blocks instead of one. A week of opening times is no more readable in half a
- * card because a drag put it there.
- *
- * **A mark splits the line too, and not down the middle.** A logo has no `width`
- * control, so it has no `minWidthPct` either, and the floor used to come out at
- * 100 for it — 50 is under 100, and dragging a logo onto anything offered no pair
- * target at all. That was the right arithmetic answering the wrong question: a
- * logo does not narrow to fit a column, it reserves the square it draws at and
- * leaves the rest. So the share it takes is `selfShareOf` and the block already
- * there narrows to whatever is left — which is the same division `selfTargets`
- * makes from the other side of the line, the room beside a mark, and therefore
- * lands on the same two columns whichever of the two was picked up first.
- *
- * That number arrives as `floor`, already worked out by `sideSlots` for its own
- * purposes, rather than being computed a second time here. A mark's share depends
- * on its height and on the card's, so two copies would be two numbers that agree
- * until someone drags the logo bigger: the share this target promises has to be
- * the share `cardRows` will compute, or the block lands *under* the one it was
- * dropped beside instead of next to it.
- *
- * The line has to be at least `MIN_BAND` tall, too — a divider is 13px, and a
- * target that thin is not one anyone can aim at while moving. A line that short
- * is paired with the slider or not at all.
- *
- * **It catches the whole line.** It used to catch only the middle six tenths,
- * leaving a strip at each end for the seams between touching blocks. There are
- * no seams now, and the line's `blockedFaces` band covers it top to bottom, so
- * a strip left here would hatch the ends of a line whose middle offered to pair.
+ * What catches the pointer for a place on a line: the free run it sits in, and
+ * never less than the box it draws.
  */
-function pairTargets(
-  layout: CardLayout,
-  zone: CardZone,
-  row: MeasuredRow,
-  drag: CardDrag,
-  line: LineBox,
-  type: CardBlockType,
-  /** The narrowest column this drag can land in — see `sideSlots`. */
-  floor: number,
-): SideTarget[] {
-  if (row.count !== 1 || row.blocks.length !== 1) return [];
+function hitOf(
+  room: { left: number; right: number },
+  left: number,
+  width: number,
+): { hitLeft: number; hitWidth: number } {
+  const from = Math.min(room.left, left);
+  const to = Math.max(room.right, left + width);
 
-  const measured = row.blocks[0];
-  // A block cannot pair with itself: it would have to be in two columns at once.
-  if (drag.kind === "move" && measured.id === drag.id) return [];
-
-  const sitting = layout.zones[zone][row.index] as CardBlock | undefined;
-  if (!sitting || sitting.id !== measured.id) return [];
-  if (!hasControl(sitting.type, "width")) return [];
-  /*
-   * And the blocks a drop may not narrow at all — see `isPairable` in
-   * packages/shared/card-layout.ts. It is the block *sitting there* that is
-   * asked, so a gallery dragged onto a name still splits that name's line; what
-   * it stops is the reverse, where something dropped on a photo halved it.
-   *
-   * Refusing here is also what puts the gallery's own `blockedFaces` band back
-   * in the pointer's way: the columns were painted over that face and won it
-   * inside their own boxes, so with none drawn the line refuses outright.
-   */
-  if (!isPairable(sitting.type)) return [];
-
-  /*
-   * What the newcomer takes, and therefore what is left for the block already
-   * there. For a mark that is the square it reserves; for everything else it is
-   * half, which is the only split a drop has a degree of freedom left to ask for.
-   */
-  const mark = isSelfSized(type);
-  const share = mark ? floor : PAIR_SHARE;
-  const rest = 100 - share;
-
-  // The newcomer's own floor, which a mark has not got and does not need: its
-  // width is its own, so there is nothing for a minimum to be a minimum of.
-  if (!mark && share < (CARD_BLOCKS[type].minWidthPct ?? 100)) return [];
-  if (rest < (CARD_BLOCKS[sitting.type].minWidthPct ?? 100)) return [];
-
-  if (row.bottom - row.top < MIN_BAND) return [];
-
-  // The *hit* area rather than the drawn one — the outline is the whole column,
-  // because that is what will land there, and it can be taller than the line.
-  const middle = { hitTop: row.top, hitBottom: row.bottom };
-
-  if (mark) {
-    /*
-     * The square, in the units the line is measured in — and at each **end** of
-     * the line, because those are the two places a mark that has just claimed one
-     * end of a row can be. `markBox` would otherwise cut this from the measured
-     * DOM and put both squares at the *start* of the room they were given, which
-     * for the far column is the middle of the card.
-     *
-     * The pointer still aims at a **half of the line** rather than at the square
-     * itself: 62px is not something anyone can hit with a moving pointer, which
-     * is the same draw-versus-hit split `splitAlignColumns` makes across a run.
-     */
-    const square = Math.round((line.width * share) / 100);
-    if (square <= 0 || square >= line.width) return [];
-
-    const half = line.width / 2;
-
-    return [
-      {
-        index: row.index,
-        side: "start",
-        left: line.left,
-        width: square,
-        // Square on both axes, which is the whole of "the outline is the shape
-        // of the thing you are dragging" — see `height` on `SideTarget`.
-        height: square,
-        mark: true,
-        hitLeft: line.left,
-        hitWidth: half,
-        pairId: sitting.id,
-        pairWidthPct: rest,
-        ...middle,
-      },
-      {
-        index: row.end,
-        side: "end",
-        left: line.left + line.width - square,
-        width: square,
-        height: square,
-        mark: true,
-        hitLeft: line.left + half,
-        hitWidth: half,
-        pairId: sitting.id,
-        pairWidthPct: rest,
-        ...middle,
-      },
-    ];
-  }
-
-  /*
-   * Exactly what `blockBox` gives a 50% share: half the line, less its half of
-   * the one gap between the two columns. Taken from the measured line rather
-   * than from the block's own rect, so the two halves come out equal even when
-   * the block sitting there carries a margin of its own.
-   */
-  const width = (line.width - layout.gap) / 2;
-  if (width <= 0) return [];
-
-  return [
-    {
-      index: row.index,
-      side: "start",
-      left: line.left,
-      width,
-      widthPct: share,
-      pairId: sitting.id,
-      pairWidthPct: rest,
-      ...middle,
-    },
-    {
-      index: row.end,
-      side: "end",
-      left: line.left + width + layout.gap,
-      width,
-      widthPct: share,
-      pairId: sitting.id,
-      pairWidthPct: rest,
-      ...middle,
-    },
-  ];
-}
-
-/** One line's columns, as many as this drag has on it. See `sideSlots`. */
-function sideTargets(
-  layout: CardLayout,
-  zone: CardZone,
-  row: MeasuredRow,
-  drag: CardDrag,
-  line: LineBox,
-  /** The narrowest column this drag can land in — see `sideSlots`. */
-  floor: number,
-): SideTarget[] {
-  /*
-   * Every case here needs a measured rect, and takes the *column* width from
-   * it rather than working one out from the card. A column is whatever the row
-   * actually drew, which is the only number that lines a mark up with the block
-   * beside it at every card width.
-   */
-  const rect = (block: ZoneBlockMeasure | undefined) =>
-    block && block.left !== undefined && block.right !== undefined
-      ? { left: block.left, right: block.right, width: block.right - block.left }
-      : null;
-
-  /*
-   * A column's width in pixels, back as the percentage that produced it.
-   *
-   * `blockBox` gives a share of `s` the basis `calc(s% - gap/2)`, so the pixels
-   * are `line·s/100 - gap/2` and this is that inverted. Doing the arithmetic
-   * rather than reading the sitting block's stored number is what keeps the two
-   * columns of a line summing to exactly 100: the free side is whatever is left
-   * over, measured, and `100 - s` falls out of it.
-   */
-  const shareOfWidth = (px: number) =>
-    Math.round((100 * (px + layout.gap / 2)) / line.width);
-
-  // A column too narrow for what is in the hand is not a place it can go.
-  const fits = (widthPct: number) => widthPct >= floor;
-
-  if (row.count === 2) {
-    // A full line has no free column. The one thing that can still land on it
-    // is one of the two blocks already there, crossing to the other side — and
-    // it takes no width with it, because both columns already hold a block.
-    if (drag.kind !== "move") return [];
-    if (row.blocks.length !== 2) return [];
-
-    const [first, second] = row.blocks;
-
-    if (first.id === drag.id) {
-      const box = rect(second);
-      return box
-        ? [{ index: row.end, side: "end", left: box.left, width: box.width }]
-        : [];
-    }
-
-    if (second.id === drag.id) {
-      const box = rect(first);
-      return box
-        ? [{ index: row.index, side: "start", left: box.left, width: box.width }]
-        : [];
-    }
-
-    return [];
-  }
-
-  const box = rect(row.blocks[0]);
-  if (!box) return [];
-
-  /*
-   * Which column the block is *in* decides which one is free, and that is the
-   * layout's business rather than the measurement's — a rect cannot tell a
-   * block at the end of its line from a card that happens to be narrow.
-   */
-  const sitting = layout.zones[zone][row.index] as CardBlock | undefined;
-  const atEnd = sitting?.side === "end";
-
-  /*
-   * The free column is the rest of the line, measured — not half of it. Its far
-   * edge is the line's own edge, so a 40% block leaves a 60% column and the mark
-   * drawn for it is exactly the box the block that lands will fill.
-   */
-  const free = atEnd
-    ? {
-        side: "start" as const,
-        left: line.left,
-        width: box.left - layout.gap - line.left,
-      }
-    : {
-        side: "end" as const,
-        left: box.right + layout.gap,
-        width: line.left + line.width - box.right - layout.gap,
-      };
-
-  /*
-   * Landing on its own free column is a real move: the block crosses its line
-   * and the space it left opens on the other side. Its index does not change —
-   * it is still the only block on that line — so the whole edit is the `side`
-   * the drop carries, and it takes no width with it.
-   */
-  const isSelf = drag.kind === "move" && row.blocks[0].id === drag.id;
-  const index = isSelf ? row.index : free.side === "end" ? row.end : row.index;
-
-  const targets: SideTarget[] = [];
-  const freeShare = shareOfWidth(free.width);
-
-  if (free.width > 0 && (isSelf || fits(freeShare))) {
-    targets.push({
-      index,
-      side: free.side,
-      left: free.left,
-      width: free.width,
-      ...(isSelf ? {} : { widthPct: freeShare }),
-    });
-  }
-
-  /*
-   * And the column the block already occupies, for anything that is not that
-   * block. Landing there puts the newcomer in that column — at that column's
-   * width, so the line still adds up — and pushes the one already on the line
-   * across. `insert` in card-edits.ts reads `"start"` as "take this line, the
-   * block here joins you" and `"end"` as "join the block before you", which is
-   * exactly the two cases below.
-   *
-   * Offering it to the block itself would be drawing a mark over where that
-   * block already is, for a drop `dropCardBlock` answers `null` to.
-   */
-  const takenShare = shareOfWidth(box.width);
-
-  if (!isSelf && fits(takenShare)) {
-    targets.push(
-      atEnd
-        ? {
-            index: row.end,
-            side: "end",
-            left: box.left,
-            width: box.width,
-            widthPct: takenShare,
-          }
-        : {
-            index: row.index,
-            side: "start",
-            left: box.left,
-            width: box.width,
-            widthPct: takenShare,
-          },
-    );
-  }
-
-  return targets;
+  return { hitLeft: from, hitWidth: to - from };
 }

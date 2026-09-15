@@ -600,214 +600,6 @@ describe("dropCardBlock — where in the free space it landed", () => {
   });
 });
 
-describe("dropCardBlock — pairing two blocks on one line", () => {
-  it("narrows the block already there, and puts the newcomer beside it", () => {
-    /*
-     * The drop a `pairTargets` slot makes (lib/card/drop-slots.ts): the block in
-     * the hand takes half the line, and the block that owned the line pays for it
-     * by taking the other half. Nothing else about the edit is new — the halves
-     * pair by adjacency, exactly as two blocks narrowed by hand always have.
-     */
-    const layout = sampleCardLayout();
-    const next = dropCardBlock(layout, { kind: "new", type: "divider" }, {
-      zone: "middle",
-      index: 1,
-      half: "end",
-      widthPct: 50,
-      line: 0,
-      pairId: "name",
-      pairWidthPct: 50,
-    });
-
-    expect(next).not.toBeNull();
-    expect(types(next!, "middle")).toEqual([
-      "name",
-      "divider",
-      "category",
-      "address",
-      "details",
-    ]);
-    expect(next!.zones.middle[0].widthPct).toBe(50);
-    expect(next!.zones.middle[1].widthPct).toBe(50);
-
-    // And the two really are one line, which is the whole point of the gesture.
-    const [first] = cardRows(next!.zones.middle, sampleCardLayout());
-    expect(first.blocks.map((block) => block.type)).toEqual(["name", "divider"]);
-  });
-
-  it("lets the newcomer take the near column and pushes the other across", () => {
-    // The same line, the other end. `insert` reads "start" as "take this line,
-    // the block here joins you".
-    const layout = sampleCardLayout();
-    const next = dropCardBlock(layout, { kind: "new", type: "divider" }, {
-      zone: "middle",
-      index: 0,
-      half: "start",
-      widthPct: 50,
-      line: 0,
-      pairId: "name",
-      pairWidthPct: 50,
-    });
-
-    expect(types(next!, "middle")).toEqual([
-      "divider",
-      "name",
-      "category",
-      "address",
-      "details",
-    ]);
-    expect(cardRows(next!.zones.middle, sampleCardLayout())[0].blocks).toHaveLength(2);
-  });
-
-  it("pairs a block already on the card with one somewhere else on it", () => {
-    const layout = sampleCardLayout();
-    const address = findBlock(layout, "address");
-    const next = dropCardBlock(layout, { kind: "move", id: address!.block.id }, {
-      zone: "middle",
-      index: 1,
-      half: "end",
-      widthPct: 50,
-      line: 0,
-      pairId: "name",
-      pairWidthPct: 50,
-    });
-
-    expect(types(next!, "middle")).toEqual([
-      "name",
-      "address",
-      "category",
-      "details",
-    ]);
-    expect(cardRows(next!.zones.middle, sampleCardLayout())[0].blocks.map((block) => block.id)).toEqual(
-      ["name", "address"],
-    );
-  });
-
-  it("is a real drop even when the block in the hand does not move", () => {
-    /*
-     * The case the non-move guard would otherwise swallow. A half sitting
-     * directly above a full-width block is already at the index the pair target
-     * names, already at 50%, and already at the same end of its line — every
-     * test that guard makes passes. What changes is the *other* block, which
-     * narrows to make the line they share.
-     */
-    const layout: CardLayout = {
-      ...sampleCardLayout(),
-      zones: {
-        top: [],
-        middle: [
-          { id: "name", type: "name", widthPct: 50 },
-          { id: "category", type: "category" },
-        ],
-        bottom: [],
-      },
-    };
-
-    // Two lines before: a half with reserved room beside it, and a full-width
-    // block under it.
-    expect(cardRows(layout.zones.middle, sampleCardLayout())).toHaveLength(2);
-
-    const next = dropCardBlock(layout, { kind: "move", id: "name" }, {
-      zone: "middle",
-      index: 1,
-      half: "start",
-      widthPct: 50,
-      line: 1,
-      pairId: "category",
-      pairWidthPct: 50,
-    });
-
-    expect(next).not.toBeNull();
-    expect(cardRows(next!.zones.middle, sampleCardLayout())).toHaveLength(1);
-    expect(next!.zones.middle.map((block) => block.widthPct)).toEqual([50, 50]);
-  });
-
-  it("lets a logo take the square it needs and narrows the rest away", () => {
-    /*
-     * The drop a *mark's* pair target makes. A logo has no width to narrow, so
-     * the split is not down the middle: it reserves `selfShareOf` — 24% of a
-     * 296px line for a default 62px logo — and the block already on the line pays
-     * the other 76%.
-     *
-     * Nothing in `pair` needed changing for this; it has always applied whatever
-     * `pairWidthPct` the target carried. What it must not do is write a width on
-     * the logo, which has no control for one.
-     */
-    const next = dropCardBlock(sampleCardLayout(), { kind: "new", type: "logo" }, {
-      zone: "middle",
-      index: 1,
-      half: "end",
-      line: 0,
-      pairId: "name",
-      pairWidthPct: 76,
-    });
-
-    expect(next).not.toBeNull();
-    expect(types(next!, "middle")).toEqual([
-      "name",
-      "logo",
-      "category",
-      "address",
-      "details",
-    ]);
-    expect(next!.zones.middle[0].widthPct).toBe(76);
-    expect(next!.zones.middle[1].widthPct).toBeUndefined();
-
-    // And the two are one line, which is the only thing the gesture promised.
-    const [first] = cardRows(next!.zones.middle, sampleCardLayout());
-    expect(first.blocks.map((block) => block.type)).toEqual(["name", "logo"]);
-  });
-
-  it("leaves a gallery at the width its owner gave it", () => {
-    /*
-     * The edit-path half of `isPairable`. `pairTargets` never draws a target
-     * over a photo, so this can only be reached by a stale one — but a target is
-     * an offer and this is where a rule has to be true, which is the same
-     * belt-and-braces `withShare` already gets from `pair`.
-     *
-     * The rest of the drop still runs: the block lands, on a line of its own,
-     * because a photo that has not narrowed leaves nothing beside it. That is
-     * `pair` returning the layout it was given, which `dropCardBlock` reads as
-     * "nothing to do" rather than as "refuse".
-     */
-    const layout = sampleCardLayout();
-    const next = dropCardBlock(layout, { kind: "new", type: "divider" }, {
-      zone: "top",
-      index: 1,
-      half: "end",
-      widthPct: 50,
-      line: 0,
-      pairId: "gallery",
-      pairWidthPct: 50,
-    });
-
-    expect(next).not.toBeNull();
-    expect(next!.zones.top[0].widthPct).toBeUndefined();
-    expect(types(next!, "top")).toEqual(["gallery", "divider"]);
-
-    // Two lines, not one: the photo is still the full width of the card, so
-    // there is no room beside it for the newcomer to have landed in.
-    expect(cardRows(next!.zones.top, layout)).toHaveLength(2);
-  });
-
-  it("refuses to pair a block with itself", () => {
-    // No slot builds this target, but the edit path is where the rule has to be
-    // true rather than merely observed: it falls through to the ordinary non-move
-    // and answers null.
-    const layout = sampleCardLayout();
-    const name = findBlock(layout, "name");
-
-    expect(
-      dropCardBlock(layout, { kind: "move", id: name!.block.id }, {
-        zone: "middle",
-        index: 0,
-        pairId: name!.block.id,
-        pairWidthPct: 50,
-      }),
-    ).toBeNull();
-  });
-});
-
 describe("removeCardBlock", () => {
   it("takes the block off the card", () => {
     const layout = removeCardBlock(sampleCardLayout(), "category");
@@ -1192,88 +984,81 @@ describe("width", () => {
     ).toBeUndefined();
   });
 
-  it("gives a block dropped into the room beside another that room's width", () => {
+  it("keeps its own width when it lands in the room beside another", () => {
+    /*
+     * A drop never resizes a block. The room beside a 40% name is 60%, and a
+     * 60% address moved into it takes it at the width it already had — the
+     * Width control is the one thing that changes a width.
+     */
     const layout = cardWith({
-      middle: [{ id: "a", type: "name", widthPct: 40 }],
+      middle: [
+        { id: "a", type: "name", widthPct: 40 },
+        { id: "b", type: "address", widthPct: 60, newLine: true },
+      ],
     });
     const next = dropCardBlock(
       layout,
-      { kind: "new", type: "address" },
-      { zone: "middle", index: 1, half: "end", widthPct: 60, line: 0 },
+      { kind: "move", id: "b" },
+      { zone: "middle", index: 1, half: "end", line: 0 },
     );
 
     expect(next).not.toBeNull();
     expect(next?.zones.middle.map((block) => block.widthPct)).toEqual([40, 60]);
-    // Consecutive, which is what makes `cardRows` pair them.
-    expect(next?.zones.middle.map((block) => block.type)).toEqual([
-      "name",
-      "address",
-    ]);
+    expect(cardRows(next?.zones.middle ?? [], sampleCardLayout())).toHaveLength(1);
   });
 
-  it("leaves a block alone when the type cannot be narrowed", () => {
-    // No such target is ever built, but the edit path is where the rule has to
-    // be true rather than merely observed.
-    const layout = cardWith({
-      middle: [{ id: "a", type: "name", widthPct: 50 }],
-    });
-    const next = dropCardBlock(
-      layout,
-      { kind: "new", type: "hours" },
-      { zone: "middle", index: 1, half: "end", widthPct: 50, line: 0 },
-    );
-
-    expect(next?.zones.middle[1].widthPct).toBeUndefined();
-  });
-
-  it("re-widths a block moved into the room beside one", () => {
+  it("never changes a block's width, wherever it lands", () => {
+    // Too wide for the room beside the name, so it lands on a line of its own —
+    // at its own 70%, rather than being cut down to fit or widened to the line.
     const layout = cardWith({
       middle: [
         { id: "a", type: "name", widthPct: 40 },
+        { id: "c", type: "description" },
         { id: "b", type: "address", widthPct: 70 },
       ],
     });
     const next = dropCardBlock(
       layout,
       { kind: "move", id: "b" },
-      { zone: "middle", index: 1, half: "end", widthPct: 60, line: 0 },
+      { zone: "middle", index: 1, offset: 0 },
     );
 
     expect(next).not.toBeNull();
-    expect(next?.zones.middle[1].widthPct).toBe(60);
+    expect(findBlock(next as CardLayout, "b")?.block.widthPct).toBe(70);
+    expect(findBlock(next as CardLayout, "a")?.block.widthPct).toBe(40);
   });
 
   it("counts joining a line as a move even from immediately below it", () => {
     /*
-     * The non-move guard has to let this through. A block sitting under a lone
-     * narrowed one is already at that insertion index, so by index and offset
-     * alone this looks like putting it back where it was — but going from owning
-     * a line to sharing one is the whole gesture.
+     * The non-move guard has to let this through. A block alone on the line
+     * directly under a narrowed one is already at the insertion index a place
+     * beside that block names, with the same offset and no side — and before
+     * drops stopped carrying a width, the width was the only thing saying that
+     * joining a line is not staying put. `line` says it now.
      */
     const layout = cardWith({
       middle: [
         { id: "a", type: "name", widthPct: 50 },
-        { id: "b", type: "address" },
+        { id: "b", type: "address", widthPct: 50, newLine: true },
       ],
     });
     const next = dropCardBlock(
       layout,
       { kind: "move", id: "b" },
-      { zone: "middle", index: 1, half: "end", widthPct: 50, line: 0 },
+      { zone: "middle", index: 1, half: "end", line: 0 },
     );
 
     expect(next).not.toBeNull();
-    expect(next?.zones.middle[1].widthPct).toBe(50);
+    expect(cardRows(next?.zones.middle ?? [], sampleCardLayout())).toHaveLength(1);
   });
 
-  it("gives a block that lands alone on a line the whole line", () => {
+  it("keeps a narrowed block's width when it lands alone on a line", () => {
     /*
-     * The complaint: a run mark is drawn across the whole card, and a 50%-wide
-     * block released on one used to land at 50% with reserved space beside it —
-     * an outline promising a block twice the size of the one that arrived. Every
-     * run slot now names 100 (`run` in lib/card/drop-slots.ts), so pulling a half
-     * out of a pair and dropping it somewhere it has the line to itself widens it
-     * back out. Narrowing stays the Width slider's alone.
+     * A drop mark on a run used to be drawn across the whole card, and a 50%
+     * block released on one was widened to match. The spot is drawn at the
+     * block's own width now (`fitRunsToBlock` in lib/card/drop-bands.ts), so the
+     * block lands at that width on a line of its own — and its old partner keeps
+     * its own line and its own width.
      */
     const layout = cardWith({
       middle: [
@@ -1285,21 +1070,19 @@ describe("width", () => {
     const next = dropCardBlock(
       layout,
       { kind: "move", id: "b" },
-      { zone: "middle", index: 0, widthPct: 100 },
+      { zone: "middle", index: 0 },
     );
 
-    expect(next?.zones.middle[0].id).toBe("b");
-    // Deleted rather than stored as 100 — full width is the absence of a width.
-    expect(next?.zones.middle[0].widthPct).toBeUndefined();
-    // And the partner left behind keeps its own, because narrowing is not
-    // something a drag does to a block nobody picked up.
-    expect(next?.zones.middle[1].widthPct).toBe(50);
+    expect(next?.zones.middle.map((block) => block.id)).toEqual(["b", "a"]);
+    expect(next?.zones.middle.map((block) => block.widthPct)).toEqual([50, 50]);
+    // Two lines, not the pair re-formed the other way round.
+    expect(cardRows(next?.zones.middle ?? [], sampleCardLayout())).toHaveLength(2);
   });
 
-  it("drops the line rules with the width, so nothing comes back on the next drag", () => {
-    // `newLine` and `side` are both statements about a line the block *shares*.
-    // Left on a block that has just taken a whole line to itself, they would
-    // reappear the moment someone narrowed it again.
+  it("clears a stale side when a narrowed block lands on a run", () => {
+    // `side` and `newLine` are statements about the line a block was on. Landing
+    // on a run starts a line of its own at its start, where neither means
+    // anything, and left on the block they would come back later.
     const layout = cardWith({
       middle: [
         { id: "a", type: "name", widthPct: 50, side: "end", newLine: true },
@@ -1309,11 +1092,11 @@ describe("width", () => {
     const next = dropCardBlock(
       layout,
       { kind: "move", id: "a" },
-      { zone: "middle", index: 2, widthPct: 100 },
+      { zone: "middle", index: 2 },
     );
 
     expect(next?.zones.middle[1].id).toBe("a");
-    expect(next?.zones.middle[1].widthPct).toBeUndefined();
+    expect(next?.zones.middle[1].widthPct).toBe(50);
     expect(next?.zones.middle[1].side).toBeUndefined();
     expect(next?.zones.middle[1].newLine).toBeUndefined();
   });
@@ -1341,28 +1124,25 @@ describe("width", () => {
   it("writes no settling offset onto a block that shares the line", () => {
     /*
      * `nextOffset` exists to stop an arrival shoving the rest of the card down.
-     * When the block after the one that landed is its own partner there is
-     * nothing below to protect, and a narrowed block's leading space belongs to
-     * the row as the greater of the pair — so writing one would either do
+     * When the block that landed joins a line as its last member there is nothing
+     * after it in the zone to protect, and a line's leading space belongs to the
+     * line as the greater of its members' — so writing one would either do
      * nothing or move them both.
      */
     const layout = cardWith({
-      middle: [{ id: "a", type: "name", widthPct: 50 }],
+      middle: [
+        { id: "a", type: "name", widthPct: 50 },
+        { id: "b", type: "address", widthPct: 50, newLine: true },
+      ],
     });
     const next = dropCardBlock(
       layout,
-      { kind: "new", type: "address" },
-      {
-        zone: "middle",
-        index: 0,
-        half: "end",
-        widthPct: 50,
-        line: 0,
-        nextOffset: 40,
-      },
+      { kind: "move", id: "b" },
+      { zone: "middle", index: 1, half: "end", line: 0, nextOffset: 40 },
     );
 
-    expect(next?.zones.middle[1].offset).toBeUndefined();
+    expect(findBlock(next as CardLayout, "a")?.block.offset).toBeUndefined();
+    expect(findBlock(next as CardLayout, "b")?.block.offset).toBeUndefined();
   });
 
   it("only changes the side when a block crosses the line it owns alone", () => {
@@ -1486,7 +1266,7 @@ describe("lines survive an edit", () => {
     const moved = dropCardBlock(
       halves("a", "b", "c"),
       { kind: "move", id: "b" },
-      { zone: "middle", index: 3, half: "end", widthPct: 50, line: 2 },
+      { zone: "middle", index: 3, half: "end", line: 2 },
     );
 
     expect(moved?.zones.middle[1].newLine).toBe(true);
@@ -1572,17 +1352,20 @@ describe("side", () => {
   });
 
   it("carries no side while it shares its line", () => {
-    // Only a block alone on its line has a column to choose; a pair fills the
-    // row. Storing one anyway would be a field that means something on one card
-    // and nothing on the next.
+    // Only a block alone on its line has an end to choose; a line of two fills
+    // the row. Storing one anyway would be a field that means something on one
+    // card and nothing on the next.
     const layout = cardWith({
-      middle: [{ id: "a", type: "name", half: true, side: "end" }],
+      middle: [
+        { id: "a", type: "name", half: true, side: "end" },
+        { id: "b", type: "address", widthPct: 50, newLine: true },
+      ],
     });
 
     const next = dropCardBlock(
       layout,
-      { kind: "new", type: "address" },
-      { zone: "middle", index: 0, half: "start", widthPct: 50, line: 0 },
+      { kind: "move", id: "b" },
+      { zone: "middle", index: 0, half: "start", line: 0 },
     );
 
     expect(cardRows(next?.zones.middle ?? [], sampleCardLayout())).toHaveLength(1);
@@ -1632,6 +1415,12 @@ describe("dropping a mark, and dropping beside one", () => {
     },
   });
 
+  /** The same logo, with these blocks each on a line of their own below it. */
+  const withLogoAbove = (...below: CardBlock[]): CardLayout =>
+    withLogo({
+      middle: [{ id: "logo", type: "logo", heightPct: 14, align: "center" }, ...below],
+    });
+
   it("puts the mark where across its line the drop said", () => {
     const next = dropCardBlock(
       withLogo(),
@@ -1673,12 +1462,12 @@ describe("dropping a mark, and dropping beside one", () => {
   });
 
   it("puts a block into the room beside the mark, on one line", () => {
-    // 38% is what a 109px run of a 296px line measures as — see
-    // `sideSlots` in drop-slots.test.ts, which is where that number comes from.
+    // A 38% name is 108px of a 296px line, which fits the 109px run beside a
+    // centred 62px logo without moving it — see `sideSlots` in drop-slots.test.ts.
     const next = dropCardBlock(
-      withLogo(),
-      { kind: "new", type: "name" },
-      { zone: "middle", index: 1, offset: 0, half: "end", widthPct: 38, line: 0 },
+      withLogoAbove({ id: "name", type: "name", widthPct: 38, newLine: true }),
+      { kind: "move", id: "name" },
+      { zone: "middle", index: 1, offset: 0, half: "end", line: 0 },
     );
 
     expect(next?.zones.middle.map((block) => block.type)).toEqual([
@@ -1698,15 +1487,18 @@ describe("dropping a mark, and dropping beside one", () => {
      * it with a name to one side and an address to the other, all on one line.
      */
     const one = dropCardBlock(
-      withLogo(),
-      { kind: "new", type: "name" },
-      { zone: "middle", index: 1, offset: 0, half: "end", widthPct: 38, line: 0 },
+      withLogoAbove(
+        { id: "name", type: "name", widthPct: 38, newLine: true },
+        { id: "address", type: "address", widthPct: 38, newLine: true },
+      ),
+      { kind: "move", id: "name" },
+      { zone: "middle", index: 1, offset: 0, half: "end", line: 0 },
     );
 
     const two = dropCardBlock(
       one as CardLayout,
-      { kind: "new", type: "address" },
-      { zone: "middle", index: 0, offset: 0, half: "start", widthPct: 38, line: 0 },
+      { kind: "move", id: "address" },
+      { zone: "middle", index: 0, offset: 0, half: "start", line: 0 },
     );
 
     expect(two?.zones.middle.map((block) => block.type)).toEqual([
@@ -1724,9 +1516,9 @@ describe("dropping a mark, and dropping beside one", () => {
     // A mark has no width to give up, so nothing about it changes: the block
     // that lands takes the room that was already there.
     const next = dropCardBlock(
-      withLogo(),
-      { kind: "new", type: "name" },
-      { zone: "middle", index: 1, offset: 0, half: "end", widthPct: 38, line: 0 },
+      withLogoAbove({ id: "name", type: "name", widthPct: 38, newLine: true }),
+      { kind: "move", id: "name" },
+      { zone: "middle", index: 1, offset: 0, half: "end", line: 0 },
     );
 
     expect(next?.zones.middle[0]).toEqual({
@@ -1751,7 +1543,7 @@ describe("dropping a mark, and dropping beside one", () => {
         },
       },
       { kind: "new", type: "logo" },
-      { zone: "middle", index: 1, offset: 0, half: "end", widthPct: 40, line: 0 },
+      { zone: "middle", index: 1, offset: 0, half: "end", line: 0 },
     );
 
     expect(beside?.zones.middle[1].type).toBe("logo");
@@ -1813,13 +1605,12 @@ describe("moving a block along a line it shares", () => {
     },
   });
 
-  /** Where `selfTargets` puts the room past the logo: the end of line 0. */
+  /** Where `sideSlots` puts the room past the logo: the end of line 0. */
   const pastTheMark = {
     zone: "middle",
     index: 2,
     offset: 0,
     half: "end",
-    widthPct: 36,
     line: 0,
   } as const;
 
@@ -1862,7 +1653,7 @@ describe("moving a block along a line it shares", () => {
         top: [],
         middle: [
           { id: "logo", type: "logo", heightPct: 14, align: "center" },
-          { id: "name", type: "name" },
+          { id: "name", type: "name", widthPct: 36, newLine: true },
         ],
         bottom: [],
       },
@@ -1873,7 +1664,6 @@ describe("moving a block along a line it shares", () => {
       index: 1,
       offset: 0,
       half: "end",
-      widthPct: 36,
       line: 0,
     });
 
@@ -2046,7 +1836,6 @@ describe("the leading space above a shared line", () => {
       index: 2,
       offset: 0,
       half: "end",
-      widthPct: 39,
       line: 0,
       vacateId: "name",
       vacateOffset: 137,
@@ -2159,12 +1948,11 @@ describe("taking a block off a logo's line and putting it back", () => {
   });
 
   it("leaves the logo untouched, out and back", () => {
-    // Out: onto the run below, full width, which is what a card-wide mark says.
+    // Out: onto the run below, at the address's own width.
     const out = dropCardBlock(start, { kind: "move", id: "address" }, {
       zone: "middle",
       index: 2,
       offset: 0,
-      widthPct: 100,
     })!;
 
     expect(out.zones.middle.map((block) => block.id)).toEqual([
@@ -2175,14 +1963,12 @@ describe("taking a block off a logo's line and putting it back", () => {
       findBlock(start, "logo")!.block,
     );
 
-    // And back into the column at the head of the logo's line, at the width it
-    // was reserving there.
+    // And back into the room at the head of the logo's line.
     const back = dropCardBlock(out, { kind: "move", id: "address" }, {
       zone: "middle",
       index: 0,
       offset: 0,
       half: "start",
-      widthPct: 39,
       line: 0,
     })!;
 

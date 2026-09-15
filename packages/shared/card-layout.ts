@@ -323,45 +323,6 @@ export function isSelfSized(type: CardBlockType): boolean {
 }
 
 /**
- * The blocks a drop may not split a line with.
- *
- * About the block **already sitting there**, never the one in the hand. A photo
- * is the one block whose whole job is its size, so halving it is a change to the
- * design rather than a way of making room — and the only thing that should
- * narrow a gallery is its owner reaching for the Width slider or its resize
- * handle. It can still be narrowed, and the room that opens beside it is a real
- * column like any other; what it cannot be is narrowed *by someone dropping
- * something on it*.
- *
- * So this is also the list of blocks a drop target may never be drawn over. A
- * pair target is the one thing the designer paints across a block that is
- * staying put, and taking it away is what leaves the gallery's own face refusing
- * the drop outright — see `blockedFaces` in lib/card/drop-slots.ts, which was
- * always computed for that line and only ever painted over.
- *
- * Dropping a gallery *onto* another block is untouched: that is a target on the
- * block underneath, which is allowed, and the gallery arrives at whatever share
- * the target names.
- *
- * A list rather than a field on `CardBlockSpec`, for the reason `SELF_SIZED` and
- * `UNZOOMED` are lists: it is one type out of twelve, and a row of `pairable:
- * true` on the other eleven is eleven chances to write the wrong one.
- */
-const UNPAIRABLE: readonly CardBlockType[] = ["gallery"];
-
-/**
- * Whether a drop onto this block may split its line in two.
- *
- * Asked twice on purpose. `pairTargets` in lib/card/drop-slots.ts asks it before
- * drawing a target, and `pair` in lib/card/card-edits.ts asks it again before
- * narrowing anything — the same belt-and-braces the width floor already gets,
- * because a target is an offer and the edit path is where a rule has to be true.
- */
-export function isPairable(type: CardBlockType): boolean {
-  return !UNPAIRABLE.includes(type);
-}
-
-/**
  * What a block made of words arrives with: a few pixels of room inside its own
  * box, so a name does not sit hard against the block above it and an address
  * dropped next to a photo is not touching it.
@@ -3225,7 +3186,7 @@ export function leadBox(offset: number, layout: CardLayout): CardLeadBox {
  * middle of the card with the leftover trailing it.
  *
  * Putting that leftover at the head instead holds the mark exactly where it was,
- * and *exactly* rather than approximately: `selfTargets` in
+ * and *exactly* rather than approximately: `sideSlots` in
  * lib/card/drop-slots.ts gives the newcomer the share it measures off the very
  * run it was released in, so `100 - markShare - newcomerShare` **is** the space
  * that was to the mark's left.

@@ -1988,36 +1988,27 @@ html {
 }
 
 /*
- * A seated copy that is a *label* for the block rather than the block — a
- * palette tile (`SnapBox.fit`) — centred in the place at its own size, and
- * scaled down by the magnet only as far as the place needs.
+ * A palette tile's copy while the pointer is on a place (`SnapBox.fit`): it
+ * steps aside, because the overlay draws the real block in that place
+ * (`DropBlockPreview`).
  *
- * **It keeps its ground.** It used to shed the pill whole — ground, border and
- * padding — which left an icon and a word laid straight on the drop layer's
- * veil: on a dark card, dark text on a darkened card, and measured, a seated
- * Name was a word under 10px at a third of its strength. The pill stays solid
- * and loses only what made it too tall for a one-line place: the hairline, and
- * its padding down to the 24px of its glyph well — so a 24px Name place seats it
- * at 0.75 rather than shrinking a 38px pill to half size.
+ * It used to be seated there itself — the pill centred in the place at its own
+ * size — and in anything taller than a line of text that was a small label lost
+ * in a large box, which is how "what I am dragging is tiny next to where it
+ * goes" was reported. A click-to-place carry has no copy at all and showed
+ * nothing, so the preview has to be the overlay's either way, and one preview
+ * answers both gestures.
  *
- * The children go `flex: none` because the tile's name is `flex-1`, and a
- * `flex-1` item in a copy sized to its own content has no width to grow into
- * and truncates to an ellipsis.
+ * Faded rather than removed, on `.row-ghost`'s own opacity transition, so
+ * leaving the place brings it straight back. Centred at its own size while it
+ * fades, so it recedes rather than stretching to the place's box. After
+ * `.row-ghost--snapped`, whose `opacity: 1` this has to beat.
  */
-.row-ghost--label {
+.row-ghost--previewed {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.row-ghost--label > .palette-tile {
-  border-width: 0;
-  padding: 0 0.625rem 0 0;
-  box-shadow: 0 2px 8px oklch(0% 0 0 / 0.3);
-}
-
-.row-ghost--label > * > * {
-  flex: none;
+  opacity: 0;
 }
 
 /*
@@ -2209,7 +2200,7 @@ body.is-drop-remove .row-ghost {
  * block, with no edge and nothing in it.
  *
  * **A fill, where it was dashes, and the dashes were a bug.** This was a 2px
- * dashed accent box drawn *inside* a `.card-drop-region`, which has 2px dashes of
+ * dashed accent box drawn *inside* a `.card-drop-region` (now `.card-drop-spot`), which has dashes of
  * its own — for a one-line place the two measured 220×24 inside 222×28, two
  * dashed edges a pixel apart, breathing against each other with the region's 3%.
  * The copy in the hand is seated in exactly this box, so the inner edge read as
@@ -2242,43 +2233,63 @@ body.is-drop-remove .row-ghost {
 }
 
 /*
- * Somewhere the block could go — all of them, for the whole gesture.
+ * One place the block could land, at the size it lands as — all of them, for
+ * the whole gesture.
  *
- * The same vocabulary as `.card-drop-slot` and deliberately so: dashes mean a
- * place a block can go, and these are places. What differs is the volume. There
- * are as many of these as the card has room in it, they are on screen from the
- * moment the block leaves the palette, and they are chrome laid over a design
- * someone is looking at — so a thin edge at under half strength, where the one
- * bold box is the answer and these are the question.
+ * **Spots, not areas.** This used to be `.card-drop-region`: one dashed box per
+ * run of free space, whatever was in the hand, so a 62px logo over a 300px gap
+ * was shown a 300px box and a straddling spot under a photo was shown nothing.
+ * It was reported as dashes where the block could not go and none where it
+ * could. Each place the block fits at its current size is outlined on its own
+ * now (components/card/designer/drop-spot.tsx), and each outline is exactly the
+ * box the block will fill.
  *
- * **Areas, not slots.** A run of free space holds as many insertion points as the
- * block in hand fits into, and outlining thirteen stacked boxes on an empty card
- * is what the one-outline design was retreating from. `dropRegions` draws the
- * free space those insertion points were measured from — not the union of their
- * boxes, which starts and stops wherever the marks happen to fall — so what is
- * drawn here is *anywhere in here* while the bold mark keeps saying *exactly
- * here*. A logo is no exception: one box per area, the full width of the line,
- * with where it sits *across* that line left to the bold square.
- *
- * **Louder than it was, on purpose.** This was a 1px edge at 45% and it said
- * where a block could go without ever inviting anyone to put it there — so it
- * is 2px at 70% now, with a faint accent tint. The tint covers nothing: a region
- * is free space by construction (`dropRegions`), so there is no design under it
- * to hide. The bold slot mark is a stronger tint of the same colour with no edge
- * of its own, so a place has one dashed edge and it is this one — see
- * `.card-drop-slot`.
+ * **Lighter than the region was, because there are more of them.** A name on an
+ * empty card is a column of a dozen outlines; at the region's 2px and 70% that
+ * column read as a ruled page laid over the card. 1.5px at 60% still says
+ * "here" with a faint tint behind it. The tint covers nothing: a spot is free
+ * space by construction. The bold slot mark is a stronger tint of the same
+ * colour at the same box, so a place has one dashed edge and it is this one —
+ * see `.card-drop-slot`.
  *
  * Nothing transitions. Its geometry is measured once when the drag begins, and
- * what moves — the pop as it arrives and the breathing while the block is in
- * the air — is Motion's, on a wrapper and on this element respectively
- * (components/card/designer/drop-region.tsx). **This weight and tint are also
- * the reduced-motion form**: `MotionConfig` stops the scale, and what is left has
- * to say "here" on its own.
+ * what moves — the pop as it arrives and the breathing while the block is in the
+ * air — is Motion's, on a wrapper and on this element respectively. **This
+ * weight and tint are also the reduced-motion form**: `MotionConfig` stops the
+ * scale, and what is left has to say "here" on its own.
  */
-.card-drop-region {
-  border: 2px dashed color-mix(in oklab, var(--accent) 70%, transparent);
+.card-drop-spot {
+  border: 1.5px dashed color-mix(in oklab, var(--accent) 60%, transparent);
   border-radius: 0.375rem;
-  background-color: color-mix(in oklab, var(--accent) 8%, transparent);
+  background-color: color-mix(in oklab, var(--accent) 6%, transparent);
+}
+
+/*
+ * The block that would land, drawn in the spot under the pointer
+ * (`DropBlockPreview`).
+ *
+ * Clipped to the spot's own corner so a photo's dropzone or a button's ground
+ * cannot stand outside the tint it sits on. Slightly see-through, which is the
+ * one thing that says it has not landed yet — the tint and the dashed edge read
+ * through it.
+ */
+.card-drop-preview {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  opacity: 0.9;
+}
+
+/*
+ * The designer's sample text in a Description block whose location has none —
+ * see the `description` case in components/card/card-block.tsx.
+ *
+ * Opacity rather than a colour, so an owner's own text colour on the block still
+ * shows, faded: this is their design previewed with words that are not theirs.
+ */
+.card-text--stand-in {
+  opacity: 0.55;
 }
 
 /*

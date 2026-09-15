@@ -9,7 +9,8 @@ import { MAGNET_SPRING } from "@/components/ui/list-row-motion";
 import type { CardDrag, CardDropTarget } from "@/lib/card/card-edits";
 import { toCardDrag, type DropBand } from "@/lib/card/drop-bands";
 import type { BlockedFace, VacatedSpace } from "@/lib/card/drop-slots";
-import { DropRegionOutline } from "./drop-region";
+import { DropBlockPreview, type IncomingBlock } from "./drop-preview";
+import { DropSpotOutline } from "./drop-spot";
 import type { CardDropGeometry } from "./use-drop-bands";
 import { useGhostSnap } from "./use-ghost-snap";
 
@@ -48,84 +49,66 @@ const OVERLAY_VARIANTS = {
  * single block. The card underneath is untouched, and is the card that will be
  * published.
  *
- * **Two answers at two volumes.** The faint outlines are every area this block
- * can go into; the bold one is where it lands if you let go now.
+ * **Two answers at two volumes, both the size of the block.** Every place the
+ * block in the hand fits at its current size is outlined, faintly, for the whole
+ * gesture (`DropSpotOutline`); the one under the pointer is filled in and draws
+ * the block itself in it (`SlotMark`).
  *
- * Neither alone works. Drawing every *slot* was the first attempt and it was
- * unreadable: a run of free space is divided into as many places as the block in
- * hand fits into, so an empty card offers a name thirteen of them, a logo turns
- * each into three (`splitAlignColumns`), and the result was a card covered in
- * dashed boxes crowding the design they were supposed to be arranging. Drawing
- * only the one under the pointer was the second, and it left the gesture with no
- * affordance at all — you had to sweep the card to find out what it would take.
+ * The faint layer used to be *areas*: each run of free space merged into one
+ * outline (`dropRegions`, deleted), on the argument that thirteen stacked
+ * outlines on an empty card was unreadable. What it drew instead was the size of
+ * the space rather than of the block — a tall dashed box for a small logo, three
+ * of them for a logo across a line, and nothing at all for the spot straddling a
+ * photo, whose area is empty. That was reported as dashes that made no sense
+ * next to a spot that had none, and the answer asked for was the block's own
+ * outline at every place it fits. `.card-drop-spot` is lighter than the region
+ * was, for exactly the reason the old argument gave.
  *
- * `dropRegions` is what makes both possible at once: it merges a run's slots
- * back into the one area they came from, so the resting layer is a handful of
- * quiet outlines saying *anywhere in here* while the bold mark keeps saying
- * *exactly here*. The targets are untouched by any of it — only the drawing
- * changed — so the left, middle and right thirds of a run still place a logo
- * differently, and the bold square still finds each of them.
- *
- * **A logo's three-across grid is a bold-layer thing only.** It is drawn from the
- * bands, which `splitAlignColumns` has cut into columns; the faint layer is drawn
- * from the partition before that cut (`useCardDropBands`), so a mark in the hand
- * gets one full-width outline per free area, exactly as a name does. Merged the
- * other way round it was three 62px columns running the height of the card —
- * tall dashed bars standing over a design nothing was ever going to land as.
- *
- * **Outlines and nothing else.** No fill, no text, no preview of the block's
- * content. A mark that draws the real block on an opaque ground hides whatever
- * is already there, and on a card with anything on it that reads as the design
- * having been replaced by the chrome for arranging it. The dashes say where; the
- * card underneath still says what.
- *
- * Two qualifications since. The resting areas carry a faint accent tint and
- * breathe (`DropRegionOutline`) — the tint covers nothing, because a region is
- * free space by construction. And the preview this layer refuses to draw now
- * exists *above* it instead: the copy in the hand is pulled onto the slot under
- * the pointer (`useGhostSnap`), so the block is shown where it lands without
- * anything here painting over the card.
- *
- * And a third: the bold mark is a tint with no edge, not an outline. It is drawn
- * inside an area with dashes of its own, and two dashed edges a pixel apart read
- * as a border on the block seated between them. See `.card-drop-slot`.
+ * **The block is previewed where it lands.** A block moved on the card is its
+ * own copy in the hand, pulled onto the place under the pointer (`useGhostSnap`).
+ * A block off the palette has no copy that looks like it — a pill stood in for
+ * it, small inside a large spot, and a click-to-place carry had nothing at all —
+ * so the mark draws the real block (`DropBlockPreview`) and the pill steps aside.
+ * The spot is free space by construction, so the preview covers nothing.
  *
  * **A click can open this layer too** (components/groups/use-tap-carry.ts). A
  * palette tile picked up by a click is `dragged` like any other carry, so the
- * layer is drawn exactly as for a drag; the pointer lights the bold mark on
- * hover, and a click on a `DropSlot` is the release.
+ * layer is drawn exactly as for a drag; the pointer lights the mark on hover, and
+ * a click on a `DropSlot` is the release.
  *
  * **And one thing that is not a place.** A block already on the card is covered,
  * top to bottom, by a `BlockedTarget`: it accepts the drag so the release is a
  * no-op rather than a drop into nothing, and it draws a hatch instead of an
- * outline. The card used to partition every pixel between the places a block
- * could land, so letting go over a photo quietly inserted the block above or
- * below it — a gesture that could not say *there is already something here*.
+ * outline.
  *
  * **Only free space aims anywhere.** A place's hit area is its share of the run
- * of free space it is in (`areaBands`): larger than the box drawn for it,
- * because a target you have to be precise with is a target you fight, and never
- * reaching past that run. Over a block, or the gap between two, the pointer aims
- * at nothing — the copy in the hand lets go and follows it, and a release falls
- * through to the card's own catch-all and does nothing. It used to be the whole
- * card, hairline seams between touching blocks included, so a block could be
- * shoved in anywhere; now it goes only where there is room for it.
+ * of free space it is in (`areaBands`), or of the room across its line: larger
+ * than the box drawn for it, because a target you have to be precise with is a
+ * target you fight, and never reaching past that room. Over a block, or the gap
+ * between two, the pointer aims at nothing — the copy in the hand lets go and
+ * follows it, and a release falls through to the card's own catch-all and does
+ * nothing.
  *
  * **It arrives and it leaves.** The whole layer fades in with the gesture and
- * back out when the block lands. Before that it hard-cut in both directions,
- * which reads as the card having been replaced rather than as the gesture having
- * opened something. The exit is only possible because the caller keeps this
- * mounted under `AnimatePresence` — `useCardDropBands` nulls its geometry the
- * moment the pointer goes up.
+ * back out when the block lands. The exit is only possible because the caller
+ * keeps this mounted under `AnimatePresence` — `useCardDropBands` nulls its
+ * geometry the moment the pointer goes up.
  */
 export function CardDropOverlay({
   geometry,
   onDrop,
+  preview,
 }: {
   geometry: CardDropGeometry;
   onDrop: (dragged: CardDrag, target: CardDropTarget) => void;
+  /**
+   * The block a palette tile is carrying, to draw in the place under the
+   * pointer. Absent for a block moved on the card, whose own copy is pulled
+   * onto that place instead.
+   */
+  preview?: IncomingBlock;
 }) {
-  const { bands, regions, blocked, vacate, over, line } = geometry;
+  const { bands, blocked, vacate, over, line } = geometry;
 
   /*
    * Which slot the pointer is in, read once here rather than by each slot for
@@ -145,13 +128,11 @@ export function CardDropOverlay({
   useGhostSnap(layerRef, geometry, slotId);
 
   /*
-   * The one place the block would go if it were let go now, and the only one
-   * drawn.
+   * The one place the block would go if it were let go now.
    *
-   * Undefined twice over, and both are the same answer — draw nothing: before
+   * Undefined twice over, and both are the same answer — draw no mark: before
    * the pointer has reached the card at all, and while it is over something that
    * is not a slot, which is the remove strip and anything outside the workspace.
-   * A drag that is over nowhere should look like it.
    */
   const active = bands.find((band) => slotId(band) === overId);
   /*
@@ -203,9 +184,9 @@ export function CardDropOverlay({
             * allowed to shrink absorbed the difference and drew itself smaller
             * (see `wants` in lib/card/drop-slots.ts) — so the card looks fine,
             * there is a large empty block in the middle of it, and "No room for
-            * this on the card" contradicts the screen. That was the reported
-            * bug. `over` is the missing number, and the second sentence is the
-            * way out: the Height control under Size, or one block fewer.
+            * this on the card" contradicts the screen. `over` is the missing
+            * number, and the second sentence is the way out: the Height control
+            * under Size, or one block fewer.
             *
             * Rounded, because it is measured text and a card is never 36.8px
             * over in any sense its owner can act on.
@@ -219,12 +200,12 @@ export function CardDropOverlay({
       ) : (
         <>
           {/*
-           * Every area, quietly — see `dropRegions`. Keyed on the region's own
-           * key rather than on an index, so the set changing between two drags
-           * of different-sized blocks does not reuse a box for a different place.
+           * Every place, quietly, at the size of the block. Keyed on the place's
+           * own id, so the set changing between two drags of different-sized
+           * blocks does not reuse a box for a different place.
            */}
-          {regions.map((region) => (
-            <DropRegionOutline key={region.key} region={region} />
+          {bands.map((band) => (
+            <DropSpotOutline key={slotId(band)} band={band} line={line} />
           ))}
           {/*
            * **One element, kept**, rather than one per band with the id as its
@@ -235,7 +216,9 @@ export function CardDropOverlay({
            * Keyed like this it is mounted once, fades in once, and afterwards
            * only its geometry changes.
            */}
-          {active ? <SlotMark key="mark" band={active} line={line} /> : null}
+          {active ? (
+            <SlotMark key="mark" band={active} line={line} preview={preview} />
+          ) : null}
           {refused ? <BlockedMark key="blocked" face={refused} /> : null}
           {/*
            * **Order is the mechanism here, not house style.** A drag resolves
@@ -291,40 +274,28 @@ export function CardDropOverlay({
  *
  * The same ids the in-flow lanes used, so nothing else has to learn a new
  * vocabulary — `DesignerCanvasArea` matches on the removal id alone. The offset
- * is part of it because one insertion index now has several places to it: a
- * block can go at the top of a run of free space or four slots down it, and both
- * are "second in the middle zone".
+ * is part of it because one insertion index has several places to it: a block
+ * can go at the top of a run of free space or four slots down it, and both are
+ * "second in the middle zone".
  *
  * And the column across the line is part of it for the same reason one step
- * sideways: a mark in the hand turns one run position into the three places a
- * square could sit across it (`splitAlignColumns`), and those three agree about
- * the zone, the index and the leading space — they differ in nothing else this
- * string would show.
+ * sideways: a mark in the hand turns one run position into the squares across
+ * it (`splitAlignColumns`), and those agree about the zone, the index and the
+ * leading space — they differ in nothing else this string would show.
  *
  * And `half` is part of it because two genuinely different places share the rest
- * of it. The free column beside a narrowed block, and the run of free space
+ * of it. The place beside a narrowed block, and the run of free space
  * immediately below that line, are both "insert at this index, with no leading
  * space" — so without the suffix they register as one drop target under one id,
  * one silently shadows the other in the drag context's map, and the pointer
  * lights both marks while only one of them can ever fire.
  *
- * The *side* is in the suffix for the same reason one step further in: a line
- * offers a column target at each end — swapping a pair, or flipping a lone block
- * across its own line — and the two differ in nothing else a plain `:half`
- * would show.
- *
- * **And the line, which is the one that was actually broken.** Every column
- * target on somebody else's line uses `row.end` for `"end"` and `row.index` for
- * `"start"`, which is unique because rows are consecutive — but a block crossing
- * *its own* line stays where it is, so it uses `row.index` with `"end"`. Two
- * adjacent lone narrow rows, and the lower one in your hand, therefore minted
- * `card:middle:1:0:half:end` twice: "join the block on line 0" and "cross to the
- * far column of line 1" are different places that agreed about everything in
- * this string. React warned about the duplicate key, and the drag context's own
- * registry — a map keyed by exactly this id — kept only one of the two, so one
- * of the places silently could not be reached at all. `(zone, line, side)`
- * cannot collide: a line has one target per side, and no two lines start at the
- * same index.
+ * **And the line.** A block crossing *its own* line stays at its index, so "join
+ * the block on line 0" and "cross to the far end of line 1" can agree about the
+ * zone, the index and the side. React warned about the duplicate key, and the
+ * drag context's own registry — a map keyed by exactly this id — kept only one
+ * of the two. `(zone, line, side)` cannot collide: no two lines start at the
+ * same index, and a line offers one place per side.
  */
 export function slotId(band: DropBand): string {
   return `card:${band.zone}:${String(band.index)}:${String(band.offset)}${
@@ -333,29 +304,25 @@ export function slotId(band: DropBand): string {
 }
 
 /**
- * What will land, drawn where it will land — as a tint, nothing more
- * (`.card-drop-slot` has why it lost its dashes).
+ * What will land, drawn where it will land.
  *
- * Inset to `--card-pad` rather than to the card's own edges, because that is
- * where a block's box actually starts; a hard-coded inset stopped lining up the
- * moment the card's padding was anything but the number it was written against.
+ * A tint the size of the block, over the place's own dashed outline — the same
+ * box, so a place still has one edge (`.card-drop-slot` has why the mark lost
+ * its dashes) — and, for a block off the palette, the block itself inside it.
  *
  * **The box is the block's own size, and it stays that size.** It used to grow
  * under the pointer, which was the answer to picking one outline out of a dozen
- * a centimetre apart. There is one now, so there is nothing to pick it out of —
- * and growing the only outline on the card would take it away from the single
- * thing it is for: promising the size and the place of what is about to land.
- * The shrink that kept its neighbours clear went with it, and
- * `lib/card/mark-transforms.ts` with the pair of them.
+ * a centimetre apart. Growing it would take it away from the single thing it is
+ * for: promising the size and the place of what is about to land.
  *
  * **It moves rather than reappearing.** The caller keeps this element mounted
  * for the whole gesture — see the key there — so crossing from one place to the
  * next is a change of geometry on a box that is already on screen. That change
- * springs now (`MAGNET_SPRING`), where it used to be set outright: the copy in
- * the hand is pulled onto the same place on the same spring (ghost-magnet.ts),
- * and an outline that jumped while the block beside it flew would be two
- * answers arriving at different times. The arrival — the fade and the settle
- * from 92% — still plays once, when the pointer first reaches the card.
+ * springs (`MAGNET_SPRING`): the copy in the hand is pulled onto the same place
+ * on the same spring (ghost-magnet.ts), and an outline that jumped while the
+ * block beside it flew would be two answers arriving at different times. The
+ * arrival — the fade and the settle from 92% — still plays once, when the
+ * pointer first reaches the card.
  *
  * **Never `scale` alongside `scaleX`/`scaleY`.** Motion keeps the one the other
  * never overwrites, so an `initial` of `scale: 0.92` and an `animate` of
@@ -363,16 +330,19 @@ export function slotId(band: DropBand): string {
  * exactly the same keys, which is what makes that impossible to get wrong.
  *
  * A **mark** — the square drawn for a self-sized block — settles on both axes. A
- * bar settles on one, because it is already as wide as the card has room for. A
- * square scaled vertically alone has stopped promising the block's shape.
+ * bar settles on one. A square scaled vertically alone has stopped promising the
+ * block's shape.
  */
 function SlotMark({
   band,
   line,
+  preview,
 }: {
   band: DropBand;
   /** The line's own box — what a band with no `left` of its own spans. */
   line: CardDropGeometry["line"];
+  /** The block to draw in it, when the carry is off the palette. */
+  preview?: IncomingBlock;
 }) {
   const isMark = band.mark === true;
 
@@ -382,9 +352,7 @@ function SlotMark({
   /*
    * Numbers throughout, so the box can spring between a full-width band and a
    * column: `var(--card-pad)` on one side of that and px on the other is not
-   * something anything can animate across. A side slot knows its own left edge
-   * and width — it is half a line, not the width of the card — and everything
-   * else spans the line, which starts at the card's padding.
+   * something anything can animate across.
    */
   const box = {
     left: band.left ?? line.left,
@@ -410,16 +378,19 @@ function SlotMark({
         height: MAGNET_SPRING,
       }}
       style={{ position: "absolute", pointerEvents: "none" }}
-    />
+    >
+      {preview ? <DropBlockPreview {...preview} /> : null}
+    </motion.div>
   );
 }
 
 /**
- * One place's hit area — its share of the run of free space it is in, and no
- * mark of its own.
+ * One place's hit area — its share of the free space it is in, and no mark of
+ * its own.
  *
- * A run's slots divide that run between them (`areaBands`), so a release
- * anywhere inside it lands somewhere, which makes each larger than what it
+ * A run's slots divide that run between them (`areaBands`), and a place on a
+ * line catches the room across the line it sits in (`hitLeft`/`hitWidth`), so a
+ * release anywhere inside lands somewhere, which makes each larger than what it
  * stands for. `SlotMark` above is what says where the block goes; this is only
  * what catches the pointer.
  */
@@ -453,22 +424,15 @@ function DropSlot({
         // lib/card/card-edits.ts — it is what stops the arrival shoving the
         // rest of the card down.
         ...(band.nextOffset === undefined ? {} : { nextOffset: band.nextOffset }),
-        // And the three things a column slot says that no other target does:
-        // land beside the block already on that line, in the named column —
-        // which is what tells a swap from a join — at that column's own width,
-        // and on that particular line. See `sideSlots` in lib/card/drop-slots.ts.
+        // And the two things a place on a line says that no other target does:
+        // which end of it the block takes, and which line. See `sideSlots` in
+        // lib/card/drop-slots.ts.
         ...(band.half ? { half: band.half } : {}),
-        ...(band.widthPct === undefined ? {} : { widthPct: band.widthPct }),
         ...(band.line === undefined ? {} : { line: band.line }),
-        // And the one thing only an *align* column says: which of the three
-        // places across the line the square was released in. See
-        // `splitAlignColumns` in lib/card/drop-bands.ts.
+        // And the one thing only a square across a run says: which of the
+        // places across the line it was released in. See `splitAlignColumns`
+        // in lib/card/drop-bands.ts.
         ...(band.align === undefined ? {} : { align: band.align }),
-        // And the one thing only a *pair* target says: the block already on that
-        // line has to narrow for this drop to fit. See `pairTargets`.
-        ...(band.pairId === undefined
-          ? {}
-          : { pairId: band.pairId, pairWidthPct: band.pairWidthPct }),
         // And the one thing that is not about this place at all: the block the
         // lift is about to leave stranded, and the leading space it has to take
         // so it does not ride up into the hole. The mirror of `nextOffset`
@@ -488,13 +452,10 @@ function DropSlot({
       // cursor over everything.
       className="absolute cursor-pointer"
       style={{
-        // A side slot is only its own part of the line. Every other band is a
-        // full-width share of the card — see `dropBands`.
-        //
-        // `hitLeft`/`hitWidth` where they differ from the drawn box, which is an
-        // align column: the square is drawn where the mark will land and catches
-        // a whole third of the line, so aiming at "the left of this row" is not
-        // aiming at a 62px target.
+        // A band with no box of its own across the line is a full-width share
+        // of the card. Every other one catches the room it sits in, which is
+        // wider than the box drawn for it: a 62px square or a 108px column is
+        // not something anyone should have to aim at.
         ...(band.left === undefined
           ? { left: 0, right: 0 }
           : {
@@ -529,11 +490,10 @@ function blockedId(face: BlockedFace): string {
  * There is already something here.
  *
  * **Drawn across the whole line, not around the block.** A narrowed block's face
- * is refused across the line because the columns that *do* accept are painted
+ * is refused across the line because the places that *do* accept are painted
  * over this one and take their own strips of it out of the pointer's reach before
  * this can ever be the answer — so by the time this draws, the whole line really
- * is refused. An outline around the block itself would be promising that the room
- * beside it accepts, which is exactly the thing it does not.
+ * is refused.
  *
  * **A hatch, not dashes.** Every dashed thing on this layer is a place a block can
  * go, and this is the opposite of one; see `.card-drop-blocked` in
@@ -569,7 +529,7 @@ function BlockedMark({ face }: { face: BlockedFace }) {
  * it away" are the same gesture otherwise, and the second one is destructive.
  *
  * It spans the full card width where `BlockedMark` insets to the padding: the
- * mark says which line, the target catches every pixel of it, and the columns
+ * mark says which line, the target catches every pixel of it, and the places
  * that accept are painted afterwards and win back the parts that do.
  */
 function BlockedTarget({ face }: { face: BlockedFace }) {

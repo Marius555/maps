@@ -289,28 +289,28 @@ export function movingBlockTravel(
 const LANDING_TRAVEL: Transition = { ...TRANSITION, layout: { duration: 0 } };
 
 /**
- * How each area a dragged block could go into arrives: it pops up to full size
+ * How each spot a dragged block could go into arrives: it pops up to full size
  * on the magnet's spring, so picking something up reads as the card opening its
  * places to it.
  *
  * On an element of its own, outside the one that breathes
- * (`dropRegionBreathMotion`) — two elements, one property each, the rule
+ * (`dropSpotBreathMotion`) — two elements, one property each, the rule
  * `wallMotion` states — so the pop and the loop never fight over `scale`.
  */
-const REGION_HIDDEN: TargetAndTransition = { scale: 0.85 };
-const REGION_SHOWN: TargetAndTransition = { scale: 1 };
+const SPOT_HIDDEN: TargetAndTransition = { scale: 0.85 };
+const SPOT_SHOWN: TargetAndTransition = { scale: 1 };
 
-export function dropRegionMotion(): HTMLMotionProps<"div"> {
-  return { initial: REGION_HIDDEN, animate: REGION_SHOWN, transition: MAGNET_SPRING };
+export function dropSpotMotion(): HTMLMotionProps<"div"> {
+  return { initial: SPOT_HIDDEN, animate: SPOT_SHOWN, transition: MAGNET_SPRING };
 }
 
 /**
- * The breathing an area does for as long as a block is in the air — 3% and
+ * The breathing a spot does for as long as a block is in the air — 3% and
  * back, every 1.2s, all of them together.
  *
  * Motion for the length of a gesture only: the layer it is on is unmounted when
  * the drag ends. `MotionConfig reducedMotion="user"` stops it, and
- * `.card-drop-region`'s own weight and tint are the static form that is left.
+ * `.card-drop-spot`'s own weight and tint are the static form that is left.
  */
 const BREATH: TargetAndTransition = { scale: [1, 1.03, 1] };
 const BREATH_TRANSITION: Transition = {
@@ -319,7 +319,7 @@ const BREATH_TRANSITION: Transition = {
   repeat: Infinity,
 };
 
-export function dropRegionBreathMotion(): HTMLMotionProps<"div"> {
+export function dropSpotBreathMotion(): HTMLMotionProps<"div"> {
   return { animate: BREATH, transition: BREATH_TRANSITION };
 }
 
