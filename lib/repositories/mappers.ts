@@ -1,4 +1,11 @@
+import type { ColumnMapping } from "@/lib/import/column-mapping";
 import { DEFAULT_MAP_STYLE, isMapStyleKey } from "@/lib/map/style";
+import {
+  SHEET_SYNC_STATUSES,
+  type SheetLink,
+  type SheetSyncReport,
+  type SheetSyncStatus,
+} from "@/lib/sheet-sync/types";
 import { photoViewUrl, photoViewUrls } from "@/lib/storage/photo-url";
 import { parseHours } from "@/packages/shared/hours";
 import { readCardBlocks } from "@/lib/validation/card-overrides.schema";
@@ -34,6 +41,7 @@ import {
   type Place,
   type PlaceRow,
   type SessionEvent,
+  type SheetLinkRow,
   type Shape,
   type ShapeRow,
 } from "./types";
@@ -223,6 +231,42 @@ export function toPlace(row: PlaceRow): Place {
      * falls back to the design and the rest of the card keeps what it was given.
      */
     cardBlocks: readCardBlocks(parseJson<unknown>(row.cardBlocks, {})),
+    // Only when there is one, so a location added by hand reads exactly as it
+    // did before sheet sync existed.
+    ...(row.sourceKey ? { sourceKey: row.sourceKey } : {}),
+    createdAt: row.$createdAt,
+    updatedAt: row.$updatedAt,
+  };
+}
+
+function toSheetSyncStatus(value: string | null | undefined): SheetSyncStatus | null {
+  return SHEET_SYNC_STATUSES.find((status) => status === value) ?? null;
+}
+
+/**
+ * A stored sheet link → the dashboard's shape.
+ *
+ * Same never-throw contract as everything above. A report that will not parse
+ * reads as no report, which the Locations page draws as "not synced yet" rather
+ * than as a crash; the next sync writes a fresh one.
+ */
+export function toSheetLink(row: SheetLinkRow): SheetLink {
+  return {
+    id: row.$id,
+    userId: row.userId,
+    mapId: row.mapId,
+    sheetId: row.sheetId,
+    gid: row.gid || null,
+    published: row.published ?? false,
+    mapping: parseJson<ColumnMapping>(row.mapping, {}),
+    headerRowIndex:
+      typeof row.headerRowIndex === "number" ? row.headerRowIndex : null,
+    autoSync: row.autoSync ?? true,
+    lastSyncedAt: row.lastSyncedAt ?? null,
+    lastStatus: toSheetSyncStatus(row.lastStatus),
+    lastReport: parseJson<SheetSyncReport | null>(row.lastReport, null),
+    failedLookups: parseJson<SheetLink["failedLookups"]>(row.failedLookups, {}),
+    syncingUntil: row.syncingUntil ?? null,
     createdAt: row.$createdAt,
     updatedAt: row.$updatedAt,
   };

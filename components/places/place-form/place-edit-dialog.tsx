@@ -4,6 +4,7 @@ import { Drawer, Modal } from "@heroui/react";
 
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { SM_BREAKPOINT, useMediaQuery } from "@/lib/ui/use-media-query";
+import { SheetOwnedNote } from "../sheet-sync/sheet-owned-note";
 import { PlaceForm, type FormShell } from "./place-form";
 
 /**
@@ -103,6 +104,7 @@ export function PlaceEditDialog({
             <Modal.Header>
               <Modal.Heading>Edit location</Modal.Heading>
             </Modal.Header>
+            {place ? <SheetOwnedNote place={place} /> : null}
             {form}
           </Modal.Dialog>
         </Modal.Container>
@@ -148,6 +150,7 @@ export function PlaceEditDialog({
               Edit location
             </Drawer.Heading>
           </Drawer.Header>
+          {place ? <SheetOwnedNote place={place} /> : null}
           {form}
         </Drawer.Dialog>
       </Drawer.Content>

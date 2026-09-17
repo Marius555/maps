@@ -21,6 +21,14 @@ export default function MarketingLayout({
           </Link>
 
           <div className="flex items-center gap-3">
+            {/* Ahead of Log in, because it is the one thing on this header a
+                visitor can use before having an account. */}
+            <Link
+              href="/docs"
+              className="text-sm text-muted transition-colors hover:text-foreground"
+            >
+              Guides
+            </Link>
             <Link
               href="/login"
               className="text-sm text-muted transition-colors hover:text-foreground"

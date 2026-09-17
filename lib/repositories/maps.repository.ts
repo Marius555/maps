@@ -239,9 +239,12 @@ export async function deleteMap(ctx: RepoContext, mapId: string): Promise<void> 
     // anyone holding the URL.
     await deleteSnapshots(mapId);
 
-    // Places and shapes next: a map row deleted before its children would orphan
-    // them with no owner left to find them by.
-    for (const tableId of [TABLES.places, TABLES.shapes]) {
+    // Places, shapes and the sheet link next: a map row deleted before its
+    // children would orphan them with no owner left to find them by — and an
+    // orphaned sheet link would have the daily sync failing on it every night.
+    // By query rather than through sheet-links.repository, which imports this
+    // module.
+    for (const tableId of [TABLES.places, TABLES.shapes, TABLES.sheetLinks]) {
       await admin.tablesDB.deleteRows({
         databaseId: env.databaseId,
         tableId,

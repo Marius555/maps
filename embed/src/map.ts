@@ -181,7 +181,13 @@ const TAP_SLOP = 6;
 
 export type MapHandle = {
   setPlaces: (places: SnapshotPlace[]) => void;
-  focusPlace: (place: SnapshotPlace) => void;
+  /**
+   * Fly to a location and select it. `bare` leaves its card shut — a results row
+   * on a map whose owner set `rowCard: false` — and closes whatever card was
+   * already open, so the row that is marked and the card on screen never name
+   * two different locations.
+   */
+  focusPlace: (place: SnapshotPlace, bare?: boolean) => void;
   /**
    * Fly to a bare coordinate — somewhere the visitor named in search, which is
    * not one of the map's own locations and so has no place to focus.
@@ -724,7 +730,7 @@ export function createMap(
       }
     },
 
-    focusPlace: (place) => {
+    focusPlace: (place, bare) => {
       /*
        * The card first, then the flight — the reverse of what this was, and the
        * whole of why the card no longer jumps. `flyToCard` measures the card
@@ -732,8 +738,18 @@ export function createMap(
        * camera move; with the flight started first there would be nothing to
        * measure and MapLibre would place the card itself, once per frame, all
        * the way there.
+       *
+       * Bare, the open card is removed *before* the selection moves: `remove`
+       * fires the popup's close event, which clears the old selection, and
+       * `setOpen` then marks this one. The other order would clear the new one.
+       * The flight below is then plain, by the mechanism described next.
        */
-      showPopup(place);
+      if (bare) {
+        popup.remove();
+        setOpen(place.id);
+      } else {
+        showPopup(place);
+      }
       /*
        * Unchanged with the card switched off, and that is `flyToCard`'s own
        * `!card` branch doing its job rather than an omission. MapLibre's

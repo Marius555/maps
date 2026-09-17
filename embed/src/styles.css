@@ -245,24 +245,22 @@
   align-items: center;
   gap: 4px;
   /*
-   * **The type is stated here, once, and it is half of the row's height.**
+   * **The row's type is `.lm-root`'s 14px, inherited — and that is half of its
+   * height.**
    *
-   * These controls were `font: inherit` alone — 14px off `.lm-root` — which with
-   * 7px of padding made a 34px box, and the search field was asked to be a third
-   * smaller. The line box is most of that height, so the type had to come down
-   * with the padding or the box could not: 12px at the inherited 1.45 is a
-   * 17.4px line, and 2px either side plus the hairline is 23px. It cannot come
-   * off `.lm-root` instead — that 14px is the whole embed's, the results rows
-   * and the card included — and `line-height` is deliberately left alone, since
-   * it is the one of the two that can be inherited and still land on 23.
+   * It has been three sizes. `font: inherit` at 14px with 7px of padding made a
+   * 36px box; asked for a third off, the row stated `font-size: 12px` here and
+   * padded 2px, for 23px. That was then reported as too small to read or press,
+   * so the declaration is gone again and the field pads 5px: 14px at the
+   * inherited 1.45 is a 20.3px line, and 5px either side plus the hairline is a
+   * 32px box. Deleting a declaration rather than restating one is also what kept
+   * the change free against the bundle's size ceiling.
    *
-   * On the row rather than on each control, because `font: inherit` on the field
-   * and the buttons then picks it up — that declaration exists precisely so a
-   * form control takes its parent's type rather than the UA's — and so does the
-   * search dropdown, which is a `ul` inside it and would otherwise be a 14px
-   * list hanging off a 23px box.
+   * `font: inherit` on the field and the buttons is what reads it — that
+   * declaration exists precisely so a form control takes its parent's type
+   * rather than the UA's — and so does the search dropdown, which is a `ul`
+   * inside the row.
    */
-  font-size: 12px;
 }
 
 /*
@@ -291,10 +289,10 @@
  * stack having grown a padding at the top rather than as one control being
  * covered.
  *
- * **The number is `top` plus the control's height, and it moved when the field
- * did.** The controls are 23px now rather than 34, so 42 became 31 — and it has
- * to be kept in step, in both places, or the gap is either a phantom band with
- * nothing in it or the same overlap this rule exists to end.
+ * **The number is the control's height plus an 8px gap, and it moves whenever
+ * the field does.** 42 at the old 36px, 31 at 23px, and 40 now the controls are
+ * 32px — and it has to be kept in step, in both places, or the gap is either a
+ * phantom band with nothing in it or the same overlap this rule exists to end.
  *
  * `:has(> .lm-toolbar)` is exactly the floating case and needs no new state to
  * say so: docked, the toolbar is a child of `.lm-panel` instead (`index.ts`
@@ -322,7 +320,7 @@
   .maplibregl-ctrl-top-left,
 .lm-root[data-lm-side="right"]:has(> .lm-toolbar:not(:empty))
   .maplibregl-ctrl-top-right {
-  padding-top: 31px;
+  padding-top: 40px;
 }
 
 /*
@@ -369,7 +367,7 @@
  *
  * The values are the panel's own — the owner designs one surface and both
  * things wear it — and glass is the transparency and the blur, not the corner.
- * `--lm-panel-radius` runs to 24px, which on a 34px-tall control is a lozenge
+ * `--lm-panel-radius` runs to 24px, which on a 32px-tall control is a lozenge
  * rather than the panel's corner said at a smaller size, so these keep the 8px
  * they have always had. `--lm-tool-bg` carries the fallback that leaves them
  * opaque, so a map with `toolbarGlass` on and nothing else designed still looks
@@ -405,7 +403,7 @@
   min-width: 0;
   /* Room at the end for whatever sits inside the field — the magnifier, or the
      find-nearest button, which is the wider of the two. */
-  padding: 2px 26px 2px 8px;
+  padding: 5px 34px 5px 10px;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -415,12 +413,13 @@
  *
  * `dom.ts`'s `icon()` writes `width`/`height` of 18 as presentation attributes,
  * which any rule beats — and it has to stay 18 there, because the same helper
- * draws the card's links and folds, which did not get smaller. 12px is the same
- * third off as the field around it.
+ * draws the card's links and folds, which is a different size question. 16px
+ * sits in the 32px field with room either side, and in the 28px find-nearest
+ * button at the field's end.
  */
 .lm-toolbar svg {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
 }
 
 /* The type-to-clear cross Safari and Chrome add to `type="search"` lands under
@@ -438,7 +437,7 @@
  *
  * `.lm-search__icon` is the magnifier: a picture, not a button. `pointer-events:
  * none` so the whole field stays clickable through it — the one thing that makes
- * an icon inside an input worse than no icon is a dead 18px patch at the end of
+ * an icon inside an input worse than no icon is a dead 16px patch at the end of
  * the box a visitor is trying to click into.
  *
  * `.lm-search__action` is find-nearest, drawn in the same place on a map that has
@@ -448,7 +447,7 @@
 .lm-search__icon,
 .lm-search__action {
   position: absolute;
-  inset-inline-end: 6px;
+  inset-inline-end: 8px;
   top: 50%;
   translate: 0 -50%;
   color: var(--lm-muted);
@@ -458,22 +457,26 @@
   pointer-events: none;
 }
 
-.lm-button {
-  padding: 2px 7px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-/* A control whose whole label is a glyph. Square, and sized to match the height
-   of the search box beside it so the toolbar reads as one row of controls —
-   2px + 2px of padding, a 17.4px line box and the hairline, which is 23px. */
+/*
+ * A control whose whole label is a glyph. Square, and sized to match the height
+ * of the search box beside it so the toolbar reads as one row of controls —
+ * 5px + 5px of padding, a 20.3px line box and the hairline, which is 32px.
+ *
+ * **Every `.lm-button` the embed draws is one of these** — the drawer trigger
+ * and find-nearest on a map without a search box — so the bare `.lm-button`
+ * rule that used to sit here, padding a text label and keeping it on one line,
+ * styled nothing: `padding: 0` below always won. It went to pay for the controls
+ * growing from 23px against the bundle's size ceiling. A text button would need
+ * both back.
+ */
 .lm-button--icon {
   display: grid;
-  width: 23px;
-  height: 23px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   place-items: center;
   color: var(--lm-foreground);
+  cursor: pointer;
 }
 
 /*
@@ -530,11 +533,10 @@
 .lm-search__action {
   inset-inline-end: 2px;
   display: grid;
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   place-items: center;
-  font: inherit;
   border: 0;
   border-radius: 6px;
   background: none;
@@ -1721,7 +1723,6 @@
 .lm-toolbar--docked {
   position: static;
   max-width: none;
-  flex-wrap: nowrap;
   padding: 7px 10px;
   border-bottom: 1px solid var(--lm-border);
 }
@@ -1787,9 +1788,11 @@
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
-  /* iOS gives a nested scroller momentum only when it is told to. Without this
-     a flick inside the list scrolls the customer's page instead. */
-  -webkit-overflow-scrolling: touch;
+  /* No `-webkit-overflow-scrolling: touch` here any more. It was momentum for a
+     nested scroller on iOS 12 and older; iOS 13 made that the default and
+     stopped reading the property, and nothing below Safari 16.4 (`cssTarget` in
+     vite.config.mts) can run this embed at all. It went to pay for a larger
+     toolbar against the size ceiling. */
 }
 
 /*
@@ -2371,7 +2374,7 @@
     .maplibregl-ctrl-top-right,
   .lm-root[data-lm-side="right"]:has(> .lm-toolbar:not(:empty))
     .maplibregl-ctrl-top-left {
-    padding-top: 31px;
+    padding-top: 40px;
   }
 }
 

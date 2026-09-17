@@ -6,6 +6,7 @@ import { admin } from "@/lib/appwrite/admin";
 import { TABLES } from "@/lib/appwrite/config";
 import { isNotFound, toRepositoryError } from "@/lib/appwrite/errors";
 import { env } from "@/lib/env";
+import type { SheetPlacePatch } from "@/lib/sheet-sync/patch";
 import { serialiseHours } from "@/packages/shared/hours";
 import type {
   CreatePlaceInput,
@@ -287,7 +288,9 @@ export async function createPlaces(
           sortOrder: existing + start + offset,
           geocodeStatus: input.geocodeStatus,
           geocodeConfidence: input.geocodeConfidence ?? null,
-        addressParts: serialiseJson(input.addressParts),
+          addressParts: serialiseJson(input.addressParts),
+          // Only an import that keeps the map in sync with a sheet sets this.
+          ...(input.sourceKey ? { sourceKey: input.sourceKey } : {}),
         })),
       });
 
@@ -342,6 +345,82 @@ export async function updatePlace(
     });
 
     return toPlace(row);
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+/**
+ * A sync's changes to locations it already matched, one row each.
+ *
+ * Not `updatePlace` in a loop, which reads every row before writing it: the sync
+ * has just read the whole map, so a second read per location is 3,000 wasted
+ * requests on a big one. Ownership is asserted once, on the map, and each id is
+ * one the caller got from `listAllPlaces` for that same map a moment earlier.
+ *
+ * Deliberately narrow — `SheetPlacePatch` is the complete list of columns a sync
+ * may write, so nothing reaching here can touch a photo, an icon or a card.
+ *
+ * A few at a time rather than one after another: a sync step has to finish
+ * inside the host's request timeout (lib/sheet-sync/run.ts), and sixty
+ * sequential round trips are most of it.
+ */
+export async function applySheetPatches(
+  ctx: RepoContext,
+  mapId: string,
+  patches: { placeId: string; patch: SheetPlacePatch }[],
+): Promise<void> {
+  await getMap(ctx, mapId);
+
+  const pending = patches.filter(({ patch }) => Object.keys(patch).length > 0);
+
+  try {
+    for (let start = 0; start < pending.length; start += PATCH_CONCURRENCY) {
+      await Promise.all(
+        pending.slice(start, start + PATCH_CONCURRENCY).map(({ placeId, patch }) =>
+          admin.tablesDB.updateRow<PlaceRow>({
+            databaseId: env.databaseId,
+            tableId: TABLES.places,
+            rowId: placeId,
+            data: patch,
+          }),
+        ),
+      );
+    }
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+const PATCH_CONCURRENCY = 6;
+
+/** Rows per `deleteRows` query — well under Appwrite's cap on query values. */
+const DELETE_CHUNK_SIZE = 100;
+
+/**
+ * Remove several locations of one map at once, for a sync whose rows are gone.
+ *
+ * Scoped by `mapId` in the query as well as by id, so an id from another map
+ * cannot be deleted through this even if one were ever passed in.
+ */
+export async function deletePlacesById(
+  ctx: RepoContext,
+  mapId: string,
+  placeIds: string[],
+): Promise<void> {
+  await getMap(ctx, mapId);
+
+  try {
+    for (let start = 0; start < placeIds.length; start += DELETE_CHUNK_SIZE) {
+      await admin.tablesDB.deleteRows({
+        databaseId: env.databaseId,
+        tableId: TABLES.places,
+        queries: [
+          Query.equal("mapId", mapId),
+          Query.equal("$id", placeIds.slice(start, start + DELETE_CHUNK_SIZE)),
+        ],
+      });
+    }
   } catch (error) {
     throw toRepositoryError(error);
   }

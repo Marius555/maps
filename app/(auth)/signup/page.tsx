@@ -13,7 +13,6 @@ export default async function SignupPage() {
   return (
     <AuthShell
       title="Create your account"
-      description="Build your first map in a few minutes."
       footer={
         <>
           Already have an account?{" "}

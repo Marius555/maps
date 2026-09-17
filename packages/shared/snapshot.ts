@@ -471,6 +471,16 @@ export type SnapshotSettings = {
    * and folding them together would be eight names for four answers.
    */
   rowLinkRadius?: number;
+  /**
+   * Whether pressing a results row opens that location's card, as well as
+   * flying to its pin and marking the row.
+   *
+   * `false` is the row doing the rest without the card — which is the dashboard's
+   * default, because a card opened from the panel frequently does not fit the
+   * map left beside it. Absent means the card opens, which is what every row on
+   * every published map does today (§7). Only read when `card` leaves cards on.
+   */
+  rowCard?: boolean;
 
   /* MapLibre's own controls. */
 

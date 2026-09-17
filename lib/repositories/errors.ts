@@ -70,10 +70,14 @@ export class PlanLimitError extends RepositoryError {
  * remedy rather than two, and its own code lets the client offer an upgrade
  * where a limit would have pointed at a list.
  */
-export type GatedFeature = "routes";
+export type GatedFeature = "routes" | "sheetSync";
 
 const FEATURES: Record<GatedFeature, { noun: string; verb: string }> = {
   routes: { noun: "Routes", verb: "draw them" },
+  sheetSync: {
+    noun: "Linked Google Sheets",
+    verb: "keep this map in sync with a sheet",
+  },
 };
 
 export class PlanFeatureError extends RepositoryError {

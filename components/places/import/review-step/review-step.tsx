@@ -14,6 +14,7 @@ import { hasBlockingIssue } from "@/lib/import/issues";
 import type { AppMap } from "@/lib/repositories/types";
 import { useImportStore } from "@/lib/stores/import-store";
 import type { ImportProgress } from "../import-wizard";
+import { KeepInSyncSwitch } from "./keep-in-sync-switch";
 import { ReviewList } from "./review-list";
 import { ReviewMap } from "./review-map";
 import { ReviewSummary } from "./review-summary";
@@ -48,18 +49,20 @@ export function ReviewStep({
   headroom,
   isImporting,
   importProgress,
-  importError,
   onImport,
   onBack,
+  canSyncSheets,
 }: {
   map: AppMap;
   headroom: { plan: string; limit: number; used: number };
   isImporting: boolean;
   /** How far the confirmed write has got, or null when one isn't running. */
   importProgress: ImportProgress | null;
-  importError: unknown;
+  /** Reports its own failures as toasts — see `runImport` in the wizard. */
   onImport: () => void;
   onBack: () => void;
+  /** Whether the plan includes keeping a map in sync with a Google Sheet. */
+  canSyncSheets: boolean;
 }) {
   const drafts = useImportStore((state) => state.drafts);
   const skippedBlankRows = useImportStore((state) => state.skippedBlankRows);
@@ -186,6 +189,11 @@ export function ReviewStep({
         geocodeError={geocodeError}
       />
 
+      {/* With the summary and above the map: a choice about what Import does,
+          so it sits with the button rather than under a list of rows. Draws
+          nothing for a file. */}
+      <KeepInSyncSwitch isAllowed={canSyncSheets} />
+
       {overLimit ? (
         <ErrorMessage
           error={`This would be ${formatCount(importable.length)} locations and your ${headroom.plan} plan has room for ${formatCount(remaining)} more. Skip some rows below, or upgrade your plan.`}
@@ -269,8 +277,6 @@ export function ReviewStep({
           </ProgressBar.Track>
         </ProgressBar>
       ) : null}
-
-      {importError ? <ErrorMessage error={importError} /> : null}
     </div>
   );
 }

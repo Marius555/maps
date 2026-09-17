@@ -30,16 +30,21 @@ export function FileDrop({
     <div
       // Not capped here. The frame still must not stretch to the full content
       // width — a dashed rectangle 1800px across reads as a layout bug rather
-      // than a target — but the cap now lives on the `Tabs` root in
-      // `source-tabs.tsx`, so the tab strip and this frame are one width by
-      // construction instead of two that have to be kept equal by hand.
+      // than a target — but the cap lives on the import wizard, so the tab
+      // strip and this frame are one width by construction instead of two that
+      // have to be kept equal by hand.
+      //
+      // `h-full` and `justify-center` because this shares a grid cell with the
+      // Google Sheet panel (see `source-tabs.tsx`), which is the taller of the
+      // two. Without them the frame ended short of the cell and left an empty
+      // band above the plan line that only this tab had.
       //
       // Transparent at rest, so the frame is a dashed outline on the page
       // rather than a filled well. It used to be `bg-surface-secondary`, which
       // was a legible recess while this sat inside a white `SectionPanel` and
       // became a grey patch on a grey page the moment the panel went. The
       // dashed border is the whole affordance and needs no ground behind it.
-      className={`flex w-full flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-6 text-center transition-colors ${
+      className={`flex h-full w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-6 text-center transition-colors ${
         isOver ? "border-primary bg-primary/5" : "border-border"
       }`}
       onDragOver={(event) => {

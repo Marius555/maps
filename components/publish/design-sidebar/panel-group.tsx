@@ -95,8 +95,20 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
               map in a sidebar on a 1440px monitor gets the drawer and a phone
               held sideways may not. Both are inside the `list` branch because a
               drawer is where the list goes, and there is no list to put anywhere
-              with the panel switched off. */}
+              with the panel switched off.
+
+              The row's card switch is off by default: a card opened from the
+              panel rarely fits the part of the map the panel leaves. It is only
+              offered while pins open cards at all ("Map controls"), because with
+              those off there is no card for a row to open. */}
           <PropertySwitches>
+            {settings.card ? (
+              <PropertySwitch
+                label="Open a card when a row is clicked"
+                isSelected={settings.rowCard}
+                onChange={(value) => set("rowCard", value)}
+              />
+            ) : null}
             <PropertySwitch
               label="Show the list's scrollbar"
               isSelected={settings.panelScrollbar}

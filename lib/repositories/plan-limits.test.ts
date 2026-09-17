@@ -509,6 +509,24 @@ describe("assertPlanFeature", () => {
     });
   });
 
+  /*
+   * Sheet sync re-reads a sheet daily and geocodes what changed, with nobody
+   * pressing anything. A free account that slipped through would spend credits
+   * every night for as long as the link existed.
+   */
+  it("refuses sheet sync on the free plan and allows it on starter", async () => {
+    const { assertPlanFeature } = await planLimits();
+
+    await expect(assertPlanFeature(USER_ID, "sheetSync")).rejects.toMatchObject({
+      code: "plan_feature_required",
+    });
+
+    subscriptionRows = [{ plan: "starter", status: "active" }];
+    const fresh = await planLimits();
+
+    await expect(fresh.assertPlanFeature(USER_ID, "sheetSync")).resolves.toBeUndefined();
+  });
+
   it("has a row for every plan the limits table knows", async () => {
     // The `satisfies` on PLAN_FEATURES makes a missing plan a type error, but
     // only while both tables are edited in the same commit. Said out loud here
@@ -535,6 +553,9 @@ describe("planFeatureMessage", () => {
   it("names the one way out, which is the plan and not a delete", () => {
     expect(planFeatureMessage("routes", "free")).toBe(
       "Routes aren't included on the free plan. Upgrade to draw them.",
+    );
+    expect(planFeatureMessage("sheetSync", "free")).toBe(
+      "Linked Google Sheets aren't included on the free plan. Upgrade to keep this map in sync with a sheet.",
     );
   });
 });

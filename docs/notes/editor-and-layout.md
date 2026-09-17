@@ -145,8 +145,30 @@ rewritten; it is the record of why this area is shaped as it is.
   group.**
 - Page width is three choices: `Container` is `content` (unbounded), `centered`
   (`max-w-5xl`) or `narrow`. `Measure` is the readable column *inside* a full-width page.
-  The import wizard caps itself per step (`isWide`), animating between `max-w-5xl` and
+  The import wizard caps itself per step (`isWide`), animating between `max-w-2xl` and
   `max-w-full` — **`max-w-full`, because `none` is not a length and will not interpolate.**
+- **That cap is the only one; a step must not re-cap itself narrower.** The step trail is
+  left-aligned in the wizard's wrapper, so it lines up with a step only while the step fills
+  the wrapper. Source and Addresses were `mx-auto max-w-2xl` inside a `max-w-5xl` wrapper,
+  which left the trail up to 176px left of the tabs it labels. Measured after: the trail's
+  `ol` and the tab list share a left edge at 1440px and at 400px.
+- **The Source step's two tab panels are force-mounted and stacked in one grid cell.**
+  React Aria mounts only the selected panel, the two differ by ~14px, and the step is
+  centred with `my-auto` — so every switch moved the whole block by half the difference.
+  `shouldForceMount` plus `[grid-area:1/1]` makes the cell the taller panel's height at
+  every width; the unselected one is `inert` and `invisible` (never `hidden`, which would
+  drop its height). **No transition on those panels:** React Aria marks a panel with a
+  running transition `data-exiting`, HeroUI makes that `position: absolute`, and the cell
+  collapsed to the other panel for the length of the fade — measured, 198px → 184px and a
+  7px jump. `data-[exiting=true]:static` is the guard. Measured after: six switches, one
+  distinct cell height and strip position across every frame.
+- **An error about something that just happened is a toast; a message explaining why a
+  button is disabled stays inline.** The Source step's read failures, the sheet link's
+  format errors (the field keeps `isInvalid`), the address lookup stopping and a failed
+  Import are toasts through `toastProblem` — each used to be an alert or `FieldError` that
+  grew the step and moved the centred page. The over-limit note, the Columns step's
+  problems and the swapped-coordinates banner stay, because a toast expires and would leave
+  a disabled button unexplained.
 
 ### Drag
 
@@ -332,9 +354,10 @@ rewritten; it is the record of why this area is shaped as it is.
 - A **frame** is still allowed where the box is a scroll region or a map — the Columns
   table's scroller and the Review step's map keep `rounded-xl border border-border`. A
   *section* does not get one.
-- **A control must not resize itself as a side effect of being used.** `Tags · 3` and
-  `Showing 4 locations need attention` both grew when pressed and shoved the toolbar around
-  — which is what pushed that row onto two lines. State is told by the variant plus
+- **A control must not resize itself as a side effect of being used.** `Tags · 3` grew when
+  pressed and shoved the toolbar around — which is what pushed that row onto two lines. The
+  footer's attention button was the second case and is gone now, replaced by a link to the
+  import guide; the rule outlived it. State is told by the variant plus
   `aria-pressed` (or, for a popover trigger that already owns `aria-expanded`, by `sr-only`
   text, because a button claiming both is announced as two controls). Measured: the label
   span is `position: absolute` and costs 0px, and `button--secondary` and `button--tertiary`
@@ -435,7 +458,7 @@ under the user's hand.
 
 **Page width is three choices, not seven.** `Container` is `content` (unbounded — the map editor, which needs every pixel), `centered` (`max-w-5xl`, the locations table: things you read and fill in), or `narrow`. `Measure` is still the left-aligned readable column *inside* a full-width page. Switching between a map and its Locations tab does step sideways, and that is accepted rather than overlooked — the alternative was a full-width table or a narrower map. Every `loading.tsx` must pass the same `size` as its page, or the skeleton swap moves.
 
-The import wizard is the one page that varies inside those three, and it has to: its Columns step is a table wider than any laptop and its Review step is a map, while its Source step is a dropzone and its Addresses step a progress bar. So the page is `content` and `import-wizard.tsx` caps itself per step (`isWide`), animating `max-width` between `max-w-5xl` and `max-w-full` — `max-w-full`, because `none` is not a length and will not interpolate. Its `loading.tsx` stands in for the Source step and must carry the same `mx-auto max-w-5xl`.
+The import wizard is the one page that varies inside those three, and it has to: its Columns step is a table wider than any laptop and its Review step is a map, while its Source step is a dropzone and its Addresses step a progress bar. So the page is `content` and `import-wizard.tsx` caps itself per step (`isWide`), animating `max-width` between `max-w-2xl` and `max-w-full` — `max-w-full`, because `none` is not a length and will not interpolate. Its `loading.tsx` stands in for the Source step and must carry the same `mx-auto max-w-2xl`. (It was `max-w-5xl` with the narrow steps capping themselves again at `max-w-2xl` inside it, which is what left the step trail hanging to the left of the content — see the invariant above.)
 
 **A `loading.tsx` covers its segment's page *and every route below it*.** So the Locations skeleton was also the fallback for `places/import`, and clicking Import played two skeletons in a row, out of phase and neither shaped like what arrived. Each page that has routes beneath it therefore sits in a route group with its own skeleton — `maps/(list)`, `maps/[id]/(editor)`, `maps/[id]/places/(list)` — which is Next's documented fix and changes no URLs. Add a nested route under one of these and put it *outside* the group.
 

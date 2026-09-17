@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createThrottle } from "@/lib/geocoding/throttle";
+import { serviceUserAgent } from "@/lib/http/user-agent";
 import { MAX_POLYGON_POINTS } from "@/lib/validation/shape.schema";
 import type { LngLatTuple, RouteProfile } from "@/packages/shared/shapes";
 import { simplifyPath } from "./simplify";
@@ -43,8 +44,7 @@ const REQUEST_TIMEOUT_MS = 8000;
  * exactly that — a 403 from a WAF is otherwise indistinguishable from the
  * service being down. Same reasoning as the geocoder's.
  */
-const DEFAULT_USER_AGENT =
-  "custom-map-builder/1.0 (embeddable store locator; routing at edit time only)";
+const DEFAULT_USER_AGENT = serviceUserAgent("routing at edit time only");
 
 /** One retry, for failures a second attempt can plausibly fix. */
 const RETRY_BACKOFF_MS = 400;

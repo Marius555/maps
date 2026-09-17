@@ -28,3 +28,40 @@ export function toastError(error: unknown, title: string): void {
     timeout: 8000,
   });
 }
+
+const GENERIC_PROBLEM = "Something broke on our side. Try again in a moment.";
+
+/**
+ * Report the outcome of something the user just did, when that outcome is a
+ * refusal with its own instructions.
+ *
+ * `toastError` covers a server error behind an optimistic gesture. This covers
+ * the import flow's failures, which are more often a sentence we wrote on the
+ * client — "That sheet isn't shared. In Google Sheets choose Share → …" — than
+ * a response, so a plain string is accepted as the message as well. Anything
+ * else gets `fallback`, which the caller can make specific to what was tried.
+ *
+ * These used to be inline alerts under the control, and every one of them moved
+ * the page when it appeared. The rule that decides which way a message goes: an
+ * error about something that just happened is a toast; a message explaining why
+ * a button is disabled stays beside the button, because a toast would expire
+ * and leave the button unexplained.
+ *
+ * Ten seconds rather than eight: several of these are instructions to follow in
+ * another tab, and they are long.
+ */
+export function toastProblem(
+  title: string,
+  problem: unknown,
+  fallback: string = GENERIC_PROBLEM,
+): void {
+  toast.danger(title, {
+    description:
+      typeof problem === "string"
+        ? problem
+        : problem instanceof ApiError
+          ? problem.message
+          : fallback,
+    timeout: 10000,
+  });
+}

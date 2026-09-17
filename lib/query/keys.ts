@@ -18,6 +18,8 @@ export const queryKeys = {
     all: (mapId: string) => ["maps", mapId, "groups"] as const,
     list: (mapId: string) => ["maps", mapId, "groups", "list"] as const,
   },
+  /** The map's link to a Google Sheet, or null — see lib/sheet-sync. */
+  sheetLink: (mapId: string) => ["maps", mapId, "sheetLink"] as const,
   /** One design for the whole account — see lib/repositories/card-design.repository.ts. */
   cardDesign: ["cardDesign"] as const,
 } as const;

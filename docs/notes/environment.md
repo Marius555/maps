@@ -38,6 +38,16 @@ this is why each one exists.
   environment; it is not browser-safe and does not need to be, since nothing on the client
   composes a link.
 
+- Optional, server-only: `CRON_SECRET` and `SHEET_SYNC_STEP_MS` — Google Sheets sync
+  (`docs/notes/sheet-sync.md`). **`CRON_SECRET` gates the daily sync's route, and unset means
+  that route refuses everyone**, not that it is open: an unauthenticated trigger would let a
+  stranger spend geocoding credit and republish every linked map. The same value goes on the
+  `sheet-sync-daily` Appwrite Function, which is what calls it. `SHEET_SYNC_STEP_MS` is how long
+  one sync step may spend looking addresses up (default 5000). A step has to finish inside the
+  Appwrite Sites timeout — 15s by default, 30s at most — so raise this to about 15000 only after
+  raising the site's timeout to 30s. Sync now works with neither set; the daily sync needs the
+  secret. `APP_URL` matters here too: a daily republish has no request to take an origin from.
+
 - Optional, browser-safe: `NEXT_PUBLIC_EMBED_SCRIPT_URL`. Set it to the CDN origin in production. Unset, the embed snippet points at the dashboard's own origin, which is what makes development and self-hosting work with no config.
 
 `STORAGE_ID` never reaches the browser: photo URLs are composed on the server in `lib/storage/photo-url.ts` and handed to clients as `place.photoUrl`. If you need a bucket id in a component, that's the signal you're building it in the wrong layer.

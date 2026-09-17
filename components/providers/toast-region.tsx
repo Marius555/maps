@@ -36,6 +36,14 @@ import { SM_BREAKPOINT, useMediaQuery } from "@/lib/ui/use-media-query";
  * first, and a description set to wrap evenly under it. A plan limit is not a
  * "something went wrong" — it is a sentence the user has to actually read, and
  * the default toast's job is to be ignorable.
+ *
+ * **Colour lives in the indicator and nowhere else.** HeroUI tints the title
+ * per variant (`.toast--success .toast__title` is `--success-soft-foreground`)
+ * and greys the description with `text-muted`, so a success toast read as a
+ * green sentence and a danger toast as a pink one. The icon already says which
+ * kind of news this is; the words are for reading, so both are the page's own
+ * foreground in either theme. The classes below win without `!` because
+ * HeroUI's rules sit in `@layer components` and Tailwind's utilities after it.
  */
 export function ToastRegion() {
   const isWide = useMediaQuery(SM_BREAKPOINT);
@@ -72,10 +80,12 @@ export function ToastRegion() {
 
             <Toast.Content className="gap-0.5">
               {title ? (
-                <Toast.Title className="font-semibold">{title}</Toast.Title>
+                <Toast.Title className="font-semibold text-foreground">
+                  {title}
+                </Toast.Title>
               ) : null}
               {description ? (
-                <Toast.Description className="text-pretty">
+                <Toast.Description className="text-pretty text-foreground">
                   {description}
                 </Toast.Description>
               ) : null}
@@ -101,13 +111,16 @@ export function ToastRegion() {
  * The variants are a closed set in HeroUI's own types, and this is written out
  * rather than interpolated because Tailwind reads class names as text — a
  * `bg-${variant}/10` would compile to nothing at all.
+ *
+ * Warning's glyph is `--warning-ink`, not `--warning`: raw amber is about 2:1
+ * on a white toast, which is the case that token exists for (globals.css).
  */
 function tintClass(variant: string | undefined): string {
   switch (variant) {
     case "danger":
       return "bg-danger/10 text-danger";
     case "warning":
-      return "bg-warning/10 text-warning";
+      return "bg-warning/10 text-warning-ink";
     case "success":
       return "bg-success/10 text-success";
     case "accent":

@@ -1,6 +1,5 @@
 "use client";
 
-import { ErrorMessage } from "@/components/ui/error-message";
 import { formatCount } from "@/lib/format/number";
 import type { DraftPlace } from "@/lib/import/draft-places";
 
@@ -17,6 +16,11 @@ import type { DraftPlace } from "@/lib/import/draft-places";
  * step and was only ever shown there, so the moment the user moved on they lost
  * the one explanation for why half their rows have no pin — and the rows
  * themselves can only say "not looked up", not why.
+ *
+ * It is a line of the notes rather than an alert. The moment it happened was
+ * already told as a toast on the lookup step; what is left to say here is a
+ * standing fact about this run, and a red card for a fact that stays true is the
+ * same weight as the error it once was.
  */
 export function ReviewSummary({
   drafts,
@@ -36,6 +40,9 @@ export function ReviewSummary({
   geocodeError: string | null;
 }) {
   const notes: string[] = [];
+
+  // Already a whole sentence about the lookup, written where it failed.
+  if (geocodeError) notes.push(geocodeError);
 
   if (skippedBlankRows > 0) {
     notes.push(
@@ -64,8 +71,6 @@ export function ReviewSummary({
       {notes.length > 0 ? (
         <p className="text-xs text-muted">{notes.join(" ")}</p>
       ) : null}
-
-      {geocodeError ? <ErrorMessage error={geocodeError} /> : null}
     </div>
   );
 }

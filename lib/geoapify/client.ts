@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createThrottle } from "@/lib/geocoding/throttle";
+import { serviceUserAgent } from "@/lib/http/user-agent";
 
 /**
  * The transport every Geoapify call goes through.
@@ -54,8 +55,9 @@ const RETRY_BACKOFF_MS = 400;
  * unidentified client is what a WAF blocks, and a 403 from one is otherwise
  * indistinguishable from the service being down.
  */
-const USER_AGENT =
-  "custom-map-builder/1.0 (embeddable store locator; geocoding and routing at edit time only)";
+const USER_AGENT = serviceUserAgent(
+  "geocoding and routing at edit time only",
+);
 
 /**
  * Thrown for any Geoapify failure.

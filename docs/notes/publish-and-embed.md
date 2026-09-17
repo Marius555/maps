@@ -295,40 +295,40 @@ rewritten; it is the record of why this area is shaped as it is.
   because a trigger opening onto nothing is worse than no trigger. What is left is a
   master switch, three selectors and one run of switches, which is the shape the rest
   of the designer already had.
-- **The toolbar's controls are 23px tall, and the row states its own type to get there.**
-  They were `font: inherit` — 14px off `.lm-root` — with 7px of padding, which is a 34px
-  box; asked for a third off, the line box is most of that height, so the type had to come
-  down with the padding. `font-size: 12px` therefore sits on `.lm-toolbar`, **once**, and
-  everything in the row takes it: `font: inherit` on the field and the buttons is exactly
-  the declaration that makes a form control read its parent's type, and the search dropdown
-  is a `ul` inside it. `line-height` is deliberately *not* stated — 12px at the inherited
-  1.45 is a 17.4px line, and 2px either side plus the hairline is 23px on the nose. It
-  cannot be set on `.lm-root` instead: that 14px is the whole embed's, the results rows and
-  the card included.
+- **The toolbar's controls are 32px tall, on the root's own 14px type.** They have been
+  three sizes: `font: inherit` at 14px with 7px of padding (36px); then, asked for a third
+  off, `font-size: 12px` on `.lm-toolbar` and 2px of padding (23px); then, reported as too
+  small to read or press, that declaration deleted and 5px of padding — 14px at the inherited
+  1.45 is a 20.3px line, and 5px either side plus the hairline is 32px. `font: inherit` on the
+  field is what reads the row's type, and the search dropdown inherits it too. The find-nearest
+  button inside the field is 28px, the glyphs 16px.
 - **Three numbers have to move with it or something breaks silently.**
-  `.lm-button--icon` is a square sized to the field's height (23px, was 34); the toolbar's
-  glyphs are `.lm-toolbar svg { width: 12px; height: 12px }`, because `dom.ts`'s `icon()`
-  writes 18 as presentation attributes and has to keep doing so — the same helper draws the
-  card's links and folds, which did not get smaller; and the MapLibre top-corner clearance
-  is `top: 10px` plus the control height, so **42px became 31px, in both places**
-  (`:has(> .lm-toolbar)` and its 480px twin). Too large is a phantom band with nothing in
-  it; too small is the overlap that rule exists to end. Measured at a 390px embed: the
-  floating toolbar is 368x23 with the drawer trigger beside it and no wrap, both top
-  corners pad 31px, and a control there would start 8px below the toolbar — the same gap 42
-  gave at the old size.
-- **This one reaches live maps**, on the next `/embed` deploy and without the owner
-  republishing, which is the tag-chip trade taken deliberately again. It is a size change
-  rather than a broken state becoming a working one, so it is a weaker case than the four
-  toolbar fixes above — it was asked for directly, and the alternative (a setting) would be
-  a key in `SnapshotSettings` for something nobody would open the panel to change.
-- **It cost nothing against the budget, and that was the constraint rather than a
-  coincidence.** The total was 319.8KB of a 320.0KB ceiling. Every value here is an edit in
-  place; the only real additions are the glyph rule and one `font-size`, and the first pass
-  — which put `font-size` and `line-height` on each control and a third on the dropdown —
-  went **10 bytes over**. Stating the type once on the row, dropping the `line-height`
-  override in favour of arithmetic that lands on 23 anyway, and folding the two
-  `color: var(--lm-muted)` declarations in that corner into the rule they share, brought it
-  to 320.0KB with **3 bytes** spare. The budget was not raised (§4).
+  `.lm-button--icon` is a square sized to the field's height (32px); the toolbar's glyphs are
+  `.lm-toolbar svg` (16px), because `dom.ts`'s `icon()` writes 18 as presentation attributes
+  and has to keep doing so — the same helper draws the card's links and folds; and the
+  MapLibre top-corner clearance is the control height plus an 8px gap, **in both places**
+  (`:has(> .lm-toolbar)` and its 480px twin): 42 at 36px, 31 at 23px, 40 now. Too large is a
+  phantom band with nothing in it; too small is the overlap that rule exists to end.
+- **Every size change here reaches live maps**, on the next `/embed` deploy and without the
+  owner republishing — the tag-chip trade, taken deliberately each time because it was asked
+  for directly, and a setting would be a key in `SnapshotSettings` for something nobody would
+  open the panel to change.
+- **Each resize has had to be free against the ceiling, and the ceiling had 3 bytes in it.**
+  The 23px pass got there by stating the type once and folding two `color` declarations. The
+  32px pass is value edits plus one deleted `font-size`, which is net zero on its own — what
+  paid for `rowCard`'s 24 bytes of JS was dead CSS, none of it a feature: the bare
+  `.lm-button` rule (every `.lm-button` is also `--icon`, whose `padding: 0` always won), a
+  `flex-wrap: nowrap` the docked toolbar restated from the base, `font: inherit` on a
+  glyph-only button, and `-webkit-overflow-scrolling: touch`, which no browser that can run the
+  embed reads. 2 bytes spare after. The budget was not raised (§4).
+- **`rowCard: false` is a results row that flies and marks but opens no card.** Absent in a
+  snapshot means the card opens, which every published row did (§7); `DEFAULT_EMBED_SETTINGS`
+  is `false`, because a card opened from the panel rarely fits the map the panel leaves. The
+  embed passes `bare` to `focusPlace`, which calls `popup.remove()` *before* `setOpen` — the
+  close event clears the selection, so the other order would clear the row just marked — and
+  `flyToCard` then flies plain through the same `!card` branch `card: false` relies on. A pin
+  click and find-nearest still open cards. The switch sits in the Results panel fold and is
+  offered only while `card` is on.
 - **The accent has a default and the other four colours do not.** `DEFAULT_EMBED_ACCENT`
   seeds `DEFAULT_EMBED_SETTINGS.colors`, so `readColors` always resolves an accent and every
   new publish writes one. `--lm-focus` in the stylesheet stays `#1c7ed6`, because that is

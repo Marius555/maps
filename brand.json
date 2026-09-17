@@ -1,7 +1,7 @@
 {
-  "name": "Map Embed",
+  "name": "Pinglide",
   "tagline": "Put your locations on a map and embed it on your site.",
-  "website": "",
+  "website": "https://pinglide.com",
   "logo": {
     "light": "",
     "dark": "",
@@ -9,14 +9,14 @@
   },
   "favicon": "/favicon.ico",
   "company": {
-    "legalName": "",
+    "legalName": "Pinglide",
     "registrationNumber": "",
     "vatNumber": "",
     "address": ""
   },
   "contact": {
-    "supportEmail": "",
-    "privacyEmail": ""
+    "supportEmail": "support@pinglide.com",
+    "privacyEmail": "privacy@pinglide.com"
   },
   "legal": {
     "termsUrl": "",

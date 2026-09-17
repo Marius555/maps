@@ -16,7 +16,6 @@ export default async function LoginPage(props: PageProps<"/login">) {
   return (
     <AuthShell
       title="Log in"
-      description="Pick up where you left off."
       footer={
         <>
           No account yet?{" "}

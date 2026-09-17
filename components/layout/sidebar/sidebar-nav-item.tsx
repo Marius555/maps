@@ -10,6 +10,14 @@ export type NavItem = {
   icon: LucideIcon;
   /** True for index routes, so `/maps` doesn't stay lit inside `/maps/[id]`. */
   exact?: boolean;
+  /**
+   * Opens in a new tab instead of replacing the dashboard.
+   *
+   * For destinations outside the app shell — the guides live in the marketing
+   * layout, so navigating there in place swaps the whole chrome out from under
+   * somebody who was mid-task and makes Back the only way home.
+   */
+  newTab?: boolean;
 };
 
 /**
@@ -31,12 +39,14 @@ export function SidebarNavItem({
   /** Closes the mobile drawer once a destination is chosen. */
   onNavigate?: () => void;
 }) {
-  const { icon: Icon, label, href } = item;
+  const { icon: Icon, label, href, newTab } = item;
 
   return (
     <Link
       href={href}
       onClick={onNavigate}
+      target={newTab ? "_blank" : undefined}
+      rel={newTab ? "noreferrer" : undefined}
       aria-current={isActive ? "page" : undefined}
       title={isCollapsed ? label : undefined}
       /*
@@ -45,7 +55,7 @@ export function SidebarNavItem({
        * zero-area node in the accessibility tree is not something to bet a
        * nav item's only name on.
        */
-      aria-label={label}
+      aria-label={newTab ? `${label} (opens in a new tab)` : label}
       className={`flex min-h-9 items-center rounded-2xl px-2.5 text-sm transition-[color,background-color] duration-[var(--duration-fast)] ${
         isActive
           ? "bg-default font-medium text-foreground"
@@ -68,7 +78,10 @@ export function SidebarNavItem({
         {label}
       </span>
 
-      <NavPending />
+      {/* Nothing to wait for when the destination is another tab — this one
+          never navigates, so `useLinkStatus` would report a pending state that
+          has no end. */}
+      {newTab ? null : <NavPending />}
     </Link>
   );
 }

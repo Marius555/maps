@@ -59,11 +59,17 @@ export type PlanId = keyof typeof PLAN_LIMITS;
  * every pin on the map besides. So the gate is both the pricing decision and
  * the spend cap, which is why it is enforced on the two endpoints that reach
  * the engine rather than only hidden in the toolbar.
+ *
+ * Sheet sync is here on the same argument. Importing a sheet once is free on
+ * every plan; keeping a map linked to one re-reads it every day and geocodes
+ * whatever changed, which is spend nobody pressed a button for. Enforced where
+ * the link is created and again on every sync, so a downgraded account's links
+ * go quiet rather than keep spending.
  */
 export const PLAN_FEATURES = {
-  free: { routes: false },
-  starter: { routes: true },
-  pro: { routes: true },
+  free: { routes: false, sheetSync: false },
+  starter: { routes: true, sheetSync: true },
+  pro: { routes: true, sheetSync: true },
 } as const satisfies Record<PlanId, Record<GatedFeature, boolean>>;
 
 /**

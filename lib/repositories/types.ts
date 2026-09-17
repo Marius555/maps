@@ -64,6 +64,24 @@ export type PlaceRow = Models.Row & {
   groupId?: string | null;
   /** How this location's card differs from the account design, as JSON. */
   cardBlocks?: string | null;
+  /** Which row of the map's linked Google Sheet this came from, if any. */
+  sourceKey?: string | null;
+};
+
+export type SheetLinkRow = Models.Row & {
+  userId: string;
+  mapId: string;
+  sheetId: string;
+  gid?: string | null;
+  published?: boolean | null;
+  mapping?: string | null;
+  headerRowIndex?: number | null;
+  autoSync?: boolean | null;
+  lastSyncedAt?: string | null;
+  lastStatus?: string | null;
+  lastReport?: string | null;
+  failedLookups?: string | null;
+  syncingUntil?: string | null;
 };
 
 export type ShapeRow = Models.Row & {
@@ -227,6 +245,15 @@ export type Place = {
    * narrows them away at publish, and every reader drops them when drawing.
    */
   cardBlocks: Record<string, CardBlock>;
+  /**
+   * Which row of the map's linked Google Sheet this location came from.
+   *
+   * Absent for every location added any other way, and absent means exactly
+   * what it meant before sheet sync existed: a sync never matches, changes or
+   * removes a location without one. Optional rather than `string | null` so
+   * the many hand-built `Place` fixtures did not all have to learn about it.
+   */
+  sourceKey?: string;
   createdAt: string;
   updatedAt: string;
 };

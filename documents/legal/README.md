@@ -5,15 +5,22 @@ only. **This is not legal advice.** The drafts lean as far towards the provider 
 allowed, and a Lithuanian lawyer should review them before they bind anyone — especially the
 questions listed near the end.
 
-| File | What it is | Published at (`brand.json`) | Where the app links it |
+| File | What it is | Page (`brand.json` link) | Where the app links it |
 |---|---|---|---|
-| [terms-of-service.md](terms-of-service.md) | The contract with customers | `legal.termsUrl` | Sign-up and log-in consent notice (`components/brand/legal-consent-notice.tsx`), footer links (`components/brand/legal-links.tsx`) |
-| [privacy-policy.md](privacy-policy.md) | What we do with personal data as a controller | `legal.privacyUrl` | Consent notice, footer links, email footer (`lib/email/templates/layout.ts`) |
-| [cookie-policy.md](cookie-policy.md) | Cookies and browser storage, from the code | `legal.cookiesUrl` | Footer links |
-| [data-processing-agreement.md](data-processing-agreement.md) | GDPR Art. 28 terms for visitor measurement and customer content | `legal.dpaUrl` | Measurement switch in the publish designer (`components/publish/design-sidebar/measurement-group.tsx`) |
+| [terms-of-service.md](terms-of-service.md) | The contract with customers | `/terms` (`legal.termsUrl`) | Sign-up and log-in consent notice (`components/brand/legal-consent-notice.tsx`), footer links (`components/brand/legal-links.tsx`) |
+| [privacy-policy.md](privacy-policy.md) | What we do with personal data as a controller | `/privacy` (`legal.privacyUrl`) | Consent notice, footer links, email footer (`lib/email/templates/layout.ts`) |
+| [cookie-policy.md](cookie-policy.md) | Cookies and browser storage, from the code | `/cookies` (`legal.cookiesUrl`) | Footer links |
+| [data-processing-agreement.md](data-processing-agreement.md) | GDPR Art. 28 terms for visitor measurement and customer content | `/dpa` (`legal.dpaUrl`) | Measurement switch in the publish designer (`components/publish/design-sidebar/measurement-group.tsx`) |
 
 Company and contact placeholders are defined one folder up, in [../company.md](../company.md) and
 [../contact.md](../contact.md).
+
+**How the pages work.** `app/(marketing)/{terms,privacy,cookies,dpa}` render these files as they
+stand (`components/legal/`, `lib/legal/`), filling each `{{path}}` from `brand.json` or
+`lib/legal/values.ts` at build time. **A document is a draft while any placeholder is unfilled or
+any `[VERIFY]`, `[REMOVE IF UNUSED]` or `[IF USED]` marker is left.** A draft answers 404 in a
+production build and, in development, renders under a notice listing what is missing — so
+`npm run dev` and `/terms` is the quickest way to see what is still owed.
 
 ## Before you publish
 
@@ -21,7 +28,10 @@ Company and contact placeholders are defined one folder up, in [../company.md](.
    contract with. Published before it exists, they make the person running the service the
    contracting party, with unlimited personal liability.
 2. **Have a Lithuanian lawyer review them**, starting with [the questions below](#questions-for-the-lawyer).
-3. **Fill every placeholder.** `grep -rn "{{" documents/legal/` must return nothing.
+3. **Fill every placeholder** — in `brand.json`, or in `LEGAL_DETAILS` in `lib/legal/values.ts`
+   for the values `brand.json` has no field for. Not by find-and-replace in these files: the
+   placeholders stay, so a value changed in `brand.json` changes in the documents too. The notice
+   at the top of each page in development lists what is left.
 4. **Resolve every `[VERIFY: …]`** in the [list below](#verify-items), then delete the marker.
    `grep -rn "\[VERIFY" documents/legal/` must return nothing.
 5. **Delete the rows that do not apply.** Rows marked `[REMOVE IF UNUSED]` or `[IF USED]` are there
@@ -32,8 +42,11 @@ Company and contact placeholders are defined one folder up, in [../company.md](.
 6. **Make sure `{{contact.legalEmail}}` and `{{contact.privacyEmail}}` are monitored inboxes.** Both
    carry legal deadlines.
 7. **Fix, or soften the text around, the [open code issues](#open-issues-in-the-code).**
-8. **Publish, then fill the four `legal` URLs in `brand.json`.** Filling a URL is what turns its link
-   on in the app — `lib/brand.ts` draws nothing for an empty string.
+8. **Check a production build** (`npm run build && npm start`): the four pages must now answer 200
+   rather than 404. **Then set the four `legal` URLs in `brand.json`** to `/terms`, `/privacy`,
+   `/cookies` and `/dpa`. Setting a URL is what turns its link on in the app — `lib/brand.ts`
+   draws nothing for an empty string — so do it only once the pages are live, or the footer
+   links to a 404.
 
 ## Conventions
 

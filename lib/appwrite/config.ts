@@ -18,4 +18,5 @@ export const TABLES = {
   subscriptions: "subscriptions",
   mapSessions: "mapSessions",
   mapDaily: "mapDaily",
+  sheetLinks: "sheetLinks",
 } as const;

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { serviceUserAgent } from "@/lib/http/user-agent";
 import { confidenceFor } from "./confidence";
 import type { PhotonFeature, PhotonProperties } from "./reverse-select";
 import { selectReverseFeature, selectVenue } from "./reverse-select";
@@ -40,8 +41,7 @@ const REQUEST_TIMEOUT_MS = 8000;
  * the service being down. Overridable so a self-hosted instance can be told who
  * is calling it.
  */
-const DEFAULT_USER_AGENT =
-  "custom-map-builder/1.0 (embeddable store locator; geocoding at import time only)";
+const DEFAULT_USER_AGENT = serviceUserAgent("geocoding at import time only");
 
 /**
  * One retry, and only for failures that a second attempt can plausibly fix.

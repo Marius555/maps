@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { Place } from "@/lib/repositories/types";
 import { describeMissing, isIncomplete, missingFields } from "./completeness";
 import {
-  countNeedingAttention,
   matchesFilter,
   matchesTagFilter,
   needsAttention,
@@ -119,19 +118,6 @@ describe("matchesFilter", () => {
   it("finds rows with details missing, whatever their pin is doing", () => {
     expect(matchesFilter(bare, "incomplete")).toBe(true);
     expect(matchesFilter(place(), "incomplete")).toBe(false);
-  });
-});
-
-describe("countNeedingAttention", () => {
-  it("counts each suspect row once", () => {
-    const places = [
-      place(),
-      place({ geocodeStatus: "failed" }),
-      place({ geocodeStatus: "low", geocodeConfidence: 0.3 }),
-      place({ geocodeStatus: "manual", geocodeConfidence: 0.6 }),
-    ];
-
-    expect(countNeedingAttention(places)).toBe(3);
   });
 });
 

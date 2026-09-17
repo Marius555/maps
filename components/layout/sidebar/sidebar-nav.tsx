@@ -1,18 +1,28 @@
 "use client";
 
-import { LayoutGrid } from "lucide-react";
+import { BookOpen, LayoutGrid } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { SidebarMapNav, isItemActive } from "./sidebar-map-nav";
 import { SidebarNavItem, type NavItem } from "./sidebar-nav-item";
 
-const ALL_MAPS: NavItem = {
-  href: "/maps",
-  label: "All maps",
-  icon: LayoutGrid,
-  // Exact, or it would stay lit while you're inside a single map.
-  exact: true,
-};
+const GLOBAL_ITEMS: NavItem[] = [
+  {
+    href: "/maps",
+    label: "All maps",
+    icon: LayoutGrid,
+    // Exact, or it would stay lit while you're inside a single map.
+    exact: true,
+  },
+  {
+    href: "/docs",
+    label: "Documentation",
+    icon: BookOpen,
+    // Not exact: `/docs/importing-locations` is still the guides, so the row
+    // should stay lit inside them.
+    newTab: true,
+  },
+];
 
 export function SidebarNav({
   isCollapsed,
@@ -26,15 +36,17 @@ export function SidebarNav({
 
   return (
     <nav aria-label="Main" className="space-y-5">
-      <ul>
-        <li>
-          <SidebarNavItem
-            item={ALL_MAPS}
-            isActive={isItemActive(pathname, ALL_MAPS)}
-            isCollapsed={isCollapsed}
-            onNavigate={onNavigate}
-          />
-        </li>
+      <ul className="space-y-0.5">
+        {GLOBAL_ITEMS.map((item) => (
+          <li key={item.href}>
+            <SidebarNavItem
+              item={item}
+              isActive={isItemActive(pathname, item)}
+              isCollapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
+          </li>
+        ))}
       </ul>
 
       {mapId ? (

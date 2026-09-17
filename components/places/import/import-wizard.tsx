@@ -19,8 +19,14 @@ import {
   normalizeLabel,
   resolveTags,
 } from "@/lib/import/resolve-tags";
+import { ApiError } from "@/lib/query/fetcher";
 import { useBulkCreatePlaces } from "@/lib/query/import";
 import { useUpdateMap } from "@/lib/query/maps";
+import { useSaveSheetLink } from "@/lib/query/sheet-link";
+import { toastProblem } from "@/lib/query/toast-error";
+import { mappingForLink } from "@/lib/sheet-sync/link-mapping";
+import { sourceKeysFor } from "@/lib/sheet-sync/row-key";
+import type { CreatePlaceInput } from "@/lib/validation/place.schema";
 import type { AppMap } from "@/lib/repositories/types";
 import { useImportStore } from "@/lib/stores/import-store";
 import { MAX_BULK_PLACES } from "@/lib/validation/place.schema";
@@ -53,27 +59,22 @@ export type ImportProgress = { saved: number; total: number };
 export function ImportWizard({
   map,
   headroom,
+  canSyncSheets,
 }: {
   map: AppMap;
   headroom: ImportHeadroom;
+  /** Whether the plan includes keeping a map in sync with a Google Sheet. */
+  canSyncSheets: boolean;
 }) {
   const router = useRouter();
   const bulkCreate = useBulkCreatePlaces(map.id);
   const updateMap = useUpdateMap(map.id);
+  const saveSheetLink = useSaveSheetLink(map.id);
 
   const step = useImportStore((state) => state.step);
   const setStep = useImportStore((state) => state.setStep);
   const reset = useImportStore((state) => state.reset);
   const fileName = useImportStore((state) => state.fileName);
-
-  /**
-   * A row that can't be written, caught before the first request goes out.
-   *
-   * Its own state rather than a thrown error: `runImport` is fired from a press
-   * handler, so throwing produced an unhandled rejection and a review step whose
-   * only error slot — the mutation's — was still empty.
-   */
-  const [preflightError, setPreflightError] = useState<string | null>(null);
 
   const [progress, setProgress] = useState<ImportProgress | null>(null);
 
@@ -117,8 +118,15 @@ export function ImportWizard({
     useImportStore.getState().attachTo(map.id);
   }, [hydrated, map.id]);
 
-  const finish = (saved: number, total: number, addedTags: number) => {
-    const description = describeImport({ saved, total, addedTags });
+  const finish = (
+    saved: number,
+    total: number,
+    addedTags: number,
+    reason?: string,
+  ) => {
+    const description = [describeImport({ saved, total, addedTags }), reason]
+      .filter(Boolean)
+      .join(" ");
 
     // The action keeps its name the whole way through (CLAUDE.md §8): the button
     // says Import and this says Imported. A run that stopped short says so in a
@@ -133,10 +141,28 @@ export function ImportWizard({
   };
 
   const runImport = async () => {
-    const drafts = importableDrafts(useImportStore.getState().drafts);
+    const store = useImportStore.getState();
+    const drafts = importableDrafts(store.drafts);
     if (drafts.length === 0) return;
 
-    setPreflightError(null);
+    /*
+     * Whether this import leaves the map linked to its sheet.
+     *
+     * Decided once, up front, because it changes what every row is written with:
+     * a linked import stamps each location with the key a sync will match it by
+     * (lib/sheet-sync/row-key.ts). The server re-checks the plan when the link is
+     * saved; `canSyncSheets` only keeps a Free account from stamping keys onto
+     * rows for a link it will be refused.
+     */
+    const sheet =
+      canSyncSheets &&
+      store.keepInSync &&
+      store.sourceKind === "google-sheet" &&
+      store.sheetReference
+        ? store.sheetReference
+        : null;
+
+    const sourceKeys = sheet ? sourceKeysFor(drafts) : null;
 
     /*
      * The file's labels, reconciled against the map's vocabulary before the
@@ -168,10 +194,10 @@ export function ImportWizard({
     // Built up front so every row can be checked before the first request goes
     // out. A failure on chunk two would otherwise leave 200 locations saved and
     // a message that names neither the row nor the reason.
-    const inputs = drafts.map((draft) => ({
+    const inputs = drafts.map((draft, index) => ({
       key: draft.key,
       rowNumber: draft.rowNumber,
-      input: draftToCreateInput(
+      input: withSourceKey(sourceKeys?.[index], draftToCreateInput(
         draft,
         /*
          * The main tag first, because the first tag a location wears is what
@@ -192,12 +218,20 @@ export function ImportWizard({
             ].filter((id): id is string => Boolean(id)),
           ),
         ],
-      ),
+      )),
     }));
 
+    /*
+     * A row that can't be written, caught before the first request goes out.
+     *
+     * Reported rather than thrown: `runImport` is fired from a press handler,
+     * so throwing produced an unhandled rejection and nothing on screen. A
+     * toast rather than an alert, because the alert slot was at the foot of the
+     * list — thousands of pixels below the Import button on a big file.
+     */
     const problem = preflightProblem(inputs);
     if (problem) {
-      setPreflightError(problem);
+      toastProblem("Couldn't import", problem);
       return;
     }
 
@@ -250,14 +284,49 @@ export function ImportWizard({
           addedTags = added;
         }
       }
-    } catch {
+    } catch (cause) {
       // Whatever landed before the failure is real and already on the map. Going
       // quiet about it would leave the user thinking nothing was imported and
-      // re-running the whole file on top of itself. With nothing saved there is
-      // nowhere to send them, and the mutation's own error is already on screen.
+      // re-running the whole file on top of itself — so a partial run says how
+      // far it got *and* why it stopped, in one toast. With nothing saved there
+      // is nowhere to send them, and the reason is the whole message.
       setProgress(null);
-      if (saved > 0) finish(saved, drafts.length, addedTags);
+
+      if (saved > 0) {
+        finish(
+          saved,
+          drafts.length,
+          addedTags,
+          cause instanceof ApiError ? cause.message : undefined,
+        );
+      } else {
+        toastProblem("Couldn't import", cause);
+      }
       return;
+    }
+
+    /*
+     * Link the map to its sheet, once every row is in.
+     *
+     * Only after a run that got all the way through: a link over a half-imported
+     * sheet would have its first sync add the other half with no review step,
+     * which is the step the owner was in the middle of. A failure here costs
+     * nothing already saved, so it is said and the import still finishes.
+     */
+    let linked = false;
+
+    if (sheet) {
+      try {
+        await saveSheetLink.mutateAsync({
+          ...sheet,
+          mapping: mappingForLink(store.mapping, store.splitNotice),
+          headerRowIndex: store.headerRowIndex,
+          autoSync: true,
+        });
+        linked = true;
+      } catch (cause) {
+        toastProblem("Imported, but couldn't link the sheet", cause);
+      }
     }
 
     // Only a run that got all the way through throws the wizard away. A partial
@@ -265,7 +334,12 @@ export function ImportWizard({
     // `startOver` rather than `reset`, because `finish` navigates immediately and
     // a debounced write would not survive it — see the note there.
     startOver();
-    finish(saved, drafts.length, addedTags);
+    finish(
+      saved,
+      drafts.length,
+      addedTags,
+      linked ? "It's linked to your sheet and syncs daily." : undefined,
+    );
   };
 
   /**
@@ -278,20 +352,26 @@ export function ImportWizard({
    * pin two streets out is invisible at 400px. Source and Addresses are a
    * dropzone and a progress bar, and stretching either across a 2560px monitor
    * would make them harder to use, not easier.
+   *
+   * **This is the only cap, and the steps must not add their own.** The step
+   * trail is left-aligned in this wrapper, so it lines up with whatever the
+   * step draws only while the step fills the wrapper. Source and Addresses used
+   * to sit at a centred `max-w-2xl` inside a `max-w-5xl` wrapper, which put the
+   * trail up to 176px left of the tabs it was labelling.
    */
   const isWide = step === "mapping" || step === "review";
 
   return (
     /*
      * `max-w-full`, not `max-w-none`: `none` is not a length and does not
-     * interpolate, so the transition would not play in one direction. 64rem to
+     * interpolate, so the transition would not play in one direction. 42rem to
      * 100% does. There is no `motion-reduce:` here because there does not need
      * to be — the blanket `prefers-reduced-motion` rule in globals.css already
      * clamps every transition in the app to 0.01ms.
      */
     <div
       className={`mx-auto w-full transition-[max-width] duration-[var(--duration-panel)] ease-[var(--ease-out)] ${
-        isWide ? "max-w-full" : "max-w-5xl"
+        isWide ? "max-w-full" : "max-w-2xl"
       }`}
     >
       <div className="relative space-y-6">
@@ -375,7 +455,7 @@ export function ImportWizard({
                 headroom={headroom}
                 isImporting={bulkCreate.isPending || updateMap.isPending}
                 importProgress={progress}
-                importError={preflightError ?? bulkCreate.error ?? updateMap.error}
+                canSyncSheets={canSyncSheets}
                 onImport={() => void runImport()}
                 onBack={() => setStep("mapping")}
               />
@@ -407,6 +487,14 @@ function useHasHydrated(): boolean {
     // claimed the run was loaded would mismatch the first client render.
     () => false,
   );
+}
+
+/** The key a linked import stamps on a row, or the row as it was. */
+function withSourceKey(
+  sourceKey: string | undefined,
+  input: CreatePlaceInput,
+): CreatePlaceInput {
+  return sourceKey ? { ...input, sourceKey } : input;
 }
 
 function describeImport({

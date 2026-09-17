@@ -1,9 +1,10 @@
 "use client";
 
-import { Button, FieldError, Input, Label, TextField } from "@heroui/react";
+import { Button, Input, Label, TextField } from "@heroui/react";
 import { useState } from "react";
 
 import { parseSheetUrl, type SheetReference } from "@/lib/import/sheet-url";
+import { toastProblem } from "@/lib/query/toast-error";
 
 /**
  * Paste a Google Sheets link.
@@ -11,6 +12,13 @@ import { parseSheetUrl, type SheetReference } from "@/lib/import/sheet-url";
  * The link is parsed here rather than on the server, and it has to be: the sheet
  * tab lives in the URL fragment (`#gid=…`), which a browser never sends. A server
  * that took the whole URL would quietly import the first tab of every workbook.
+ *
+ * **A bad link is a toast, and the field only turns red.** The sentence used to
+ * be a `FieldError` under the input, and it grew the form by a line — which, in
+ * a panel sharing its height with the file tab and a step centred down the page,
+ * moved everything on screen. The field keeps `isInvalid` so the red border and
+ * `aria-invalid` still point at what to fix; the toast region is a live region,
+ * so the reason is still announced.
  */
 export function SheetUrlForm({
   isBusy,
@@ -20,17 +28,18 @@ export function SheetUrlForm({
   onSubmit: (reference: SheetReference) => void;
 }) {
   const [url, setUrl] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [isInvalid, setIsInvalid] = useState(false);
 
   const submit = () => {
     const result = parseSheetUrl(url);
 
     if (!result.ok) {
-      setError(result.message);
+      setIsInvalid(true);
+      toastProblem("That link won't work", result.message);
       return;
     }
 
-    setError(null);
+    setIsInvalid(false);
     onSubmit(result.reference);
   };
 
@@ -45,17 +54,16 @@ export function SheetUrlForm({
     >
       <TextField
         fullWidth
-        isInvalid={Boolean(error)}
+        isInvalid={isInvalid}
         type="url"
         value={url}
         onChange={(value) => {
           setUrl(value);
-          if (error) setError(null);
+          if (isInvalid) setIsInvalid(false);
         }}
       >
         <Label>Google Sheets link</Label>
         <Input />
-        {error ? <FieldError>{error}</FieldError> : null}
       </TextField>
 
       <div className="rounded-lg bg-surface-secondary px-4 py-3">
@@ -64,7 +72,8 @@ export function SheetUrlForm({
           <span className="text-foreground">Share</span> →{" "}
           <span className="text-foreground">General access</span> →{" "}
           <span className="text-foreground">Anyone with the link</span> →{" "}
-          <span className="text-foreground">Viewer</span>. We read it once, now.
+          <span className="text-foreground">Viewer</span>. We read it now, and
+          daily after that if you keep the map in sync.
         </p>
       </div>
 

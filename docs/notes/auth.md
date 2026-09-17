@@ -46,6 +46,14 @@ emails.
 - **`env.appUrl` is configured, never read from the request.** A spoofed `Host`
   header would otherwise mint a working reset link pointing at an attacker's
   domain.
+- **The auth back arrow is the browser's Back with a floor, and `?next=` means go
+  home.** `AuthBackButton` (pinned to the form column by `app/(auth)/layout.tsx`)
+  calls `router.back()` unless the history is one entry long (a fresh tab, an
+  email link) or the URL carries `next` — which only `proxy.ts` writes, so the
+  entry behind it is the protected page that bounced the visitor, and Back would
+  only bounce them again. Both cases `router.push("/")`. `AuthShell` is centred
+  under a lock badge; its `description` is optional, omitted on Log in and Sign
+  up and kept wherever it carries instructions.
 
 ## The SameSite trap
 

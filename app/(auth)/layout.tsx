@@ -1,3 +1,4 @@
+import { AuthBackButton } from "@/components/auth/auth-back-button";
 import { AuthVisual } from "@/components/auth/auth-visual";
 
 /**
@@ -17,6 +18,12 @@ import { AuthVisual } from "@/components/auth/auth-visual";
  *
  * `min-h-dvh` and not `h-dvh`: the reset form is taller than the login form, and
  * a fixed height would clip it on a short laptop window rather than scroll.
+ *
+ * **The back arrow is pinned to the form column's corner**, not placed in the
+ * form's flow: the form is vertically centred, so an arrow inside it would float
+ * somewhere different on every screen. `pt-16` rather than `py-12` is the room
+ * it needs — on a phone a tall form starts at the top, and without it the mark
+ * above the heading sits under the arrow.
  */
 export default function AuthLayout({
   children,
@@ -27,7 +34,11 @@ export default function AuthLayout({
     <div className="flex min-h-dvh flex-1 flex-col lg:flex-row">
       <AuthVisual />
 
-      <div className="flex flex-1 items-center justify-center px-4 py-12 sm:px-8 lg:w-1/2">
+      <div className="relative flex flex-1 items-center justify-center px-4 pt-16 pb-12 sm:px-8 lg:w-1/2">
+        <div className="absolute top-3 left-3 sm:top-5 sm:left-5">
+          <AuthBackButton />
+        </div>
+
         {children}
       </div>
     </div>

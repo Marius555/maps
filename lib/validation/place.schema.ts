@@ -125,6 +125,16 @@ export const createPlaceSchema = z.object({
   // Optional, not defaulted: nothing is created into a group. A location joins
   // one afterwards, by being dragged onto a row or caught by a marquee.
   groupId: groupIdSchema.optional(),
+  /*
+   * Which row of a linked Google Sheet this location is, set by an import that
+   * keeps the map in sync (lib/sheet-sync/row-key.ts). Absent for everything
+   * else, and a location without one is never touched by a sync.
+   */
+  sourceKey: z
+    .string()
+    .max(64)
+    .regex(/^[a-z0-9]+:[0-9a-f]+(#\d+)?$/)
+    .optional(),
 });
 
 export const updatePlaceSchema = z

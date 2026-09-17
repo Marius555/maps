@@ -9,9 +9,9 @@ Project instructions. Read this fully before writing code.
 ## 0. State of the code
 
 **Weeks 1–3 of §10 are done; Week 4 is next.** Of §5's layout, `/app`, `/lib`,
-`/components`, `/scripts`, `/embed` and `/packages/shared` exist. Still absent, and
-correctly so — they belong to Week 4: `/functions`, and `/app/(marketing)/for/[platform]`
-+ `/pricing`.
+`/components`, `/scripts`, `/embed`, `/packages/shared` and `/functions` (one function, the
+daily sheet sync) exist. Still absent, and correctly so — they belong to Week 4:
+`/app/(marketing)/for/[platform]` and `/pricing`.
 
 Working end to end: email auth, map CRUD, the MapLibre editor, the locations list with
 search and tag filters, per-location editing with search-on-submit geocoding and photo
@@ -37,6 +37,17 @@ session, never per event) and the per-map monthly ceiling in `SESSION_LIMITS`. T
 statistics this tab used to show are deleted; what was actionable in them was already a
 filter on the Locations page. Full reasoning, and the five blockers it had to answer, in
 `docs/notes/analytics.md`.
+
+**Google Sheets sync is the third call made against a rival (Atlist), and it bends §7.** An
+import from a Google Sheet can leave the map linked: rows in the sheet are its locations, and a
+sync adds, updates and removes them, then republishes a live map. Sync now on the Locations page,
+plus a daily Appwrite Function; Starter and Pro only. The §7 bend is that a sync geocodes with no
+review step, and it is survivable because **only confident matches are written** — the rest are
+reported by sheet row number for the owner to fix in the sheet — and a sync that would remove
+most of the map stops and asks. **Hosting is Appwrite Sites, which cuts every request off at 30
+seconds at most**, so a sync is a series of short idempotent steps, never one long request. That
+constraint applies to any future long job, too. Full reasoning and the function's setup in
+`docs/notes/sheet-sync.md`.
 
 **Auth and transactional email are done, and are the first of Week 4 to land.** A split
 `app/(auth)` group — a drawn map panel on one half, the form on the other — carrying
@@ -134,6 +145,10 @@ one exists: `docs/notes/environment.md`.
 - Server-only, optional: `SNAPSHOT_STORAGE_ID`, defaulting to `STORAGE_ID` — Appwrite
   Cloud's free plan allows one bucket per project, which is why `json` is in the assets
   bucket's allowed extensions.
+- Server-only, optional: `CRON_SECRET` (the daily sheet sync's route **refuses everyone**
+  while it is unset; the same value goes on the `sheet-sync-daily` function) and
+  `SHEET_SYNC_STEP_MS` (lookup time per sync step, default 5000 — raise only with the site
+  timeout).
 - Browser-safe, optional: `NEXT_PUBLIC_COLLECT_URL` — where a published map posts what its
   visitors did. Unset means the dashboard's own origin, which is what makes development and
   self-hosting work with no config. **Absolute, always**: the embed runs on a customer's
@@ -190,8 +205,9 @@ Area-specific invariants live at the head of each file in the table below.
   it `retired` so it stops being offered and keeps being read.
 - **One writer per JSON blob column.** `updateMap` serialises `settings` whole, so two
   forms writing it is a lost update. `useEmbedDesign` is the only writer.
-- **The embed's own-code budget is 47KB and it currently sits at 46.6KB.** The
-  binding number is the **total**, 319.8KB of a 320KB ceiling. Run
+- **The embed's own-code budget is 47KB and it currently sits at 46.8KB.** The
+  binding number is the **total**, 320.0KB of a 320KB ceiling with **2 bytes** spare —
+  anything new has to be paid for by removing something dead. Run
   `npm run build:embed` after any change under `/embed` or `/packages/shared` — `npm run
   check` does not. Do not raise the budget to get past it (§4).
 - **Adding to `EditorMode` something that is not a `ShapeKind` means auditing every
@@ -227,6 +243,8 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `components/editor/**`, `lib/import/**`, `lib/map/edge-autoscroll.ts`, any `loading.tsx`, `Container` sizes | `docs/notes/editor-and-layout.md` |
 | `components/analytics/**`, `lib/analytics/**`, `embed/src/track.ts`, `app/api/collect/**` | `docs/notes/analytics.md` |
 | `components/auth/**`, `lib/auth/**`, `lib/email/**`, `app/(auth)/**`, `app/api/auth/**`, `proxy.ts` | `docs/notes/auth.md` |
+| `lib/sheet-sync/**`, `components/places/sheet-sync/**`, `app/api/**/sheet-link/**`, `app/api/cron/**`, `functions/**` | `docs/notes/sheet-sync.md` |
+| `documents/legal/**`, `lib/legal/**`, `components/legal/**`, the `legal` links in `brand.json` | `documents/legal/README.md` |
 
 Self-hosting runbooks, unchanged: `docs/self-hosting-geocoding.md`,
 `docs/self-hosting-routing.md`, `docs/self-hosting-tiles.md`.
@@ -313,9 +331,9 @@ The embed must **never** import React, HeroUI, Motion, TanStack Query, Zustand, 
 
 Target: **under 250KB gzipped including MapLibre.** If a change pushes it over, flag it.
 
-**Measured, that target is unreachable with MapLibre v6** — its own dist files are 273.2KB gzipped (`maplibre-gl.mjs` 136.4 + `maplibre-gl-shared.mjs` 131.0 + the worker 5.8), minified already, with no slim build. Actual total is **319.8KB**, of which ours is 46.6KB. `npm run build:embed` enforces a 47KB budget on our code and a 320KB ceiling on the total; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 46.6KB.
+**Measured, that target is unreachable with MapLibre v6** — its own dist files are 273.2KB gzipped (`maplibre-gl.mjs` 136.4 + `maplibre-gl-shared.mjs` 131.0 + the worker 5.8), minified already, with no slim build. Actual total is **320.0KB** (2 bytes under), of which ours is 46.8KB. `npm run build:embed` enforces a 47KB budget on our code and a 320KB ceiling on the total; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 46.8KB.
 
-The own-code budget has been raised three times — 42 → 46 → 47KB — and each raise is argued in `scripts/check-embed-size.mjs` rather than merely recorded. It **must not be raised to get past a binding budget**: it exists to catch the MapLibre duplication regression above, and a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam. **The ceiling below it is now the number with the least room** — 0.2KB — and that one is not editable: if the total is what binds, it is a §3 conversation about the map library. Reasoning in `scripts/check-embed-size.mjs` and `docs/notes/publish-and-embed.md`.
+The own-code budget has been raised three times — 42 → 46 → 47KB — and each raise is argued in `scripts/check-embed-size.mjs` rather than merely recorded. It **must not be raised to get past a binding budget**: it exists to catch the MapLibre duplication regression above, and a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam. **The ceiling below it is now the number with the least room** — 2 bytes — and that one is not editable: if the total is what binds, it is a §3 conversation about the map library. Reasoning in `scripts/check-embed-size.mjs` and `docs/notes/publish-and-embed.md`.
 
 `/packages/shared` is the **only** directory both targets may import from. `@/lib`, `@/components` and `@/app` are closed to the embed, and `eslint.config.mjs` enforces both halves of that.
 
@@ -382,7 +400,7 @@ from one list, and moving it would orphan every map already saved. It is a `varc
 theme keys stay short.
 
 ### `places`
-`mapId` · `name` · `lat` · `lng` · `address` · `tags` (string[]) · `fields?` (JSON) · `icon?` · `groupId?` · `description?` · `phone?` · `email?` · `url?` · `hours?` (JSON) · `photoIds?` (string[]) · `photoId?` (retired) · `logoId?` · `sortOrder` · `geocodeConfidence?` · `geocodeStatus` (`ok` | `low` | `failed` | `manual`) · ~~`category`~~ (retired) · `cardBlocks?` (JSON)
+`mapId` · `name` · `lat` · `lng` · `address` · `tags` (string[]) · `fields?` (JSON) · `icon?` · `groupId?` · `description?` · `phone?` · `email?` · `url?` · `hours?` (JSON) · `photoIds?` (string[]) · `photoId?` (retired) · `logoId?` · `sortOrder` · `geocodeConfidence?` · `geocodeStatus` (`ok` | `low` | `failed` | `manual`) · ~~`category`~~ (retired) · `cardBlocks?` (JSON) · `sourceKey?`
 
 `cardBlocks` is how *this* location's card differs from the account's design:
 `{ [blockId]: CardBlock }`, a whole resolved block per entry rather than a diff
@@ -417,6 +435,14 @@ Rows carry **no owner permission**: table permissions are empty with `rowSecurit
 only the admin client reads them, and that client is only ever held by the dashboard. The
 write path takes no `RepoContext` and cannot — see the head of
 `lib/repositories/analytics.repository.ts` before touching it.
+
+### `sheetLinks`
+`userId` · `mapId` (unique) · `sheetId` · `gid` · `published` · `mapping` (JSON) · `headerRowIndex` · `autoSync` · `lastSyncedAt` · `lastStatus` · `lastReport` (JSON) · `failedLookups` (JSON) · `syncingUntil`
+
+A map's link to a Google Sheet, one row at most. A table rather than JSON on `maps` because
+three things write it (the linking import, the daily switch, the sync), and `maps` JSON columns
+have one writer each. `places.sourceKey` is the other half: which sheet row a location is, and
+absent for every location a sync must never touch. `docs/notes/sheet-sync.md`.
 
 ### `subscriptions`
 `userId` · `billingCustomerId` · `billingSubscriptionId` · `plan` · `status` · `currentPeriodEnd`
@@ -519,7 +545,10 @@ Each of these is a week not spent getting a paying customer. If one seems necess
 
 ## 12. Known constraints
 
-- **Vercel Hobby prohibits commercial use** and caps cron at once daily. Use Vercel Pro or self-host.
+- **Hosting is Appwrite Sites.** No request may run past the site timeout (15s default, 30s
+  max), and Sites has no cron — scheduled work is an Appwrite Function (up to 900s when run
+  asynchronously) calling a secret-guarded route in bounded steps. `maxDuration` exports are
+  Vercel-only and do nothing here.
 - **Google Maps is not an option anywhere in this codebase.** Their terms forbid storing business names and addresses, cap coordinate caching at 30 days, and require Places results to be shown on a Google map. Our model breaks all three.
 - **Nominatim's public API forbids autocomplete and bulk use.** If we self-host geocoding, use Photon (prebuilt GraphHopper dumps, runs as a separate service on its own VPS — it is not loaded into Appwrite).
 - **A licence and a demo server's usage policy are different things, and confusing them has cost time.** Every component of this stack — OSM data (ODbL), OpenFreeMap, OSRM (BSD-2), MapLibre and PMTiles (BSD-3/MIT) — permits commercial use outright, and nothing here has ever claimed otherwise. What is restricted is running production traffic through the free *demo endpoints* those projects host. Verified September 2026, and the three do not have the same answer:

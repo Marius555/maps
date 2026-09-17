@@ -84,9 +84,9 @@ export function TagFilterMenu({
        * beside it, and it does so at exactly the moment the user is aiming at
        * something else.
        *
-       * So the state is told by the variant — the same `tertiary` → `secondary`
-       * pair `AttentionBadge` uses, so the two "a filter is on" signals on this
-       * page look like one idea — and the number is kept in the accessible name
+       * So the state is told by the variant — a `tertiary` → `secondary` pair,
+       * the page's one signal that a filter is on, alongside the Show select's
+       * own value — and the number is kept in the accessible name
        * instead, where it costs no width. Not `aria-pressed`: this is a popover
        * trigger and already owns `aria-expanded`, and a button claiming both is
        * announced as two controls in one.

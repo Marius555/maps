@@ -1,4 +1,5 @@
 import { detectColumns, type DetectionResult } from "./detect/score";
+import type { SheetReference } from "./sheet-url";
 import { buildTable, type HeaderRowChoice, type ImportTable } from "./table";
 import { readCsvFile } from "./sources/csv";
 import { readXlsxFile } from "./sources/xlsx";
@@ -20,6 +21,11 @@ export type LoadedSource = ImportTable & {
   source: SourceTable;
   /** Which row became the column names. null when we named them ourselves. */
   headerRowIndex: number | null;
+  /**
+   * The sheet this came from, for a Google Sheet — what a map kept in sync with
+   * it has to store. Absent for every file.
+   */
+  sheet?: SheetReference;
 };
 
 /** What the file picker accepts, and what the drop zone tests a drop against. */

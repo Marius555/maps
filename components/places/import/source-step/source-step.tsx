@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 
-import { ErrorMessage } from "@/components/ui/error-message";
 import { formatCount } from "@/lib/format/number";
 import { MAX_SOURCE_ROWS } from "@/lib/import/limits";
 import { finishSource, readFile, type LoadedSource } from "@/lib/import/read-source";
 import { readGoogleSheet } from "@/lib/import/sources/google-sheet";
 import { ImportSourceError } from "@/lib/import/sources/types";
 import type { SheetReference } from "@/lib/import/sheet-url";
-import { ApiError } from "@/lib/query/fetcher";
+import { toastProblem } from "@/lib/query/toast-error";
 import { useImportStore } from "@/lib/stores/import-store";
 import { FileDrop } from "./file-drop";
 import { SheetPicker } from "./sheet-picker";
@@ -34,7 +33,6 @@ export function SourceStep({
   const setSource = useImportStore((state) => state.setSource);
 
   const [tab, setTab] = useState<SourceTab>("file");
-  const [error, setError] = useState<unknown>(null);
   const [isBusy, setIsBusy] = useState(false);
 
   // Kept so switching sheets can re-read the same workbook without a re-pick.
@@ -46,17 +44,27 @@ export function SourceStep({
 
   const remaining = Math.max(headroom.limit - headroom.used, 0);
 
-  const load = async (read: () => Promise<LoadedSource>) => {
-    setError(null);
+  /**
+   * Read a source, or say why it couldn't be read.
+   *
+   * A failure is a toast, not an alert under the tabs: it reports the press that
+   * just happened, and an alert appearing there pushed the whole centred step
+   * up by half its height. The message itself is still whoever raised it —
+   * `ImportSourceError` and the sheet route both write user-facing sentences.
+   */
+  const load = async (
+    title: string,
+    read: () => Promise<LoadedSource>,
+  ) => {
     setIsBusy(true);
 
     try {
       setSource(await read());
     } catch (cause) {
-      setError(
-        cause instanceof ImportSourceError || cause instanceof ApiError
-          ? cause.message
-          : "We couldn't read that. Export your locations as CSV and try again.",
+      toastProblem(
+        title,
+        cause instanceof ImportSourceError ? cause.message : cause,
+        "We couldn't read that. Export your locations as CSV and try again.",
       );
     } finally {
       setIsBusy(false);
@@ -64,7 +72,7 @@ export function SourceStep({
   };
 
   const onPickFile = (file: File) =>
-    void load(async () => {
+    void load("Couldn't read the file", async () => {
       const loaded = await readFile(file);
 
       if (loaded.sheetNames && loaded.sheetNames.length > 1) {
@@ -84,13 +92,17 @@ export function SourceStep({
     if (!workbook) return;
 
     setWorkbook({ ...workbook, sheetName });
-    void load(() => readFile(workbook.file, { sheetName }));
+    void load("Couldn't read that sheet", () =>
+      readFile(workbook.file, { sheetName }),
+    );
   };
 
   const onPickGoogleSheet = (reference: SheetReference) =>
-    void load(async () =>
-      finishSource(await readGoogleSheet(mapId, reference), "google-sheet"),
-    );
+    void load("Couldn't read the Google Sheet", async () => ({
+      ...finishSource(await readGoogleSheet(mapId, reference), "google-sheet"),
+      // Kept so the import can link the map to this sheet and keep it in sync.
+      sheet: reference,
+    }));
 
   return (
     /*
@@ -104,11 +116,12 @@ export function SourceStep({
      * directly above it, and the description is a fact about the file, so it
      * belongs with the file picker rather than in a header.
      *
-     * `max-w-2xl` matches the cap on the `Tabs` root in `source-tabs.tsx`, so
-     * the tab strip, the dropzone and the notes below them are one column by
-     * construction.
+     * No width of its own. The wizard caps the Source step, so the tab strip,
+     * the dropzone, the notes below them and the step trail above them are one
+     * column by construction — a second, narrower cap here is what used to
+     * leave the trail hanging off to the left of the tabs.
      */
-    <div className="mx-auto w-full max-w-2xl space-y-4">
+    <div className="space-y-4">
       <SourceTabs
         current={tab}
         onChange={setTab}
@@ -138,8 +151,6 @@ export function SourceStep({
           ? `Your ${headroom.plan} plan is full at ${formatCount(headroom.limit)} locations. Upgrade, or remove some before importing.`
           : `You can add ${formatCount(remaining)} more ${remaining === 1 ? "location" : "locations"} on your ${headroom.plan} plan.`}
       </p>
-
-      {error ? <ErrorMessage error={error} /> : null}
     </div>
   );
 }

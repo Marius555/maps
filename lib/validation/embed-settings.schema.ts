@@ -148,6 +148,13 @@ export const embedSettingsSchema = z.object({
   rowLinkStyle: z.enum(ROW_LINK_STYLES),
   /** 999 is the pill; the ceiling is the pill, not a corner anyone can pick. */
   rowLinkRadius: z.number().int().min(0).max(999),
+  /**
+   * Whether pressing a results row opens the location's card.
+   *
+   * Spelled as the card opening, so absent keeps meaning what every published
+   * row does (`packages/shared/snapshot.ts`) — while the default below is off.
+   */
+  rowCard: z.boolean(),
 
   controlsCorner: z.enum(CONTROL_CORNERS),
   compass: z.boolean(),
@@ -255,6 +262,12 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   // map being the one round-cornered thing on the page.
   rowLinkStyle: "outline",
   rowLinkRadius: 999,
+  // Off: a row press flies to the pin and marks the row, and the card stays
+  // shut. A card opened from the panel usually does not fit the part of the map
+  // the panel leaves, and the row is already saying which location it is. A pin
+  // click still opens its card — that is `card`, not this. Maps already
+  // published keep opening it until their owner republishes.
+  rowCard: false,
 
   // Lower left, which is where the editor's own zoom stack already sits
   // (components/map/use-maplibre.ts, reasoned at docs/notes/editor-and-layout.md):
@@ -335,6 +348,7 @@ export function readEmbedSettings(
       d.rowLinkStyle,
     ),
     rowLinkRadius: readNumber(settings.rowLinkRadius, 0, 999, d.rowLinkRadius),
+    rowCard: readFlag(settings.rowCard, d.rowCard),
 
     controlsCorner: readChoice(
       settings.controlsCorner,

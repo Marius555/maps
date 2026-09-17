@@ -33,6 +33,7 @@ const text = (key, opts = {}) => ({ type: "text", key, required: false, ...opts 
 const float = (key, opts = {}) => ({ type: "float", key, required: false, ...opts });
 const integer = (key, opts = {}) => ({ type: "integer", key, required: false, ...opts });
 const datetime = (key, opts = {}) => ({ type: "datetime", key, required: false, ...opts });
+const boolean = (key, opts = {}) => ({ type: "boolean", key, required: false, ...opts });
 const enumeration = (key, elements, opts = {}) => ({
   type: "enum",
   key,
@@ -50,6 +51,8 @@ export const PLANS = ["free", "starter", "pro"];
 // Hand-copied from lib/validation/collect.schema.ts, the way SHAPE_KINDS is
 // copied from lib/validation/shape.schema.ts.
 export const DEVICE_KINDS = ["desktop", "tablet", "mobile"];
+// Hand-copied from lib/sheet-sync/types.ts, on the same terms.
+export const SHEET_SYNC_STATUSES = ["ok", "partial", "failed", "needs_confirmation"];
 export const SUBSCRIPTION_STATUSES = [
   "active",
   "past_due",
@@ -229,6 +232,19 @@ export const TABLES = [
        * follows it.
        */
       text("cardBlocks"),
+      /*
+       * Which row of the map's linked Google Sheet this location came from, or
+       * absent for one added any other way.
+       *
+       * Absent is the old behaviour and the normal case: a location without a key
+       * is never touched by a sync, which is what lets an owner add a pin by hand
+       * to a map that is otherwise kept in step with a sheet.
+       *
+       * A short hash of the row's name and address (lib/sheet-sync/row-key.ts),
+       * not the text itself — the two together can run past any varchar a key
+       * belongs in. Never published: `buildSnapshot` copies fields one by one.
+       */
+      varchar("sourceKey", 64),
     ],
     indexes: [
       { key: "idx_places_mapId", type: "key", columns: ["mapId"], orders: ["asc"] },
@@ -346,6 +362,59 @@ export const TABLES = [
         type: "unique",
         columns: ["userId"],
         orders: ["asc"],
+      },
+    ],
+  },
+  {
+    // A map kept in step with a Google Sheet: which sheet, how its columns map,
+    // and how the last sync went. One row per map at most.
+    //
+    // Its own table rather than a JSON column on `maps`, because three things
+    // write it — the import that creates the link, the daily-sync switch, and
+    // the sync itself — and `maps` JSON columns are written whole by one form
+    // each (CLAUDE.md's one-writer rule). A row lets each of them write only
+    // its own columns.
+    //
+    // Dashboard-side only. Nothing here reaches a snapshot, and a sync runs on
+    // our server when the owner presses Sync now or the daily job fires — never
+    // when a visitor loads the map (§2). docs/notes/sheet-sync.md.
+    id: "sheetLinks",
+    name: "Sheet links",
+    columns: [
+      varchar("userId", 36, { required: true }),
+      varchar("mapId", 36, { required: true }),
+      // The same two pieces the import route accepts — never a URL, so a stored
+      // link cannot aim the server anywhere but docs.google.com.
+      varchar("sheetId", 200, { required: true }),
+      varchar("gid", 20),
+      boolean("published", { xdefault: false }),
+      // `{ field: header }`, as the import's mapping step left it. Read whole.
+      text("mapping"),
+      // Which row held the column names; absent when the sheet had none and the
+      // import named the columns itself.
+      integer("headerRowIndex", { min: 0 }),
+      boolean("autoSync", { xdefault: true }),
+      datetime("lastSyncedAt"),
+      enumeration("lastStatus", SHEET_SYNC_STATUSES),
+      // Counts and the rows that were skipped, for the Locations page. Read whole.
+      text("lastReport"),
+      // Addresses the geocoder recently could not place, as `{ hash: iso date }`.
+      // A sync runs in short steps and daily; without this, one bad address would
+      // be paid for again on every step of every day until someone fixed it.
+      // Expired after a week, and an edited address hashes differently anyway.
+      text("failedLookups"),
+      // A soft lock: a sync in progress sets it a few minutes ahead, so a second
+      // press or an overlapping daily run does not write the same rows twice.
+      datetime("syncingUntil"),
+    ],
+    indexes: [
+      { key: "idx_sheetlinks_mapId", type: "unique", columns: ["mapId"], orders: ["asc"] },
+      // The daily job's query: every linked map with sync on, oldest first.
+      {
+        key: "idx_sheetlinks_auto_synced",
+        type: "key",
+        columns: ["autoSync", "lastSyncedAt"],
+        orders: ["asc", "asc"],
       },
     ],
   },

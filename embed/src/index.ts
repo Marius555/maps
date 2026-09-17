@@ -286,7 +286,8 @@ async function render(
         (place) => {
           track("row", { id: place.id });
           closeDrawer?.();
-          map?.focusPlace(place);
+          // `=== false`, so a snapshot that predates `rowCard` still opens it.
+          map?.focusPlace(place, snapshot.settings.rowCard === false);
         },
         () => me,
       )

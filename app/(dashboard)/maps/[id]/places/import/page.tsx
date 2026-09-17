@@ -8,7 +8,11 @@ import { requireUser } from "@/lib/auth/current-user";
 import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
 import { loadMap } from "@/lib/repositories/load-map";
-import { PLAN_LIMITS, getUserPlan } from "@/lib/repositories/plan-limits";
+import {
+  PLAN_LIMITS,
+  getUserPlan,
+  planAllows,
+} from "@/lib/repositories/plan-limits";
 import { countPlaces } from "@/lib/repositories/places.repository";
 import type { AppMap } from "@/lib/repositories/types";
 
@@ -81,6 +85,7 @@ export default async function ImportPage(
         <ImportWizard
           map={map}
           headroom={{ plan, limit: PLAN_LIMITS[plan].places, used }}
+          canSyncSheets={planAllows(plan, "sheetSync")}
         />
       </div>
     </Container>

@@ -1,0 +1,8 @@
+{
+  "name": "sheet-sync-daily",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Runs the daily Google Sheets sync by calling the dashboard's cron route, step by step.",
+  "type": "module",
+  "main": "src/main.js"
+}

@@ -1,7 +1,6 @@
 import { Skeleton } from "@heroui/react";
 
 import { Container } from "@/components/ui/container";
-import { SectionPanelSkeleton } from "@/components/ui/skeletons";
 
 /**
  * Shown while the import wizard loads, and it always lands on the Source step.
@@ -16,36 +15,39 @@ import { SectionPanelSkeleton } from "@/components/ui/skeletons";
  * `page.tsx`, or the skeleton sits at the top and the real thing drops into the
  * middle of the screen as it arrives.
  *
- * It used to be one 156px box standing in for a 460px panel, which meant the
- * swap dropped everything below it by 300px. The body below mirrors the real
- * one: the two-up tab strip and the dashed dropzone, both at the `max-w-2xl`
- * that `source-tabs.tsx` puts on them.
+ * No panel around the body: the real step lost its `SectionPanel`, and a
+ * skeleton still drawing one arrived as a bordered box that vanished on swap.
+ * The heights are the real step's, measured: a 16px trail, 24px, a 40px tab
+ * strip, 16px, the tab cell, 16px, a 16px plan line. The cell holds both tab
+ * panels stacked (see `source-tabs.tsx`), so its height does not depend on the
+ * tab — 198px from `sm` up and 216px below it, where the sheet note wraps.
  */
 export default function ImportLoading() {
   return (
     <Container size="content" className="flex flex-col">
-      <div className="mx-auto my-auto w-full max-w-5xl">
+      <div className="mx-auto my-auto w-full max-w-2xl">
         <div className="space-y-6">
           {/* Source → Columns → Addresses → Review, as four words and three
               arrows rather than one solid bar. */}
-          <div className="flex items-center gap-x-2">
+          <div className="flex h-4 items-center gap-x-2">
             <Skeleton className="h-3 w-12 rounded-lg" />
             <Skeleton className="h-3 w-16 rounded-lg" />
             <Skeleton className="h-3 w-16 rounded-lg" />
             <Skeleton className="h-3 w-12 rounded-lg" />
           </div>
 
-          <SectionPanelSkeleton>
-            {/* The segmented control. */}
-            <Skeleton className="mx-auto h-10 w-full max-w-2xl rounded-3xl" />
-
-            {/* The dashed frame: `px-6 py-10` around an icon puck, a button, and
-                two lines of note — 245px in the real thing. */}
-            <Skeleton className="mx-auto h-[15.5rem] w-full max-w-2xl rounded-xl" />
+          <div className="space-y-4">
+            {/* The tab strip and the cell under it. */}
+            <div className="space-y-4">
+              <Skeleton className="h-10 w-full rounded-3xl" />
+              <Skeleton className="h-54 w-full rounded-xl sm:h-[12.375rem]" />
+            </div>
 
             {/* The plan-headroom line. */}
-            <Skeleton className="h-3 w-2/5 rounded-lg" />
-          </SectionPanelSkeleton>
+            <div className="flex h-4 items-center">
+              <Skeleton className="h-3 w-2/5 rounded-lg" />
+            </div>
+          </div>
         </div>
       </div>
     </Container>

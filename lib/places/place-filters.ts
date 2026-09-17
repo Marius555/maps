@@ -69,10 +69,6 @@ export function matchesFilter(place: Place, filter: PlaceFilter): boolean {
   }
 }
 
-export function countNeedingAttention(places: Place[]): number {
-  return places.filter(needsAttention).length;
-}
-
 /**
  * "Untagged", carried inside the tag selection rather than beside it.
  *

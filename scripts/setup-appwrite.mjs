@@ -153,6 +153,12 @@ function createColumn(tableId, column) {
         required: column.required,
         xdefault: column.xdefault,
       });
+    case "boolean":
+      return tablesDB.createBooleanColumn({
+        ...base,
+        required: column.required,
+        xdefault: column.xdefault,
+      });
     case "enum":
       return tablesDB.createEnumColumn({
         ...base,

@@ -19,6 +19,21 @@ import {
  * that the other four tokens still gain nothing (CLAUDE.md §7 — absent is what
  * lets `.lm-root--dark` redefine them).
  */
+/**
+ * A results row's card: off for a stored map that never answered, while the
+ * embed reads a *snapshot* with no key as on (`packages/shared/snapshot.ts`).
+ */
+describe("readEmbedSettings rowCard", () => {
+  it("keeps the card shut on a row press unless the owner asked for it", () => {
+    expect(readEmbedSettings({}).rowCard).toBe(false);
+  });
+
+  it("honours a stored answer and ignores one of the wrong type", () => {
+    expect(readEmbedSettings({ rowCard: true }).rowCard).toBe(true);
+    expect(readEmbedSettings({ rowCard: "yes" }).rowCard).toBe(false);
+  });
+});
+
 describe("readEmbedSettings colours", () => {
   it("gives an uncoloured map the product accent and nothing else", () => {
     const { colors } = readEmbedSettings({});

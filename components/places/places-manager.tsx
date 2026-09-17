@@ -8,7 +8,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageTitle } from "@/components/ui/page-title";
 import {
-  countNeedingAttention,
   matchesFilter,
   matchesTagFilter,
   type PlaceFilter,
@@ -18,12 +17,14 @@ import { usePlaces } from "@/lib/query/places";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { tagGroupsInUse, wornTagIds } from "@/lib/tags/tag-usage";
 import { tagGroupIndex } from "@/packages/shared/tags";
-import { AttentionBadge } from "./attention-badge";
+import { ImportHelpLink } from "./import-help-link";
 import { PlaceCountBadge } from "./place-count-badge";
 import { PlaceEditDialog } from "./place-form/place-edit-dialog";
 import { PlaceList } from "./place-list";
 import { PlaceTable } from "./place-table/place-table";
 import { PlacesToolbar } from "./places-toolbar";
+import { SheetSyncButton } from "./sheet-sync/sheet-sync-button";
+import type { SheetLinkView } from "@/lib/sheet-sync/types";
 
 export function PlacesManager({
   initialMap,
@@ -31,10 +32,13 @@ export function PlacesManager({
   placeLimit,
   initialFilter = "",
   initialTagIds,
+  initialSheetLink,
 }: {
   initialMap: AppMap;
   initialPlaces: Place[];
   placeLimit: number;
+  /** The map's link to a Google Sheet, or null — resolved with the rest on the server. */
+  initialSheetLink: SheetLinkView | null;
   /**
    * What the list opens filtered to, when something sent the visitor here to
    * look at a subset — the Analytics table links every count it reports.
@@ -140,8 +144,6 @@ export function PlacesManager({
     });
   }, [places, query, filter, tagIds, groupOf]);
 
-  const attention = useMemo(() => countNeedingAttention(places), [places]);
-
   const isFiltered = visible.length !== places.length;
   const editingPlace = places.find((place) => place.id === editingId) ?? null;
 
@@ -176,9 +178,12 @@ export function PlacesManager({
         tagIds={tagIds}
         hasPlaces={places.length > 0}
         actions={
-          <LinkButton variant="secondary" href={`/maps/${map.id}/places/import`}>
-            Import locations
-          </LinkButton>
+          <>
+            <SheetSyncButton mapId={map.id} initialLink={initialSheetLink} />
+            <LinkButton variant="secondary" href={`/maps/${map.id}/places/import`}>
+              Import locations
+            </LinkButton>
+          </>
         }
         onQueryChange={setQuery}
         onFilterChange={setFilter}
@@ -215,12 +220,11 @@ export function PlacesManager({
         {/*
          * Under the table, not in the toolbar.
          *
-         * These are both readings of the list rather than controls over it, and
-         * in the toolbar they were competing for the one row that has to hold
-         * the filters — between them they took about 320px, which is what made
-         * the search field and the Tags button wrap. Underneath, they read as
-         * the table's own footer: how full the map is, and how much of it wants
-         * a look.
+         * How full the map is, and where to read about filling it. In the
+         * toolbar these competed for the one row that has to hold the filters —
+         * they took about 320px between them, which is what made the search
+         * field and the Tags button wrap. Underneath, they read as the table's
+         * own footer.
          *
          * Only when there is a list. On an empty map `PlaceTable` draws an
          * invitation to add the first location, and "0 of 3,000" under it is a
@@ -230,14 +234,9 @@ export function PlacesManager({
           <div className="flex flex-wrap items-center gap-3">
             <PlaceCountBadge count={places.length} limit={placeLimit} />
 
-            <AttentionBadge
-              count={attention}
-              isActive={filter === "attention"}
-              onShow={() => setFilter(filter === "attention" ? "" : "attention")}
-            />
+            <ImportHelpLink />
 
-            {/* The one place a filtered count is said, now that the attention
-                button no longer says a second version of it in its own label. */}
+            {/* The one place a filtered count is said. */}
             {isFiltered ? (
               <p className="ml-auto text-xs text-muted" role="status">
                 Showing {visible.length} of {places.length} locations.

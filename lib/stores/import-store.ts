@@ -17,6 +17,7 @@ import type { GeocodeCandidate } from "@/lib/geocoding/types";
 import { IMPORT_FIELDS, type ImportField } from "@/lib/import/fields";
 import type { LoadedSource } from "@/lib/import/read-source";
 import { splitLatLngColumn } from "@/lib/import/split-latlng";
+import type { SheetReference } from "@/lib/import/sheet-url";
 import type { SourceKind } from "@/lib/import/sources/types";
 import { createImportStorage, RUN_MAX_AGE_MS } from "./import-persist";
 
@@ -75,6 +76,18 @@ type ImportState = {
 
   sourceKind: SourceKind | null;
   fileName: string | null;
+  /**
+   * The Google Sheet this run was read from, or null for a file.
+   *
+   * Persisted, because the import that links a map to its sheet can be resumed
+   * ten minutes and a reload later, and it has to still know which sheet.
+   */
+  sheetReference: SheetReference | null;
+  /**
+   * Whether this import should leave the map linked to its sheet. Only read for
+   * a Google Sheet, and only honoured on a plan that includes sheet sync.
+   */
+  keepInSync: boolean;
   headers: string[];
   rows: CsvRow[];
   /** True when the source was longer than we're willing to read. */
@@ -137,6 +150,7 @@ type ImportState = {
    */
   attachTo: (mapId: string) => void;
   setSource: (source: LoadedSource) => void;
+  setKeepInSync: (keepInSync: boolean) => void;
   setColumnField: (header: string, field: ImportField | undefined) => void;
   setCell: (rowIndex: number, header: string, value: string) => void;
   splitLatLng: (header: string) => void;
@@ -167,6 +181,12 @@ type ImportState = {
 };
 
 export type SplitNotice = {
+  /**
+   * The combined column the two came from. A map kept in sync stores this
+   * rather than the two new columns, which exist in this run and not in the
+   * sheet. Absent on a run persisted before it was recorded.
+   */
+  sourceHeader?: string;
   latHeader: string;
   lngHeader: string;
   /** Rows that held something unreadable. Blank cells are not counted. */
@@ -180,6 +200,8 @@ const initialState = {
   isResumed: false,
   sourceKind: null,
   fileName: null,
+  sheetReference: null as SheetReference | null,
+  keepInSync: true,
   headers: [] as string[],
   rows: [] as CsvRow[],
   truncated: false,
@@ -206,6 +228,8 @@ export const useImportStore = create<ImportState>()(
   ...initialState,
 
   setStep: (step) => set({ step }),
+
+  setKeepInSync: (keepInSync) => set({ keepInSync }),
 
   /**
    * Decide whether what was restored from disk belongs to this page.
@@ -238,6 +262,12 @@ export const useImportStore = create<ImportState>()(
       savedAt: Date.now(),
       sourceKind: source.kind,
       fileName: source.label,
+      // Re-picking the header row rebuilds the source from its cells and loses
+      // `sheet`; it is still the same sheet, so the reference is carried over.
+      sheetReference:
+        source.sheet ??
+        (source.kind === "google-sheet" ? state.sheetReference : null),
+      keepInSync: state.keepInSync,
       headers: source.headers,
       rows: source.rows,
       truncated: source.truncated,
@@ -338,6 +368,7 @@ export const useImportStore = create<ImportState>()(
         mapping,
         detection,
         splitNotice: {
+          sourceHeader: header,
           latHeader: result.latHeader,
           lngHeader: result.lngHeader,
           unparsed: result.unparsed,
@@ -437,6 +468,8 @@ export const useImportStore = create<ImportState>()(
         savedAt: state.savedAt,
         sourceKind: state.sourceKind,
         fileName: state.fileName,
+        sheetReference: state.sheetReference,
+        keepInSync: state.keepInSync,
         headers: state.headers,
         rows: state.rows,
         truncated: state.truncated,
@@ -467,6 +500,7 @@ type PersistedImport = Omit<
   | "setStep"
   | "attachTo"
   | "setSource"
+  | "setKeepInSync"
   | "setColumnField"
   | "setCell"
   | "splitLatLng"

@@ -3,7 +3,6 @@
 import { Button, Label, ProgressBar } from "@heroui/react";
 import { useEffect, useRef, useState } from "react";
 
-import { ErrorMessage } from "@/components/ui/error-message";
 import { formatCount, formatRoughDuration } from "@/lib/format/number";
 import {
   estimateGeocodeMs,
@@ -12,6 +11,7 @@ import {
 } from "@/lib/import/geocode-plan";
 import { runGeocode } from "@/lib/import/geocode-run";
 import { useGeocodeBatch } from "@/lib/query/import";
+import { toastProblem } from "@/lib/query/toast-error";
 import {
   draftFromGeocodeResult,
   useImportStore,
@@ -160,7 +160,15 @@ export function GeocodeStep({
       // Keep what resolved and let the user place the rest by hand, rather than
       // losing the whole import. A run that merely skipped a chunk or two
       // reports no error — those rows say so themselves in the review step.
-      if (summary.error) useImportStore.getState().failGeocoding(summary.error);
+      //
+      // Said once, as a toast, at the moment it happens. It used to be an
+      // alert on this step *and* again on Review, and each one moved the page
+      // as it appeared; the rows that went unplaced are flagged on Review
+      // regardless, which is the part that is still true a minute later.
+      if (summary.error) {
+        useImportStore.getState().failGeocoding(summary.error);
+        toastProblem("Address lookup stopped", summary.error);
+      }
 
       onDoneRef.current();
     });
@@ -177,7 +185,9 @@ export function GeocodeStep({
     : 0;
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4">
+    // No width of its own: the wizard caps this step, and a second cap here
+    // would pull the content away from the step trail above it.
+    <div className="space-y-4">
       <div className="space-y-1">
         <h2 className="text-sm font-semibold text-foreground">
           Looking up addresses
@@ -231,7 +241,6 @@ export function GeocodeStep({
 
       {geocodeError ? (
         <div className="space-y-3">
-          <ErrorMessage error={geocodeError} />
           <p className="text-xs text-muted">
             The addresses already found are kept. Continue to place the rest by
             hand.
