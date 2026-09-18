@@ -169,7 +169,29 @@ export function buildPopup(
     category,
     fields,
     tagChips: chips,
-    pinColor: pinColorOfChips(chips),
+    /*
+     * The pin's colour, resolved here once and to the letter of `colorOf` in
+     * map.ts — a group's answer, then the custom pin's own, then the first tag's,
+     * then a pre-merge snapshot's category.
+     *
+     * `category?.color` is still asked for at the end even though `chips` folds
+     * that chip in above, because the fold is skipped when the layout names a
+     * Category block of its own — and a card that draws the category as a chip
+     * must not lose it as a colour.
+     *
+     * **It stops where `colorOf` goes on**, deliberately: neither
+     * `settings.pinColor` nor `UNTAGGED_PIN_COLOR` is read here, so a place the
+     * map says nothing about leaves this undefined and both readers below write
+     * no custom property at all. The stylesheets' own `var()` chains then answer
+     * exactly as they did before any of this — `--lm-pin` for the logo, the
+     * accent for the button — which is what every card already on a customer's
+     * site draws (§7).
+     */
+    pinColor:
+      place.color ??
+      resolvePin(place.icon ?? "", pins)?.color ??
+      pinColorOfChips(chips) ??
+      category?.color,
     pins,
     folded: detailsContents(layout),
     me,
@@ -320,8 +342,13 @@ type BlockContext = {
    */
   tagChips: readonly TagChip[];
   /**
-   * The colour this location's pin took, so exactly one chip can be marked as
-   * its source. Worked out once per popup rather than per chip.
+   * The colour this location's pin took, worked out once per popup — see
+   * `buildPopup`, which is where the ladder is written.
+   *
+   * Two blocks read it and they are the card's only coloured parts: the Logo,
+   * which draws the pin itself, and the Button, whose ground falls back to this
+   * before it falls back to the map's accent. Undefined means the map says
+   * nothing about this location, and both answer by writing nothing.
    */
   pinColor: string | undefined;
   /** The map's pins — what a Logo block draws. */
@@ -359,14 +386,7 @@ type BlockBuilder = (
 const BUILDERS: Record<CardBlockType, BlockBuilder> = {
   gallery: (context) => buildGallery(photosOf(context.place)),
   logo: (context, block) =>
-    buildLogo(
-      context.place,
-      // The first tag's colour, falling back to the legacy category's for a
-      // snapshot published before the two merged.
-      context.pinColor ?? context.category?.color,
-      context.pins,
-      block,
-    ),
+    buildLogo(context.place, context.pinColor, context.pins, block),
   name: (context) => el("h3", "lm-popup__name", context.place.name),
   /*
    * The retired Category block, on a snapshot old enough to name it.
@@ -402,7 +422,15 @@ const BUILDERS: Record<CardBlockType, BlockBuilder> = {
   actions: (context, block) =>
     buildActions(context.place, context.fields, block, context.me),
   button: (context, block) =>
-    block ? buildButton(context.place, context.fields, block, context.me) : null,
+    block
+      ? buildButton(
+          context.place,
+          context.fields,
+          block,
+          context.me,
+          context.pinColor,
+        )
+      : null,
   divider: () => el("div", "lm-popup__divider"),
   spacer: () => el("div", "lm-popup__spacer"),
 };
@@ -643,7 +671,16 @@ function wrapBlock(
  */
 function buildLogo(
   place: SnapshotPlace,
-  fallbackColor: string | undefined,
+  /**
+   * The pin's colour, already resolved — see `BlockContext.pinColor`.
+   *
+   * Handed to `pinCssVars` as the **override** rather than the fallback, which
+   * is what makes this block agree with the marker on the map behind it. The
+   * ladder has already been walked by the time it gets here, so there is nothing
+   * left for the pin's own colour to win against; passing it as a fallback would
+   * put a custom pin's design ahead of the group that was meant to beat it.
+   */
+  color: string | undefined,
   pins: readonly CustomPinIcon[],
   /**
    * Absent for a snapshot published before the block could be asked which of
@@ -697,9 +734,7 @@ function buildLogo(
 
   // Ring, thickness, glyph colour and size, through the one helper the markers
   // and the dashboard's own preview also use.
-  for (const [name, value] of Object.entries(
-    pinCssVars(pin, undefined, fallbackColor),
-  )) {
+  for (const [name, value] of Object.entries(pinCssVars(pin, color))) {
     node.style.setProperty(name, value);
   }
 
@@ -1076,6 +1111,11 @@ function buildButton(
   block: CardBlock,
   /** Only read for a Directions button — see `buttonTargetOf`. */
   me: Fix | null,
+  /**
+   * The ground for a button the owner has not coloured — see `buttonStyleOf`,
+   * which owns that ladder, and `BlockContext.pinColor`, which owns this value.
+   */
+  pinColor: string | undefined,
 ): HTMLElement | null {
   const target = buttonTargetOf(block, place, fields, me);
   if (!target) return null;
@@ -1092,7 +1132,7 @@ function buildButton(
     block.buttonAction === "link"
       ? link("lm-popup__button", target.label, target.href)
       : directionsLink("lm-popup__button", target.label, place, me);
-  const style = buttonStyleOf(block);
+  const style = buttonStyleOf(block, pinColor);
 
   if (block.buttonFull) node.classList.add("lm-popup__button--full");
 

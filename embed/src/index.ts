@@ -275,7 +275,7 @@ async function render(
    *
    * Assigned below rather than passed in, because the list is built before the
    * drawer that holds it — picking a location is the third way out of it, after
-   * the veil and Escape, and the one that matters most: the whole reason to
+   * the trigger and Escape, and the one that matters most: the whole reason to
    * press a row is to see its pin.
    */
   let closeDrawer: (() => void) | undefined;
@@ -301,8 +301,20 @@ async function render(
     const panel = el("div", "lm-panel");
     panel.append(toolbar, list.element);
 
-    if (snapshot.settings.panelDrawer) {
-      closeDrawer = installDrawer(root, panel, toolbar);
+    /*
+     * Both answers install a drawer and only the axis differs; **the key being
+     * absent is the third answer**, and it is the one that must not reach here.
+     * Stacking is what every snapshot published before this setting existed
+     * draws on sites we do not control (§7).
+     */
+    if (snapshot.settings.panelDrawer !== undefined) {
+      closeDrawer = installDrawer(
+        root,
+        panel,
+        list.element,
+        toolbar,
+        snapshot.settings.panelDrawer,
+      );
     }
 
     /*
@@ -438,21 +450,64 @@ function applyChrome(root: HTMLElement, snapshot: MapSnapshot): void {
  */
 const DRAWER_MAX_WIDTH = 768;
 
+/** How far a pointer travels on the strip before a press becomes a drag. */
+const SHEET_SLOP = 6;
+
 /**
- * The results panel as a drawer, on a narrow map.
+ * How far the sheet must travel before release snaps it to the other state.
+ *
+ * Distance, not velocity, and the same 48 the dashboard's sheet uses: a flick
+ * has already passed 48px before the finger lifts, and a velocity test would
+ * make a slow deliberate half-drag land back where it started — the one case
+ * where a person is clearly saying what they want.
+ */
+const SHEET_SNAP = 48;
+
+/**
+ * The results panel as a drawer on a narrow map — parked at the bottom or off
+ * the side, and the setting chooses which.
  *
  * Returns the function that shuts it, or `undefined` when the snapshot did not
- * ask for one — absent means the stacked layout every published map draws today
- * (§7), so nothing here runs for a file written before the setting existed.
+ * ask for one. **`panelDrawer` absent is the third answer**: the stacked layout
+ * every map published before the setting existed draws, and still has to (§7),
+ * so nothing here runs for those files. `false` is not the same thing — it is an
+ * owner who has seen the switch and turned it off, and what they get is the side
+ * drawer this had before the sheet replaced it.
  *
- * **The toolbar moves, and it has to be JavaScript that moves it.** Shut, the
- * drawer is off the edge, and a search box inside it is a search box a visitor
- * cannot reach — so at narrow widths the toolbar comes out of the panel and
- * floats over the map, which is the arrangement a list-less map already uses. No
- * stylesheet can do that: `.lm-panel` is the containing block for its own
- * absolutely-positioned children, so a toolbar inside it travels with the
- * translate however it is positioned. Hence the observer, which is also the only
- * honest way to ask a container query's question from script.
+ * **Two axes, one mechanism.** `data-lm-drawer` carries `"sheet"` or `"side"`,
+ * and everything under it is shared: `data-lm-open`, `list.inert`, Escape, and
+ * the toolbar move below. What differs is the trigger, and it differs only
+ * because the two parks leave it nowhere else to be:
+ *
+ * - **Sheet** keeps 44px of the panel on screen, and that strip *is* the
+ *   trigger. It says a list is there, it is a real `<button>` so a keyboard and
+ *   a mouse both toggle it, and it is draggable so a thumb can throw it open —
+ *   the same gesture `components/ui/bottom-sheet.tsx` runs on the dashboard,
+ *   down to the 6px of slop and the 48px snap. An owner who has used the editor
+ *   should not have to learn a second one on the map they published.
+ * - **Side** parks the whole panel off the edge with nothing of it showing, so
+ *   the trigger has to live somewhere else: a hamburger in the floating toolbar,
+ *   which is where it was until the sheet arrived. Lines, because the thing it
+ *   opens is a list, and drawn rather than written for the room — it shares a
+ *   row with the search field at 390px.
+ *
+ * **Neither gets a veil and neither moves focus**, and that is the part of the
+ * side drawer deliberately left behind. A scrim would end the map behind the
+ * panel still working, which is why the editor's sheet has none either — the
+ * side drawer shuts on a press outside it instead, which lets that press
+ * through to the map (see below). And `panel.focus()` is the subject of the
+ * warning in `setOpen`: both triggers are real buttons carrying
+ * `aria-expanded`, so there is nowhere focus needs to be sent.
+ *
+ * **The toolbar moves, and it has to be JavaScript that moves it.** Parked
+ * either way, most of the panel is off screen, and a search box inside the part
+ * that is not showing is a search box a visitor cannot reach — so at narrow
+ * widths the toolbar comes out of the panel and floats over the map, which is
+ * the arrangement a list-less map already uses. No stylesheet can do that:
+ * `.lm-panel` is the containing block for its own absolutely-positioned
+ * children, so a toolbar inside it travels with the transform however it is
+ * positioned. Hence the observer, which is also the only honest way to ask a
+ * container query's question from script.
  *
  * A `ResizeObserver` on the root rather than a `matchMedia`, for the reason
  * written at the top of the stylesheet: this widget is a div on somebody else's
@@ -461,90 +516,211 @@ const DRAWER_MAX_WIDTH = 768;
 function installDrawer(
   root: HTMLElement,
   panel: HTMLElement,
+  list: HTMLElement,
   toolbar: HTMLElement,
+  /** The owner's answer: a bottom sheet, or the side drawer. */
+  sheet: boolean,
 ): () => void {
-  root.setAttribute("data-lm-drawer", "1");
-
-  // Lines, because the thing it opens is a list. Drawn rather than written for
-  // the room: this shares a row with the search field at 390px.
-  const trigger = button("lm-button lm-button--icon", "");
-  trigger.setAttribute("aria-label", "Show the locations");
-  trigger.setAttribute("aria-expanded", "false");
-  trigger.append(icon(["M4 6h16", "M4 12h16", "M4 18h16"]));
-
-  const veil = el("div", "lm-veil");
+  root.setAttribute("data-lm-drawer", sheet ? "sheet" : "side");
 
   /*
-   * The panel takes focus when it opens, rather than its first row.
+   * The one control, in whichever form this axis can show.
    *
-   * A row is a button that moves the map, so landing on one puts a visitor one
-   * stray Enter from a place they did not pick. The panel itself is only
-   * focusable programmatically (`-1`), which is what lets it be the landing
-   * point without joining the tab order.
+   * The strip's text *is* its accessible name, so there is no `aria-label` to
+   * keep in step with it; the hamburger has no text, so it carries one. The
+   * pill above the strip's words is a `::before`.
+   *
+   * **`aria-expanded` and no `aria-controls`, deliberately.** For the sheet the
+   * list is this button's own next sibling, which is the disclosure pattern ARIA
+   * describes — and there `aria-controls` is optional, thinly supported by
+   * screen readers, and would cost the list a literal `id` that a second map on
+   * the page would collide with. The hamburger is not a sibling of the list, but
+   * naming one there and not here is two answers to one question for a property
+   * that buys nothing in either.
+   *
+   * **The strip says the word and no count, and that is a correctness call
+   * before it is a byte one.** A total printed there is the snapshot's, and the
+   * list under it is whatever the search box and find-nearest have left — so it
+   * would read "Locations · 40" over three matching rows, which is worse than
+   * saying nothing. A live count means a callback out of `setPlaces`, which
+   * costs more than it is worth for a number a visitor did not ask for; the
+   * editor's strip carries one because managing the list is the whole point of
+   * that screen.
    */
-  panel.tabIndex = -1;
+  const trigger = button(
+    sheet ? "lm-grip" : "lm-button lm-button--icon",
+    // The strip says the word; the hamburger is a glyph and carries the same
+    // word as its label below.
+    sheet ? "Locations" : "",
+  );
+
+  if (!sheet) {
+    // The same name the strip carries, which is one control named once rather
+    // than two names for one job — and `aria-expanded` is what says which state
+    // it is in, on either axis.
+    trigger.ariaLabel = "Locations";
+    trigger.append(icon(["M4 6h16", "M4 12h16", "M4 18h16"]));
+  }
+
+  // Reflected rather than `setAttribute`, here and in `setOpen`. Baseline 2023,
+  // the same vintage as the `inert` and `:has()` this bundle already needs.
+  trigger.ariaExpanded = "false";
 
   let open = false;
 
-  const setOpen = (next: boolean, moveFocus: boolean) => {
+  const setOpen = (next: boolean) => {
     if (next === open) return;
 
     open = next;
-    trigger.setAttribute("aria-expanded", String(next));
+    trigger.ariaExpanded = String(next);
     /*
-     * What actually keeps a shut drawer out of reach.
+     * What actually keeps the parked part of the panel out of reach, and **note
+     * that it is the list rather than the panel**.
      *
-     * Parked off the edge it is still tabbable, and `.lm-root`'s `overflow:
-     * hidden` means focusing a row inside it scrolls the root and drags the map
-     * sideways. `inert` takes the whole subtree out of the tab order and the
-     * accessibility tree, and — unlike the `visibility` this replaced — it flips
-     * synchronously, so the `focus()` below lands instead of silently failing
-     * against a style the transition has not applied yet.
+     * The sheet's strip lives inside `.lm-panel`, so marking the panel inert
+     * would take that axis's own trigger out of the tab order with it. The list
+     * is the part that is off screen in both, and the dashboard's sheet puts
+     * `inert` on its content wrapper for exactly this reason.
+     *
+     * Why it is needed at all: parked out of view the rows are still tabbable,
+     * and `.lm-root`'s `overflow: hidden` is still scrollable programmatically —
+     * so focusing a row scrolls the root and drags the map out from under the
+     * panel. `inert` takes the whole subtree out of the tab order and the
+     * accessibility tree, and flips synchronously.
+     *
+     * **The evidence is `root.scrollLeft` 0 → 284, measured on the side
+     * drawer**; parked downwards it is `scrollTop` instead. One trap, two axes,
+     * one answer — which is why this line is not inside a branch.
      */
-    panel.inert = !next;
+    list.inert = !next;
 
-    if (next) {
-      root.setAttribute("data-lm-drawer-open", "1");
-      // Before the toolbar in source, so the trigger stays pressable over it —
-      // both are z-index 2 on the same parent, so the later one paints on top.
-      root.prepend(veil);
-    } else {
-      root.removeAttribute("data-lm-drawer-open");
-      veil.remove();
-    }
-
-    /*
-     * Only when a person did this. The observer below shuts the drawer on its
-     * way to the wide layout, and stealing focus for a resize would take it off
-     * whatever the visitor was actually using.
-     *
-     * **`preventScroll` is what stops the map sliding, and without it this whole
-     * animation reads backwards.** At the instant focus lands the panel is still
-     * parked at `translateX(100%)`, so the browser does what it does for any
-     * focused element outside its scroll port: it scrolls the nearest scrollable
-     * ancestor to reveal it. That is `.lm-root`, which is `overflow: hidden` —
-     * hidden is still scrollable programmatically — and the map is inside it, so
-     * `root.scrollLeft` jumped the panel's full width and then decayed back to 0
-     * over the slide. Measured in the browser: 212 → 78 → 19 → 0 across the
-     * 180ms, with the basemap dragged the same distance under a drawer that
-     * looked stationary. The panel is about to arrive under its own transform;
-     * nothing needs scrolling to it.
-     *
-     * The stylesheet's note about a focused *row* doing this is the same trap
-     * from the other side, and `inert` is what answers that one.
-     */
-    if (moveFocus) (next ? panel : trigger).focus({ preventScroll: true });
+    if (next) root.setAttribute("data-lm-open", "1");
+    else root.removeAttribute("data-lm-open");
   };
 
-  trigger.addEventListener("click", () => {
-    setOpen(!open, true);
+  /*
+   * The drag.
+   *
+   * Pointer events and three window listeners — the pattern every gesture in
+   * this repo runs, because HTML5 drag does not fire on touch at all and this
+   * one exists for phones first. The pan is refused declaratively by
+   * `touch-action: none` on the strip; `preventDefault()` here would do nothing.
+   */
+  trigger.addEventListener("pointerdown", (down) => {
+    // The sheet's alone. A side drawer has no strip to drag — its trigger is a
+    // 36px button in a toolbar, where a drag is a mispress rather than a
+    // gesture, and there is no travel to measure because none of the panel is
+    // on screen to follow the finger.
+    if (!sheet) return;
+
+    /*
+     * Asked of the DOM at press time rather than tracked, because it is the one
+     * number that cannot be wrong that way: the sheet is a percentage of a box
+     * whose height changes when a phone's browser chrome collapses, and a travel
+     * measured once is a sheet that stops short of its own edge afterwards.
+     */
+    const travel = panel.offsetHeight - trigger.offsetHeight;
+    if (travel <= 0) return;
+
+    const { style } = panel;
+    const startOffset = open ? travel : 0;
+    let offset = startOffset;
+    let moved = false;
+
+    const onMove = (move: PointerEvent) => {
+      const delta = down.clientY - move.clientY;
+      if (!moved && Math.abs(delta) < SHEET_SLOP) return;
+
+      moved = true;
+      // The sheet has to be under the finger, not 180ms behind it.
+      style.transition = "none";
+      offset = Math.min(travel, Math.max(0, startOffset + delta));
+      style.transform = `translateY(${String(travel - offset)}px)`;
+    };
+
+    const bind = (op: typeof addEventListener) => {
+      op("pointermove", onMove);
+      op("pointerup", onEnd);
+      op("pointercancel", onEnd);
+    };
+
+    const onEnd = () => {
+      bind(removeEventListener);
+
+      /*
+       * Both cleared *before* `setOpen`, in the same task, so the browser sees
+       * one style change: it interpolates the stylesheet's resting transform
+       * from wherever the finger left the sheet. Clearing them afterwards would
+       * snap it back and then slide it.
+       *
+       * Short of the snap there is deliberately nothing else to do — handing the
+       * transform back to CSS has already returned it to where it started.
+       */
+      style.transition = "";
+      style.transform = "";
+
+      /*
+       * **A press that never became a drag is the toggle, and it is handled here
+       * rather than in the click listener.** The alternative was a `swallowClick`
+       * flag: the strip is a real button, so a pointer released after 200px of
+       * dragging fires a click too, and that click would undo the drag that just
+       * landed. Deciding it on the gesture's own terms needs no state to leave
+       * armed against an unrelated click later.
+       */
+      if (!moved) {
+        setOpen(!open);
+        return;
+      }
+
+      const delta = offset - startOffset;
+      if (delta > SHEET_SNAP) setOpen(true);
+      else if (delta < -SHEET_SNAP) setOpen(false);
+    };
+
+    bind(addEventListener);
   });
-  veil.addEventListener("click", () => {
-    setOpen(false, true);
+
+  /*
+   * The click, which is the side drawer's whole interface and the sheet's
+   * keyboard half.
+   *
+   * `detail` is the click count, and it is **0 for a click a browser synthesises
+   * from Enter or Space** — every pointer-driven click carries at least 1. The
+   * sheet needs that test, because its own pointer gesture above has already
+   * decided what a press meant and a second answer here would undo it. The
+   * hamburger has no gesture to disagree with, so it takes every click.
+   */
+  trigger.addEventListener("click", (event) => {
+    if (!sheet || !event.detail) setOpen(!open);
   });
+
   root.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") setOpen(false, true);
+    if (event.key === "Escape") setOpen(false);
   });
+
+  /*
+   * **The side drawer shuts on a press anywhere outside it, because open it
+   * covers its own trigger.** The hamburger sits at the end of the floating
+   * toolbar, which is exactly the edge the panel slides in over — measured at
+   * 390px: trigger at x=344, open panel from x=80 to 380 at the z-index above
+   * it. On a phone there is no Escape key, so without this the only way out was
+   * to pick a location. The sheet needs none of it: its strip is the top of the
+   * panel and is still there to press.
+   *
+   * A listener rather than the `.lm-veil` this used to have, and the difference
+   * is the one the sheet was built on: a scrim swallows the press, so the map
+   * behind it stops working until the panel is dismissed. This lets the press
+   * through — a tap on the map shuts the drawer *and* reaches the map, so a pin
+   * pressed past the panel opens its card in one go. The toolbar is excluded so
+   * that typing in the search field does not shut the list it is filtering.
+   */
+  if (!sheet) {
+    root.addEventListener("pointerdown", ({ target }) => {
+      if (!panel.contains(target as Node) && !toolbar.contains(target as Node)) {
+        setOpen(false);
+      }
+    });
+  }
 
   /*
    * `null` rather than `false`, so the first callback always lands: an observer
@@ -561,27 +737,34 @@ function installDrawer(
 
     if (next) {
       toolbar.classList.remove("lm-toolbar--docked");
-      toolbar.append(trigger);
       // On the root, where the list-less map already puts it, and after the
       // layout so it paints over the map.
       root.append(toolbar);
+      /*
+       * The strip is the panel's first child, which is why this waits until the
+       * toolbar has left it. The hamburger rides in that toolbar instead — the
+       * toolbar floating over the map is the whole reason a side drawer can
+       * have a trigger at all.
+       */
+      if (sheet) panel.prepend(trigger);
+      else toolbar.append(trigger);
       // Set here as well as in `setOpen`, which returns early when the state
       // has not changed — arriving narrow, the drawer is already shut.
-      panel.inert = !open;
+      list.inert = !open;
       return;
     }
 
-    setOpen(false, false);
+    setOpen(false);
     trigger.remove();
     // Back in the flow and reachable again: `inert` belongs to the drawer, not
-    // to the panel.
-    panel.inert = false;
+    // to the list.
+    list.inert = false;
     toolbar.classList.add("lm-toolbar--docked");
     panel.prepend(toolbar);
   }).observe(root);
 
   return () => {
-    setOpen(false, false);
+    setOpen(false);
   };
 }
 

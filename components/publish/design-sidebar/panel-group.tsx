@@ -114,8 +114,16 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
               isSelected={settings.panelScrollbar}
               onChange={(value) => set("panelScrollbar", value)}
             />
+            {/* **Named for what it turns on, because both positions are a
+                drawer.** On it is the bottom sheet a thumb drags up; off it is
+                the side drawer behind a button in the toolbar, which is what
+                this had before the sheet. The old label said "on narrow
+                screens", which read as the only alternative being no drawer at
+                all — and the stacked layout it seemed to promise is now reached
+                by neither position, being what a snapshot written before this
+                setting draws and nothing else (§7). */}
             <PropertySwitch
-              label="Use a drawer on narrow screens"
+              label="Use a bottom drawer"
               isSelected={settings.panelDrawer}
               onChange={(value) => set("panelDrawer", value)}
             />

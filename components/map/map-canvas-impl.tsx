@@ -33,7 +33,7 @@ import type {
   Shape,
 } from "@/lib/repositories/types";
 import type { Selection, Viewport } from "@/lib/stores/editor-store";
-import type { CustomPinIcon } from "@/packages/shared/pin-icons";
+import { resolvePin, type CustomPinIcon } from "@/packages/shared/pin-icons";
 import { shapeBounds, type ShapeBounds } from "@/packages/shared/shapes";
 import { tagChipsOf } from "@/packages/shared/tags";
 import { useAddModeGhost } from "./add-location/use-add-mode-ghost";
@@ -915,6 +915,28 @@ export default function MapCanvasImpl({
           fields={fields ?? []}
           tagChips={
             selectedPlace ? tagChipsOf(tagGroups ?? [], selectedPlace.tags) : []
+          }
+          /*
+           * The colour this pin is actually wearing, through the same resolver
+           * the markers beside it went through — `colorFor`, which is
+           * `groupColorIndex.forPlace`. The pin's own colour is handed in as the
+           * second argument rather than left for the resolver to look up, which
+           * is the contract `colorFor` states and what `use-map-export.ts` does
+           * for the same reason.
+           *
+           * Without this the card would resolve tags and a custom pin for
+           * itself and miss the one answer only the map has: a **group's**. A
+           * canvas that passes no `colorFor` — the import review, which has no
+           * map loaded — passes nothing here either, and the card falls back to
+           * working it out, which is all those drafts have.
+           */
+          pinColor={
+            selectedPlace && colorFor
+              ? colorFor(
+                  selectedPlace,
+                  resolvePin(selectedPlace.icon, pinIcons)?.color ?? undefined,
+                )
+              : undefined
           }
           // The same pins the markers are drawn from, so a card holding a Logo
           // block shows the pin its own location wears.

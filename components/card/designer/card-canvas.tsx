@@ -92,6 +92,7 @@ export function CardCanvas({
   place,
   tagChips,
   fields,
+  pinColor,
   pinIcons,
   selectedId,
   justLanded,
@@ -108,6 +109,14 @@ export function CardCanvas({
   /** The sample location's tags, resolved — see `CardBlockData`. */
   tagChips: readonly TagChip[];
   fields: MapField[];
+  /**
+   * What colour to draw the sample pin in — the Logo block and an uncoloured
+   * Button both read it. See `CardBlockData.pinColor`.
+   *
+   * The designer has no map in scope, so this is the sample location's own
+   * answer, or whatever the Preview fold has been set to instead.
+   */
+  pinColor?: string;
   /** The map's pins — what a Logo block draws. */
   pinIcons: CustomPinIcon[];
   /**
@@ -217,6 +226,7 @@ export function CardCanvas({
     place,
     tagChips,
     fields,
+    pinColor,
     pinIcons,
     folded: detailsContents(layout),
     // The one flag every designer-only difference reads. See `CardBlockData`:

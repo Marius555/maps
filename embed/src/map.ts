@@ -77,6 +77,7 @@ import {
   registerPinImageBitmaps,
   registerPinImages,
 } from "@/packages/shared/pin-raster";
+import { blankMissingIcons } from "@/packages/shared/missing-icons";
 
 /**
  * The map itself: source, layers, clustering and popups.
@@ -328,6 +329,10 @@ export function createMap(
         : {}),
     },
   });
+
+  // The basemap's sprite has gaps, and a customer's console is no place to
+  // announce them. See packages/shared/missing-icons.ts.
+  blankMissingIcons(map);
 
   /*
    * Which controls, and in which corner — the owner's, with absent meaning what

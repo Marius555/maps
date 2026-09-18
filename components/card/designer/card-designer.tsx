@@ -32,7 +32,7 @@ import {
   type CardLayout,
 } from "@/packages/shared/card-layout";
 import { resolvePin } from "@/packages/shared/pin-icons";
-import { tagChipsOf } from "@/packages/shared/tags";
+import { pinColorOfChips, tagChipsOf } from "@/packages/shared/tags";
 import { previewChips } from "@/lib/card/preview-chips";
 import { SAMPLE_CHIP_COUNT, SAMPLE_PLACE } from "@/lib/card/sample-place";
 import { BlockPalette } from "./block-palette";
@@ -255,6 +255,19 @@ export function CardDesigner({
     places.length === 0 ? SAMPLE_CHIP_COUNT : null,
   );
 
+  /**
+   * A colour to put under the card for as long as somebody is looking at it —
+   * `chipPreview`'s twin, and null means the sample location's own.
+   *
+   * It exists because a card's colours come from the pin: the Logo block draws
+   * one, and a Button nobody has coloured takes the pin's colour for its ground
+   * (`buttonStyleOf`). So one design is a blue card on one group of locations
+   * and a red one on the next, and this canvas can only ever draw whichever
+   * location it picked. **It writes nothing** — see `PinColorPreview`, and
+   * `CardBlockData.pinColor` for where it lands.
+   */
+  const [pinPreview, setPinPreview] = useState<string | null>(null);
+
   const isDirty = !sameCardLayout(draft, baseline);
 
   /**
@@ -471,6 +484,27 @@ export function CardDesigner({
     [initialMap.tagGroups, sample, chipPreview],
   );
 
+  /*
+   * What the sample location's pin is actually wearing, which is what the canvas
+   * draws until somebody sets a preview colour and what clearing one returns to.
+   *
+   * Two rungs of the ladder and not three: a **group** is the one this tool
+   * cannot see, because the designer is account-level and a group is a fact
+   * about one map's locations. That is exactly the gap `pinPreview` above fills
+   * by hand, and it is why the control exists at all rather than being an
+   * oversight worth fixing here.
+   *
+   * `tagChips` rather than the sample's raw tags, so a map with no locations
+   * reads the same colourless stand-ins the chips do — an invented colour here
+   * would paint the sample pin something the map has never heard of.
+   */
+  const samplePinColor = useMemo(
+    () =>
+      resolvePin(sample?.icon ?? "", initialMap.pinIcons)?.color ??
+      pinColorOfChips(tagChips),
+    [sample, initialMap.pinIcons, tagChips],
+  );
+
   const logoHasImage = useMemo(
     () => Boolean(resolvePin(sample?.icon ?? "", initialMap.pinIcons)?.image),
     [sample?.icon, initialMap.pinIcons],
@@ -570,6 +604,9 @@ export function CardDesigner({
                 place={sample}
                 tagChips={tagChips}
                 fields={initialMap.fields}
+                /* The sample's own colour, or the one the Preview fold has been
+                   set to — see `pinPreview`. */
+                pinColor={pinPreview ?? samplePinColor}
                 pinIcons={initialMap.pinIcons}
                 selectedId={selectedId}
                 justLanded={justLanded}
@@ -695,6 +732,9 @@ export function CardDesigner({
                   fields={initialMap.fields}
                   chipPreview={chipPreview}
                   onChipPreview={setChipPreview}
+                  pinPreview={pinPreview ?? samplePinColor}
+                  samplePinColor={samplePinColor}
+                  onPinPreview={setPinPreview}
                   onCard={(patch) => commit({ ...draft, ...patch })}
                   onBlock={(id, patch) => commit(resizeCardBlock(draft, id, patch))}
                   /*

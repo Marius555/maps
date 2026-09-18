@@ -133,23 +133,32 @@ function activePreset(block: CardBlock): string | null {
 
 export function ButtonPresets({
   block,
+  pinColor,
   onChange,
 }: {
   block: CardBlock;
+  /** What the button draws when it has no colour of its own — see `buttonStyleOf`. */
+  pinColor?: string;
   onChange: (patch: BlockPatch) => void;
 }) {
   const active = activePreset(block);
 
   /*
-   * The owner's own colour, or the accent the stylesheet falls back to.
+   * The colour the button on the canvas is actually drawn in: the owner's own,
+   * else the pin's, else the accent the stylesheet falls back to.
+   *
+   * The middle rung is the one that matters since an uncoloured button started
+   * taking the pin's colour. Without it these five swatches painted the accent
+   * over a card whose button was green, which is five previews of a button that
+   * does not exist.
    *
    * A custom property rather than five copies of the same conditional, and the
-   * fallback is a `var()` rather than a literal for the reason every colour on
-   * this card is: `--accent` is what an unstyled button actually draws, in
-   * whichever theme the panel happens to be open in.
+   * last fallback is a `var()` rather than a literal for the reason every colour
+   * on this card is: `--accent` is what an unstyled button draws when nothing
+   * decided a colour, in whichever theme the panel happens to be open in.
    */
   const swatchVars = {
-    "--swatch": block.buttonBackground || "var(--accent)",
+    "--swatch": block.buttonBackground || pinColor || "var(--accent)",
   } as CSSProperties;
 
   return (

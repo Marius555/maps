@@ -156,13 +156,20 @@ export function createList(
    *
    * `scrollIntoView({ block: "nearest" })` is what this was, and it is the bug
    * behind "pressing Nearest to me drags the sidebar out and I can't get rid of
-   * it". On a narrow map the results panel is a drawer parked off the edge at
-   * `translateX(100%)`, and `.lm-root` is `overflow: hidden` — which is still
-   * scrollable programmatically. Asked to reveal a row inside that panel, the
+   * it". On a narrow map the results panel is a drawer parked off screen, and
+   * `.lm-root` is `overflow: hidden` — which is still scrollable
+   * programmatically. Asked to reveal a row inside that panel, the
    * browser does the only thing it can: it scrolls the nearest scrollable
    * ancestor, which is the root, and the basemap goes with it. The panel appears
-   * to slide in, but nothing *opened* it — no veil, no `data-lm-drawer-open`, so
-   * there is nothing to press to make it go away.
+   * to slide in, but nothing *opened* it — no `data-lm-open`, so there is
+   * nothing to press to make it go away.
+   *
+   * **The trap exists on both axes and this answers on `scrollTop`.** The
+   * measurements behind it are from the side drawer, where it was `scrollLeft`;
+   * a sheet turns it 90 degrees, and the switch means a map can be either. That
+   * costs nothing, because the fix never touched an ancestor on either axis — a
+   * row is revealed by scrolling the list it is in, and the list only ever
+   * scrolls vertically.
    *
    * Every route into a card lands here (`onSelect` → `select`), so the same
    * thing happened on a plain pin click. `inert` in `installDrawer` answers the

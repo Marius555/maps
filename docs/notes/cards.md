@@ -313,6 +313,26 @@ building the same card from the same functions in `packages/shared/`.
 - **A button's outline is a width, and the colour is optional on it** — unlike a chip's
   indivisible pair — because a button has `currentColor` under its edge. Both stylesheets
   fall back to `currentColor`; the control writes only a width and never seeds a colour.
+- **A button with no ground of its own takes the pin's, and "no ground" is still
+  absence.** `buttonStyleOf(block, pinColor)` is the ladder: the block's own
+  `buttonBackground`, then the pin's colour, then nothing at all — which leaves
+  `var(--card-button-bg, var(--card-accent, …))` and its `--lm-` twin in charge, exactly
+  as before. A location's own card override wins over all of it for free, being a whole
+  resolved block. **No field was added**, and that was the choice rather than the
+  shortcut: `hex()` rejects a sentinel, so the alternative was a stored flag written onto
+  every fresh card to say what absent could simply mean.
+- **That one changes cards already published, deliberately (§7).** Absent used to mean
+  the map's accent for every location on it; it means each location's own pin now, so a
+  live embed moves on the next `/embed` deploy without its owner republishing — the tag
+  chips and the toolbar resizes are the same trade. It was asked for directly: a group
+  coloured blue should produce blue cards.
+- **`pinColor` must be the same answer the marker took, not a second walk of the same
+  ladder.** `groupColorIndex.forPlace` (dashboard) and `colorOf` (embed) are the two
+  statements of it, and both renderers hand the resolved string in — `pinColor` on
+  `CardBlockData`, `BlockContext.pinColor` in the popup. A card that resolved it itself
+  would be a fourth renderer free to disagree, and what it would miss is a **group**: a
+  snapshot carries no groups at all, only `SnapshotPlace.color`, which publish writes
+  only when one actually decided.
 - A new Button arrives full width (`defaultButtonFull`, read only by `makeCardBlock`).
 - A Label may contain spaces: `resizeCardBlock` must **not** normalise `buttonLabel`
   mid-typing. `readBlock` still collapses and trims on the way in.
@@ -613,15 +633,29 @@ more here than any amount of cleverness about contrast.
   `"image"` = the logo always, empty block if there is none. **`"image"` must not fall back
   to the pin** or Mixed is a second word for something that already exists.
 - Both renderers had to learn this together — the first attempt was real twin drift.
-- **The two renderers' untagged fallback now agrees by default rather than by design, and
-  that is not the same as agreeing.** The embed reads `--lm-pin`, which `applyChrome`
-  writes from `settings.pinColor`; the dashboard's `PinPreview` reads `var(--accent)`
-  (`app/globals.css`). `DEFAULT_EMBED_SETTINGS.pinColor` is that same accent, so an
-  undesigned map draws the same colour on both sides — but an owner who changes **Default
-  pin** in the Colours fold moves only the published half, and the card designer keeps
-  previewing the orange. Left alone deliberately: the designer is an account-level tool
-  with no map in scope, so it has no per-map colour to read. If a Logo block ever needs the
-  real one, the seam is `PinPreview`'s `fallbackColor`, not a new token.
+- **The colour arrives as the *override*, not the fallback, in both renderers.**
+  `pinCssVars(pin, color)` in the embed and `PinPreview`'s `color` prop on the dashboard.
+  The ladder has been walked by the caller, so there is nothing left for the pin's own
+  colour to win against; handed in as a fallback it would put a custom pin's design ahead
+  of the group meant to beat it, and the card would draw a different colour from the
+  marker it opened off. The dashboard's `Logo` used to pass only a fallback, on the
+  reasoning that "a card is not looking at a group" — it is now, through
+  `CardBlockData.pinColor`.
+- **The two renderers' untagged fallback agrees by default rather than by design, and
+  that is not the same as agreeing.** With nothing decided, neither writes a property:
+  the embed lands on `--lm-pin`, which `applyChrome` writes from `settings.pinColor`, and
+  the dashboard's `PinPreview` on `var(--accent)` (`app/globals.css`).
+  `DEFAULT_EMBED_SETTINGS.pinColor` is that same accent, so an undesigned map draws the
+  same colour on both sides — but an owner who changes **Default pin** in the Colours
+  fold moves only the published half. Left alone deliberately: the designer is an
+  account-level tool with no map in scope, so it has no per-map colour to read.
+- **What the designer *can* do about having no map in scope is let somebody put a colour
+  under the card by hand.** `PinColorPreview` in the Preview fold — `chipPreview`'s twin,
+  writing nothing, absent from the per-pin editor for the same reason (there the real pin
+  is on screen). It seeds from the sample location's own colour, so the designer opens on
+  the truth rather than on a literal, and it feeds `CardCanvas`'s `pinColor`, so it moves
+  the sample pin and the button's ground together. The Button panel's own Colour wheel
+  opens on it too, which is what stops a cleared field reading as "no colour".
 
 ### Per-pin overrides
 

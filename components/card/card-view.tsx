@@ -37,6 +37,7 @@ export function CardView({
   place,
   fields,
   tagChips,
+  pinColor,
   pinIcons,
   className,
   renderEmptyState,
@@ -56,6 +57,12 @@ export function CardView({
    * resolve.
    */
   tagChips?: readonly TagChip[];
+  /**
+   * The colour this location's pin is wearing, already resolved — see
+   * `CardBlockData.pinColor`. The caller passes it because a group is a fact
+   * about the *map*, and this component is handed one location.
+   */
+  pinColor?: string;
   /** The map's pins — where a Logo block's picture comes from. */
   pinIcons: CustomPinIcon[];
   className?: string;
@@ -140,6 +147,7 @@ export function CardView({
     place,
     fields,
     tagChips: tagChips ?? [],
+    pinColor,
     pinIcons,
     folded: detailsContents(layout),
   };

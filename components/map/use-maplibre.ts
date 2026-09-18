@@ -13,6 +13,7 @@ import { carryRuntimeLayers } from "@/lib/map/carry-style";
 import { resolveStyleUrl, type MapStyleKey } from "@/lib/map/style";
 import { collapseAttribution } from "@/packages/shared/attribution";
 import { loadMapStyle } from "@/packages/shared/load-style";
+import { blankMissingIcons } from "@/packages/shared/missing-icons";
 import type { MapAppearance } from "@/packages/shared/map-appearance";
 import type { ShapeBounds } from "@/packages/shared/shapes";
 import { usePrefersDark } from "@/lib/theme/use-prefers-dark";
@@ -220,6 +221,10 @@ export function useMaplibre(
          */
         attributionControl: { compact: true },
       });
+
+      // Kept across `setStyle`, so one call covers every theme switch after it.
+      // See packages/shared/missing-icons.ts.
+      blankMissingIcons(map);
 
       /*
        * Bottom-left, and it is the only control this map has.

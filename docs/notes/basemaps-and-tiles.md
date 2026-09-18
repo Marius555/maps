@@ -38,6 +38,12 @@ rewritten; it is the record of why this area is shaped as it is.
   silently disappears (§12).
 - `lib/map/tile-style.test.ts` is the only thing holding the app's constants equal to
   `scripts/tile-style.mjs`. Each drift is silent in production.
+- **Every map constructor calls `blankMissingIcons(map)`** (`packages/shared/missing-icons.ts`)
+  — `use-maplibre.ts`, `embed/src/map.ts`, `lib/export/render-map.ts`. Liberty names POI
+  icons its sprite lacks (`ice_rink`, `sports_centre`), and MapLibre v6 warns for each; a
+  1×1 blank is today's picture without the console line. It skips `pin:` ids and
+  `DOT_IMAGE_ID` on purpose: `registerPinImages` skips any id the map already has, so a
+  blank under a pin's id hides that pin for good. Cost the embed 98 bytes.
 - **Chrome that sits *on* a map wears the map's light/dark, never the dashboard's**, and
   `mapThemeClass(style, prefersDark)` in `lib/map/style.ts` is the single answer — Auto
   asks the viewer, everything else asks the basemap. Two elements declare it, both in

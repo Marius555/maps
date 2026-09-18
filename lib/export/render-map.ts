@@ -1,5 +1,7 @@
 import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 
+import { blankMissingIcons } from "@/packages/shared/missing-icons";
+
 import type { Layout } from "./paper";
 import { zoomFor } from "./paper";
 
@@ -113,6 +115,8 @@ export async function renderMapCanvas(
       attributionControl: false,
       trackResize: false,
     });
+
+    blankMissingIcons(map);
 
     const instance = map;
     await once(instance, "load", LOAD_TIMEOUT_MS, "The map didn't load in time.");

@@ -2365,6 +2365,34 @@ describe("the button controls", () => {
     expect(buttonStyleOf({ id: "a", type: "button" })).toBeUndefined();
   });
 
+  /*
+   * The ladder an uncoloured button now falls down, which is the whole of the
+   * pin-coloured card on this side of the seam.
+   *
+   * The third rung is absence rather than a value: writing nothing leaves
+   * `var(--card-button-bg, var(--card-accent, …))` in both stylesheets in
+   * charge, which is what every card published before this drew and what a
+   * location the map says nothing about must keep drawing (§7).
+   */
+  it("take the pin's colour when the design named none", () => {
+    expect(buttonStyleOf({ id: "a", type: "button" }, "#1c7ed6")?.background).toBe(
+      "#1c7ed6",
+    );
+  });
+
+  it("keep a colour the design did name, whatever the pin is wearing", () => {
+    const style = buttonStyleOf(
+      { id: "a", type: "button", buttonBackground: "#f54600" },
+      "#1c7ed6",
+    );
+
+    expect(style?.background).toBe("#f54600");
+  });
+
+  it("still say nothing when neither the design nor the pin has an answer", () => {
+    expect(buttonStyleOf({ id: "a", type: "button" }, undefined)).toBeUndefined();
+  });
+
   it("carry the ground, the room and the corner as CSS values", () => {
     const style = buttonStyleOf({
       id: "a",

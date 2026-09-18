@@ -84,6 +84,23 @@ export type CardBlockData = {
    * falls back to when a location has no pin of its own.
    */
   tagChips: readonly TagChip[];
+  /**
+   * The colour this location's pin is wearing, when the caller already knows.
+   *
+   * The editor does: `colorFor` there is `groupColorIndex.forPlace` in
+   * lib/map/group-colors.ts, the single statement of that precedence, which the
+   * marker layer, the PNG export and publish all read — so a card that worked it
+   * out for itself would be a fourth renderer free to disagree with the other
+   * three, and a **group's** colour is exactly what it would miss. The designer
+   * passes its preview colour here instead, which is how an account-level tool
+   * with no map in scope can still show what a coloured pin does to a card.
+   *
+   * Absent, `CardBlockContent` walks the rest of the same ladder itself from the
+   * pin and the tags it has been handed — which is what the publish preview and
+   * any other caller with no groups in scope get, and is the answer those maps
+   * have always drawn.
+   */
+  pinColor?: string;
   /** What "More details" holds — see `detailsContents`. */
   folded: CardBlockType[];
   /**
@@ -133,8 +150,21 @@ export function CardBlockContent({
 }) {
   const { place, tagChips } = data;
 
-  /** What the pin outside this card is wearing — see `CardBlockData.tagChips`. */
-  const pinColor = pinColorOfChips(tagChips);
+  /*
+   * What the pin outside this card is wearing, resolved to the letter of
+   * `colorFor` in components/editor/map-editor.tsx and of `colorOf` in the
+   * embed's map.ts: a group's answer, then the custom pin's own, then the first
+   * tag's (`CardBlockData.tagChips` is in the location's own order, which is
+   * what makes "first" mean anything).
+   *
+   * Undefined is a location the map says nothing about, and every reader below
+   * answers by writing no property at all — so the pin keeps `--accent` and the
+   * button keeps `--card-accent`, which is what they have always drawn.
+   */
+  const pinColor =
+    data.pinColor ??
+    resolvePin(place.icon, data.pinIcons)?.color ??
+    pinColorOfChips(tagChips);
 
   switch (block.type) {
     case "gallery":
@@ -163,11 +193,14 @@ export function CardBlockContent({
        * mode safe on a map of four hundred locations: asking for the image is
        * asking for it *if this pin has one*, and the pin is what the rest get.
        *
-       * No `color` prop — that override belongs to a group, and a card is not
-       * looking at one. The first tag is the fallback, exactly as it is on the
-       * map: the pin's own colour first, its first tag's if it has none.
+       * The colour arrives as `PinPreview`'s **override** rather than its
+       * fallback, because the ladder has already been walked above — a group's
+       * answer included, which this block used to have no way to see. Handing it
+       * in as a fallback would put a custom pin's own design ahead of the group
+       * that is meant to beat it, and the card would then draw a different
+       * colour from the marker it opened off.
        */
-      return <Logo block={block} data={data} fallbackColor={pinColor} />;
+      return <Logo block={block} data={data} color={pinColor} />;
 
     case "name":
       return (
@@ -296,6 +329,7 @@ export function CardBlockContent({
           block={block}
           place={place}
           fields={data.fields}
+          pinColor={pinColor}
           isDesigner={data.isDesigner}
         />
       );
@@ -416,11 +450,12 @@ function Description({
 function Logo({
   block,
   data,
-  fallbackColor,
+  color,
 }: {
   block: CardBlock;
   data: CardBlockData;
-  fallbackColor: string | undefined;
+  /** The pin's colour, already resolved — see `CardBlockContent`. */
+  color: string | undefined;
 }) {
   const pin = resolvePin(data.place.icon, data.pinIcons);
   // This location's own upload first, then the image on whichever custom pin it
@@ -479,7 +514,7 @@ function Logo({
     <PinPreview
       icon={data.place.icon}
       pinIcons={data.pinIcons}
-      fallbackColor={fallbackColor}
+      color={color}
       size="fill"
     />
   );
@@ -1045,11 +1080,17 @@ function CardButton({
   block,
   place,
   fields,
+  pinColor,
   isDesigner,
 }: {
   block: CardBlock;
   place: Place;
   fields: MapField[];
+  /**
+   * The ground for a button the owner has not coloured — `buttonStyleOf` owns
+   * that ladder, and `CardBlockContent` owns this value.
+   */
+  pinColor: string | undefined;
   isDesigner?: boolean;
 }) {
   const target = buttonTargetOf(block, place, fields);
@@ -1073,7 +1114,7 @@ function CardButton({
     );
   }
 
-  const style = buttonBox(buttonStyleOf(block));
+  const style = buttonBox(buttonStyleOf(block, pinColor));
   const className = `card-button card-text${buttonModifiers(block)}`;
 
   if (isDesigner) {

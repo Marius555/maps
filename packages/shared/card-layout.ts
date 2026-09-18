@@ -2772,10 +2772,39 @@ export type CardButtonStyle = {
  *
  * Padding is a **length to add**, as a chip's is, so zero is the button the
  * stylesheet already draws and a block nobody has styled writes nothing at all.
+ *
+ * **A button with no colour of its own takes the pin's**, which is the one place
+ * this function answers with something that is not on the block. The ladder is
+ * the block's own `buttonBackground`, then `pinColor`, then — by writing nothing
+ * and leaving the stylesheets' own `var()` chain in charge — the map's accent.
+ * A location's card override sits above all of it for free, because an override
+ * is a whole resolved block and arrives here as `block`.
+ *
+ * **`pinColor` is an already-resolved string, never a place and a pin**, which is
+ * `logoImageOf`'s rule below and for its reason: this file stays free of a
+ * `pin-icons` import, and every renderer has the colour in hand by the time it
+ * asks. What it has to *be* is the same answer the marker took — a group's
+ * colour, then the custom pin's own, then the first tag's — or the card is drawn
+ * correctly for the wrong location, which is the one bug the twin renderers
+ * cannot show you.
+ *
+ * **This changes what already-published cards draw, and that was decided rather
+ * than overlooked (§7).** Absent used to mean the map's accent for every
+ * location on it; it now means each location's own pin, and a live embed picks
+ * that up on the next deploy without its owner republishing — the same trade the
+ * tag chips and the toolbar resizes were made on. What it is *not* is a stored
+ * field: `hex()` at the foot of this file rejects a sentinel outright, and a
+ * flag would have had to be written onto every fresh card to say what absent can
+ * simply mean.
  */
-export function buttonStyleOf(block: CardBlock): CardButtonStyle | undefined {
+export function buttonStyleOf(
+  block: CardBlock,
+  /** What the pin outside this card is wearing, when anything decided one. */
+  pinColor?: string,
+): CardButtonStyle | undefined {
+  const background = block.buttonBackground ?? pinColor;
   const style: CardButtonStyle = {
-    ...(block.buttonBackground ? { background: block.buttonBackground } : {}),
+    ...(background ? { background } : {}),
     ...(block.buttonPadding
       ? { padding: `${String(block.buttonPadding)}px` }
       : {}),

@@ -72,6 +72,7 @@ export function PlaceCard({
   layout,
   fields,
   tagChips,
+  pinColor,
   pinIcons,
   slots,
   theme,
@@ -94,6 +95,13 @@ export function PlaceCard({
    * and in the location's own order — the first is what colours its pin.
    */
   tagChips: TagChip[];
+  /**
+   * What the pin this card opened off is wearing, resolved by the canvas that
+   * knows the groups — see `CardBlockData.pinColor`. It is what the card's Logo
+   * block draws and what an uncoloured Button takes for its ground, so a card
+   * and the marker under it cannot come out two colours.
+   */
+  pinColor?: string;
   /** The map's pins, for a card whose layout holds a Logo block. */
   pinIcons: CustomPinIcon[];
   /**
@@ -403,6 +411,7 @@ export function PlaceCard({
                 place={place}
                 fields={fields}
                 tagChips={tagChips}
+                pinColor={pinColor}
                 pinIcons={pinIcons}
                 className={`map-card relative border border-border${
                   theme ? ` ${theme}` : ""

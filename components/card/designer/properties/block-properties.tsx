@@ -34,7 +34,7 @@ import { ChipProperties } from "./chip-properties";
 import { LinksProperties } from "./links-properties";
 import { HoursProperties } from "./hours-properties";
 import { LogoProperties } from "./logo-properties";
-import { PreviewProperties } from "./preview-properties";
+import { PinColorPreview, PreviewProperties } from "./preview-properties";
 import {
   PropertyCheckbox,
   PropertyChecks,
@@ -277,6 +277,9 @@ export function BlockProperties({
   mapId,
   chipPreview,
   onChipPreview,
+  pinPreview,
+  samplePinColor,
+  onPinPreview,
   zone,
   onMoveZone,
   onChange,
@@ -339,6 +342,22 @@ export function BlockProperties({
    */
   chipPreview?: number | null;
   onChipPreview?: (count: number | null) => void;
+  /**
+   * What colour the canvas is drawing the sample pin in, and how to change it.
+   *
+   * **Optional, and its absence hides the control**, on `chipPreview`'s rule and
+   * for the same reason turned up one notch: a card's Logo block draws the pin
+   * and an uncoloured Button takes the pin's colour, so the design is one colour
+   * per group and this tool is account-level with no map in scope. Opened over a
+   * real pin (`BlockEditorForm`) there is nothing to pretend about — that pin is
+   * the pin — so nothing is passed and the group does not appear.
+   *
+   * `pinPreview` is what is on screen (the override, or the sample's own);
+   * `samplePinColor` is what clearing returns to.
+   */
+  pinPreview?: string;
+  samplePinColor?: string;
+  onPinPreview?: (color: string | null) => void;
   /** Which band of the card this block is in now. See `onMoveZone`. */
   zone?: CardZone;
   /**
@@ -395,6 +414,16 @@ export function BlockProperties({
   const showZone = zoneOptions.length > 1;
 
   /*
+   * Whether this block draws anything in the pin's colour — which is what makes
+   * the preview colour worth offering while this block is selected.
+   *
+   * Two do. A Logo block *is* the pin, and a Button with no colour of its own
+   * takes the pin's for its ground (`buttonStyleOf`). Nothing else on a card
+   * reads it: the chips are the owner's to colour and the text is the theme's.
+   */
+  const showsPinColor = block.type === "logo" || has("buttonStyle");
+
+  /*
    * The same answers again, as a table — because the folds need them twice.
    *
    * Once to decide whether to render at all (`PropertyFold`'s `isEmpty`), and
@@ -420,7 +449,14 @@ export function BlockProperties({
     text: !has("text"),
     chips: !has("chips"),
     button: !has("buttonStyle"),
-    preview: !has("chips") || !onChipPreview,
+    /*
+     * Two controls now, and the fold is empty only when neither applies. Chips
+     * are for the Tags block; the pin's colour is for the two blocks that draw
+     * one — the Logo, which *is* the pin, and the Button, whose ground falls
+     * back to it.
+     */
+    preview:
+      (!has("chips") || !onChipPreview) && (!showsPinColor || !onPinPreview),
   };
 
   return (
@@ -738,7 +774,11 @@ export function BlockProperties({
             of the heading rather than as where the colours are. */}
         <PropertyFold id="button" title="Button style" isEmpty={emptyGroups.button}>
           {has("buttonStyle") ? (
-            <ButtonStyleProperties block={block} onChange={onChange} />
+            <ButtonStyleProperties
+              block={block}
+              pinColor={pinPreview}
+              onChange={onChange}
+            />
           ) : null}
         </PropertyFold>
 
@@ -748,6 +788,14 @@ export function BlockProperties({
         <PropertyFold id="preview" title="Preview" isEmpty={emptyGroups.preview}>
           {has("chips") && onChipPreview ? (
             <PreviewProperties count={chipPreview ?? null} onCount={onChipPreview} />
+          ) : null}
+
+          {showsPinColor && onPinPreview ? (
+            <PinColorPreview
+              color={pinPreview}
+              sampleColor={samplePinColor}
+              onColor={onPinPreview}
+            />
           ) : null}
         </PropertyFold>
       </PropertyFolds>

@@ -45,11 +45,16 @@ import {
  * store a colour it will be drawn in a theme it has not seen (CLAUDE.md §7).
  *
  * It is the light theme's accent, `oklch(64.37% 0.2195 36.18)` in
- * app/globals.css, which is the ground an unstyled button actually draws. Its
- * predecessor claimed to be that and was `#1c7ed6`, a blue belonging to no part
- * of this theme — and the Border width control used to *write* it, so one nudge
- * of the width turned an Outline button's theme-coloured line hard blue. The
- * width stores no colour at all now: see `CardBlock.buttonBorder`.
+ * app/globals.css, which is the ground an unstyled button actually draws *when
+ * nothing else decided one*. Its predecessor claimed to be that and was
+ * `#1c7ed6`, a blue belonging to no part of this theme — and the Border width
+ * control used to *write* it, so one nudge of the width turned an Outline
+ * button's theme-coloured line hard blue. The width stores no colour at all
+ * now: see `CardBlock.buttonBorder`.
+ *
+ * **The ground wheel prefers the pin's colour to this**, because that is what an
+ * uncoloured button now draws — see `pinColor` below. This stays as the last
+ * word, for a location the map says nothing about.
  */
 const BUTTON_PICKER_START = "#f54600";
 
@@ -72,15 +77,25 @@ const HOVER_OPTIONS = [
 
 export function ButtonStyleProperties({
   block,
+  pinColor,
   onChange,
 }: {
   block: CardBlock;
+  /**
+   * What the pin on the card beside this panel is wearing — what the button
+   * draws when this panel has stored no colour of its own.
+   *
+   * Only ever the *seed* for the wheel and never written, on
+   * `BUTTON_PICKER_START`'s rule: storing it would freeze one location's colour
+   * onto a design that is meant to take each location's.
+   */
+  pinColor?: string;
   onChange: (patch: BlockPatch) => void;
 }) {
   return (
     <>
       {/* First, because it is the first decision — see `ButtonPresets`. */}
-      <ButtonPresets block={block} onChange={onChange} />
+      <ButtonPresets block={block} pinColor={pinColor} onChange={onChange} />
 
       {/*
        * "Colour", not "Background", because on three of the four treatments it
@@ -96,16 +111,28 @@ export function ButtonStyleProperties({
         // Label above, so both colours sit on the rhythm of the selects under
         // them — see `labelPlacement`.
         labelPlacement="outside"
-        // The accent, which is what an unstyled button already draws, so the
-        // wheel opens on roughly what is on screen rather than on a colour
-        // nobody has seen.
-        fallback={BUTTON_PICKER_START}
+        // What the button is drawing right now, so the wheel opens on what is on
+        // screen rather than on a colour nobody has seen: the pin's, which an
+        // uncoloured button takes, and the accent only when nothing decided one.
+        fallback={pinColor ?? BUTTON_PICKER_START}
         onChange={(buttonBackground) => onChange({ buttonBackground })}
-        // An empty string is the absence, and the absence is theme-aware where
-        // a stored literal could not be: a button coloured against a light card
-        // vanishes the moment a visitor's map is dark.
+        // An empty string is the absence, and the absence is now **the pin's own
+        // colour** — see `buttonStyleOf`. So clearing is not "no colour", it is
+        // the one setting that makes a blue group's cards blue and a red
+        // group's red, and it stays theme-aware where a stored literal could
+        // not: a button coloured against a light card vanishes the moment a
+        // visitor's map is dark.
         onClear={() => onChange({ buttonBackground: "" })}
       />
+
+      {/* Said where the control is, because "clear" reads as "none" everywhere
+          else in this panel and here it means something. One line, and only
+          while it is true. */}
+      {block.buttonBackground ? null : (
+        <p className="-mt-1 text-xs text-muted">
+          Following each location&rsquo;s pin colour. Pick one to fix it instead.
+        </p>
+      )}
 
       {/*
        * The outline, which is a pair and is stored as one.

@@ -70,11 +70,17 @@ const PIXEL_RATIO = 2;
 const PIN_STROKE = "#ffffff";
 
 /**
+ * What every pin's image id starts with, so ./missing-icons.ts can tell ours
+ * from the basemap's.
+ */
+export const PIN_IMAGE_PREFIX = "pin:";
+
+/**
  * The image id for one pin. Shared by the registration pass and the feature
  * builder, so neither can drift from the other's naming.
  */
 export function pinImageId(icon: string, color: string): string {
-  return `pin:${icon}:${color}`;
+  return `${PIN_IMAGE_PREFIX}${icon}:${color}`;
 }
 
 /**

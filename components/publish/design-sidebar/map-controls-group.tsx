@@ -92,24 +92,23 @@ export function MapControlsGroup({ settings, set }: EmbedDesign) {
           onChange={(value) => set("card", value)}
         />
 
-        {/* Shown only where it can do something, which is the rule the rest of
-            the designer follows. Search and Nearest are docked *inside* the
-            results panel on a wide map with a list, and already on its surface;
-            the two arrangements where they float over the basemap are a map with
-            no list at all, and a narrow one whose list is a drawer. On a wide
-            list map with the drawer off there is nothing here to frost, so there
-            is no control.
+        {/* Search and Nearest are docked *inside* the results panel on a wide
+            map with a list, and already on its surface; the arrangements where
+            they float over the basemap are a map with no list at all, and any
+            narrow one — where the list is a drawer at *either* position of that
+            switch, so the toolbar comes out of the panel either way. That is why
+            there is no condition on this one any more: every map has a width at
+            which these controls float, and the device tiles are how an owner
+            looks at it.
 
             It carries no colours of its own — the controls read the panel’s own
             transparency, blur and corners, so what is designed is one surface
             rather than two that agree today. */}
-        {!settings.list || settings.panelDrawer ? (
-          <PropertySwitch
-            label="Frost the controls over the map"
-            isSelected={settings.toolbarGlass}
-            onChange={(value) => set("toolbarGlass", value)}
-          />
-        ) : null}
+        <PropertySwitch
+          label="Frost the controls over the map"
+          isSelected={settings.toolbarGlass}
+          onChange={(value) => set("toolbarGlass", value)}
+        />
       </PropertySwitches>
 
       {/* Said once, where the switch is, rather than in the Card tab that

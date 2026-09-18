@@ -46,6 +46,9 @@ export function CardProperties({
   mapId,
   chipPreview,
   onChipPreview,
+  pinPreview,
+  samplePinColor,
+  onPinPreview,
   fields,
   onCard,
   onBlock,
@@ -75,6 +78,15 @@ export function CardProperties({
    */
   chipPreview: number | null;
   onChipPreview: (count: number | null) => void;
+  /**
+   * The sample pin's colour on the canvas, and the sample's own answer under it
+   * — `chipPreview`'s twin in every respect, including saving nothing. It is
+   * here rather than in the panel because the canvas is what has to draw it.
+   * See `BlockProperties.pinPreview`.
+   */
+  pinPreview?: string;
+  samplePinColor?: string;
+  onPinPreview: (color: string | null) => void;
   /**
    * This map's custom fields, passed straight through to the Button block's
    * source picker — the one control on either panel whose options come from
@@ -117,6 +129,9 @@ export function CardProperties({
         mapId={mapId}
         chipPreview={chipPreview}
         onChipPreview={onChipPreview}
+        pinPreview={pinPreview}
+        samplePinColor={samplePinColor}
+        onPinPreview={onPinPreview}
         zone={selected.zone}
         onMoveZone={(zone) => onMoveBlockZone(selected.block.id, zone)}
         onChange={(patch) => onBlock(selected.block.id, patch)}

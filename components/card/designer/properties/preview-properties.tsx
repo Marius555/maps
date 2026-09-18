@@ -1,6 +1,7 @@
 "use client";
 
 import { CHIP_PREVIEW_COUNTS } from "@/lib/card/preview-chips";
+import { ColorPickerField } from "@/components/ui/color-picker-field";
 import { PropertyChoice } from "@/components/ui/properties/property-fields";
 
 /**
@@ -56,3 +57,70 @@ export function PreviewProperties({
     </>
   );
 }
+
+/**
+ * What colour the sample pin is, and nothing else.
+ *
+ * `PreviewProperties`' sibling, in this file for its reason: it saves nothing,
+ * and the fold it sits in is the one place on this panel where that is the rule
+ * rather than the exception.
+ *
+ * **It exists because a card's colours now come from the pin and this tool has
+ * no map in scope.** A Logo block draws the pin, and a Button the owner has not
+ * coloured takes the pin's colour for its ground — so the same design is a blue
+ * card on one group of locations and a red one on the next, and the canvas can
+ * only ever draw the colour whichever location it picked happens to wear. That
+ * is the same gap `chipPreview` fills for the Tags block, and the same answer:
+ * let somebody put another colour under the design for as long as they are
+ * looking at it.
+ *
+ * Clearing it goes back to the sample location's own, which is the honest
+ * default — a designer that opened on an invented colour would be previewing a
+ * card nobody has.
+ */
+export function PinColorPreview({
+  color,
+  sampleColor,
+  onColor,
+}: {
+  /** What the canvas is drawing the pin in now. */
+  color: string | undefined;
+  /** The sample location's own answer, which clearing returns to. */
+  sampleColor: string | undefined;
+  /** `null` is "back to the sample's own". */
+  onColor: (color: string | null) => void;
+}) {
+  /*
+   * Whether there is anything to clear. The field shows the sample's own colour
+   * when nothing has been set, which is the truth about the canvas — but an `×`
+   * beside it would then be a control that changes nothing when pressed.
+   */
+  const isSet = color !== undefined && color !== sampleColor;
+
+  return (
+    <>
+      <ColorPickerField
+        label="Pin colour"
+        value={color ?? ""}
+        labelPlacement="outside"
+        // Opens on what is on screen rather than on a literal — and with no
+        // sample colour to read, on the ground an uncoloured button still draws.
+        fallback={sampleColor ?? PIN_PREVIEW_START}
+        onChange={(next) => onColor(next)}
+        onClear={isSet ? () => onColor(null) : undefined}
+      />
+
+      <p className="-mt-1 text-xs text-muted">
+        Only changes this preview. A real card takes each location&rsquo;s own pin
+        colour, from its group or its first tag.
+      </p>
+    </>
+  );
+}
+
+/**
+ * What the wheel opens on when the sample location has no colour at all — the
+ * light theme's accent, which is what both an unstyled button and an untagged
+ * pin actually draw. It never reaches the layout; see `ColorPickerField`.
+ */
+const PIN_PREVIEW_START = "#f54600";

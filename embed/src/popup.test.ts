@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 
-import { defaultCardLayout, type CardBlock } from "@/packages/shared/card-layout";
+import {
+  defaultCardLayout,
+  type CardBlock,
+  type CardLayout,
+} from "@/packages/shared/card-layout";
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import type { SnapshotPlace } from "@/packages/shared/snapshot";
+import type { TagChip } from "@/packages/shared/tags";
 import { buildPopup } from "./popup";
 
 /**
@@ -96,5 +102,138 @@ describe("buildPopup, per-place card overrides", () => {
     });
 
     expect(text).toContain(PHONE);
+  });
+});
+
+/**
+ * Where a card's colours come from, and the one thing that must be true of
+ * them: **the card and the marker it opened off agree**.
+ *
+ * Two blocks read the pin's colour and they read it through different
+ * mechanisms — the Logo writes `--pin-color` for an SVG fill, the Button writes
+ * `--lm-button-bg` for a background — so the bug this guards against is not a
+ * card that fails to draw. It is a card drawn perfectly in the wrong colour,
+ * beside a pin in the right one, on a customer's site.
+ *
+ * The ladder under test is `colorOf` in map.ts, restated for the popup in
+ * `BlockContext.pinColor`: a group's answer, then the custom pin's own, then
+ * the first tag's. `place.color` is how a group reaches a snapshot at all — it
+ * is written only when one actually decided (lib/snapshot/build.ts).
+ */
+const COLOURED: CardLayout = {
+  ...layout,
+  zones: {
+    top: [{ id: "logo", type: "logo" }],
+    middle: [{ id: "name", type: "name" }],
+    // No `buttonAction`, so it is a Directions button — which needs nothing of
+    // the place but its coordinates and therefore always draws.
+    bottom: [{ id: "cta", type: "button" }],
+  },
+};
+
+const CUSTOM_PIN: CustomPinIcon = {
+  id: "ab12cd34",
+  label: "Store",
+  color: "#7048e8",
+  glyph: "store",
+  image: "",
+};
+
+function colours(
+  place: SnapshotPlace,
+  tagChips: TagChip[] = [],
+  pins: readonly CustomPinIcon[] = [],
+): { logo: string; button: string } {
+  const card = buildPopup(place, undefined, [], COLOURED, pins, tagChips);
+  const logo = card.querySelector<HTMLElement>(".lm-popup__logo");
+  const button = card.querySelector<HTMLElement>(".lm-popup__button");
+
+  expect(logo).not.toBeNull();
+  expect(button).not.toBeNull();
+
+  return {
+    logo: logo?.style.getPropertyValue("--pin-color") ?? "",
+    button: button?.style.getPropertyValue("--lm-button-bg") ?? "",
+  };
+}
+
+const TAG: TagChip = { id: "t1", label: "Stockist", color: "#2f9e44" };
+
+describe("buildPopup, the pin's colour on the card", () => {
+  it("takes a group's colour, on both blocks at once", () => {
+    // `place.color` out-ranks the custom pin *and* the tag, which is the only
+    // case a card could not work out for itself — a snapshot carries no groups.
+    const { logo, button } = colours(
+      { ...base, color: "#e8590c", icon: "custom:ab12cd34" },
+      [TAG],
+      [CUSTOM_PIN],
+    );
+
+    expect(logo).toBe("#e8590c");
+    expect(button).toBe("#e8590c");
+  });
+
+  it("takes a custom pin's own colour over its first tag", () => {
+    const { logo, button } = colours(
+      { ...base, icon: "custom:ab12cd34" },
+      [TAG],
+      [CUSTOM_PIN],
+    );
+
+    expect(logo).toBe(CUSTOM_PIN.color);
+    expect(button).toBe(CUSTOM_PIN.color);
+  });
+
+  it("falls to the first tag for a place wearing a built-in pin", () => {
+    const { logo, button } = colours({ ...base, icon: "store" }, [TAG]);
+
+    expect(logo).toBe(TAG.color);
+    expect(button).toBe(TAG.color);
+  });
+
+  /*
+   * §7, and the reason this file exists. A place the map says nothing about
+   * leaves both properties unwritten, so the stylesheet's own chains answer —
+   * `--lm-pin` for the pin, `--lm-focus` for the button — exactly as they did
+   * on every card published before any of this.
+   */
+  it("writes nothing at all for a place the map says nothing about", () => {
+    const { logo, button } = colours(base);
+
+    expect(logo).toBe("");
+    expect(button).toBe("");
+  });
+
+  /*
+   * A colour the owner chose beats the pin on the button and **only** on the
+   * button: the Logo block draws the pin itself, so there is nothing there for
+   * a button's ground to override.
+   */
+  it("lets a designed button colour win, and leaves the logo on the pin", () => {
+    const card = buildPopup(
+      base,
+      undefined,
+      [],
+      {
+        ...COLOURED,
+        zones: {
+          ...COLOURED.zones,
+          bottom: [{ id: "cta", type: "button", buttonBackground: "#f54600" }],
+        },
+      },
+      [],
+      [TAG],
+    );
+
+    expect(
+      card
+        .querySelector<HTMLElement>(".lm-popup__button")
+        ?.style.getPropertyValue("--lm-button-bg"),
+    ).toBe("#f54600");
+    expect(
+      card
+        .querySelector<HTMLElement>(".lm-popup__logo")
+        ?.style.getPropertyValue("--pin-color"),
+    ).toBe(TAG.color);
   });
 });

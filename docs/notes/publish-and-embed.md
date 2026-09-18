@@ -138,17 +138,94 @@ rewritten; it is the record of why this area is shaped as it is.
   list switched off was giving away 40% of its height to nothing. The sibling combinator says
   "a panel precedes me" exactly and needs no `:has`.
 - **`panelDrawer` is structural, not chrome.** Below the stylesheet's own drawer
-  container query it takes the results panel out of the flow and parks it off the
-  edge, and the toolbar has to *move* — out of the panel and onto the root — or the
-  search box goes off the edge with it. No stylesheet can do that (`.lm-panel` is
-  the containing block for its own absolutely-positioned children), so
-  `installDrawer` runs a `ResizeObserver` and the setting stays out of
-  `CHROME_SETTING_KEYS`: one rebuild per press, exactly what `list` and `panelSide`
-  cost. `data-lm-drawer` is written in `render()` rather than by `chromeAttrs`, so
-  that table still means exactly `CHROME_SETTING_KEYS`. **Absent is the stacked
-  layout**, and every narrow rule it would fight is gated `:not([data-lm-drawer])`
-  rather than cancelled property by property — two complete answers to one width,
-  not one answer patching the other.
+  container query it takes the results panel out of the flow and parks it, and the
+  toolbar has to *move* — out of the panel and onto the root — or the search box goes
+  with it. No stylesheet can do that (`.lm-panel` is the containing block for its own
+  absolutely-positioned children), so `installDrawer` runs a `ResizeObserver` and the
+  setting stays out of `CHROME_SETTING_KEYS`: one rebuild per press, exactly what
+  `list` and `panelSide` cost. `data-lm-drawer` is written in `render()` rather than by
+  `chromeAttrs`, so that table still means exactly `CHROME_SETTING_KEYS`.
+- **The switch has three answers and only two of them are positions.** `true` is the
+  bottom sheet, `false` is the side drawer, and **absent is the stacked layout** — what
+  every snapshot published before the field existed draws on sites we do not control
+  (§7), and what neither position of the switch can now produce. `installDrawer` is
+  therefore entered on `!== undefined` rather than on truthiness, and every narrow rule
+  the stacked block would fight is gated `:not([data-lm-drawer])` rather than cancelled
+  property by property — three complete answers to one width, not one answer patching
+  another.
+- **`data-lm-drawer` carries the axis, `"sheet"` or `"side"`, and almost nothing reads
+  the value.** The shared rule, the open rule and the stacked block's negation are all
+  written as attribute *presence*, so adding the second axis changed none of them. Only
+  three rules name a value: the two closed parks and the MapLibre bottom-corner
+  clearance, which is the sheet's alone because a side drawer covers neither bottom
+  corner shut. **The open rule serves both** — `transform: translateY(0)` cancels a
+  `translateX` as completely as a `translateY`, `transform` being one property — which
+  is why the second axis needed no second open state and no second hand-counted tie.
+- **The sheet replaced the side drawer on 2026-09-17 and stopped replacing it on the
+  same day.** The bottom sheet is what `true` draws, and it is the better default: a
+  strip along the bottom is its own trigger and its own affordance — it says a list is
+  there, says how to get it, and, because it *is* the panel rather than a button about
+  the panel, it opens by being dragged. Deliberately the same gesture as
+  `components/ui/bottom-sheet.tsx` on the dashboard, down to the 6px of slop and the
+  48px snap, so an owner who has used the editor does not have to learn a second one on
+  the map they published. **What was wrong was deleting the other one.** `false` fell
+  through to the stacked layout, which is a results panel welded to the bottom 40% of
+  an already small map — so a two-position switch had one implementation behind it and
+  the other position was not an alternative but a worse version of the same idea.
+  Reported as "when I switch it off I want the side bar and the button back". The side
+  drawer is `false` now, restored from the commit that removed it, and the switch is
+  named for what it turns *on* ("Use a bottom drawer") because both positions are a
+  drawer. **The sheet still reaches every `panelDrawer: true` map already live, on the
+  next `/embed` deploy and without the owner republishing** — the same trade as the tag
+  chips and each toolbar resize, taken because it was asked for directly.
+- **Three things went out with the side drawer and only one came back.** The hamburger
+  `trigger` and its three SVG paths had to: parked off the edge there is nothing of the
+  panel on screen to press, which is the whole reason the sheet could drop it. The
+  other two stayed gone on their merits rather than by omission. The **`.lm-veil`**
+  scrim: the editor's sheet has none on purpose — the map behind it keeps working,
+  which a scrim would end. And **`panel.focus({ preventScroll: true })`** with the
+  `moveFocus` argument threaded through `setOpen`: both triggers are real `<button>`s
+  carrying `aria-expanded`, so there is nowhere focus needs to be sent.
+- **The veil's *job* came back without the veil, and the browser is what found it.**
+  This note first said the trigger was "always on screen to press either way". For the
+  sheet it is; for the side drawer it is not — the hamburger sits at the end of the
+  floating toolbar, which is exactly the edge the panel slides in over. Measured at
+  390px: trigger at x=344, open panel from x=80 to 380 at the z-index above it. On a
+  phone, with no Escape key, the only way out was to pick a location. So the side
+  drawer shuts on a `pointerdown` anywhere outside the panel and the toolbar — a
+  listener, not a scrim, so the press also reaches the map and a pin tapped past the
+  panel opens its card in one go. The toolbar is excluded so typing a search does not
+  shut the list it filters, and the sheet does not get it at all: its strip is still
+  there to press. 63 bytes. Verified: a map press shuts it, presses in the panel and
+  the search field do not, and `root.scrollLeft`/`scrollTop` stay 0 throughout. `list.inert` — not `panel.inert`, because
+  the sheet's strip lives inside the panel — is the whole of what keeps a parked panel
+  out of reach, and it is one line rather than a branch because the trap is the same on
+  both axes.
+- **Carrying both axes cost 162 bytes and the own-code budget was raised to 48KB for
+  it**, which is the fourth raise and the first taken against §4's rule rather than
+  around it. Four trims paid back 18 of the 162 first and each is a real simplification:
+  the shared drawer rule went from three selectors to one (the weight-carriers it was
+  written to out-weigh set *nothing but* `transform`, and it sets none); the two
+  triggers share one `button()` call and one accessible name; `aria-label` is reflected
+  as `ariaLabel` beside the `ariaExpanded` that already was; and the trigger's two
+  placements folded into one branch. The remaining 144 was put to the owner with the
+  numbers and they took it. The argument is written out in `scripts/check-embed-size.mjs`
+  — **the rule it overrides is unchanged for the next person.**
+- **The `panel.focus()` post-mortem is kept because the trap is still there, rotated 90
+  degrees.** "The drawer doesn't slide in, the map behind it does" was `focus()` landing
+  on a panel still parked off the edge: the browser scrolls the nearest scrollable
+  ancestor to reveal it, that is `.lm-root`, whose `overflow: hidden` is still
+  scrollable programmatically, and the map is inside it. Measured then:
+  `root.scrollLeft` jumped to 212 and decayed 212 → 78 → 19 → 0 across the 180ms.
+  Parked *downwards* the same thing would act on `scrollTop`, and a transform still
+  contributes to scrollable overflow (measured: `scrollHeight` 801 against a
+  `clientHeight` of 518). What answers it is `inert`, and **the element it goes on
+  moved**: the strip lives inside `.lm-panel` now, so marking the panel inert would
+  take the sheet's own trigger out of the tab order with it. `list.inert` is the
+  statement, which is what the dashboard's sheet does to its content wrapper.
+  Verified after: `scrollTop` and `scrollLeft` both stay 0 across opening, dragging,
+  focusing a row and a pin click that calls `select()`, and a `row.focus()` while shut
+  leaves `document.activeElement` on `BODY`.
 - **The drawer answers at 768px and the stacked layout at 640px, in two separate
   container queries.** Stacking is what a snapshot with no `panelDrawer` draws, and
   those are live on sites we do not control, so its breakpoint cannot move (§7); a
@@ -158,61 +235,123 @@ rewritten; it is the record of why this area is shaped as it is.
   decides where the toolbar lives while the query decides where the panel is drawn.
   The Tablet preview tile is 768px, so it lands inside the drawer's range by the
   root's own 1px border; that is what the tile is now for.
-- **"The drawer doesn't slide in, the map behind it does" was `panel.focus()`, and
-  the fix is `{ preventScroll: true }`.** At the instant focus lands the panel is
-  still parked at `translateX(100%)`, so the browser scrolls the nearest scrollable
-  ancestor to reveal it — that is `.lm-root`, whose `overflow: hidden` is still
-  scrollable programmatically, and the map is inside it. Measured in the browser:
-  `root.scrollLeft` jumped to 212 and decayed 212 → 78 → 19 → 0 across the 180ms,
-  with the basemap dragged exactly that far under a drawer that looked stationary.
-  After: `scrollLeft` stays 0 and the map's offset does not change by a pixel while
-  the panel travels 340 → 0. The stylesheet's note about a focused *row* doing this
-  is the same trap from the other side, and `inert` answers that one.
-- **A drawer is the floating panel parked off the edge, and it overrides nothing
-  the owner designed.** Transparency, blur, corner radius and the width scale all
-  come from the same `--lm-panel-*` properties the floating rule reads, so a map
-  designed at Glass (60%) and Slim (25%) — which is what `DEFAULT_EMBED_SETTINGS`
-  ships — opens a glass, slim drawer. The drawer rule sets position, width and the
-  transform and deliberately nothing else: the moment it restates `background` or
-  `border-radius`, a control in the publish sidebar has an exception invisible from
-  the sidebar. That is exactly what it did for one revision, and the complaint that
-  found it was "it doesn't share glass theme that we run by default and slim
-  profile". Two consequences worth knowing. `backdrop-filter` and `border-radius`
-  *are* restated — not to override, but because `.lm-root[data-lm-float] .lm-panel`
-  is where they otherwise live and a drawer is over the map at **either**
-  placement; "Beside it" describes a layout this width does not have. And the width
-  is `min(86%, max(var(--lm-panel-w, 40%), 300px))`: the percentage is of the
-  embed's own box, so Slim is a readable column beside a 1200px map and 97px on a
-  phone — the setting widens the drawer and never narrows it below what a name and
-  an address need, while the 86% ceiling keeps the strip of basemap that says the
-  map is still back there.
-- **The blur does travel with the slide, and that is the accepted cost.** A
-  `backdrop-filter` is sampled in the element's own coordinate space, so a
-  10px-blurred panel carries its patch of basemap along for the 180ms. The
-  drawer was opaque for one revision on the theory that this was the reported
-  "the map slides, not the panel" — it was not; that was `panel.focus()`, the
-  entry above. Weighed against discarding the map's own design language, the
-  artifact is not worth paying for. If it ever has to go, the fix is to drop the
-  filter for the length of the transition, not to hard-code a surface.
-- **The drawer's open rule must not name `[data-lm-float]`, and `translate` is not
-  available to make that easy.** The open state has to out-weigh both the closed
-  rule and the *unqueried* floating side-flip, which a container query does nothing
-  to weaken; done by stacking attributes, the open rule picked up `[data-lm-float]`
-  that the closed rule does not have, so a map with the panel placed **beside** the
-  map matched closed and never matched open — the trigger dimmed the basemap, moved
-  focus into a panel off the edge, and slid nothing. The tidy answer is the
-  `translate` property, which nothing else sets on `.lm-panel`. **It does not
-  survive the build:** written `transform: none; translate: 100% 0`, Lightning CSS
-  folds the pair into one `transform: translate(100%)` and deletes the property the
-  open rule was going to answer on, with no error anywhere. So it stays `transform`
-  and every selector is weighed by hand — each open selector ties the heaviest
-  closed rule it competes with, four against four in LTR and five against five in
-  RTL, and comes later. Check the built bundle, not the source, after touching any
-  of it.
+- **A sheet is the floating panel parked at the bottom, and it overrides one thing the
+  owner designed.** Transparency, blur and corner radius all come from the same
+  `--lm-panel-*` properties the floating rule reads, so a map designed at Glass (60%) —
+  which is what `DEFAULT_EMBED_SETTINGS` ships — opens a glass sheet. Verified in the
+  preview: `oklab(… / 0.6)`, `blur(10px)`, `border-radius: 12px`. The rule sets
+  position, height and the transform and deliberately nothing else; the moment it
+  restates `background`, a control in the publish sidebar has an exception invisible
+  from the sidebar, which is what it did for one revision when it was a side drawer
+  (the complaint that found it was "it doesn't share glass theme that we run by default
+  and slim profile").
+  **The exception is Width, and it is inherent rather than an oversight.** A sheet that
+  comes up from the bottom spans the box, so there is no edge for a 25% column to be a
+  column against, and `--lm-panel-w` stops reaching the panel below 768px. That costs
+  nothing real: the percentage is of the embed's own box, so Slim was 97px on a phone
+  and the side drawer had to clamp it up to 300px anyway. The setting means what it says
+  again the moment the map is wide enough to have a side.
+- **`backdrop-filter` and `border-radius` are restated, not to override but because
+  `.lm-root[data-lm-float] .lm-panel` is where they otherwise live and a sheet is over
+  the map at *either* placement**; "Beside it" describes a layout this width does not
+  have. The blur travels with the slide — a `backdrop-filter` is sampled in the
+  element's own coordinate space, so a 10px-blurred panel carries its patch of basemap
+  along for the 180ms. The sheet was opaque for one revision on the theory that this was
+  the reported "the map slides, not the panel"; it was not, that was `panel.focus()`.
+  Weighed against discarding the map's own design language the artifact is not worth
+  paying for. If it ever has to go, drop the filter for the length of the transition
+  rather than hard-coding a surface.
+- **The open rule must not name `[data-lm-float]`, and `translate` is still not
+  available to make that easy.** The open state has to out-weigh both the closed rule
+  and the *unqueried* floating side-flip, which a container query does nothing to
+  weaken; done by stacking attributes, the open rule once picked up `[data-lm-float]`
+  that the closed rule does not have, so a map with the panel placed **beside** the map
+  matched closed and never matched open — the trigger moved focus into a panel off the
+  edge and slid nothing. The tidy answer is the `translate` property, which nothing else
+  sets on `.lm-panel`. **It does not survive the build:** written
+  `transform: none; translate: 0 X`, Lightning CSS folds the pair into one `transform`
+  and deletes the property the open rule was going to answer on, with no error anywhere.
+  So it stays `transform` and every selector is weighed by hand. Check the built bundle,
+  not the source, after touching any of it — verified this pass:
+  `transform:translateY(calc(100% - 44px))` closed and `transform:translateY(0)` open,
+  and the only `translate:` left in the bundle is `.lm-search__icon`'s.
+- **The RTL selector survived the move to a bottom sheet, and it is no longer a
+  mirror — it is a weight.** A sheet has nothing to mirror, so the instinct is to delete
+  it. `[dir="rtl"] .lm-root[data-lm-float][data-lm-side="right"] .lm-panel` sits
+  unqueried at five and sets `transform: translateX(...)`; without a five in the closed
+  block, an RTL host page with the panel on the right would slide the sheet sideways.
+  It is folded into the closed rule's selector list rather than kept as its own block,
+  which is the one part of this pass that got *cheaper*. The open rule keeps both
+  selectors for the matching reason: the closed block's own five would otherwise beat
+  the open rule's four.
+- **§12 is a rule here, not a nicety: the strip parks over exactly the corner MapLibre
+  stacks the attribution and the zoom buttons in.** `--map-chrome-inset` is how the
+  editor answers this for the same sheet and cannot reach — there the property is set on
+  the dashboard's document and here the map *is* the document — so
+  `.maplibregl-ctrl-bottom-left`/`-right` take a `padding-bottom` inside the drawer
+  query. **Both corners, unlike the top rule**, which names one because a floating
+  toolbar covers one; a sheet spans, so there is no far corner to leave alone and the
+  rule needs no `:has`, no side branch and no matched-weight pair.
+  **The number is 42, not 52, and the ten is MapLibre's own margin.** The top rule is
+  "control height plus 8" because the toolbar it clears is inset from the frame by the
+  same 10px the controls are; the strip is flush to the bottom edge instead, so the
+  arithmetic is 44 + 8 − 10. Measured at 515×520 with 52: an 18px gap, which is the
+  phantom band the top rule's comment warns about. With 42: 8px. Verified on the real
+  publish preview at 414px — attribution and zoom stack both end at 559 against a strip
+  starting at 568.
+- **The sheet is flush to the bottom edge, and a 10px gutter there is a bug rather than
+  a taste.** A translate parks the box by its *own* height, so lifting it 10px and then
+  pushing it down by `100% - 44px` leaves 54px on screen: the strip plus a 10px sliver
+  of the first row, with the strip's own bottom border stranded in the middle of it.
+  Measured at 515×520 with `inset: auto 10px 10px`: the strip ended at 510 against a
+  frame ending at 520. `inset: auto 10px 0` is what `max-lg:bottom-0` does for the same
+  sheet on the dashboard, and the visible height is then exactly the strip.
+- **The strip needs `flex: none`, and a 44px rule is not enough on its own.**
+  `.lm-panel` is a flex column, so the strip is a flex item and `height` is only its
+  basis — the list below it has content to show, so the default `flex-shrink: 1` squeezed
+  a 44px strip to 31px and left the sheet parked 13px too low. Measured before the fix
+  at 515×520: a 44px rule drawing a 31px box.
+- **44px is written out at three sites rather than held in a custom property, and that
+  is a budget decision with its reasoning on the rules.** The strip's height, the park
+  distance, and the 42px of clearance all have to agree, and `--lm-peek` saying so once
+  is how `app/globals.css` does it for the dashboard's sheet at 4rem. The property plus
+  three `var()` calls measured 29 bytes gzipped against a budget that was 29 over. Two
+  things make it survivable: the **JS half cannot drift at all**, because
+  `installDrawer` measures `grip.offsetHeight` and never reads a number, and all three
+  sites are inside one container query within fifty lines of each other.
+- **The strip says "Locations" and no count, and that is a correctness call before it is
+  a byte one.** A total printed there is the snapshot's, and the list under it is
+  whatever the search box and find-nearest have left — so the strip would read
+  "Locations · 40" over three matching rows. A live count means a callback out of
+  `setPlaces`, which is more than it is worth for a number a visitor did not ask for;
+  the editor's strip carries one because managing the list is the whole point of that
+  screen.
+- **The tap and the drag live on one button, and `event.detail` is what separates
+  them.** A pointer released after 200px of dragging fires a click too, and that click
+  would undo the drag that just landed. The dashboard's sheet arms a `swallowClick`
+  flag; here the gesture decides it on its own terms — a press that never passed the
+  slop calls the toggle from `onEnd` — and the `click` listener fires only when
+  `detail` is 0, which is what a browser reports for a click synthesised from Enter or
+  Space. No state to leave armed against an unrelated click later. Verified: drag past
+  the snap opens, a 30px drag returns, 150px down shuts, a tap toggles, Escape shuts, a
+  `detail: 0` click toggles and a `detail: 1` click is ignored.
+- **The grab pill is a tinted `currentColor`, not `--lm-border`.** The border token was
+  one declaration instead of two and it was wrong: measured on the dark theme it
+  rendered `rgb(44, 47, 53)` against a `#17181a` surface, which is a pill nobody can
+  see — and it is the only thing on the strip that says it can be dragged.
+  `currentColor` tracks both themes and any colour the owner set. It is drawn as
+  `::before` rather than a `<span>` because a pseudo-element is CSS the minifier already
+  ships and an element is JS bytes.
+- **No `aria-controls`, deliberately.** The list is the strip's own next sibling, which
+  is the disclosure pattern ARIA describes, and there `aria-controls` is optional,
+  thinly supported by screen readers, and would cost the list a literal `id` that a
+  second map on the page would collide with. The dashboard's sheet names one because its
+  content is not a sibling.
 - **Find-nearest lives inside the search field.** The magnifier there was a picture
   (`pointer-events: none`) while the one live control beside it spent 34px of a row
   that runs out of width first on exactly the maps the drawer is for; at 390px the
-  floating toolbar is now the field and the drawer trigger. `createSearchField`
+  floating toolbar is now the field and nothing else, the drawer's own trigger having
+  become the grab strip at the foot of the sheet. `createSearchField`
   takes an `action`, and with none it draws the magnifier as before — a map with
   Nearest switched off still has to read as a search box. **The in-field control
   wears `lm-search__action` *instead of* `lm-button lm-button--icon`, not beside
@@ -275,10 +414,14 @@ rewritten; it is the record of why this area is shaped as it is.
   `row.scrollIntoView({ block: "nearest" })` is what it was, and on a drawer map
   it dragged the basemap out from under a panel nobody had opened — measured:
   `root.scrollLeft` 0 → 284, the panel from x=670 to x=386, the canvas from
-  x=16.8 to x=−267.2, with `data-lm-drawer-open` false and no veil, so there was
+  x=16.8 to x=−267.2, with `data-lm-open` false and no veil, so there was
   nothing to press to undo it. `inert` answers the *focus* half of this trap and
-  cannot answer this half. Two rect reads and one `scrollTop` write reproduce
-  `nearest` exactly with no way to reach an ancestor.
+  cannot answer this half: an explicit `scrollIntoView` is not focus, and an inert
+  subtree still scrolls. Two rect reads and one `scrollTop` write reproduce
+  `nearest` exactly with no way to reach an ancestor. **Those numbers are from the
+  side-drawer era and the sheet turns the trap 90 degrees onto `scrollTop`**;
+  re-verified after the move, a pin click that calls `select()` leaves both
+  `root.scrollTop` and `root.scrollLeft` at 0.
 - **A group's colour travels; a group's id does not.** `groupId` is still kept off
   every snapshot — a visitor cannot see a group or act on one. What is published is
   the colour it *decided*, because that is a fact about the pin rather than about the
@@ -295,32 +438,53 @@ rewritten; it is the record of why this area is shaped as it is.
   because a trigger opening onto nothing is worse than no trigger. What is left is a
   master switch, three selectors and one run of switches, which is the shape the rest
   of the designer already had.
-- **The toolbar's controls are 32px tall, on the root's own 14px type.** They have been
-  three sizes: `font: inherit` at 14px with 7px of padding (36px); then, asked for a third
-  off, `font-size: 12px` on `.lm-toolbar` and 2px of padding (23px); then, reported as too
-  small to read or press, that declaration deleted and 5px of padding — 14px at the inherited
-  1.45 is a 20.3px line, and 5px either side plus the hairline is 32px. `font: inherit` on the
-  field is what reads the row's type, and the search dropdown inherits it too. The find-nearest
-  button inside the field is 28px, the glyphs 16px.
-- **Three numbers have to move with it or something breaks silently.**
-  `.lm-button--icon` is a square sized to the field's height (32px); the toolbar's glyphs are
-  `.lm-toolbar svg` (16px), because `dom.ts`'s `icon()` writes 18 as presentation attributes
-  and has to keep doing so — the same helper draws the card's links and folds; and the
-  MapLibre top-corner clearance is the control height plus an 8px gap, **in both places**
-  (`:has(> .lm-toolbar)` and its 480px twin): 42 at 36px, 31 at 23px, 40 now. Too large is a
-  phantom band with nothing in it; too small is the overlap that rule exists to end.
+- **The toolbar's controls are 36px tall, on the root's own 14px type.** They have been
+  four sizes, and the route is a circle worth knowing about. `font: inherit` at 14px with 7px
+  of padding made a 36px box; asked for a third off, the row stated `font-size: 12px` on
+  `.lm-toolbar` and padded 2px, for 23px; that was reported as too small to read or press, so
+  the declaration went and the field padded 5px, for 32px. **That was reported as too small as
+  well, which is the whole finding: 32px was never the answer, it was the halfway house
+  between the two reports.** So the padding is 7px again and the box is back at its original
+  36px — 14px at the inherited 1.45 is a 20.3px line, and 7px either side plus the hairline is
+  36px. `font: inherit` on the field is what reads the row's type, and the search dropdown
+  inherits it too. **Do not restate `font-size` on `.lm-toolbar`**: twice now the fix has been
+  to delete that declaration. A control a finger presses on a phone does not get to be 32px.
+- **Four numbers have to move with it or something breaks silently.**
+  `.lm-button--icon` is a square sized to the field's height (36px); `.lm-search__action`, the
+  find-nearest button inside the field, is the height less its 2px inset either side (32px);
+  `.lm-search__input`'s `padding-right` has to stay at or above that button's width plus the
+  inset, so 34px was exactly flush and it is 38px, the same 4px of air it had at the smaller
+  size; and the MapLibre top-corner clearance is the control height plus an 8px gap, **in both
+  places** (`:has(> .lm-toolbar)` and its 480px twin): 42 at the first 36px, 31 at 23px, 40 at
+  32px, 44 now. (42 rather than 44 the first time was the hairline counted on one side only;
+  44 is the honest arithmetic.) Too large is a phantom band with nothing in it; too small is
+  the overlap that rule exists to end.
+- **There is no `.lm-toolbar svg` rule any more, and its absence is load-bearing enough to
+  have a comment holding the space.** It shrank `icon()`'s `width`/`height` of 18 —
+  presentation attributes, which any rule beats, and which have to stay 18 in `dom.ts` because
+  the same helper draws the card's links and folds — down to 16px for a 32px field. At 36px the
+  row wants the 18 the helper already writes, so the rule became two declarations restating a
+  default. It went out as **part of paying for the resize**: the glyph reading small was half
+  of what "the search box is too small" meant. If a toolbar glyph ever needs a size of its own
+  again, it needs one class, not a descendant rule on every `svg` in the row.
 - **Every size change here reaches live maps**, on the next `/embed` deploy and without the
   owner republishing — the tag-chip trade, taken deliberately each time because it was asked
   for directly, and a setting would be a key in `SnapshotSettings` for something nobody would
   open the panel to change.
-- **Each resize has had to be free against the ceiling, and the ceiling had 3 bytes in it.**
-  The 23px pass got there by stating the type once and folding two `color` declarations. The
-  32px pass is value edits plus one deleted `font-size`, which is net zero on its own — what
-  paid for `rowCard`'s 24 bytes of JS was dead CSS, none of it a feature: the bare
+- **Each resize has had to be free against the budget, and the 36px pass came in 10 bytes
+  under.** The 23px pass got there by stating the type once and folding two `color`
+  declarations. The 32px pass was value edits plus one deleted `font-size`, net zero on its
+  own — what paid for `rowCard`'s 24 bytes of JS was dead CSS, none of it a feature: the bare
   `.lm-button` rule (every `.lm-button` is also `--icon`, whose `padding: 0` always won), a
   `flex-wrap: nowrap` the docked toolbar restated from the base, `font: inherit` on a
   glyph-only button, and `-webkit-overflow-scrolling: touch`, which no browser that can run the
-  embed reads. 2 bytes spare after. The budget was not raised (§4).
+  embed reads. The 36px pass is seven digit-for-digit value swaps — every number kept its
+  character count, which is why it cost nothing — plus the deleted glyph rule, which is where
+  the 10 came from. **No budget was raised for any of the four** (§4). What did change, in the
+  same commit as the bottom sheet, is *which* number is the gate: the 320KB total ceiling was
+  down to 2 bytes and had become a cap on our own code by arithmetic accident, so it was
+  re-aimed at MapLibre, which is what its own docblock always said it was for. The 47KB
+  own-code budget is untouched and is still the number to argue with.
 - **`rowCard: false` is a results row that flies and marks but opens no card.** Absent in a
   snapshot means the card opens, which every published row did (§7); `DEFAULT_EMBED_SETTINGS`
   is `false`, because a card opened from the panel rarely fits the map the panel leaves. The
