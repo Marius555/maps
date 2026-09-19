@@ -1,7 +1,7 @@
 "use client";
 
 import { Separator } from "@heroui/react";
-import { Bookmark, Eye } from "lucide-react";
+import { Bookmark, Eye, Undo2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
 
@@ -74,6 +74,8 @@ export function MapToolbar({
   onImportShapes,
   onStartSelecting,
   onStopSelecting,
+  canUndoMove = false,
+  onUndoMove,
   onDropPin,
   onDraggingChange,
   onOpenStudio,
@@ -136,6 +138,12 @@ export function MapToolbar({
   onImportShapes?: () => void;
   onStartSelecting: () => void;
   onStopSelecting: () => void;
+  /**
+   * There is a dragged pin to put back — see use-pin-move-history.ts. Absent,
+   * the Undo button is not drawn at all, which is this toolbar as it was.
+   */
+  canUndoMove?: boolean;
+  onUndoMove?: () => void;
   /** A pin dragged out of the add control and dropped, in viewport coordinates. */
   onDropPin: (clientX: number, clientY: number, icon: string) => void;
   onDraggingChange?: (isDragging: boolean) => void;
@@ -229,6 +237,21 @@ export function MapToolbar({
           onStartSelecting={onStartSelecting}
           onStopSelecting={onStopSelecting}
         />
+
+        {/* Last on this side of the rule: it takes back a change made *on* the
+            map with the tools beside it — a dragged pin. Drawn disabled rather
+            than hidden when there is nothing to undo, so the toolbar does not
+            change width under the pointer the moment a pin is let go. */}
+        {onUndoMove ? (
+          <IconButton
+            label="Undo pin move"
+            icon={Undo2}
+            placement="bottom"
+            isDisabled={!canUndoMove}
+            aria-keyshortcuts="Control+Z Meta+Z"
+            onPress={onUndoMove}
+          />
+        ) : null}
 
         <Separator orientation="vertical" className="h-6" />
 

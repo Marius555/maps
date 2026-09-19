@@ -71,6 +71,30 @@ export function useAddressResolution(mapId: string) {
   const requests = useRef(new Map<string, number>());
 
   /**
+   * `pendingIds` again, as a ref, for `isPending`.
+   *
+   * A reader that closes over the set itself changes identity each time a lookup
+   * starts or ends — and `movePlace`, which asks, is the marker layer's `onMove`.
+   * A new `onMove` in the render straight after a drop re-ran the marker sync
+   * while the places array still held the old position, and the pin flashed
+   * back to where it had been dragged from.
+   */
+  const inFlight = useRef(new Set<string>());
+
+  const markPending = useCallback((placeId: string, isPending: boolean) => {
+    if (isPending) inFlight.current.add(placeId);
+    else inFlight.current.delete(placeId);
+
+    setMembership(setPendingIds, placeId, isPending);
+  }, []);
+
+  /** Whether this location's address is still being looked up. Stable. */
+  const isPending = useCallback(
+    (placeId: string) => inFlight.current.has(placeId),
+    [],
+  );
+
+  /**
    * Ask the geocoder what is at these coordinates and write it to the location.
    *
    * `address` is what receives it, not `name`. A location's name is the
@@ -90,7 +114,7 @@ export function useAddressResolution(mapId: string) {
       // A retry is a fresh attempt, so the row stops claiming the last one failed
       // for as long as this one is in the air.
       setMembership(setFailedIds, placeId, false);
-      setMembership(setPendingIds, placeId, true);
+      markPending(placeId, true);
 
       try {
         const candidate = await reverseMutate({ ...coords, road });
@@ -153,12 +177,29 @@ export function useAddressResolution(mapId: string) {
         // Also the failure path: a skeleton that never resolves is worse than a
         // row admitting it has nothing.
         if (requests.current.get(placeId) === token) {
-          setMembership(setPendingIds, placeId, false);
+          markPending(placeId, false);
         }
       }
     },
-    [reverseMutate, saveAddress],
+    [reverseMutate, saveAddress, markPending],
   );
+
+  /**
+   * Stop waiting for this location's address — whatever is in the air is not to
+   * land.
+   *
+   * For undoing a drag. The lookup the drag started describes where the pin was
+   * dragged *to*; if it answered after the pin had been put back, it would file
+   * the restored location under a street it is no longer on. Taking a number is
+   * enough to stop it: the lookup already checks it is still the newest before
+   * writing anything.
+   */
+  const cancel = useCallback((placeId: string) => {
+    requests.current.set(placeId, (requests.current.get(placeId) ?? 0) + 1);
+
+    markPending(placeId, false);
+    setMembership(setFailedIds, placeId, false);
+  }, [markPending]);
 
   /**
    * Drop everything remembered about locations that no longer exist.
@@ -173,11 +214,15 @@ export function useAddressResolution(mapId: string) {
       if (!placeIds.has(placeId)) requests.current.delete(placeId);
     }
 
+    for (const placeId of inFlight.current) {
+      if (!placeIds.has(placeId)) inFlight.current.delete(placeId);
+    }
+
     setPendingIds((current) => retain(current, placeIds));
     setFailedIds((current) => retain(current, placeIds));
   }, []);
 
-  return { pendingIds, failedIds, resolveAddress, retainOnly };
+  return { pendingIds, failedIds, isPending, resolveAddress, cancel, retainOnly };
 }
 
 /** Same set back when nothing was dropped, so this can't loop a render. */

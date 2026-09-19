@@ -138,6 +138,13 @@ export function usePlaceMarkers({
     isArmedRef.current = isArmed;
   });
 
+  /*
+   * Whether pins can be dragged at all — the only thing the effects below need
+   * to know about `onMove`. Its *identity* must not re-run them: see the note on
+   * the diff effect's dependencies.
+   */
+  const canMove = Boolean(onMove);
+
   useEffect(() => {
     const instance = map.current;
     if (!instance || !isReady) return;
@@ -206,7 +213,7 @@ export function usePlaceMarkers({
 
       const marker = new Marker({
         element,
-        draggable: Boolean(onMove) && !isArmed,
+        draggable: canMove && !isArmed,
       })
         .setLngLat([place.lng, place.lat])
         .addTo(instance);
@@ -248,8 +255,17 @@ export function usePlaceMarkers({
      *
      * Re-running costs nothing: the loop below diffs, so an unchanged marker is
      * repainted in place rather than rebuilt, and no drop animation restarts.
+     *
+     * **Except in the moment after a drop**, which is why `canMove` is here and
+     * `onMove` is not. `dragend` has already released the pin from `dragging`,
+     * and until the save's optimistic patch lands `places` still holds where it
+     * came *from* — so a re-run in that window puts it back there, and the patch
+     * then puts it forward again: a pin that flashes home on every drop. The
+     * editor's `onMove` changed identity in exactly that window (the address
+     * lookup the drop starts sets state at once). The listener reads `onMoveRef`,
+     * so nothing here needs to know which function it is.
      */
-  }, [map, isReady, places, pinIcons, onMove, colorFor, isArmed]);
+  }, [map, isReady, places, pinIcons, canMove, colorFor, isArmed]);
 
   useEffect(() => {
     for (const [id, marker] of markers.current) {
@@ -270,9 +286,9 @@ export function usePlaceMarkers({
    * can be dragged out from under a click that was meant for the map.
    */
   useEffect(() => {
-    const canDrag = Boolean(onMove) && !isArmed;
+    const canDrag = canMove && !isArmed;
     for (const marker of markers.current.values()) marker.setDraggable(canDrag);
-  }, [isArmed, onMove, places]);
+  }, [isArmed, canMove, places]);
 
   /*
    * Its own effect rather than a line in `paint`, for the reason the selection

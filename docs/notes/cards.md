@@ -104,13 +104,31 @@ building the same card from the same functions in `packages/shared/`.
   caps `.maplibregl-popup`, which is a flex row of the tip *and* the content — so a cap
   costs the card the tip's 9.6px and it overflows an `overflow: hidden` parent. It is
   `maxWidth: "none"`; a cap, if ever wanted again, must be the card's width plus the tip's.
-- **A card never opens under the results panel.** `embed/src/card-place.ts` holds
-  `usableFrame`, `cardBands` and `chooseBand`, and decides **from rectangles, never from
-  `data-lm-side`** — which is what makes one rule serve docked, stacked and floating, and
-  an RTL host page need no second case.
-- `flyToCard` still offsets against the **container's** centre, not the usable rect's —
-  MapLibre defines `flyTo`'s offset that way. `card-place.ts` is its own module because
-  `map.ts` imports maplibre-gl at module scope and is unreachable from a unit test.
+- **A card never opens under anything the embed floats over the map.** `usableFrame` in
+  `embed/src/card-place.ts` cuts away the results panel, the bottom sheet's peek strip and
+  a floating search bar, each **along whichever edge leaves the most map** — decided
+  **from rectangles, never from `data-lm-side`**, so one rule serves docked, stacked,
+  floating and the sheet, and an RTL host page needs no second case. It was a
+  horizontal-only test once, and the phone's full-width strip cut the map to a 10px sliver.
+- **Overlays are measured where they are going, not mid-slide.** A row tapped in an open
+  drawer closes it and starts the flight in one task, so `usableFrame` puts every running
+  CSS transition in the embed at its end, reads the rects and puts each back — one task,
+  nothing painted between. Without it the card was planned against the open sheet, flown
+  in cut to half, and grown at `moveend`.
+- **One side per map, not the cheapest side per pin.** `cardSide`: to the right of the pin
+  where the card is at most half the usable width, below it otherwise (every phone). The
+  pin moves the least it has to for the whole card to show on that side; a card taller
+  than the frame is cut (`--lm-popup-max`), and wider than it is narrowed (`--lm-popup-w`).
+- **Decided in the tick the card opens, and before a flight rather than after it.**
+  `fitCard` is the one function the settle and the flight both call. A pin click places
+  synchronously (no frame on MapLibre's side first); a row click fixes the side and hands
+  `flyTo` an `offset` that lands the pin and card centred as a pair, so `placeCard` at
+  `moveend` finds nothing to move. A flight with no card lands the pin in the middle of
+  the usable map.
+- The `offset` is still stated against the **container's** centre — MapLibre defines it
+  that way — while the usable rect decides where the pin goes. `card-place.ts` is its own
+  module because `map.ts` imports maplibre-gl at module scope and is unreachable from a
+  unit test.
 
 ### The designer on a touchscreen
 
@@ -1224,6 +1242,64 @@ touches `window` on evaluation — nothing in it is reachable from a unit test, 
 `embed/src/card-place.test.ts` is what now holds the placement honest.
 `PositionAnchor` is a type-only import there, so the split costs the bundle
 nothing.
+
+**The card goes to the right of its pin, or below it on a phone — and the phone
+had been broken by the panel rule above.** Reported as "on mobile a bigger card
+doesn't fit, and the card opens at the top or the bottom of the screen when it
+should be on the right". Two causes, both measured on the publish preview at
+390px. First, `usableFrame` tested overlap on the horizontal axis alone, which
+holds for a panel standing the frame's full height and not for the bottom
+sheet: its 44px peek strip spans the map's width, so the "cut" left the 10px
+between the strip and the edge. Every card then took the no-room branch and was
+flown to the bottom of the map with its pin *under* the strip (pin at y≈703 of
+731). Overlays are now cut along whichever edge leaves the most area, and the
+floating search bar is one of them, so a pin pushed to the top lands below it.
+Second, the side was "whichever costs least, above the pin on a tie" — above for
+one pin, below for the next, beside for a third. It is one side per map now
+(`cardSide`): beside the pin where the card is at most half the usable width,
+below it otherwise, which is every phone without a breakpoint. The four-band
+search went with it, since only one band is ever asked about.
+
+**The flight lands in one motion, as a pair.** `flyToCard` asks `fitCard` about
+the middle of the usable map with `pair` set, which aims half the card away from
+the middle, so the pin and its card arrive centred together rather than the pin
+centred and the card hanging off one side. The side is fixed before the camera
+moves and the `moveend` pass finds the pin already on its spot — verified by
+sampling the popup every frame: one anchor for the whole flight and no movement
+after the flight's own ease-out, on the desktop preview and at 390px. A pin
+*click* is placed in the same tick the card opens rather than a frame later,
+which removed the one frame the card spent on MapLibre's side before ours. A row
+set to open no card (`rowCard: false`, or cards off) lands its pin in the middle
+of the usable map, not the container, so a floating panel does not push it
+off-centre.
+
+**A card wider than the map is narrowed to it.** `buildPopup` set an inline
+`max-width` equal to the card's width "for the frame that is narrower than the
+card", which caps nothing, so a 400px card hung off a 390px phone. `fitCard`
+writes `--lm-popup-w` when the room is short, `.lm-popup--place` reads it, and the
+card keeps its designed height, so the words wrap and the middle zone scrolls.
+The designer's L/XL stops came down in the same change (360/400 wide, 500/560
+tall) — the stops only; `CARD_LIMITS` still accepts a card saved at 480×720, and
+the embed narrows and cuts it to whatever frame it opens in.
+
+**"Half the card shows while it flies, and the rest loads when the flight
+ends."** Reported with "open the card from a row" switched on, and it was the
+drawer, not the card. The row handler calls `closeDrawer()` and then
+`focusPlace` in the same task; the sheet slides shut on a 180ms `transform`
+transition, so when `flyToCard` measured, the sheet's rect was still the *open*
+one — measured at 390px, covering the map from y256. The card was planned
+against the 210px above it, capped at 161px of its 300, and flown in that way;
+the `moveend` pass then found the sheet shut and grew the card to full height
+after the landing. The side drawer had the same bug on the other axis.
+`usableFrame` now takes `root.getAnimations({ subtree: true })`, keeps the
+`CSSTransition`s (MapLibre's location dot pulses forever, and an infinite end
+time cannot be seeked to), sets each to its end time, reads every overlay's rect,
+and restores each `currentTime` — in one task, so nothing paints and the slide
+carries on from where it was. The subtree matters: a search bar docked in the
+sheet moves with the sheet's transform and has no transition of its own.
+Verified on the preview at 390px (sheet) and 700px (side drawer): one card height
+on every frame of the flight, no cap, nothing changing at `moveend`. It cost 131
+bytes gzipped.
 
 **Every `--lm-card-*` fallback must equal its `--card-*` twin, and three of them
 did not.** The two stylesheets are kept in step by hand, which works until

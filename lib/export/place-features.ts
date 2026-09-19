@@ -7,6 +7,8 @@ import {
 } from "@/packages/shared/pin-raster";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 
+import type { ExportPlace } from "./export-place";
+
 /**
  * Locations as style layers, for a map with no DOM.
  *
@@ -28,14 +30,7 @@ const SOURCE = "export-places";
 const POINT_LAYER = "export-place-points";
 const PIN_LAYER = "export-place-pins";
 
-export type ExportPlace = {
-  lng: number;
-  lat: number;
-  /** Empty for a plain dot. The caller resolves `custom:` ids the same way. */
-  icon: string;
-  /** Already resolved by the caller — category, group and custom pin ranked. */
-  color: string;
-};
+export type { ExportPlace };
 
 /**
  * Add the layers, and register the images they need.
@@ -51,6 +46,12 @@ export async function addPlaceLayers(
   map: MapLibreMap,
   places: readonly ExportPlace[],
   pinIcons?: readonly CustomPinIcon[],
+  /**
+   * How big a pin is drawn, against the export's own size. Absent is 1, which is
+   * every export. The maps list's previews pass less: a 480px thumbnail of a
+   * dense map at full pin size is one blob of white rings.
+   */
+  scale = 1,
 ): Promise<void> {
   const pairs = places
     .filter((place) => place.icon)
@@ -73,8 +74,8 @@ export async function addPlaceLayers(
     filter: ["!", ["has", "pin"]],
     paint: {
       "circle-color": ["get", "color"],
-      "circle-radius": 8,
-      "circle-stroke-width": 2,
+      "circle-radius": 8 * scale,
+      "circle-stroke-width": 2 * scale,
       "circle-stroke-color": "#ffffff",
     },
   });
@@ -90,6 +91,8 @@ export async function addPlaceLayers(
       // anchor, as the embed's own pin layer.
       "icon-image": ["get", "pin"],
       "icon-anchor": "center",
+      // Only when asked for, so an export's layout object stays what it was.
+      ...(scale === 1 ? {} : { "icon-size": scale }),
       /*
        * Collision is off, as it is in the embed and for the same reason: two
        * shops on one street would otherwise silently cost one of them its pin.

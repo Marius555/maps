@@ -11,6 +11,12 @@
  */
 @theme inline {
   --font-sans: var(--font-instrument-sans);
+  /* The marketing pages' two extra roles, wired the same way and for the same
+     reason: without these lines `font-display` and `font-mono` are not
+     utilities, and `font-mono` in particular would silently keep resolving to
+     Tailwind's own stack. app/layout.tsx loads both. */
+  --font-display: var(--font-archivo);
+  --font-mono: var(--font-plex-mono);
   /* Ours, not HeroUI's — see `--warning-ink` below. Without this line the
      variable exists but `text-warning-ink` is not a utility. */
   --color-warning-ink: var(--warning-ink);
@@ -3104,4 +3110,741 @@ body.is-pin-dragging * {
   .disclosure__content {
     will-change: auto;
   }
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Marketing pages
+ * ---------------------------------------------------------------------------
+ *
+ * The public pages are laid out like a printed map sheet: a graticule ground,
+ * a legend, a scale bar, and marginalia set in mono. Everything below is either
+ * that ground or the hero's one orchestrated arrival.
+ *
+ * Plain unlayered CSS like the rest of this file, for the same reason: it has
+ * to beat @heroui/styles without an `!important`.
+ *
+ * Every colour is a theme token, so these pages crossfade with the app when the
+ * theme changes (see the `@property` block above). A hardcoded palette here
+ * would leave a light rectangle on a near-black page for the length of every
+ * toggle — the tell that a screen was pasted in from somewhere else.
+ */
+
+/*
+ * The display face, at a width the body face cannot reach.
+ *
+ * Archivo is loaded as a variable font with its `wdth` axis, and this is the
+ * only place that axis is driven. 118 rather than the 125 maximum: past about
+ * 120 the counters open far enough that a headline stops reading as one word
+ * and starts reading as spaced letters, which is a different — and worse —
+ * effect than wayfinding lettering.
+ *
+ * `font-synthesis: none` because a synthesised bold on top of a real 700 is
+ * what makes a variable font look muddy at display size.
+ */
+.mk-display {
+  font-family: var(--font-display), var(--font-sans), ui-sans-serif, system-ui,
+    sans-serif;
+  font-variation-settings: "wdth" 118;
+  font-weight: 700;
+  font-synthesis: none;
+  letter-spacing: -0.02em;
+  line-height: 0.96;
+}
+
+/* The same lettering at label size, where the tracking has to open back up —
+   tight tracking is a property of large type, not of the face. */
+.mk-eyebrow {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/*
+ * The graticule: the lines a map draws to say where you are.
+ *
+ * Two grids at once — a fine one and a coarse one every fourth line — because
+ * that is what a real graticule does, and because one grid at one weight reads
+ * as graph paper. Masked to fade out vertically so a section never ends on a
+ * hard edge of ruling.
+ *
+ * `background-position: center` rather than the default corner: the grid then
+ * stays centred under content as the viewport changes, instead of the lines
+ * appearing to crawl sideways on every resize.
+ */
+.mk-graticule {
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px),
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 160px 160px, 160px 160px, 40px 40px, 40px 40px;
+  background-position: center;
+  opacity: 0.55;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 12%,
+    #000 78%,
+    transparent
+  );
+}
+
+/*
+ * The public site's header height, as a number the page can subtract.
+ *
+ * `SiteHeader` is `py-6` around a 1.5rem logo and is deliberately not sticky
+ * (see the component), so it sits *above* the first section rather than over
+ * it — and the hero, which has to hold the first screen, has to know how much
+ * of that screen the header already took. One value here rather than a magic
+ * number in a class, because the header's padding and this have to move
+ * together or the first fold is wrong by exactly the difference.
+ */
+.mk-site {
+  --mk-header: 4.5rem;
+}
+
+/*
+ * The landing page scrolls a section at a time.
+ *
+ * **On `<html>`, because that is the scroll container.** The document scrolls,
+ * not a box inside it, so `scroll-snap-type` has to be set there — and `:has()`
+ * is what keeps it on the one page that wants it. `app/(marketing)/page.tsx`
+ * renders `.mk-snap`; /pricing, /docs and the legal pages share the same shell
+ * and are ordinary documents, which they stay.
+ *
+ * **Mandatory, and it took making the sections fit to earn that.** This used to
+ * be gated behind `min-height: 56rem` with `proximity` below it, because three
+ * of the sections measured about 865px against the 732px a 1440×900 laptop
+ * actually leaves — and firmly snapping a section that does not fit is worse
+ * than not snapping at all. That gate was a measurement of a layout bug rather
+ * than a rule: every section is now `100svh` and every one of them was
+ * compacted until its content fits inside that, measured.
+ *
+ * **And only where the grids are side by side: below `lg` there is no snap at
+ * all.** Every multi-column grid on this page stacks there, by design — three
+ * step cards become three rows, the two cost cards become two. Measured at
+ * 502px wide: the sequence section is 1459px against a 732px screen, the key
+ * 1124px. No amount of compacting fixes that, because the stacking *is* the
+ * mobile layout. It used to get `proximity`, which only takes hold near a
+ * boundary — and on a phone that still read as the page being tugged at the end
+ * of a flick, so it was taken off: a phone scrolls as a plain document.
+ *
+ * **Both numbers in the gate are measured.** 64rem is `lg`, the breakpoint the
+ * grids themselves switch at — not a number picked near it. 44rem of height
+ * comes from the tallest section's own content: swept across 1024, 1100, 1280
+ * and 1440px wide with the viewport forced short, the worst any section needs
+ * is **688px**, and that is the scale section at every one of those widths —
+ * its verdict sentence is held at two lines so dragging the slider cannot move
+ * the section (`verdictSizers` in lib/marketing/cost.ts), and its measure is
+ * capped, so the height does not vary with width. The key section is the
+ * runner-up at 685, at exactly 1024 where its three columns wrap most. 44rem is
+ * 704px, so the firm snap arrives with 16px to spare. A 1440×900 laptop leaves
+ * ~732px and qualifies; a 1366×768
+ * screen leaves ~640px and does not, correctly — at 640 the sections do not
+ * fit and `proximity` is the honest answer for a key or the scrollbar. The
+ * wheel still steps there: `SnapScroll` gates on width alone and gives a
+ * section taller than the window a second stop at its foot.
+ *
+ * **Re-measure both if a section grows.** docs/notes/marketing.md has the
+ * per-section budget and the script.
+ *
+ * **`scroll-snap-stop: always` is the magnet.** Without it a fast wheel flick
+ * or a trackpad fling passes several snap points in one gesture and lands
+ * wherever momentum ran out, which reads as snapping that works sometimes. With
+ * it, one gesture moves one screen — which is the whole shape of this page.
+ *
+ * **Off entirely under `prefers-reduced-motion`.** Snapping is scrolling the
+ * visitor did not ask for, and it tells them nothing that the sections do not
+ * already tell them by being a screen each. The rest of this file switches
+ * animations off for the same reader; this is the same promise.
+ *
+ * `scroll-snap-align` goes on the children rather than in each component: the
+ * hero is a `<section>` of its own and the rest come from `Section`, and how
+ * the page scrolls is the page's business, not a section's.
+ *
+ * **The first snap point is the header, not the hero** — and that is not a
+ * nicety. A mandatory snap container scrolls to its nearest snap point on load,
+ * so with the hero as the first one the page opened 72px down with the
+ * navigation already scrolled off, every time. The hero is a screen *minus* the
+ * header (see `Hero`), so the two together are the first screen and the
+ * document's own top is where it starts.
+ *
+ * **The footer aligns to `end`, and under a mandatory snap that is the
+ * difference between reachable and not.** It is 109px tall; aligned to `start`
+ * it claims a whole screen to show a hundred pixels of links. Aligned to `end`
+ * its bottom meets the viewport's bottom, which is simply where a document
+ * stops — and it stays a snap point of its own, because a scroll position with
+ * *no* snap point near it is one a mandatory container refuses to rest at.
+ */
+@media (prefers-reduced-motion: no-preference) and (min-width: 64rem) {
+  html:has(.mk-snap) {
+    scroll-snap-type: y proximity;
+  }
+
+  @media (min-height: 44rem) {
+    html:has(.mk-snap) {
+      scroll-snap-type: y mandatory;
+    }
+  }
+
+  .mk-snap > *,
+  /* The header is outside the wrapper — it belongs to the layout — so it is
+     named here: it is the top of the first screen. */
+  .mk-site:has(.mk-snap) > header {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .mk-site:has(.mk-snap) > footer {
+    scroll-snap-align: end;
+    scroll-snap-stop: always;
+  }
+
+  /* The hero shares the first screen with the header above it, so it is not a
+     stop of its own. */
+  .mk-snap > *:first-child {
+    scroll-snap-align: none;
+  }
+
+  /*
+   * Off for the length of a move `SnapScroll` is animating.
+   *
+   * **Snapping applies to programmatic scrolls too**, so under `mandatory`
+   * every `scrollTo` an animation makes is re-snapped to the nearest point and
+   * the move teleports instead of travelling. components/marketing/snap-scroll.tsx
+   * sets the attribute for the duration and takes it off at the end, where
+   * restoring the snap costs nothing because the page has landed exactly on a
+   * stop. The extra attribute is what outranks the rule above without an
+   * `!important`.
+   */
+  html[data-snap-lock]:has(.mk-snap) {
+    scroll-snap-type: none;
+  }
+}
+
+/*
+ * The cue at the foot of the first screen, saying the page moves a screen at a
+ * time — see components/marketing/hero/scroll-cue.tsx.
+ *
+ * A short travel and a long pause. A continuous bob is a thing moving on the
+ * page for the whole time somebody is reading the headline above it; this
+ * nudges twice a cycle and then holds still, which reads as a hint rather than
+ * as an animation.
+ *
+ * The arrow points down whether or not it moves, so the reduced-motion branch
+ * is simply the animation removed — nothing is told in the movement alone.
+ */
+.mk-scroll-cue__arrow {
+  animation: mk-scroll-cue-nudge 2.8s ease-in-out infinite;
+}
+
+@keyframes mk-scroll-cue-nudge {
+  0%,
+  70%,
+  100% {
+    translate: 0 0;
+  }
+  80% {
+    translate: 0 0.25rem;
+  }
+  90% {
+    translate: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-scroll-cue__arrow {
+    animation: none;
+  }
+}
+
+/*
+ * The hero's map: a picture of the basemap with the editor's pins laid over it
+ * — see components/marketing/hero/hero-map.tsx and lib/marketing/hero-map.ts.
+ *
+ * **An inline-size container, and the size container is the box below it.**
+ * This used to be `container-type: size` here, on the promise that a stretched
+ * flex item satisfies one — "a size container may not be sized by its own
+ * contents, and a stretched item is not". That is true of layout and false of
+ * container query *units*: measured at 390×844 this box is 350×764 and
+ * `100cqh` inside it resolves to **0**, so the stage's `max(100cqh, 50cqw)`
+ * collapsed to `50cqw` and the map drew as a 349×174 strip in a full-height
+ * frame. Chrome wants a *definite* block size, and a flex item grown against an
+ * ancestor's `min-height` is not that. `.mk-hero-map__viewport` below is.
+ *
+ * It stays a container of some kind because `.mk-hero-attrib__text` reads
+ * `100cqw` off it, and an inline-size container still answers that; drop the
+ * declaration and that `calc(100cqw - 3rem)` silently starts measuring the
+ * viewport instead. docs/notes/marketing.md has the measurements.
+ */
+.mk-hero-map {
+  container-type: inline-size;
+  /*
+   * A flex item that stretches to the row its parent gives it, rather than a
+   * fixed height: the hero holds a screen and the map takes whatever the words
+   * leave.
+   *
+   * It used to be `clamp(22rem, 62vh, 38rem)`, from when the page scrolled
+   * freely and the hero was as tall as it wanted to be. The floor is kept so a
+   * short landscape phone gets a map rather than a strip.
+   */
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 15rem;
+}
+
+/*
+ * The box the stage is measured against: the frame's own rectangle, as a size
+ * container that actually resolves `cqh`.
+ *
+ * `inset: 0` on an absolutely positioned box takes both dimensions from the
+ * frame's padding box, which is definite whatever grew the frame — so `100cqh`
+ * in here is the frame's height (measured 762 inside a 764px frame, the other
+ * 2px being its border) rather than 0. It is also exactly the box
+ * `useElementSize` reports to `stageBox`, which reads the content box, so the
+ * CSS crop and the pixel maths agree by construction.
+ *
+ * Nothing but the stage goes in here. The chips, "Nearest to me", the card, the
+ * you-are-here layer and the attribution stay direct children of the frame,
+ * which is where their stacking order and the pointer handlers live.
+ */
+.mk-hero-map__viewport {
+  position: absolute;
+  inset: 0;
+  container-type: size;
+}
+
+/*
+ * The picture, cropped to the frame the way `object-fit: cover` would crop it —
+ * but as a box, so the pins inside it are cropped *with* it and stay on their
+ * streets at every width. The 2:1 in both lines is HERO_SIZE's aspect ratio.
+ *
+ * A background rather than an `<img>`, and the reason is the theme: the page
+ * knows light or dark only as a class on <html>, and of two `<img>` elements
+ * the browser downloads both whichever one is hidden. A background is fetched
+ * only when a rule that names it matches, so each visitor downloads one look.
+ *
+ * The plain `url()` first is the fallback for a browser without `image-set()`.
+ */
+.mk-hero-map__stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100cqw, 200cqh);
+  height: max(100cqh, 50cqw);
+  translate: -50% -50%;
+  background-color: var(--surface-secondary);
+  background-image: url("/marketing/hero-positron.webp");
+  background-image: image-set(
+    url("/marketing/hero-positron.webp") 1x,
+    url("/marketing/hero-positron@2x.webp") 2x
+  );
+  background-size: 100% 100%;
+}
+
+.dark .mk-hero-map__stage,
+[data-theme="dark"] .mk-hero-map__stage {
+  background-image: url("/marketing/hero-carbon.webp");
+  background-image: image-set(
+    url("/marketing/hero-carbon.webp") 1x,
+    url("/marketing/hero-carbon@2x.webp") 2x
+  );
+}
+
+/*
+ * A marker from the editor, pinned by its centre to its point — which is how
+ * MapLibre anchors the same element (see `.map-pin--icon` further up). The hand
+ * cursor and the hover lift are the editor's own and come with the markup; a
+ * pin the filter has hidden stops answering the pointer.
+ */
+.mk-hero-pin {
+  position: absolute;
+  translate: -50% -50%;
+}
+
+.mk-hero-pin[data-hidden] {
+  pointer-events: none;
+}
+
+/*
+ * The landing: each pin drops in and the editor's own ripple plays as it lands,
+ * one after another outwards from the centre (`dropRanks`).
+ *
+ * **CSS rather than Motion, and that is the rule reveal.tsx records.** Motion's
+ * `initial` is written into the server HTML as an inline style, so a pin that
+ * started invisible there would stay invisible for anyone whose script never
+ * ran. A CSS animation plays with or without script, and `backwards` holds the
+ * first frame only for the length of the pin's own delay.
+ *
+ * On the marker, not on `.mk-hero-pin`: that element's transform belongs to
+ * Motion (the filter), and one element with two writers is a flicker. The
+ * individual `scale`/`translate` properties compose with the hover transforms
+ * on the dot and the shape rather than replacing them.
+ */
+.mk-hero-pin__drop {
+  animation: mk-hero-pin-drop 480ms cubic-bezier(0.34, 1.4, 0.64, 1) backwards;
+  animation-delay: var(--mk-drop-delay, 0s);
+}
+
+.mk-hero-pin__drop .map-pin__pulse {
+  animation: map-pin-drop 520ms ease-out 1;
+  animation-delay: calc(var(--mk-drop-delay, 0s) + 0.3s);
+}
+
+@keyframes mk-hero-pin-drop {
+  from {
+    opacity: 0;
+    translate: 0 -0.875rem;
+    scale: 0.4;
+  }
+}
+
+/*
+ * The blanket reduced-motion rule shortens an animation but keeps its delay, so
+ * the outermost pins would sit invisible for a second and then snap on. The
+ * static form of "pins landed" is pins that are simply there.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .mk-hero-pin__drop,
+  .mk-hero-pin__drop .map-pin__pulse {
+    animation: none;
+  }
+}
+
+/*
+ * The tag chips (hero-filters.tsx). HeroUI draws a joined, filled segmented
+ * control; on a map the chips are separate pills on the glass, and the chosen
+ * one's ground is a single element that slides between them — so every chip's
+ * own fill is cleared, selected or not, and the indicator paints instead.
+ */
+.mk-hero-filters {
+  scrollbar-width: none;
+}
+
+.mk-hero-filters .toggle-button {
+  --toggle-button-bg: transparent;
+  --toggle-button-bg-hover: color-mix(in oklab, var(--foreground) 7%, transparent);
+  --toggle-button-bg-pressed: var(--toggle-button-bg-hover);
+  --toggle-button-bg-selected: transparent;
+  --toggle-button-bg-selected-hover: transparent;
+  --toggle-button-bg-selected-pressed: transparent;
+  --toggle-button-fg-selected: var(--background);
+
+  border-radius: 9999px;
+  flex-shrink: 0;
+  gap: 0.375rem;
+  transition: color 180ms var(--ease-out, ease-out);
+}
+
+.mk-hero-filters__indicator {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 9999px;
+  background: var(--foreground);
+}
+
+/* A ring of the page round each colour dot, so the roastery's orange still
+   reads as a dot on a dark chip. */
+.mk-hero-filters__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 1.5px var(--surface);
+}
+
+/* "You are here": the visitor's dot, the one mark on the map that is not a pin. */
+.mk-hero-you {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  translate: -50% -50%;
+}
+
+.mk-hero-you__dot,
+.mk-hero-you__ring {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--accent);
+}
+
+.mk-hero-you__dot {
+  border: 3px solid var(--surface);
+  box-shadow: 0 1px 4px oklch(0% 0 0 / 0.35);
+}
+
+/*
+ * The credit (CLAUDE.md §12), folded behind an ⓘ in the corner the way
+ * MapLibre's compact control folds it on every other map in the app. A native
+ * `<details>`, so it opens without script; the text sits to the button's left
+ * and is capped at the frame's width (the frame is a size container), so on a
+ * phone it wraps rather than running off the map.
+ */
+.mk-hero-attrib {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 20;
+}
+
+.mk-hero-attrib__button {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  background: var(--map-chrome);
+  backdrop-filter: blur(8px);
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+  transition: color 150ms ease-out;
+}
+
+.mk-hero-attrib__button::-webkit-details-marker {
+  display: none;
+}
+
+.mk-hero-attrib__button:hover,
+.mk-hero-attrib[open] .mk-hero-attrib__button {
+  color: var(--foreground);
+}
+
+.mk-hero-attrib__text {
+  position: absolute;
+  right: calc(100% + 0.375rem);
+  bottom: 0;
+  width: max-content;
+  max-width: calc(100cqw - 3rem);
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.75rem;
+  background: var(--map-chrome);
+  backdrop-filter: blur(8px);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  animation: mk-hero-attrib-in 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.mk-hero-attrib__text a {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@keyframes mk-hero-attrib-in {
+  from {
+    opacity: 0;
+    translate: 0.375rem 0;
+  }
+}
+
+/*
+ * The landing page's flat panels — the step cards and the cost calculator. One
+ * ground and nothing else: no outline and no wash, which is what they wore
+ * before and what made them read as three separate widgets.
+ *
+ * Tertiary on the light site, secondary on the dark one. The light secondary is
+ * 96% on a 97.5% page, which is a panel nobody can see the edge of; the dark
+ * tertiary is lighter than the drawings' own panels are meant to be against it.
+ *
+ * A tertiary button's own ground is `--default`, 94% — the panel's colour, near
+ * enough — so on the light panel it takes the page's white instead.
+ */
+.mk-panel {
+  background: var(--surface-tertiary);
+}
+
+.dark .mk-panel,
+[data-theme="dark"] .mk-panel {
+  background: var(--surface-secondary);
+}
+
+.light .mk-panel .button--tertiary {
+  --button-bg: var(--surface);
+  --button-bg-hover: color-mix(in oklab, var(--surface) 85%, var(--foreground));
+  --button-bg-pressed: var(--button-bg-hover);
+}
+
+/*
+ * The survey chart's three series
+ * (components/marketing/compare/bill-chart.tsx).
+ *
+ * **Two steps of the page's own ink, plus the accent — not three hues.** The
+ * rule at the top of this file is that the neutrals are true greys at zero
+ * chroma and the accent is the interface's only chromatic voice, and a chart is
+ * not an exemption. It is also the claim the section is making: two of these
+ * lines are "somebody else" and one is us, so a palette that ranked the other
+ * two by hue would be saying something the page does not say.
+ *
+ * **Measured with the dataviz validator, not chosen by eye**, against the panel
+ * each mode actually draws on — `--surface-tertiary` on the light site,
+ * `--surface-secondary` on the dark one. Light (#2e2e2e, #7a7a7a, #f54600):
+ * CVD separation ΔE 12.0 at worst, normal-vision 22.9, every series over 3:1
+ * against its surface. Dark (#d7d7d7, #747474, #f25f36): 9.7, 21.9, and the
+ * same contrast pass. Two checks report FAIL and both are the validator saying
+ * "these are not three hues" — a lightness band meant for hue slots, and a
+ * chroma floor that greys cannot meet by definition. That is the design system,
+ * not a defect. **The number that is not negotiable is the 28 points of
+ * lightness between the two greys**: bring them closer and they stop being two
+ * series. Re-run the validator if you move any of these.
+ *
+ * The dark steps are chosen against the dark panel rather than flipped from the
+ * light ones — a grey that reads as "the quieter series" on paper is the louder
+ * one on a dark ground.
+ *
+ * Colour is never the only carrier: the quiet series is dashed, each line is
+ * labelled at its own end, and the same numbers are in a table under the chart.
+ */
+:root,
+.light,
+[data-theme="light"],
+[data-theme="default"] {
+  --mk-series-metered: oklch(30% 0 0);
+  --mk-series-locator: oklch(58% 0 0);
+  --mk-series-us: var(--accent);
+}
+
+.dark,
+[data-theme="dark"] {
+  --mk-series-metered: oklch(88% 0 0);
+  --mk-series-locator: oklch(56% 0 0);
+  --mk-series-us: var(--accent);
+}
+
+/*
+ * Recharts draws an SVG focus outline on the chart surface when it is clicked.
+ * The app's own `:focus-visible` ring is the one this site uses, and a second
+ * rectangle around the plot on every click is not a focus state anybody asked
+ * for.
+ */
+.mk-chart .recharts-surface:focus {
+  outline: none;
+}
+
+/*
+ * The cost calculator's slider (components/marketing/cost/views-slider.tsx): a
+ * native range input drawn to match HeroUI's Slider — a 1.25rem rounded track,
+ * the accent up to the thumb, and a white pill of a thumb ringed in the accent.
+ *
+ * The fill is a hard stop in the track's background, so it is one solid colour
+ * each side of the thumb. It stops at the thumb's *centre*, which moves across
+ * `100% - thumb` rather than the full width; `--mk-range-thumb` lives on the
+ * field so the tick labels under the track can use the same arithmetic.
+ */
+.mk-range-field {
+  --mk-range-thumb: 1.75rem;
+}
+
+.mk-range {
+  --mk-range-stop: calc(
+    var(--mk-range-fill, 0) * (100% - var(--mk-range-thumb)) + var(--mk-range-thumb) / 2
+  );
+
+  appearance: none;
+  height: 1.25rem;
+  margin: 0;
+  border-radius: 0.75rem;
+  /* The empty side is the foreground at low strength rather than `--default`,
+     which on the light panel is the panel's own colour. */
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--mk-range-stop),
+    color-mix(in oklab, var(--foreground) 10%, transparent) var(--mk-range-stop)
+  );
+  cursor: pointer;
+}
+
+.mk-range::-webkit-slider-thumb {
+  appearance: none;
+  width: var(--mk-range-thumb);
+  height: 1.25rem;
+  border: 0.1875rem solid var(--accent);
+  border-radius: 0.75rem;
+  background: var(--accent-foreground);
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.2);
+  cursor: grab;
+  transition: transform 150ms ease-out;
+}
+
+.mk-range::-moz-range-thumb {
+  box-sizing: border-box;
+  width: var(--mk-range-thumb);
+  height: 1.25rem;
+  border: 0.1875rem solid var(--accent);
+  border-radius: 0.75rem;
+  background: var(--accent-foreground);
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.2);
+  cursor: grab;
+  transition: transform 150ms ease-out;
+}
+
+.mk-range::-moz-range-track {
+  background: transparent;
+}
+
+.mk-range:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  transform: scale(1.08);
+}
+
+.mk-range:active::-moz-range-thumb {
+  cursor: grabbing;
+  transform: scale(1.08);
+}
+
+/* The ring goes on the thumb, which is what a keyboard is moving — the site-wide
+   outline below would draw round the whole track instead. `input` in the
+   selector because that rule's specificity ties with a two-class one, and it
+   comes later in the file. */
+.mk-site input.mk-range:focus-visible {
+  outline: none;
+}
+
+.mk-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.mk-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/*
+ * Visible keyboard focus, for the whole public site.
+ *
+ * Measured rather than assumed, and the answer was no: 165 `:focus-visible`
+ * rules ship with this app and not one of them matched either a `LinkButton` or
+ * the toggles under the hero map. HeroUI's focus ring arrives with its React
+ * Aria `Button`, as a `data-focus-visible` attribute — and `LinkButton` is a
+ * `next/link` wearing `buttonVariants()`' *classes*, so nothing sets it. The
+ * result was a page you could tab through without ever seeing where you were.
+ *
+ * Scoped to the marketing shell rather than fixed inside `LinkButton`, because
+ * that component is shared with the auth screens and the dashboard and its
+ * focus story is theirs to settle. Done here, the public pages clear the floor
+ * today without a change reaching three other surfaces.
+ *
+ * Any `:focus-visible`, not a list of tags. The list missed the snippet's
+ * scroller: Chrome makes a scroll container keyboard-focusable with no
+ * `tabindex` at all — correctly, since that is how a keyboard scrolls it — so
+ * `[tabindex]` never matched and it fell back to the browser's hairline ring.
+ *
+ * `:not(.lm-root *)` keeps it off the embed. Everything inside that root is the
+ * published map, which draws its own ring in the *customer's* accent
+ * (embed/src/styles.css) — a second ring over it would be our chrome leaking
+ * onto their design.
+ */
+.mk-site :focus-visible:not(.lm-root *) {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 6px;
 }

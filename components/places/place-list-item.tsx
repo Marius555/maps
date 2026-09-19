@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, RotateCw, Trash2, Ungroup } from "lucide-react";
+import { Group, Pencil, RotateCw, Trash2, Ungroup } from "lucide-react";
 import { motion } from "motion/react";
 
 import {
@@ -52,6 +52,7 @@ export function PlaceListItem({
   onEdit,
   onDelete,
   onRetryAddress,
+  onCreateGroup,
   onRemoveFromGroup,
   onDropObject,
   acceptsDrop,
@@ -92,6 +93,8 @@ export function PlaceListItem({
   onEdit: () => void;
   onDelete: () => void;
   onRetryAddress?: () => void;
+  /** Only passed for a loose row — see the menu item. */
+  onCreateGroup?: () => void;
   /** Only passed for a row in a group — see the menu item. */
   onRemoveFromGroup?: () => void;
   /** Another row was dropped on this one. Omit and the row is not a drop target. */
@@ -144,6 +147,21 @@ export function PlaceListItem({
       label: "Find address again",
       icon: RotateCw,
       onAction: onRetryAddress,
+    });
+  }
+
+  /*
+   * Only on a loose row, so it and "Remove from group" share one slot and never
+   * appear together. Dragging one loose row onto another makes a group of two;
+   * this makes a group of one without needing a second row to aim at — which on
+   * a phone, behind a 250ms hold, is the harder gesture of the two.
+   */
+  if (onCreateGroup) {
+    items.push({
+      id: "create-group",
+      label: "Create group",
+      icon: Group,
+      onAction: onCreateGroup,
     });
   }
 

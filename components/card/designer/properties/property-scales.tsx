@@ -138,22 +138,44 @@ export const FONT_SIZES: readonly ScaleOption[] = [
   { value: 28, label: "XL" },
 ];
 
-/** How wide the card is. 320 is `defaultCardLayout`'s. */
+/**
+ * How wide the card is. 320 is `defaultCardLayout`'s.
+ *
+ * **The top of the scale is a phone, not a desktop.** L and XL were 400 and 480,
+ * and 480 does not fit a 390px phone at all — the embed now narrows a card to
+ * its frame (`fitCard` in embed/src/map.ts), but a card designed wider than any
+ * phone is designed for a screen most visitors do not have. 400 is the widest
+ * that still fits a large phone whole, and on a desktop it stays well under half
+ * of a typical map, which is what keeps it opening beside its pin
+ * (`cardSide` in embed/src/card-place.ts).
+ *
+ * Only the *offered* sizes shrank. `CARD_LIMITS` still accepts 480, so a card
+ * saved at the old XL keeps its width and lights XL here without being rewritten
+ * (`nearestStop`) — quietly editing a saved design is the one thing this panel
+ * must never do.
+ */
 export const CARD_WIDTHS: readonly ScaleOption[] = [
   { value: 220, label: "XS" },
   { value: 270, label: "S" },
   { value: 320, label: "M" },
-  { value: 400, label: "L" },
-  { value: 480, label: "XL" },
+  { value: 360, label: "L" },
+  { value: 400, label: "XL" },
 ];
 
-/** How tall the card may get. 440 is `defaultCardLayout`'s. */
+/**
+ * How tall the card may get. 440 is `defaultCardLayout`'s.
+ *
+ * L and XL were 580 and 720 — the whole height of a laptop's map, and taller than
+ * a phone's once the search bar and the results strip have taken theirs. The
+ * same argument and the same promise as `CARD_WIDTHS`: smaller offers, and no
+ * saved height rewritten.
+ */
 export const CARD_HEIGHTS: readonly ScaleOption[] = [
   { value: 180, label: "XS" },
   { value: 300, label: "S" },
   { value: 440, label: "M" },
-  { value: 580, label: "L" },
-  { value: 720, label: "XL" },
+  { value: 500, label: "L" },
+  { value: 560, label: "XL" },
 ];
 
 /**

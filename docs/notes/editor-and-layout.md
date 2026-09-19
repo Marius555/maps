@@ -325,6 +325,22 @@ rewritten; it is the record of why this area is shaped as it is.
   because a third button on a 160px map is clutter. **The embed is untouched and still offers
   all of them**, since there the visitor is only looking; that choice lives in
   `SnapshotSettings` and `components/publish/design-sidebar/map-controls-group.tsx`.
+- **Undoing a pin drag must cancel that pin's address lookup, and restores six fields, not
+  two.** A drag is two writes — the position, then the address the reverse geocoder finds a
+  second later — so `usePinMoveHistory` snapshots `lat`, `lng`, `address`, `addressParts`,
+  `geocodeConfidence` and `geocodeStatus` and writes them back in one PATCH. The lookup the
+  drag started is still in the air if the undo comes quickly, and without
+  `useAddressResolution().cancel` it lands afterwards and files the restored pin under the
+  street it was dragged to (measured: the reply arrived 800ms after the undo and was
+  discarded). Ordering against a move or address write still queued needs nothing extra:
+  place PATCHes are one serial queue per map (`useUpdatePlace`'s `scope`). The stack is a
+  ref with a count beside it, because two presses of Ctrl+Z can arrive before a render and
+  state alone would hand both the same move. **Whether the lookup was pending is read through
+  `isPending()`, never the `pendingIds` set:** putting the set in `movePlace`'s dependencies
+  gave the marker layer a new `onMove` in the render straight after every drop, before the
+  optimistic patch had landed, and the pin flashed back to where it was dragged from. The
+  marker diff effect now depends on `canMove`, not on `onMove` — see the note on its
+  dependencies in `use-place-markers.ts`.
 
 ### Verifying a map in the browser
 

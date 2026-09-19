@@ -322,6 +322,25 @@ export type Page<T> = {
   total: number;
 };
 
+/**
+ * What the maps list says about one map beyond its own row.
+ *
+ * Counted per table in one request each (map-summary.repository.ts), so a card
+ * can say how much is on a map and when it last changed without loading any of it.
+ */
+export type MapSummary = {
+  placeCount: number;
+  shapeCount: number;
+  /**
+   * ISO. The newest edit to the map *or anything on it*. The map row's own
+   * `updatedAt` does not move when a location is edited, so on its own it would
+   * report a busy map as untouched for weeks.
+   */
+  lastEditedAt: string;
+  /** Changes whenever anything a preview draws could have — see lib/map-preview/version.ts. */
+  contentVersion: string;
+};
+
 /* ------------------------------------------------------------------ *
  * Visitor analytics
  * ------------------------------------------------------------------ */

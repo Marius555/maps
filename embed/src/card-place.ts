@@ -4,45 +4,41 @@
  * Its own module rather than more of `map.ts`, and the reason is testability:
  * `map.ts` imports maplibre-gl at module scope, which touches `window` the
  * moment it is evaluated, so nothing in it can be reached from a unit test.
- * Everything here is arithmetic over rectangles plus one DOM read, which is
+ * Everything here is arithmetic over rectangles plus a few DOM reads, which is
  * exactly the part worth holding still — the same argument
  * `lib/map/drop-action.ts` makes on the dashboard side.
- *
- * `PositionAnchor` is a type-only import and so is erased: this module adds
- * nothing to what the embed downloads.
  */
-
-import type { PositionAnchor } from "maplibre-gl";
 
 /** Air between an open card and the edge of the frame, in pixels. */
 export const CARD_MARGIN = 10;
 
 /**
- * Room left below a pin that a card has been pushed to the bottom of the frame
- * for, so the pin it belongs to is still on screen and still clickable.
- *
- * Roughly a pin's own height — see `PIN_POPUP_OFFSET`, which is measured from
- * the same drawing.
- */
-export const PIN_ROOM = 28;
-
-/**
  * The part of the map a card is allowed to occupy, in the frame's own pixels.
  *
- * Not the same thing as the frame, and the difference is the results panel. A
- * **docked** panel is a flex sibling of `.lm-canvas`, so the map's container
- * already excludes it and this changes nothing; a **floating** one is an overlay
- * *inside* that container, invisible to `clientWidth`, which is how a card came
- * to open underneath it — not merely hidden but unclickable, since the panel
- * takes the pointer. Measured on the publish preview: a 1120px frame, a 381px
- * panel from x730, and a card at 585-905.
+ * Not the same thing as the frame, and the difference is whatever the embed
+ * floats over the map: the results panel, the bottom sheet's peek strip, and a
+ * floating search bar. A **docked** panel is a flex sibling of `.lm-canvas`, so
+ * the map's container already excludes it and it changes nothing here; a
+ * **floating** one is an overlay *inside* that container, invisible to
+ * `clientWidth`, which is how a card came to open underneath it — not merely
+ * hidden but unclickable, since the panel takes the pointer. Measured on the
+ * publish preview: a 1120px frame, a 381px panel from x730, and a card at
+ * 585-905.
  *
- * One rule covers all three layouts because it works off the rectangles rather
- * than off the settings: docked, the panel does not intersect the frame;
- * stacked (the narrow container query) it sits below the map and does not
- * either; only floating produces a cut. Which edge is cut is decided by the
- * edge the panel is nearer, so `data-lm-side` is never read here and an RTL host
- * page needs no second case.
+ * **Each overlay is cut off along whichever edge leaves the most map**, and the
+ * test is two-dimensional. It used to be horizontal only, which was right for a
+ * panel standing the frame's full height and badly wrong for the phone's bottom
+ * sheet: its peek strip spans the map's width, so the horizontal test "cut" the
+ * frame down to the 10px between the strip and the edge. Measured on the
+ * publish preview at 390px: a 10px-wide usable rect, no side the card fitted
+ * on, and every card flown to the bottom of the map with its pin under the
+ * strip. Cutting by area turns the strip into a bottom edge and the search bar
+ * into a top one, and still turns a full-height panel into a side.
+ *
+ * It works off the rectangles rather than the settings, so `data-lm-side` is
+ * never read here and an RTL host page needs no second case. An overlay that
+ * would leave no map at all — an open sheet covering the frame — is ignored:
+ * there is nothing better to do with the card than the whole frame.
  */
 export type UsableFrame = {
   left: number;
@@ -52,123 +48,191 @@ export type UsableFrame = {
 };
 
 export function usableFrame(frame: HTMLElement): UsableFrame {
-  const usable: UsableFrame = {
+  let usable: UsableFrame = {
     left: 0,
     top: 0,
     right: frame.clientWidth,
     bottom: frame.clientHeight,
   };
 
-  const panel = frame
-    .closest(".lm-root")
-    ?.querySelector<HTMLElement>(".lm-panel");
-  if (!panel) return usable;
+  const root = frame.closest(".lm-root");
+  if (!root) return usable;
 
-  const frameBox = frame.getBoundingClientRect();
-  const panelBox = panel.getBoundingClientRect();
+  const box = frame.getBoundingClientRect();
 
-  // In the frame's own coordinates, so everything below is one arithmetic.
-  const left = panelBox.left - frameBox.left;
-  const right = panelBox.right - frameBox.left;
+  /*
+   * **Where each overlay is going, not where it is this instant.**
+   *
+   * Tapping a row in the open sheet closes the sheet and starts the flight in
+   * the same task, and the sheet slides shut on a 180ms transition — so a rect
+   * read here was the *open* sheet, covering the map from y256 of 731. The card
+   * was planned against the strip above it, cut to 161px of its 300, and flown
+   * in that way; `placeCard` re-measured at `moveend`, found the sheet gone and
+   * grew the card to full height *after* the landing. Reported as "half the
+   * card shows while it flies and the rest loads when the flight ends". The
+   * side drawer has the same shape on the other axis.
+   *
+   * So every running transition in the embed is put at its end, the rects are
+   * read, and each is put back where it was — all in one task, so nothing
+   * paints in between and the slide itself is untouched. The whole subtree,
+   * because a search bar docked in the sheet moves with the sheet's transform
+   * and has no transition of its own. Transitions only: MapLibre's location
+   * dot pulses forever, and an infinite end time is not a time. And only those
+   * with a time to put back, since restoring `null` onto one that has gained a
+   * time in between throws.
+   */
+  const moving = root
+    .getAnimations({ subtree: true })
+    .filter(
+      (animation) =>
+        animation instanceof CSSTransition && animation.currentTime !== null,
+    );
+  const now = moving.map((animation) => {
+    const at = animation.currentTime;
+    animation.currentTime =
+      animation.effect?.getComputedTiming().endTime ?? null;
+    return at;
+  });
 
-  // No horizontal overlap at all: docked, stacked, or simply switched off.
-  if (right <= usable.left || left >= usable.right) return usable;
+  const rects = [...root.querySelectorAll(".lm-panel, .lm-toolbar")].map(
+    (overlay) => overlay.getBoundingClientRect(),
+  );
 
-  if (left - usable.left <= usable.right - right) {
-    usable.left = Math.min(right, usable.right);
-  } else {
-    usable.right = Math.max(left, usable.left);
+  moving.forEach((animation, index) => {
+    animation.currentTime = now[index];
+  });
+
+  for (const rect of rects) {
+    // In the frame's own coordinates, so everything below is one arithmetic.
+    const left = rect.left - box.left;
+    const right = rect.right - box.left;
+    const top = rect.top - box.top;
+    const bottom = rect.bottom - box.top;
+
+    // Not over what is left of the map: docked, stacked, hidden, or inside a
+    // panel that has already been cut away.
+    if (
+      right <= usable.left ||
+      left >= usable.right ||
+      bottom <= usable.top ||
+      top >= usable.bottom
+    ) {
+      continue;
+    }
+
+    let best = usable;
+    let most = 0;
+
+    for (const cut of [
+      { ...usable, left: right },
+      { ...usable, right: left },
+      { ...usable, top: bottom },
+      { ...usable, bottom: top },
+    ]) {
+      // One side moves per cut, so a negative area is a cut past the far edge.
+      const area = (cut.right - cut.left) * (cut.bottom - cut.top);
+
+      if (area > most) {
+        most = area;
+        best = cut;
+      }
+    }
+
+    usable = best;
   }
 
   return usable;
 }
 
 /**
- * The four sides a card can open on, and where the pin has to be for the whole
- * of it to fit on each.
+ * The side a card opens on, in MapLibre's anchor words: `left` is the card to
+ * the *right* of the pin (the edge of the card that is pinned — MapLibre's
+ * convention, which reads backwards until it has caught you once), `top` is the
+ * card below it.
  *
- * A band is `[anchor, minX, maxX, minY, maxY]` in the frame's own pixels: the
- * rectangle the pin may sit in for a card of this size to clear every edge of
- * the *usable* rect by `CARD_MARGIN`. Written this way round — the room the
- * *pin* needs rather than the room the card needs — because that is the form
- * both questions want. "Does it fit where the pin already is?" is a
- * point-in-rectangle test, and "how far would the map have to move for it to?"
- * is the distance from the point to that rectangle. A band whose min is past its
- * max is a side this frame is simply too small for.
+ * **Beside the pin wherever the card takes no more than half the room, below it
+ * everywhere else.** One side on a given map rather than whichever side happens
+ * to be cheapest per pin, because that is what the owner asked for and what a
+ * visitor can learn: on a desktop the card is always to the right of the pin it
+ * belongs to, on a phone the pin is at the top and the card underneath it. It
+ * used to be "least movement wins, above the pin on a tie", which on an ordinary
+ * frame meant above for one pin, below for the next and beside for a third.
  *
- * It takes the usable rect rather than a width and a height, because a floating
- * results panel makes the room the *card* has and the room the *camera* has two
- * different boxes — see `usableFrame`, and `flyToCard`, which still offsets
- * against the container's own centre because that is what MapLibre's `offset` is
- * defined against.
- *
- * `left` and `right` name the edge of the *card* that is pinned, which is
- * MapLibre's convention and reads backwards until you have been caught by it
- * once: `left` puts the card to the right of the pin.
+ * Half, because a card beside its pin needs the pin's own room as well as the
+ * card's, and a card wider than half the map leaves too little of the map
+ * beside it to be worth the pin landing hard against the edge. It is also what
+ * makes the answer the phone one on a phone without a breakpoint: the narrowest
+ * card `CARD_LIMITS` allows is 220px, and a phone's map is under 440px wide.
  */
-export function cardBands(
+export type CardSide = "left" | "top";
+
+export function cardSide(width: number, usable: UsableFrame): CardSide {
+  return usable.right - usable.left >= 2 * width ? "left" : "top";
+}
+
+/**
+ * Where the pin has to be for its card to fit, and how tall the card may be if
+ * nothing fits.
+ *
+ * `x`/`y` is the point nearest the one asked about from which the whole card
+ * clears every edge of the *usable* rect by `CARD_MARGIN`. Asked with where the
+ * pin *is*, the difference is the least the map has to move — zero on a frame
+ * with room, which is most pins. `cap` is set only when the card is taller than
+ * the frame can hold on its side at all; the pin then goes where the most of the
+ * card shows (the top, for a card below it; the middle, for a card beside it)
+ * and the card is cut to `cap` and scrolls inside itself.
+ *
+ * `pair` is the flight's question rather than the settle's. A flight moves the
+ * camera anyway, so there is nothing to save by moving it less, and it is asked
+ * with the centre of the frame: aiming at the centre *less half the card* lands
+ * the pin and its card as one group in the middle of the map, instead of the pin
+ * dead centre and the card hanging off one side of it.
+ *
+ * `width` and `height` are MapLibre's container, tip included — measured with
+ * this side already applied, since the tip is part of the width on one side and
+ * of the height on the other.
+ */
+export type CardPlacement = { x: number; y: number; cap?: number };
+
+export function cardPlacement(
+  side: CardSide,
   width: number,
   height: number,
   usable: UsableFrame,
   gap: number,
-): [PositionAnchor, number, number, number, number][] {
-  const m = CARD_MARGIN;
-  const halfW = width / 2;
-  const halfH = height / 2;
-  const { left, top, right, bottom } = usable;
-
-  return [
-    // Above the pin, centred on it. MapLibre's own preference, and the shape
-    // people expect a map popup to have, so it is asked about first.
-    ["bottom", left + halfW + m, right - halfW - m, top + height + gap + m, bottom - m],
-    // Below the pin.
-    ["top", left + halfW + m, right - halfW - m, top + m, bottom - height - gap - m],
-    // To the right of the pin, centred on it vertically.
-    ["left", left + m, right - width - gap - m, top + halfH + m, bottom - halfH - m],
-    // To its left.
-    ["right", left + width + gap + m, right - m, top + halfH + m, bottom - halfH - m],
-  ];
-}
-
-/** Where a card fits, and what the map would have to spend to put it there. */
-export type CardPlacement = {
-  anchor: PositionAnchor;
-  /** Where the pin has to be in the frame, in the frame's own pixels. */
-  x: number;
-  y: number;
-  /** How far that is from where the pin is now. Zero is "already fits". */
-  move: number;
-};
-
-/**
- * The nearest point of the nearest viable band, and how far away it is.
- *
- * Strictly nearer, so a tie goes to the band asked about first — which is why
- * `cardBands` is in the order it is: two sides that would both cost nothing
- * should resolve to the one people expect, not to the last one tested.
- *
- * Its own function because two callers ask it now and they must agree. The
- * settle (`placeCard`) asks it of where the pin *is*; the flight (`flyToCard`)
- * asks it of where the pin is going to *be*, which is what lets one camera move
- * arrive with the card already in the right place instead of settling into it
- * afterwards.
- */
-export function chooseBand(
-  bands: [PositionAnchor, number, number, number, number][],
   pointX: number,
   pointY: number,
-): CardPlacement | null {
-  let best: CardPlacement | null = null;
+  pair?: boolean,
+): CardPlacement {
+  const m = CARD_MARGIN;
+  const { left, top, right, bottom } = usable;
+  const beside = side === "left";
 
-  for (const [anchor, minX, maxX, minY, maxY] of bands) {
-    if (minX > maxX || minY > maxY) continue;
-
-    const x = Math.min(Math.max(pointX, minX), maxX);
-    const y = Math.min(Math.max(pointY, minY), maxY);
-    const move = Math.hypot(x - pointX, y - pointY);
-
-    if (!best || move < best.move) best = { anchor, x, y, move };
+  if (pair) {
+    if (beside) pointX -= width / 2;
+    else pointY -= height / 2;
   }
 
-  return best;
+  /*
+   * The pin keeps `gap` from the edge it is pushed against — the popup offset is
+   * the pin's radius plus 6px — so a pin at the limit is still whole on screen.
+   */
+  const x = within(
+    pointX,
+    beside ? left + gap : left + width / 2 + m,
+    beside ? right - width - gap - m : right - width / 2 - m,
+  );
+  const low = beside ? top + height / 2 + m : top + gap;
+  const high = beside ? bottom - height / 2 - m : bottom - height - gap - m;
+
+  if (low <= high) return { x, y: within(pointY, low, high) };
+
+  const y = beside ? (top + bottom) / 2 : low;
+
+  return { x, y, cap: beside ? bottom - top - 2 * m : bottom - y - gap - m };
+}
+
+/** Clamped into `[low, high]`, or the middle of it where it is inside out. */
+function within(value: number, low: number, high: number): number {
+  return low > high ? (low + high) / 2 : Math.min(Math.max(value, low), high);
 }

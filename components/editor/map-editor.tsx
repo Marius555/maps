@@ -86,6 +86,7 @@ import { DEFAULT_SHAPE_OPACITY } from "@/lib/validation/shape.schema";
 import { ShapeEditDialog } from "@/components/shapes/shape-form/shape-edit-dialog";
 import { EditorSidebar } from "./editor-sidebar";
 import { useAddressResolution } from "./use-address-resolution";
+import { usePinMoveHistory } from "./use-pin-move-history";
 
 /**
  * Composes the canvas, toolbar and place list. Data comes from the query cache;
@@ -225,7 +226,9 @@ export function MapEditor({
   const {
     pendingIds: pendingAddressIds,
     failedIds: failedAddressIds,
+    isPending: isAddressPending,
     resolveAddress,
+    cancel: cancelAddress,
     retainOnly,
   } = useAddressResolution(map.id);
 
@@ -515,6 +518,38 @@ export function MapEditor({
     [],
   );
 
+  /** The address lookup, asked the way every other one here asks it. */
+  const lookUpAddress = useCallback(
+    (placeId: string, coords: { lat: number; lng: number }, current: string) => {
+      void resolveAddress(placeId, coords, current, streetAt(coords.lng, coords.lat));
+    },
+    [resolveAddress, streetAt],
+  );
+
+  /*
+   * Undo for dragged pins — the toolbar's Undo button and Ctrl/Cmd+Z. See
+   * use-pin-move-history.ts. Off while a drawing tool is armed, button and key
+   * together.
+   */
+  const {
+    canUndo: canUndoMove,
+    record: recordMove,
+    undo: undoMove,
+    retainOnly: retainMoveHistory,
+  } = usePinMoveHistory({
+    mapId: map.id,
+    readPlaces,
+    isAddressPending,
+    cancelAddress,
+    lookUpAddress,
+    isEnabled: drawMode === null && !isRouting,
+  });
+
+  // Same pruning as the address lookups above, for the same reason.
+  useEffect(() => {
+    retainMoveHistory(new Set(places.map((place) => place.id)));
+  }, [places, retainMoveHistory]);
+
   /**
    * Drop a pin, then find out where it landed.
    *
@@ -599,12 +634,22 @@ export function MapEditor({
    *
    * Position is saved without waiting for it. The two are separate writes because
    * they finish a second apart, and the pin must not hang in the air meanwhile.
+   *
+   * Where it was is remembered first, so the drag can be undone — both writes,
+   * not just the position.
+   *
+   * **Its identity must not change between a drop and the optimistic patch.**
+   * This is the marker layer's `onMove`, and the lookup below sets state at
+   * once — so a dependency that moves with it (the pending set did) re-ran the
+   * marker sync against a places array still holding the old position, and the
+   * pin flashed back to where it came from. See use-place-markers.ts.
    */
   const movePlace = useCallback(
     (placeId: string, coords: { lng: number; lat: number }) => {
       const lat = roundCoord(coords.lat);
       const lng = roundCoord(coords.lng);
 
+      recordMove(placeId, { lat, lng });
       moveMutate({ placeId, input: { lat, lng, geocodeStatus: "manual" } });
 
       // The address it has now, so a lookup that finds nothing knows there is a
@@ -613,7 +658,7 @@ export function MapEditor({
 
       void resolveAddress(placeId, { lat, lng }, current, streetAt(lng, lat));
     },
-    [moveMutate, resolveAddress, places, streetAt],
+    [recordMove, moveMutate, resolveAddress, places, streetAt],
   );
 
   /**
@@ -884,7 +929,7 @@ export function MapEditor({
    * existed once the reply landed.
    */
   const groupTogether = useCallback(
-    async (members: { placeIds: string[]; shapeIds: string[] }) => {
+    async (members: GroupMembers) => {
       if (members.placeIds.length + members.shapeIds.length === 0) return;
 
       setIsGrouping(true);
@@ -1005,6 +1050,21 @@ export function MapEditor({
       }
 
       void groupTogether(members);
+    },
+    [groupTogether],
+  );
+
+  /**
+   * A loose row's "Create group": a new group holding just that row.
+   *
+   * Through `groupTogether` like the drop above, not beside it, because that is
+   * where the animation comes from: `isGrouping` keeps the new group out of the
+   * panel until its member has been assigned, so the header and the row arrive
+   * together and the row travels up under it — the same movement a drop makes.
+   */
+  const groupAlone = useCallback(
+    (object: DraggedObject) => {
+      void groupTogether(asMembers(object));
     },
     [groupTogether],
   );
@@ -1317,6 +1377,8 @@ export function MapEditor({
           onImportShapes={() => setIsImportingShapes(true)}
           onStartSelecting={startSelecting}
           onStopSelecting={() => setMode("browse")}
+          canUndoMove={canUndoMove}
+          onUndoMove={undoMove}
           onDropPin={dropPin}
           onDraggingChange={setIsDraggingPin}
           onOpenStudio={() => setIsStudioOpen(true)}
@@ -1490,6 +1552,7 @@ export function MapEditor({
         onFocusGroup={focusGroup}
         onEditGroup={setEditingGroupId}
         onGroupObjects={groupObjects}
+        onCreateGroup={groupAlone}
         onAddToGroup={addToGroup}
         onRouteThrough={(shapeId, stops) => void routeThrough(shapeId, stops)}
         onMergeGroups={(targetGroupId, sourceGroupId) => {

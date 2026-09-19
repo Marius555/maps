@@ -24,6 +24,12 @@ export type Composition = {
   attribution: string;
   /** The render's own ratio, so the credit is the same size on the page at any DPI. */
   pixelRatio: number;
+  /**
+   * Type size at 1×. Absent is `FONT_PX`, which is every export. The maps list's
+   * previews pass less: at 11px the full credit spans more than half of a
+   * 480px-wide thumbnail.
+   */
+  fontPx?: number;
 };
 
 /**
@@ -36,7 +42,7 @@ export type Composition = {
  */
 export function composeExport(
   canvas: HTMLCanvasElement,
-  { attribution, pixelRatio }: Composition,
+  { attribution, pixelRatio, fontPx = FONT_PX }: Composition,
 ): HTMLCanvasElement {
   const context = canvas.getContext("2d");
   // A canvas we cannot draw on still has the map in it. Losing the credit is not
@@ -46,7 +52,7 @@ export function composeExport(
   if (!context) return canvas;
 
   const scale = Math.max(pixelRatio, 1);
-  const font = FONT_PX * scale;
+  const font = fontPx * scale;
 
   context.save();
   context.font = `${font}px system-ui, -apple-system, "Segoe UI", sans-serif`;

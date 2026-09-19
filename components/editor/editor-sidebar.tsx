@@ -71,6 +71,7 @@ export function EditorSidebar({
   onFocusGroup,
   onEditGroup,
   onRetryAddress,
+  onCreateGroup,
   onRemoveFromGroup,
   onGroupObjects,
   onAddToGroup,
@@ -105,6 +106,8 @@ export function EditorSidebar({
   onFocusGroup: (groupId: string) => void;
   onEditGroup: (groupId: string) => void;
   onRetryAddress?: (placeId: string) => void;
+  /** A loose row's menu: make a group holding just this one. */
+  onCreateGroup: (object: DraggedObject) => void;
   /** Take one object out of whatever group it is in. */
   onRemoveFromGroup: (object: DraggedObject) => void;
   /** Two loose rows met: make a group holding both. */
@@ -192,6 +195,7 @@ export function EditorSidebar({
             onFocusGroup={onFocusGroup}
             onEditGroup={onEditGroup}
             onRetryAddress={onRetryAddress}
+            onCreateGroup={onCreateGroup}
             onRemoveFromGroup={onRemoveFromGroup}
             onGroupObjects={onGroupObjects}
             onAddToGroup={onAddToGroup}

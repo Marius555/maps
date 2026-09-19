@@ -788,6 +788,10 @@
  */
 .lm-popup--place {
   height: var(--lm-card-h, 440px);
+  /* A frame narrower than the card: `fitCard` writes the room there is. Unset
+     is invalid at computed-value time, which for `max-width` is `none` — the
+     card's own designed width, and so no cap at all. */
+  max-width: var(--lm-popup-w);
   overflow: hidden;
 }
 

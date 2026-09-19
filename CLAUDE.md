@@ -10,8 +10,9 @@ Project instructions. Read this fully before writing code.
 
 **Weeks 1–3 of §10 are done; Week 4 is next.** Of §5's layout, `/app`, `/lib`,
 `/components`, `/scripts`, `/embed`, `/packages/shared` and `/functions` (one function, the
-daily sheet sync) exist. Still absent, and correctly so — they belong to Week 4:
-`/app/(marketing)/for/[platform]` and `/pricing`.
+daily sheet sync) exist. `/app/(marketing)/pricing` exists as the plans alone — no billing
+behind its buttons yet. Still absent, and correctly so — it belongs to Week 4:
+`/app/(marketing)/for/[platform]`.
 
 Working end to end: email auth, map CRUD, the MapLibre editor, the locations list with
 search and tag filters, per-location editing with search-on-submit geocoding and photo
@@ -60,7 +61,7 @@ link that arrives from outside (a mail client, Appwrite's own domain) lands on a
 survives a redirect chain and would bounce a user who had just signed in. Both, and the reason
 Appwrite's tokens are used instead of our own HMAC, are in `docs/notes/auth.md`.
 
-**Not built yet, and next — the rest of Week 4:** pricing page, plan-limit UI, MoR billing +
+**Not built yet, and next — the rest of Week 4:** billing behind the pricing page, plan-limit UI, MoR billing +
 webhook, landing page, one platform page (Webflow first), docs with screenshots. Plus the two upstreams §12 says are forced before anyone pays us,
 which are now a switch rather than two machines: `GEOCODER_PROVIDER=geoapify` and
 `ROUTING_PROVIDER=geoapify`. What is still owed there is a plan decision, not a build —
@@ -70,7 +71,9 @@ intact. The PMTiles archive on R2 is ready and deliberately *not* on that list (
 
 Installed since the original scaffold: `zod`, `@tanstack/react-query`, `zustand`,
 `papaparse`, `date-fns`, `vitest`, `vite`, `fflate` (promoted from a pmtiles transitive —
-it unzips .xlsx), `resend`, and `jsdom` as a devDependency only. Still not installed, from §3's
+it unzips .xlsx), `resend`, `recharts` (asked for and granted; marketing pages only, and it
+brings Redux Toolkit transitively, so it is loaded with `next/dynamic`), and `jsdom` as a
+devDependency only. Still not installed, from §3's
 "Add these": biome, playwright, sentry, posthog, and `@react-email/components` — three
 transactional emails do not earn a React renderer, so the templates are plain TS returning
 `{ subject, html, text }`.
@@ -111,6 +114,12 @@ Tests are `vitest` (`vitest.config.mts`), unit only, `lib/**/*.test.ts` and `pac
 ### Stack specifics that change how you write code
 
 - **Next.js 16.3.** Breaking changes against older App Router knowledge — read `node_modules/next/dist/docs/` before writing route, layout, or caching code (AGENTS.md says the same). Typed route props are globals: `LayoutProps<"/">`, `PageProps<"/maps/[id]">`. Don't hand-write `params` types; `app/layout.tsx` already uses the global form.
+- **A value imported from a `"use client"` module into a *server* component is a client
+  reference, not the value.** Components work; constants do not, and nothing warns. A shared
+  number read that way became `NaN` in an arithmetic expression, React dropped the invalid
+  inline style, and a bar chart drew every bar full length. Shared constants belong in a
+  plain module both halves import — `components/marketing/min-share.ts` is the worked
+  example.
 - **Tailwind v4, CSS-first.** There is no `tailwind.config.js` and none should be added. `app/globals.css` does `@import "tailwindcss"` then `@import "@heroui/styles"`; the theme is oklch CSS variables under `:root/.light` and `.dark`. Restyle by editing those variables, not by hardcoding colours in components.
 - **HeroUI v3** is React Aria under the hood and has a different API from v2. Don't write v2 component code from memory. One consequence bites hard: React Aria owns an input's value, so react-hook-form's `register()` **silently does not work** — a prefilled form renders blank and then saves the blanks. Always bind through `components/ui/form-field.tsx` (`FormTextField` / `FormTextArea`), which wire `Controller` to the TextField's own `value`/`onChange`. The same ownership bites a second way: `usePress` — every HeroUI `Button` — ends its `onPointerDown` with `stopPropagation()`, and React dispatches synthetic events from its root, so **a pointer handler on a wrapper around a Button never fires in the bubble phase**. It fails silently, with no error. Bind it as `onPointerDownCapture` instead; `components/map/add-location/use-drag-to-add.ts` is the working example.
 - **MapLibre's worker must be told where it lives.** MapLibre v6 derives its worker URL from `import.meta.url`, bails to `""` when that isn't an http(s) URL (which it isn't under Turbopack), and then constructs `new Worker("")` — loading the HTML page as the worker script. The worker never replies, and because vector tiles are fetched *inside* the worker, every map renders as an empty background with **no error in the console**. `scripts/copy-maplibre-worker.mjs` (via `predev`/`prebuild`) copies the worker into `public/maplibre/`, and `lib/map/worker.ts` sets `config.WORKER_URL`. A blank basemap? Check `public/maplibre/` exists before anything else.
@@ -205,7 +214,7 @@ Area-specific invariants live at the head of each file in the table below.
   it `retired` so it stops being offered and keeps being read.
 - **One writer per JSON blob column.** `updateMap` serialises `settings` whole, so two
   forms writing it is a lost update. `useEmbedDesign` is the only writer.
-- **The embed's own-code budget is 48KB and it currently sits at 47.3KB — 719 bytes
+- **The embed's own-code budget is 48KB and it currently sits at 47.5KB — 517 bytes
   spare.** That is the binding number, and anything new has to be paid for by removing
   something. The **total** used to be the gate at 2 bytes; it is reported now and not
   enforced, because its stated job was catching MapLibre ballooning and it had become a
@@ -227,6 +236,12 @@ Area-specific invariants live at the head of each file in the table below.
   registers `touchmove` at its root *passively*, so that one must be `addEventListener`,
   bound before the gesture starts. Believing otherwise cost `use-row-drag.ts` a grip icon on
   every draggable row; `docs/notes/editor-and-layout.md` has the post-mortem.
+- **`Intl.NumberFormat`'s `notation: "compact"` does not agree across our two
+  runtimes.** Node renders `1K`/`1M`, Chrome renders `1k`/`1m` — so a
+  server-rendered figure and a client-rendered one printed different strings for
+  the same number on one screen, and "1m" reads as *milli*. Any client component
+  formatting one would also hydrate-mismatch. Write the labels out; `VIEW_TICKS`
+  in `lib/marketing/cost.ts` is the worked example.
 - **`prefers-reduced-motion` cuts every animation to a single 0.01ms pass**, so a state
   told only in motion is told to nobody. Give it a static form too.
 
@@ -247,6 +262,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `components/analytics/**`, `lib/analytics/**`, `embed/src/track.ts`, `app/api/collect/**` | `docs/notes/analytics.md` |
 | `components/auth/**`, `lib/auth/**`, `lib/email/**`, `app/(auth)/**`, `app/api/auth/**`, `proxy.ts` | `docs/notes/auth.md` |
 | `lib/sheet-sync/**`, `components/places/sheet-sync/**`, `app/api/**/sheet-link/**`, `app/api/cron/**`, `functions/**` | `docs/notes/sheet-sync.md` |
+| `app/(marketing)/**`, `components/marketing/**`, `lib/marketing/**` | `docs/notes/marketing.md` |
 | `documents/legal/**`, `lib/legal/**`, `components/legal/**`, the `legal` links in `brand.json` | `documents/legal/README.md` |
 
 Self-hosting runbooks, unchanged: `docs/self-hosting-geocoding.md`,
@@ -312,6 +328,7 @@ If a change would put a database query, an API call, or a serverless function in
 | Errors | `@sentry/nextjs` | |
 | Analytics | `posthog-js` | Funnel: signup → first place → publish → paid |
 | Dates | `date-fns` | Opening-hours formatting |
+| Charts | `recharts` | The landing page's cost-over-traffic line chart. Marketing/dashboard only — never the embed (§4) |
 | Embed build | `vite` | Separate build target, see §4 |
 | Lint/format | `biome` | One tool, fast |
 | Unit tests | `vitest` | |
@@ -334,7 +351,7 @@ The embed must **never** import React, HeroUI, Motion, TanStack Query, Zustand, 
 
 Target: **under 250KB gzipped including MapLibre.** If a change pushes it over, flag it.
 
-**Measured, that target is unreachable with MapLibre v6** — its own dist files are 273.2KB gzipped (`maplibre-gl.mjs` 136.4 + `maplibre-gl-shared.mjs` 131.0 + the worker 5.8), minified already, with no slim build. Actual total is **320.5KB**, of which ours is 47.3KB. `npm run build:embed` enforces a **48KB budget on our code** and a **280KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 47.3KB.
+**Measured, that target is unreachable with MapLibre v6** — its own dist files are 273.2KB gzipped (`maplibre-gl.mjs` 136.4 + `maplibre-gl-shared.mjs` 131.0 + the worker 5.8), minified already, with no slim build. Actual total is **320.7KB**, of which ours is 47.5KB. `npm run build:embed` enforces a **48KB budget on our code** and a **280KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 47.5KB.
 
 The own-code budget has been raised four times — 42 → 46 → 47 → 48KB — and each raise is argued in `scripts/check-embed-size.mjs` rather than merely recorded. It **must not be raised to get past a binding budget**: a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam — the bottom-sheet drawer was built that way, clawed from 285 bytes over to 18 under without touching the number. The fourth raise is the counter-example and is labelled as one: carrying *both* narrow-screen drawers cost 162 bytes, four trims paid back 18 of them, and the remaining 144 was the owner's call taken with the numbers on the table rather than a conclusion the file reached.
 

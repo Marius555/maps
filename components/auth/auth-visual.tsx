@@ -4,11 +4,11 @@ import { BrandLogo } from "@/components/brand/brand-logo";
  * The left half of the auth screen.
  *
  * **Drawn, not photographed, and that was a decision rather than a shortcut.**
- * There is not one image in `/public` — the 5,463 files under it are map tiles —
- * so a photo would have meant sourcing, licensing and shipping an asset whose
- * only job is to be looked at once. This is a few hundred bytes of markup that
- * says what the product does: pins on a map, a route between them, and a card
- * open on one of them.
+ * A photo would have meant sourcing, licensing and shipping an asset whose only
+ * job is to be looked at once. This is a few hundred bytes of markup that says
+ * what the product does: pins on a map, a route between them, and a card open
+ * on one of them. The landing page's step panels are drawn the same way
+ * (components/marketing/art/).
  *
  * **Every colour is a theme token**, so the panel crossfades with the rest of the
  * app when the theme changes (see the `@property` block in globals.css). A

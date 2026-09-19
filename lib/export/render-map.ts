@@ -1,6 +1,11 @@
-import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
+import type {
+  Map as MapLibreMap,
+  MapOptions,
+  StyleSpecification,
+} from "maplibre-gl";
 
 import { blankMissingIcons } from "@/packages/shared/missing-icons";
+import type { ShapeBounds } from "@/packages/shared/shapes";
 
 import type { Layout } from "./paper";
 import { zoomFor } from "./paper";
@@ -58,6 +63,56 @@ export async function renderMapCanvas(
   layout: Layout,
   decorate: (map: MapLibreMap) => void | Promise<void>,
 ): Promise<HTMLCanvasElement> {
+  return renderOffscreenMap(
+    view.style,
+    {
+      center: view.center,
+      zoom: zoomFor(view.zoom, { width: view.width, height: view.height }, layout),
+      bearing: view.bearing,
+      pitch: view.pitch,
+    },
+    layout,
+    decorate,
+  );
+}
+
+/** Where a throwaway map points: a camera, or a box to frame. */
+export type OffscreenCamera =
+  | {
+      center: { lng: number; lat: number };
+      zoom: number;
+      bearing?: number;
+      pitch?: number;
+    }
+  | {
+      bounds: ShapeBounds;
+      /** CSS pixels kept clear around the box. */
+      padding: number;
+      /** A single point is a zero-area box and would otherwise open at max zoom. */
+      maxZoom: number;
+    };
+
+/** The hidden container's size in CSS pixels, and how much denser the canvas is. */
+export type OffscreenSize = {
+  cssWidth: number;
+  cssHeight: number;
+  pixelRatio: number;
+};
+
+/**
+ * The lifecycle every throwaway map shares: build it off screen, wait for the
+ * style, decorate, wait for the tiles, copy the pixels out, tear it down.
+ *
+ * The export is one caller; the maps list's previews (lib/map-preview) are the
+ * other, and they frame a box of locations rather than copying a live camera —
+ * which is the only reason the camera is a parameter rather than an `ExportView`.
+ */
+export async function renderOffscreenMap(
+  style: string | StyleSpecification,
+  camera: OffscreenCamera,
+  size: OffscreenSize,
+  decorate: (map: MapLibreMap) => void | Promise<void>,
+): Promise<HTMLCanvasElement> {
   const container = document.createElement("div");
 
   /*
@@ -71,7 +126,7 @@ export async function renderMapCanvas(
    */
   container.style.cssText =
     `position: fixed; left: -20000px; top: 0; pointer-events: none; ` +
-    `width: ${layout.cssWidth}px; height: ${layout.cssHeight}px;`;
+    `width: ${size.cssWidth}px; height: ${size.cssHeight}px;`;
   document.body.appendChild(container);
 
   /*
@@ -84,28 +139,46 @@ export async function renderMapCanvas(
    * map library out of the dashboard's initial bundle for everyone who never
    * presses Export.
    *
-   * Same specifier, same module instance — so `config.WORKER_URL`, set at module
-   * scope in map-canvas-impl.tsx, is already in place here. Nothing can reach
-   * this function without a live map to copy a camera from, and a live map means
-   * that file has run. Without it every tile fetch silently does nothing and the
-   * export comes back as an empty background (lib/map/worker.ts).
+   * Same specifier, same module instance — so `config.WORKER_URL` is already in
+   * place here when a caller has set it. The export's caller has: nothing can
+   * reach it without a live map, and a live map means map-canvas-impl.tsx has
+   * run. The maps list has no live map, so lib/map-preview/render-preview.ts sets
+   * it itself. Without it every tile fetch silently does nothing and the image
+   * comes back as an empty background (lib/map/worker.ts).
    */
   const { Map: MapLibreMapClass } = await import("maplibre-gl");
+
+  const framing: Partial<MapOptions> =
+    "bounds" in camera
+      ? {
+          bounds: [
+            [camera.bounds.west, camera.bounds.south],
+            [camera.bounds.east, camera.bounds.north],
+          ],
+          fitBoundsOptions: {
+            padding: camera.padding,
+            maxZoom: camera.maxZoom,
+            duration: 0,
+          },
+        }
+      : {
+          center: [camera.center.lng, camera.center.lat],
+          zoom: camera.zoom,
+          bearing: camera.bearing ?? 0,
+          pitch: camera.pitch ?? 0,
+        };
 
   let map: MapLibreMap | null = null;
 
   try {
     map = new MapLibreMapClass({
       container,
-      style: view.style,
-      center: [view.center.lng, view.center.lat],
-      zoom: zoomFor(view.zoom, { width: view.width, height: view.height }, layout),
-      bearing: view.bearing,
-      pitch: view.pitch,
+      style,
+      ...framing,
       // The whole reason this map exists at all: without it the canvas is cleared
       // the instant the frame is composited and `toBlob` returns transparency.
       canvasContextAttributes: { antialias: true, preserveDrawingBuffer: true },
-      pixelRatio: layout.pixelRatio,
+      pixelRatio: size.pixelRatio,
       interactive: false,
       // Labels and icons cross-fade in over 300ms by default, so a capture taken
       // at the right moment can still catch them half-drawn.

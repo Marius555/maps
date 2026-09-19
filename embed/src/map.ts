@@ -66,9 +66,8 @@ import type { Fix } from "./search";
 import type { Track } from "./track";
 import {
   CARD_MARGIN,
-  cardBands,
-  chooseBand,
-  PIN_ROOM,
+  cardPlacement,
+  cardSide,
   usableFrame,
   type UsableFrame,
 } from "./card-place";
@@ -666,7 +665,11 @@ export function createMap(
     placeCard(map, popup);
   };
 
-  const showPopup = (place: SnapshotPlace) => {
+  /**
+   * `fly` is a card a flight is about to carry to its place: `flyToCard` decides
+   * it before the camera moves, so the pass here only checks the landing.
+   */
+  const showPopup = (place: SnapshotPlace, fly?: boolean) => {
     setOpen(place.id);
 
     /*
@@ -702,7 +705,7 @@ export function createMap(
     // background, radius and padding live on MapLibre's container, not on ours.
     styleCard(popup, cardLayout, isDark);
     resetCard(popup);
-    placeCard(map, popup);
+    placeCard(map, popup, fly);
   };
 
   return {
@@ -747,23 +750,25 @@ export function createMap(
        * Bare, the open card is removed *before* the selection moves: `remove`
        * fires the popup's close event, which clears the old selection, and
        * `setOpen` then marks this one. The other order would clear the new one.
-       * The flight below is then plain, by the mechanism described next.
+       * The flight below then centres the pin, by the mechanism described next.
+       *
+       * A map with cards switched off takes the same branch, which is all
+       * `showPopup` would have done for it — plus closing a *shape's* card left
+       * open, which would otherwise be flown clear of as though it belonged to
+       * this location.
        */
-      if (bare) {
+      if (bare || !showCard) {
         popup.remove();
         setOpen(place.id);
       } else {
-        showPopup(place);
+        showPopup(place, true);
       }
       /*
-       * Unchanged with the card switched off, and that is `flyToCard`'s own
-       * `!card` branch doing its job rather than an omission. MapLibre's
+       * With no card, `flyToCard` lands the pin in the middle of the map, and
+       * that is its own `!card` branch rather than an omission. MapLibre's
        * `remove()` does `delete this._container`, so `getElement()` is undefined
-       * on a popup that has never been added — which is every popup on a map
-       * whose owner turned the card off — and the function falls through to the
-       * plain `flyTo` it already keeps for that case. The one exception is
-       * right too: with a *shape's* card open, that card is genuinely on screen
-       * and genuinely worth flying clear of.
+       * on a popup that is not on the map — which is every bare flight and every
+       * popup on a map whose owner turned the card off.
        */
       flyToCard(map, popup, [place.lng, place.lat]);
     },
@@ -887,9 +892,10 @@ const CARD_SHADOWS: Record<CardShadow, string> = {
  * One `Popup` serves every pin and every shape on the map, so both halves of
  * this are about the card that was there a moment ago. `options.anchor` holds
  * `placeCard`'s verdict, and left alone it would open the next card beside the
- * next pin whatever room *that* one has — cleared rather than re-decided here,
- * because the decision needs a measurement and the card has no layout until the
- * next frame, and until then MapLibre's own guess is the better one to show.
+ * next pin whatever room *that* one has. Every open re-decides it in the same
+ * tick, before anything paints; the clearing only matters to a card opened while
+ * the camera is still moving, which waits for `moveend` to be measured and until
+ * then shows MapLibre's own guess rather than the last card's answer.
  *
  * The counter is the other half, and it is what makes "the map moves once"
  * true. A placement pass waiting on `moveend` outlives the card it was measuring
@@ -912,103 +918,59 @@ function resetCard(popup: Popup): void {
  * MapLibre picks a popup's side itself, and its rule is "above the point if the
  * card fits above, otherwise below" — which is the right answer right up to the
  * moment the card fits on *neither* side. Then it goes below, whatever is down
- * there, and hangs off the bottom of the map.
+ * there, and hangs off the bottom of the map. A card with a photo, a
+ * description and a week of opening hours is taller than a good many of the
+ * frames it opens in — the Preview dialog, a sidebar embed, a phone — so that is
+ * the ordinary case rather than the edge one.
  *
- * That is the ordinary case for a location card rather than the edge one. A card
- * with a photo, a description, a week of opening hours and three extra fields is
- * taller than a good many of the frames it opens in — the Preview dialog, a
- * sidebar embed, a phone. Measured in the Preview dialog: a 430×436 frame, a
- * 320×289 card, and a pin dead in the middle of it because the map had just
- * flown there. 184px of room above, 184px below, and 181px either side: nowhere
- * for the card to go, and every choice a bad one.
+ * So the side is ours, and it is one side per map: beside the pin where the map
+ * is wide enough, below it where it is not (`cardSide`). The pin is then moved
+ * the least it has to be for the whole card to show on that side
+ * (`cardPlacement`) — nothing at all on a frame with room, which is most pins —
+ * and only a card taller than the frame however the map moves is cut short,
+ * scrolling inside itself.
  *
- * So this asks a different question. Not "which side does it fit on" but **"what
- * is the least the map has to move for it to fit somewhere"** — `cardBands`
- * above turns each of the four sides into the rectangle the pin would have to be
- * in, and the answer is the nearest point of the nearest of those rectangles. A
- * pin already inside one costs nothing and nothing moves, which is every pin on
- * a frame with room in it. The middle pin above costs a 105px pan, and shows the
- * whole card afterwards instead of two thirds of one.
+ * **Decided in the tick the card opens, before anything paints.** It used to
+ * wait a frame for layout, which put the card on MapLibre's side for one frame
+ * and then moved it to ours: a flicker on every click. `offsetWidth` forces the
+ * layout it was waiting for, at the cost of one reflow per click. `later` keeps
+ * the frame for the two callers that need it — a `toggle` deep inside the card,
+ * whose new content has not been styled yet, and a card a flight is carrying,
+ * which `flyToCard` has already decided.
  *
- * **The pan is safe here specifically because of the `isMoving` guard below.**
- * Panning was the first answer to this and was withdrawn as unreliable, for a
- * good reason: `focusPlace` opens its card the instant a flight starts, and a
- * pan issued mid-flight *interrupts* it — so the location the visitor asked for
- * never arrives. What makes it sound now is that nothing is measured, and so
- * nothing is panned, until the camera is at rest. It is the same guard the cap
- * always needed, doing a second job.
- *
- * A cap is still the last resort, for a frame too small for the card on any
- * side however the map moves. Whatever cannot be shown scrolls inside the card.
- *
- * `--lm-popup-max` is cleared before measuring so each pass sees the card's own
- * natural size rather than the cap the last one left — otherwise a card that was
- * once squeezed could never grow back when there was room. The anchor goes into
- * `popup.options`, which is a public field, and `setOffset` is what makes
- * MapLibre act on it: it is the one public method that re-runs the positioning
- * pass, and handing it back the offset it already has changes nothing else.
- *
- * Deferred a frame because the card is measured, and a node appended this tick
- * has no layout yet.
+ * **Never measured — and so never panned — while the camera moves.** A popup is
+ * anchored to a coordinate, so mid-flight the card is wherever that coordinate
+ * projects to, and a pan issued into a `flyTo` replaces it, so the location the
+ * visitor asked for never arrives. The pass waits for `moveend` instead. After a
+ * flight that pass has nothing to do — `flyToCard` landed the pin exactly where
+ * this one would put it, so the pin is already on its spot and nothing moves
+ * after the flight ends. `isMoving` rather than `isEasing`, which the published
+ * `Map` type does not expose; broader, and the worst it costs is one `moveend`.
  */
-function placeCard(map: MapLibreMap, popup: Popup): void {
+function placeCard(map: MapLibreMap, popup: Popup, later?: boolean): void {
   const card = popup.getElement();
   if (!card) return;
 
   /*
-   * And again whenever the card changes size under the visitor.
-   *
-   * Opening "More details" adds a description, a week of hours and the field
-   * rows to a card that was measured without them.
-   *
-   * Capture, because `toggle` does not bubble: the capture phase still visits
-   * every ancestor on the way down to the <details> that fired it, which is what
-   * lets one listener cover the fold and the hours inside it.
-   *
-   * Once per popup element. MapLibre reuses one container for every card it
-   * shows, so subscribing on each open would stack a listener per pin clicked.
+   * And again whenever the card changes size under the visitor — opening a
+   * fold or the week of hours. Capture, because `toggle` does not bubble. Once
+   * per popup element: MapLibre reuses one container for every card it shows.
    */
   if (!card.dataset.lmFits) {
     card.dataset.lmFits = "1";
-    card.addEventListener("toggle", () => placeCard(map, popup), true);
+    card.addEventListener("toggle", () => placeCard(map, popup, true), true);
   }
 
   /*
-   * Which card this pass is about. Everything below is deferred — a frame, or a
-   * whole flight — and by the time it runs the popup may be showing somewhere
-   * else entirely. See `resetCard`.
+   * Which card this pass is about. A deferred pass — a frame, or a whole
+   * flight — may run when the popup is showing somewhere else entirely. See
+   * `resetCard`.
    */
   const open = card.dataset.lmOpen;
 
-  requestAnimationFrame(() => {
+  const run = () => {
     if (card.dataset.lmOpen !== open) return;
 
-    /*
-     * Never measure — and so never pan — against a camera that is still moving.
-     *
-     * `focusPlace` opens its card the instant the flight starts, and a popup is
-     * anchored to a coordinate, so mid-flight the card is wherever that
-     * coordinate currently projects to: for a hop between cities, tens of
-     * thousands of pixels outside the frame. Waiting for the landing is also
-     * what keeps the pan below from cutting the flight short — an `easeTo`
-     * issued into a `flyTo` replaces it, and the location the visitor asked for
-     * never arrives.
-     *
-     * **`moveend` is later than the map looks**, and measurably so: a flight's
-     * target is the pin itself, so the pin reaches the middle of the frame and
-     * stops while the zoom is still easing in behind it. Measured on the
-     * Preview dialog, the card stopped moving 1.4s after the click and `moveend`
-     * came at 3.8s. Nothing is lost in that gap — `resetCard` leaves
-     * `options.anchor` unset, so MapLibre is placing the card by its own rule
-     * throughout, which is exactly what it did before any of this existed — but
-     * it is why the good placement can arrive as a visible settle rather than as
-     * part of the flight.
-     *
-     * `isMoving` rather than `isEasing`, which the published `Map` type does not
-     * expose. It is broader — a finger still on the map counts — and broader is
-     * the right way to be wrong here: the worst case is measuring one `moveend`
-     * later than strictly necessary.
-     */
     if (map.isMoving()) {
       map.once("moveend", () => {
         if (card.dataset.lmOpen === open) placeCard(map, popup);
@@ -1019,249 +981,153 @@ function placeCard(map: MapLibreMap, popup: Popup): void {
     const at = popup.getLngLat();
     if (!at) return;
 
-    /*
-     * Two boxes, and the difference between them matters. `card` is MapLibre's
-     * container — our card plus its tip — and it is what has to fit inside the
-     * frame. `content` is what a cap applies to. Capping the container's height
-     * on the content would leave the chrome hanging over the edge by exactly the
-     * chrome's own size.
-     */
-    const content = card.querySelector<HTMLElement>(".lm-popup");
-    if (!content) return;
-
-    card.style.removeProperty("--lm-popup-max");
-
-    const usable = usableFrame(map.getContainer());
     const point = map.project(at);
-    /*
-     * Numeric by construction — `showPopup` sets one of the two pin radii and
-     * `showShapePopup` sets zero — but the option's type also allows a Point and
-     * a per-anchor table, neither of which has one number to subtract.
-     */
-    const gap =
-      typeof popup.options.offset === "number" ? popup.options.offset : 0;
-
-    const height = card.offsetHeight;
-    const bands = cardBands(card.offsetWidth, height, usable, gap);
-
-    const best = chooseBand(bands, point.x, point.y);
+    const [x, y] = fitCard(
+      popup,
+      card,
+      usableFrame(map.getContainer()),
+      point.x,
+      point.y,
+    );
 
     /*
-     * No band at all: the usable rect is smaller than the card on every side, so
-     * there is nothing to move towards and the card is capped instead.
+     * Under a pixel is where the pin already is. Otherwise one pan, and nothing
+     * listens for it to finish: the pin lands where the whole card fits, so
+     * there is nothing left to decide. `panBy` moves the map rather than what is
+     * drawn on it, so its sign is the opposite of the pin's own travel.
      */
-    if (!best) {
-      capCard(popup, card, content, height, usable, point.y, gap);
-      return;
+    if (Math.hypot(point.x - x, point.y - y) >= 1) {
+      map.panBy([point.x - x, point.y - y]);
     }
+  };
 
-    setAnchor(popup, best.anchor);
-
-    /*
-     * Under a pixel is where the pin already is, which is every pin on a frame
-     * with room in it. Panning by a rounding error is an animation the visitor
-     * can see for no reason.
-     */
-    if (best.move < 1) return;
-
-    /*
-     * One pan, and nothing listens for it to finish.
-     *
-     * The pin lands inside a band, and a band is the set of positions the whole
-     * card fits from — so there is nothing left to decide when the map stops,
-     * and re-entering here would be a second question with a second chance of
-     * moving the map again. `dev.html` says this out loud, because "the map
-     * settles somewhere sensible eventually" and "the map moves once" look the
-     * same in a screenshot and nothing like each other to watch.
-     *
-     * `panBy` is stated as an offset applied to the map rather than to what is
-     * drawn on it, so its sign is the opposite of the pin's own travel: to move
-     * the pin *down* the frame, the map goes up.
-     */
-    map.panBy([point.x - best.x, point.y - best.y]);
-  });
+  if (later) requestAnimationFrame(run);
+  else run();
 }
 
+/**
+ * Size the card for the room it has, tell MapLibre its side, and return where
+ * the pin has to be — the one question the settle and the flight both ask, so
+ * the two can never cut the same card differently or choose it different sides.
+ *
+ * Two boxes, and the difference between them matters. `card` is MapLibre's
+ * container — our card plus its tip — and it is what has to fit inside the
+ * frame. `content` is what the caps apply to; capping the container's height
+ * on the content would leave the tip hanging over the edge by its own size.
+ *
+ * Both caps are cleared before measuring, so each pass sees the card's own
+ * designed size rather than the one the last card was squeezed to — one `Popup`
+ * serves every pin, and a card squeezed once must be able to grow back.
+ *
+ * **The width cap is new, and it is the phone.** A card is exactly as wide as
+ * its owner designed it (`buildPopup`), and nothing stopped a 400px card on a
+ * 390px map: no side fitted it, and it hung off both edges. It is narrowed to
+ * the frame instead; its height is the designed one either way, so the words
+ * wrap and the middle zone scrolls rather than anything being lost.
+ *
+ * The side is applied *before* the container is measured, because the tip is
+ * part of the width on one side and of the height on the other.
+ */
+function fitCard(
+  popup: Popup,
+  card: HTMLElement,
+  usable: UsableFrame,
+  x: number,
+  y: number,
+  pair?: boolean,
+): [number, number] {
+  const content = card.querySelector<HTMLElement>(".lm-popup");
+  if (!content) return [x, y];
+
+  const room = usable.right - usable.left - 2 * CARD_MARGIN;
+  card.style.removeProperty("--lm-popup-max");
+  card.style.removeProperty("--lm-popup-w");
+  if (content.offsetWidth > room) {
+    card.style.setProperty("--lm-popup-w", `${String(room)}px`);
+  }
+
+  const side = cardSide(content.offsetWidth, usable);
+  setAnchor(popup, side);
+
+  /*
+   * Numeric by construction — `showPopup` sets one of the two pin radii and
+   * `showShapePopup` sets zero — but the option's type also allows a Point and
+   * a per-anchor table, neither of which has one number to add.
+   */
+  const gap = typeof popup.options.offset === "number" ? popup.options.offset : 0;
+  const full = card.offsetHeight;
+  const placed = cardPlacement(
+    side,
+    card.offsetWidth,
+    full,
+    usable,
+    gap,
+    x,
+    y,
+    pair,
+  );
+
+  if (placed.cap !== undefined) {
+    card.style.setProperty(
+      "--lm-popup-max",
+      `${String(Math.max(placed.cap - (full - content.offsetHeight), MIN_CARD_HEIGHT))}px`,
+    );
+  }
+
+  return [placed.x, placed.y];
+}
 
 /**
- * Fly to a pin whose card is already open, and land with the card in place.
+ * Fly to a pin, and land with its card already in place — one motion.
  *
- * **The bug this exists for.** `resetCard` clears `popup.options.anchor` on
- * every open and `placeCard` refuses to measure while the camera is moving, so
- * for the whole length of a flight MapLibre applied its own rule — *above the
- * point if the card fits above, otherwise below* — re-evaluated every frame as
- * the pin travelled across the frame. On a tall card that is bottom, then a
- * side, then bottom again: the card visibly jumping around its own pin for the
- * length of the animation, and then one more settle when `placeCard` finally
- * measured at `moveend` and panned. Two moves and a flicker for one click.
+ * **The bug this exists for.** A card placed only once the camera stopped rode
+ * the whole flight on MapLibre's own rule, re-evaluated every frame as the pin
+ * crossed the frame — bottom, then a side, then bottom again — and then settled
+ * one more time at `moveend`. Two moves and a flicker for one click.
  *
- * So the question is asked **before** the flight rather than after it. The
- * destination is known — a `flyTo` with a `center` puts that coordinate in the
- * middle of the frame — so the bands can be evaluated against the frame's own
- * centre, the anchor fixed before MapLibre gets to guess, and the difference
- * handed to `flyTo` as an `offset`, which is stated as where the target centre
- * sits relative to the container centre when the animation ends. The pin
- * therefore arrives already inside the band its card needs, in one motion, with
- * nothing left to settle.
+ * So the question is asked **before** the flight. The destination is known, so
+ * `fitCard` answers it for the middle of the usable map with `pair` set — the
+ * pin and its card centred together, rather than the pin centred and its card
+ * off to one side — the side is fixed before MapLibre gets to guess, and the
+ * answer is handed to `flyTo` as an `offset`. The card travels on its own side
+ * the whole way and the pin arrives on its spot, so the pass `placeCard` makes
+ * at `moveend` finds nothing to move.
  *
- * **Measured synchronously**, which is the one thing here that looks wrong and
- * is not: `offsetWidth` forces a reflow, so a popup appended this tick does have
- * a box by the time it is read. It costs one layout per click. `placeCard`'s own
- * pass defers a frame instead because it also runs from a `toggle` deep inside
- * the card, where the thing that changed size has not been styled yet.
+ * With no card on screen — a results row set not to open one, or a map with
+ * cards switched off — the pin simply lands in the middle of the usable map.
+ * The usable map's middle rather than the container's: with a floating results
+ * panel over one side, the container's middle is not the middle of what the
+ * visitor can see.
  *
- * **No band at all** — a frame smaller than the card whichever side it opens on
- * — is not a zoom question either, though it looks like one. Nothing about
- * zooming changes whether a 440px card fits a 257px frame. There the pin is put
- * near the bottom of the frame instead, so the card is cut against everything
- * above it rather than against half of it, and the cap takes the rest.
+ * `offset` is measured from the **container's** centre, because that is how
+ * MapLibre defines it, so the usable rect decides where the pin goes and the
+ * container decides how that is said.
+ *
+ * **Still zoomed** when the card is too tall for the frame, which was tried the
+ * other way and put back: zooming changes nothing about whether a 440px card
+ * fits a 257px frame, and a visitor tapping a shop in the list on a phone —
+ * the frame that reaches the cap most often — would otherwise arrive at
+ * whatever the map was showing before.
  */
 function flyToCard(
   map: MapLibreMap,
   popup: Popup,
   center: [number, number],
 ): void {
-  const zoom = Math.max(map.getZoom(), FOCUS_ZOOM);
-  const card = popup.getElement();
-
-  if (!card) {
-    map.flyTo({ center, zoom });
-    return;
-  }
-
-  /*
-   * The cap the *last* card was given, cleared before this one is measured.
-   *
-   * One `Popup` serves every pin on the map, so the container arrives carrying
-   * whatever the previous card was squeezed to — and measuring against that
-   * would decide this card's side from a height that is not its own. Same line,
-   * and the same reason, as `placeCard`.
-   */
-  card.style.removeProperty("--lm-popup-max");
-
   const frame = map.getContainer();
   const usable = usableFrame(frame);
-  /* Numeric by construction — `showPopup` sets one of the two pin radii. See
-     `placeCard`, which reads it the same way. */
-  const gap = typeof popup.options.offset === "number" ? popup.options.offset : 0;
+  const card = popup.getElement();
+  const midX = (usable.left + usable.right) / 2;
+  const midY = (usable.top + usable.bottom) / 2;
+  const [x, y] = card
+    ? fitCard(popup, card, usable, midX, midY, true)
+    : [midX, midY];
 
-  /*
-   * Where the pin lands with no offset, which is what a plain `flyTo` does.
-   *
-   * The **container's** centre and deliberately not the usable rect's: MapLibre
-   * defines `offset` as where the target sits relative to the centre of the map
-   * container, so a floating results panel changes where the card may go and
-   * changes nothing at all about this number. Mixing the two is how the camera
-   * would fly the panel's width too far.
-   */
-  const middleX = frame.clientWidth / 2;
-  const middleY = frame.clientHeight / 2;
-
-  const best = chooseBand(
-    cardBands(card.offsetWidth, card.offsetHeight, usable, gap),
-    middleX,
-    middleY,
-  );
-
-  if (!best) {
-    /*
-     * Nowhere for the card to go, so the card gives way rather than the camera —
-     * but the side it opens on is still decided **here**, before the flight.
-     *
-     * That is the whole point of this branch and the first version got it wrong
-     * by simply flying: with `options.anchor` left unset MapLibre placed the
-     * card itself, once per frame, and a tall card in a short frame is exactly
-     * the case where its rule keeps changing its mind. Measured on a 558x257
-     * frame with a 440px card: four anchors in one flight — left, top-left, top,
-     * bottom — which is the jumping this function exists to stop, in the shape
-     * most likely to provoke it.
-     *
-     * **The pin lands low rather than in the middle**, and that is two things at
-     * once. It is the better answer — a card that has to be cut short is cut
-     * against the whole frame above the pin instead of against half of it,
-     * which on that 558x257 frame is 120px of card against 217px. And it is
-     * what makes the choice *stable*: a centred pin leaves `above` and `below`
-     * equal to within a rounding error, so `placeCard`'s own pass at `moveend`
-     * would toss a coin on the same question and flip the card once more at the
-     * end of the flight. Measured before this line: exactly that, one flip in
-     * three flights.
-     *
-     * Capped here too, so the card is its final size before the camera moves,
-     * and `placeCard` re-measuring at rest reaches this same function with the
-     * same numbers — so it re-applies the same cap and `setAnchor` finds nothing
-     * to change.
-     */
-    const content = card.querySelector<HTMLElement>(".lm-popup");
-    const targetY = usable.bottom - CARD_MARGIN - PIN_ROOM;
-
-    if (content) {
-      capCard(popup, card, content, card.offsetHeight, usable, targetY, gap);
-    }
-
-    /*
-     * **Still zoomed**, which is the one thing in this function that was tried
-     * the other way and put back.
-     *
-     * "Don't zoom in so far when there is no room for the card" sounds like the
-     * fix and is not: zooming changes nothing about whether a 440px card fits a
-     * 257px frame. The room is bought by the offset above and, when there is
-     * none to buy, by the cap — and holding the camera at the zoom it happened
-     * to be at costs a real thing, because a phone is the frame that reaches
-     * this branch most often. A visitor tapping a shop in the list there would
-     * arrive at whatever the map was showing before, which is the whole of what
-     * tapping a row is for.
-     */
-    map.flyTo({ center, zoom, offset: [0, targetY - middleY] });
-    return;
-  }
-
-  setAnchor(popup, best.anchor);
   map.flyTo({
     center,
-    zoom,
-    offset: [best.x - middleX, best.y - middleY],
+    zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
+    offset: [x - frame.clientWidth / 2, y - frame.clientHeight / 2],
   });
-}
-
-/**
- * The last resort: a card taller than any side of the frame, cut to fit.
- *
- * The roomier of above and below, since a card that has to be cut short should
- * at least be cut as little as possible. Whatever does not fit scrolls inside
- * the card.
- *
- * The cap lands on the *content* and is worked out from the container, which is
- * the difference the two boxes exist for: `full` is our card plus MapLibre's
- * tip, and capping the container's height on the content would leave the chrome
- * hanging over the edge by exactly the chrome's own size.
- *
- * Its own function because the settle and the flight both reach this case, and
- * a second copy is how the two would come to cut the same card to two different
- * heights.
- */
-function capCard(
-  popup: Popup,
-  card: HTMLElement,
-  content: HTMLElement,
-  /** The container's height, tip included. */
-  full: number,
-  usable: UsableFrame,
-  pointY: number,
-  gap: number,
-): void {
-  const above = pointY - usable.top - gap - CARD_MARGIN;
-  const below = usable.bottom - pointY - gap - CARD_MARGIN;
-
-  setAnchor(popup, above >= below ? "bottom" : "top");
-  card.style.setProperty(
-    "--lm-popup-max",
-    `${String(
-      Math.max(
-        Math.max(above, below) - (full - content.getBoundingClientRect().height),
-        MIN_CARD_HEIGHT,
-      ),
-    )}px`,
-  );
 }
 
 /**

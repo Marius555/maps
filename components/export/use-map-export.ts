@@ -17,13 +17,9 @@ import {
   type ExportOptions,
 } from "@/lib/export/export-map";
 import { DEFAULT_PAPER, DEFAULT_QUALITY } from "@/lib/export/paper";
-import type { ExportPlace } from "@/lib/export/place-features";
+import { toExportPlace } from "@/lib/export/export-place";
 import type { Place, Shape } from "@/lib/repositories/types";
-import {
-  resolvePin,
-  UNTAGGED_PIN_COLOR,
-  type CustomPinIcon,
-} from "@/packages/shared/pin-icons";
+import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 
 /**
  * The export, as one call the toolbar can make.
@@ -140,31 +136,5 @@ export function useMapExport({
     setOptions,
     refresh,
     exportMap: useCallback(() => void run(), [run]),
-  };
-}
-
-/**
- * A location as the export renderer wants it: a point, an icon id and one
- * resolved colour.
- *
- * The colour is ranked exactly as `paint` in use-place-markers.ts ranks it — a
- * custom pin's own colour offered to the resolver, which may override it with a
- * group's. The final fallback is the fixed grey rather than the dashboard's
- * `--accent`, because an exported file has no theme to read and `--accent` is an
- * `oklch()` value that neither MapLibre's colour parser nor a canvas fill would
- * take.
- */
-function toExportPlace(
-  place: Place,
-  pinIcons: CustomPinIcon[] | undefined,
-  colorFor: (place: Place, pinColor?: string) => string | undefined,
-): ExportPlace {
-  const pin = resolvePin(place.icon, pinIcons);
-
-  return {
-    lng: place.lng,
-    lat: place.lat,
-    icon: place.icon,
-    color: colorFor(place, pin?.color ?? undefined) ?? UNTAGGED_PIN_COLOR,
   };
 }

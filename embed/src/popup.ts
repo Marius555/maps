@@ -127,15 +127,19 @@ export function buildPopup(
   // and never sees the builder that made the row it was clicked in.
   root.dataset.lmPlace = place.id;
   /*
-   * `width`, not only `maxWidth`, and that one word is a real bug fixed.
+   * `width`, and that one word is a real bug fixed.
    *
    * A popup is content-sized, so with a cap alone a location with a short
    * address and one link drew at 133px — the same saved design at a different
-   * size on every pin, and at no size the studio ever showed. The cap stays
-   * beside it for the frame that is narrower than the card.
+   * size on every pin, and at no size the studio ever showed.
+   *
+   * There used to be an inline `maxWidth` of the same number beside it, "for the
+   * frame that is narrower than the card". A cap equal to the width caps
+   * nothing, and it also beat the stylesheet, so the card really did hang off a
+   * phone. The frame's cap is `--lm-popup-w` now, written by `fitCard` in map.ts
+   * and read by `.lm-popup--place`.
    */
   root.style.width = `${String(layout.width)}px`;
-  root.style.maxWidth = `${String(layout.width)}px`;
 
   /*
    * The legacy category, folded in as the first chip.

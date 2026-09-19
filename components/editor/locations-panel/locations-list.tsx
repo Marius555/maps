@@ -115,6 +115,7 @@ export function LocationsList({
   onFocusGroup,
   onEditGroup,
   onRetryAddress,
+  onCreateGroup,
   onRemoveFromGroup,
   onGroupObjects,
   onAddToGroup,
@@ -150,6 +151,8 @@ export function LocationsList({
   onFocusGroup: (groupId: string) => void;
   onEditGroup: (groupId: string) => void;
   onRetryAddress?: (placeId: string) => void;
+  /** A loose row's menu: make a group holding just this one. */
+  onCreateGroup: (object: DraggedObject) => void;
   /** Take one object out of whatever group it is in. */
   onRemoveFromGroup: (object: DraggedObject) => void;
   /** Two loose rows met: make a group holding both. */
@@ -509,6 +512,16 @@ export function LocationsList({
                   onDelete={() => setPendingDeletePlaceId(place.id)}
                   onRetryAddress={
                     onRetryAddress ? () => onRetryAddress(place.id) : undefined
+                  }
+                  /*
+                   * Only offered where there is no group yet — and not on a row
+                   * that exists only in the cache, whose temporary id the
+                   * server would be asked to PATCH. It is real a moment later.
+                   */
+                  onCreateGroup={
+                    !row.groupId && !isOptimisticPlaceId(place.id)
+                      ? () => onCreateGroup({ type: "place", id: place.id })
+                      : undefined
                   }
                   // Only offered where there is a group to leave.
                   onRemoveFromGroup={

@@ -1,11 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { PlaceCountBadge } from "@/components/places/place-count-badge";
 import { PageTitle } from "@/components/ui/page-title";
+import { prunePreviews } from "@/lib/map-preview/cache";
 import { useMaps } from "@/lib/query/maps";
-import type { AppMap } from "@/lib/repositories/types";
+import type { AppMap, MapSummary } from "@/lib/repositories/types";
 import { CreateMapDialog } from "./create-map-dialog";
-import { MapCard } from "./map-card";
+import { MapCard } from "./map-card/map-card";
+import { MAP_GRID_CLASS } from "./map-grid";
 import { MapListEmpty } from "./map-list-empty";
 
 /**
@@ -14,27 +18,36 @@ import { MapListEmpty } from "./map-list-empty";
  */
 export function MapList({
   initialMaps,
-  placeCounts,
+  summaries,
   mapLimit,
 }: {
   initialMaps: AppMap[];
   /** Keyed by map id. Counted on the server so a card can say something real. */
-  placeCounts: Record<string, number>;
+  summaries: Record<string, MapSummary>;
   /** The plan's ceiling, so the free plan's single map explains itself. */
   mapLimit: number;
 }) {
   const { data: maps = [] } = useMaps(initialMaps);
+
+  /*
+   * Previews of deleted maps would otherwise sit in the browser's store forever.
+   * Keyed on the ids themselves, so it runs again after a delete.
+   */
+  const mapIds = maps.map((map) => map.id).join(",");
+  useEffect(() => {
+    void prunePreviews(new Set(mapIds ? mapIds.split(",") : []));
+  }, [mapIds]);
 
   return (
     <div className="space-y-6">
       <PageTitle>Maps</PageTitle>
 
       {/*
-       * The count earns the row the "New map" button needs. It also answers the
-       * question the button raises on the free plan, where the ceiling is one:
-       * "1 of 1 maps" says why creating a second one will fail, before it does.
-       * With no maps at all the empty state carries its own CreateMapDialog, and
-       * "0 of 1 maps" would be a limit nobody is near.
+       * The count earns the row the "Create map" button needs. It also answers
+       * the question the button raises on the free plan, where the ceiling is
+       * one: "1 of 1 maps" says why creating a second one will fail, before it
+       * does. With no maps at all the empty state carries its own
+       * CreateMapDialog, and "0 of 1 maps" would be a limit nobody is near.
        */}
       {maps.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -46,12 +59,10 @@ export function MapList({
       {maps.length === 0 ? (
         <MapListEmpty />
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className={MAP_GRID_CLASS}>
           {maps.map((map) => (
-            <li key={map.id} className="relative">
-              {/* A newly created map isn't in placeCounts until the next server
-                  render, and it has no locations yet either way. */}
-              <MapCard map={map} placeCount={placeCounts[map.id] ?? 0} />
+            <li key={map.id} className="min-w-0">
+              <MapCard map={map} summary={summaries[map.id]} />
             </li>
           ))}
         </ul>

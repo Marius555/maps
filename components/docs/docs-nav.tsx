@@ -21,15 +21,15 @@ export function DocsNav() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Guides" className="lg:sticky lg:top-8">
+    <nav aria-label="Documentation" className="lg:sticky lg:top-8">
       <h2 className="px-2.5 pb-1 text-[0.6875rem] font-medium tracking-wide text-muted uppercase">
-        Guides
+        Documentation
       </h2>
 
       <ul className="space-y-0.5">
         <li>
           <DocsNavLink href="/docs" isCurrent={pathname === "/docs"}>
-            All guides
+            Overview
           </DocsNavLink>
         </li>
 
