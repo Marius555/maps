@@ -32,11 +32,20 @@ export default defineConfig({
   root: resolve(import.meta.dirname),
   /**
    * The manual test harness (embed/dev/) is copied into the build output, so it
-   * sits next to map.js at /embed/dev.html and can exercise the real bundle
-   * against a fixture snapshot — no Appwrite, no login, no publish.
+   * sits next to map.js: /embed/dev.html exercises the real bundle against a
+   * committed fixture — no Appwrite, no login, no publish — and
+   * /embed/live.html points it at a real published snapshot.
    *
-   * It lands in public/embed/, which is gitignored build output, so the harness
-   * is committed as source but never deployed.
+   * It lands in public/embed/, which is gitignored, so the harness is committed
+   * as source and never checked in at its served path. **That is not the same as
+   * never deployed, and this comment used to claim it was.** `prebuild` runs
+   * `build:embed`, so a production build regenerates public/embed/ on the host
+   * and both pages are reachable there.
+   *
+   * Which is now deliberate rather than merely true: the Publish page's "Open
+   * test page" button links to /embed/live.html, so an owner can see what they
+   * published. Both pages are `noindex`, and live.html only loads a snapshot that
+   * is already a public file.
    */
   publicDir: resolve(import.meta.dirname, "dev"),
   resolve: {

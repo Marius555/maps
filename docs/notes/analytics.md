@@ -56,6 +56,14 @@ and the five blockers this file raised are answered below rather than removed.
   a live snapshot carries no endpoint until one is written. Off is checked
   server-side in `readCollectGate`, because waiting for a republish is defensible
   for a colour and not for somebody withdrawing consent to record their visitors.
+- **The asymmetry has one honest readout, and it is not the Analytics tab.** That
+  tab's `isMeasuring` reads `settings` as *stored*, so between switching on and
+  republishing it says "on" while the live snapshot carries no endpoint — and a
+  beacon is answered `204` whether it was stored or dropped, so nothing else
+  disagrees either. `/embed/live.html` fetches the snapshot and reports which of
+  the two it is; the Publish page's "Open test page" button is how an owner gets
+  there. Anyone debugging "analytics says on but there are no sessions" should be
+  sent to that page before anywhere else.
 
 ### The collector
 

@@ -72,7 +72,8 @@ intact. The PMTiles archive on R2 is ready and deliberately *not* on that list (
 Installed since the original scaffold: `zod`, `@tanstack/react-query`, `zustand`,
 `papaparse`, `date-fns`, `vitest`, `vite`, `fflate` (promoted from a pmtiles transitive —
 it unzips .xlsx), `resend`, `recharts` (asked for and granted; marketing pages only, and it
-brings Redux Toolkit transitively, so it is loaded with `next/dynamic`), and `jsdom` as a
+brings Redux Toolkit transitively, so it is loaded with `next/dynamic`), `aws4fetch` (asked
+for and granted; signs R2's S3 requests, server-only), and `jsdom` as a
 devDependency only. Still not installed, from §3's
 "Add these": biome, playwright, sentry, posthog, and `@react-email/components` — three
 transactional emails do not earn a React renderer, so the templates are plain TS returning
@@ -89,10 +90,12 @@ npm run lint         # eslint
 npm run test         # vitest run
 npm run build:embed  # vite build → public/embed, copy MapLibre runtime, check size
 npm run setup:appwrite  # create missing tables/columns/indexes from scripts/appwrite-schema.mjs
+npm run setup:r2        # snapshot bucket: custom domain, CORS, zone cache + header rules
 
 npm run build:tile-styles -- https://tiles.example.com   # our own five style documents
 npm run mirror:tile-assets      # fonts, sprites, Natural Earth raster -> public/tiles/ (414MB)
 npm run migrate:style-host      # move published snapshots to the current tile host
+npm run migrate:snapshots-to-r2 # copy Appwrite-hosted snapshots to R2 (--dry-run first)
 npm run migrate:tags            # fold categories into tags (--dry-run first)
 ```
 
@@ -100,8 +103,14 @@ npm run migrate:tags            # fold categories into tags (--dry-run first)
 
 **Testing the embed by hand:** `npm run build:embed`, start the dev server, open
 `/embed/dev.html`. It renders the real bundle against a fixture snapshot with no
-Appwrite, login or publish involved. Source is `embed/dev/`, committed; Vite's
-`publicDir` copies it into the gitignored build output, so it never deploys.
+Appwrite, login or publish involved. **`/embed/live.html` is the other half** — the same
+bundle against a *real* published snapshot, so it is the only way to check analytics end to
+end, and the Publish page's **Open test page** button links to it (`embedTestPageUrl`). It
+reports whether the snapshot it loaded actually carries an endpoint, which the Analytics tab
+cannot: that reads `settings` as stored, not as published. Source is `embed/dev/`, committed;
+Vite's `publicDir` copies it into the gitignored `public/embed/`. **Gitignored is not
+undeployed** — `prebuild` runs `build:embed`, so both pages exist in production, `noindex`,
+deliberately.
 
 Linting is **ESLint flat config** (`eslint.config.mjs`, `eslint-config-next` core-web-vitals + typescript), not Biome. §3 chooses Biome; when you migrate, swap the `lint` script and delete the ESLint config. Until then `npm run lint` is the check.
 
@@ -125,7 +134,7 @@ Tests are `vitest` (`vitest.config.mts`), unit only, `lib/**/*.test.ts` and `pac
 - **MapLibre's worker must be told where it lives.** MapLibre v6 derives its worker URL from `import.meta.url`, bails to `""` when that isn't an http(s) URL (which it isn't under Turbopack), and then constructs `new Worker("")` — loading the HTML page as the worker script. The worker never replies, and because vector tiles are fetched *inside* the worker, every map renders as an empty background with **no error in the console**. `scripts/copy-maplibre-worker.mjs` (via `predev`/`prebuild`) copies the worker into `public/maplibre/`, and `lib/map/worker.ts` sets `config.WORKER_URL`. A blank basemap? Check `public/maplibre/` exists before anything else.
 - **The embed is an ES module, and that is forced.** MapLibre v6 ships ESM only — no UMD, no CSP build. So the snippet is `<script type="module">`, `document.currentScript` is always null (the boot code finds its script tag by `[data-snapshot]` instead), and both `/embed` and `/maplibre` need CORS headers, because module scripts and MapLibre's cross-origin worker blob are both CORS fetches. `next.config.ts` sets them.
 - **MapLibre is external to the embed bundle, deliberately.** Bundling it inlines `maplibre-gl-shared.mjs`, and the worker then downloads its own copy of the same 131KB chunk — measured at 424KB gzipped total. Shipping MapLibre's dist files beside `map.js` lets the main thread and the worker share one URL: 314.5KB. Don't "simplify" this by removing `external` from `embed/vite.config.mts`.
-- **Snapshots are written twice per publish.** An immutable timestamped archive, plus one live file at a fixed id that the embed actually reads. The embed's URL has to be stable across republishes or every customer would re-paste their snippet, and §2 forbids asking us which snapshot is current. `lib/snapshot/storage.ts` explains the delete-then-create window and why the embed retries once.
+- **Snapshots are written twice per publish.** An immutable timestamped archive, plus one live file at a fixed id that the embed actually reads. The embed's URL has to be stable across republishes or every customer would re-paste their snippet, and §2 forbids asking us which snapshot is current. **They live on R2 at `cdn.pinglide.com`**; the Appwrite store is what an unset `SNAPSHOT_PUBLIC_URL` falls back to, and it 403s on every customer's origin — `lib/snapshot/storage.ts`.
 - Vendored skills in `.agents/skills/`, pinned by `skills-lock.json`: `heroui-react`, `appwrite-typescript`, `next-cache-components-optimizer`. Use them instead of recalling API shapes.
 
 ### Environment
@@ -153,7 +162,13 @@ one exists: `docs/notes/environment.md`.
   halves out of one process-wide throttle because one account has one rate limit.
 - Server-only, optional: `SNAPSHOT_STORAGE_ID`, defaulting to `STORAGE_ID` — Appwrite
   Cloud's free plan allows one bucket per project, which is why `json` is in the assets
-  bucket's allowed extensions.
+  bucket's allowed extensions. Read only while `SNAPSHOT_PUBLIC_URL` is unset.
+- Server-only, **required in production**: `SNAPSHOT_PUBLIC_URL` (`https://cdn.pinglide.com`
+  — set, publishing goes to R2; unset, to Appwrite, which no customer's site can read),
+  `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_SNAPSHOT_BUCKET`
+  (default `snapshots`). The R2 token is scoped to that one bucket, with **no IP filter** —
+  Appwrite Sites has no fixed outbound IP.
+- Setup only, **never on the site**: `CLOUDFLARE_API_TOKEN`, read by `npm run setup:r2` alone.
 - Server-only, optional: `CRON_SECRET` (the daily sheet sync's route **refuses everyone**
   while it is unset; the same value goes on the `sheet-sync-daily` function) and
   `SHEET_SYNC_STEP_MS` (lookup time per sync step, default 5000 — raise only with the site
@@ -255,7 +270,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 |---|---|
 | `components/card/**`, `lib/card/**`, `embed/src/popup.ts`, `packages/shared/card-*.ts`, `directions.ts` | `docs/notes/cards.md` |
 | `components/map/shapes/**`, `lib/routing/**`, `lib/map/route-*.ts`, `packages/shared/shapes.ts` | `docs/notes/shapes-and-routes.md` |
-| `components/publish/**`, `lib/preview/**`, `embed/src/**`, `packages/shared/embed-chrome.ts` | `docs/notes/publish-and-embed.md` |
+| `components/publish/**`, `lib/preview/**`, `embed/src/**`, `packages/shared/embed-chrome.ts`, `lib/snapshot/*-store.ts`, `lib/r2/**`, `scripts/setup-r2.mjs` | `docs/notes/publish-and-embed.md` |
 | `lib/map/themes.ts`, `lib/map/style*.ts`, `packages/shared/style-tint.ts`, `scripts/tile-style.mjs` | `docs/notes/basemaps-and-tiles.md` |
 | `components/tags/**`, `packages/shared/tags.ts`, `packages/shared/pin-*.ts`, `components/map/pin-marker.ts` | `docs/notes/tags-and-pins.md` |
 | `components/editor/**`, `lib/import/**`, `lib/map/edge-autoscroll.ts`, any `loading.tsx`, `Container` sizes | `docs/notes/editor-and-layout.md` |

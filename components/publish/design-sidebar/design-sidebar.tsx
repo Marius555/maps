@@ -241,7 +241,7 @@ export function DesignSidebar({
           </p>
         ) : null}
 
-        <ShareDialog map={map} />
+        <ShareDialog map={map} isMeasuring={design.settings.analytics} />
         <PublishAction mapId={map.id} />
       </footer>
     </BottomSheet>

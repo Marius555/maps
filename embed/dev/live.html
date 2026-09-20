@@ -51,16 +51,12 @@
   <body>
     <h1>Live embed harness</h1>
 
-    <p class="note">
-      <code>/embed/dev.html</code> renders a <em>fixture</em>, which is what makes
-      it useful: no Appwrite, no login, no publish. That also means its map id is
-      not real, so the collector drops every beacon it sends and analytics can
-      never be checked there end to end. This page is the other half — it points
-      the same built bundle at a <strong>real published snapshot</strong>, so a
-      session recorded here lands in the real tables and shows up on the map's
-      Analytics tab.
-    </p>
-
+    <!--
+      Outside #docs, because it is a consequence rather than an explanation. The
+      Publish page links here now, so somebody arrives with ?snapshot= already
+      set and never reads a word below the map — this line is the one they must
+      still see.
+    -->
     <p class="warn">
       <strong>This writes real rows.</strong> Anything done on this page is
       recorded against that map exactly as a visitor's session would be, and
@@ -68,58 +64,90 @@
       data to, and delete the rows afterwards.
     </p>
 
-    <p class="note">
-      Paste the map's live snapshot URL — the <code>data-snapshot</code> value out
-      of the snippet on its Publish page — or pass it as
-      <code>?snapshot=&lt;url&gt;</code>.
-    </p>
+    <!--
+      Everything that explains the page, plus the form, hidden together the moment
+      a map loads. It was all visible at once, which was right while this page was
+      only ever opened by hand and wrong as soon as the Publish page linked to it:
+      an owner following that link got a wall of developer prose with their map
+      somewhere underneath it.
+    -->
+    <div id="docs">
+      <p class="note">
+        <code>/embed/dev.html</code> renders a <em>fixture</em>, which is what
+        makes it useful: no Appwrite, no login, no publish. That also means its
+        map id is not real, so the collector drops every beacon it sends and
+        analytics can never be checked there end to end. This page is the other
+        half — it points the same built bundle at a
+        <strong>real published snapshot</strong>, so a session recorded here lands
+        in the real tables and shows up on the map's Analytics tab.
+      </p>
 
-    <form id="form">
-      <input
-        id="url"
-        name="snapshot"
-        type="url"
-        placeholder="https://…/files/live-&lt;mapId&gt;/view?project=…"
-        required
-      />
-      <button type="submit">Load map</button>
-    </form>
+      <p class="note">
+        Paste the map's live snapshot URL — the <code>data-snapshot</code> value
+        out of the snippet on its Publish page — or pass it as
+        <code>?snapshot=&lt;url&gt;</code>. The Publish page's
+        <strong>Open test page</strong> button builds that URL for you.
+      </p>
+
+      <form id="form">
+        <input
+          id="url"
+          name="snapshot"
+          type="url"
+          placeholder="https://cdn.pinglide.com/&lt;mapId&gt;/live.json"
+          required
+        />
+        <button type="submit">Load map</button>
+      </form>
+
+      <p class="note">
+        What to check, with the Network tab open and filtered to
+        <code>collect</code>: search, click a pin, open a card, press Directions —
+        <strong>no request appears while you do any of it</strong>. Switch to
+        another tab and exactly one <code>POST /api/collect</code> fires,
+        answering <code>204</code>. Reload the Analytics tab for that map and the
+        session is there. Measurement has to be switched on in the Publish
+        designer <em>and the map republished</em> before any of that happens — the
+        endpoint is baked into the snapshot, so a map published before you turned
+        it on carries no endpoint and correctly sends nothing.
+      </p>
+
+      <p class="note">
+        A <code>204</code> with no row behind it is the normal answer to every
+        dropped beacon and is deliberately indistinguishable from a stored one: an
+        unpublished map, measurement switched off, a host not on the allowlist, a
+        map over its ceiling. That is the contract in
+        <code>app/api/collect/route.ts</code> — a stranger's page learns nothing
+        from us — so debug it from the server log, never from the status code.
+      </p>
+    </div>
+
+    <!--
+      Above #status, so the order down the page is verdict, URL, map. Putting it
+      after would file it below the map, since the bundle inserts its container
+      next to the script tag and that goes in after #status.
+    -->
+    <p class="note" id="verdict"></p>
 
     <p class="note" id="status"></p>
-
-    <p class="note">
-      What to check, with the Network tab open and filtered to
-      <code>collect</code>: search, click a pin, open a card, press Directions —
-      <strong>no request appears while you do any of it</strong>. Switch to
-      another tab and exactly one <code>POST /api/collect</code> fires, answering
-      <code>204</code>. Reload the Analytics tab for that map and the session is
-      there. Measurement has to be switched on in the Publish designer
-      <em>and the map republished</em> before any of that happens — the endpoint
-      is baked into the snapshot, so a map published before you turned it on
-      carries no endpoint and correctly sends nothing.
-    </p>
-
-    <p class="note">
-      A <code>204</code> with no row behind it is the normal answer to every
-      dropped beacon and is deliberately indistinguishable from a stored one: an
-      unpublished map, measurement switched off, a host not on the allowlist, a
-      map over its ceiling. That is the contract in
-      <code>app/api/collect/route.ts</code> — a stranger's page learns nothing
-      from us — so debug it from the server log, never from the status code.
-    </p>
 
     <script>
       const form = document.getElementById("form");
       const input = document.getElementById("url");
       const status = document.getElementById("status");
+      const docs = document.getElementById("docs");
+      const verdict = document.getElementById("verdict");
 
       /*
        * Everything after `snapshot=` to the end of the string, deliberately not
-       * `URLSearchParams`. A live snapshot URL carries its own `?project=`, so
-       * pasting one in unencoded splits it into two params and the map id
-       * arrives without the project it belongs to — which fails as a 401 from
-       * storage, three layers away from the mistake. Taking the tail raw reads
-       * an encoded and an unencoded URL the same way.
+       * `URLSearchParams`. An Appwrite-hosted (development) snapshot URL carries
+       * its own `?project=`, so pasting one in unencoded splits it into two params
+       * and the map id arrives without the project it belongs to — which fails as
+       * a 401 from storage, three layers away from the mistake. Taking the tail
+       * raw reads an encoded and an unencoded URL the same way.
+       *
+       * The consequence for anyone building this URL: `snapshot=` stays last.
+       * `embedTestPageUrl` in lib/embed/snippet.ts is the one place that does.
        */
       const raw = location.search.match(/[?&]snapshot=(.+)$/);
       const fromQuery = raw ? safeDecode(raw[1]) : null;
@@ -138,11 +166,77 @@
         load(input.value);
       });
 
+      /*
+       * The only place in the product that reads the *published* answer about
+       * measurement rather than the owner's draft, which is the whole reason it is
+       * worth a second fetch.
+       *
+       * The switch in the Publish designer saves immediately; the endpoint is
+       * baked into a snapshot at publish time and a live snapshot is immutable. So
+       * a switch turned on a minute ago and not yet published records nothing —
+       * and the Analytics tab still says measurement is on, because it reads
+       * settings as stored, not as last published. That gap is what sends somebody
+       * looking for a bug that isn't there. This says what the file in front of us
+       * actually carries.
+       *
+       * The duplicate fetch is free enough: the bundle is about to request the
+       * same URL, and R2 serves live.json with max-age=60, so one of the two is a
+       * cache hit.
+       */
+      async function reportMeasurement(snapshotUrl) {
+        let snapshot;
+
+        try {
+          const response = await fetch(snapshotUrl, { credentials: "omit" });
+          if (!response.ok) throw new Error(String(response.status));
+          snapshot = await response.json();
+        } catch {
+          // The bundle warns about this in the console, which an owner following a
+          // link from the Publish page will never open. This fetch is the only
+          // thing on the page that knows, so it says so.
+          verdict.className = "warn";
+          verdict.textContent =
+            "Couldn't read this snapshot, so the map below will be empty too." +
+            " Check the URL, and that the map has been published at least once.";
+          return;
+        }
+
+        if (snapshot && snapshot.analytics && snapshot.analytics.url) {
+          verdict.className = "note";
+          /*
+           * "Sending", not "measuring", and the distinction is not pedantry — it
+           * is the whole accuracy of this line. What the file in front of us
+           * settles is whether a beacon leaves the page. Whether a row is kept is
+           * settled again server-side by `readCollectGate`, which reads the switch
+           * as stored, so a map published while measurement was on and switched
+           * off since sends beacons that are all dropped. Caught in exactly that
+           * state while testing this page, which is how we know.
+           */
+          verdict.textContent =
+            `Sending. This snapshot posts to ${snapshot.analytics.url} — one` +
+            " beacon when you leave or hide the page, never one per click." +
+            " Whether the row is kept needs measurement to be on now as well:" +
+            " switching it off stops collection within the minute, and a dropped" +
+            " beacon is answered exactly like a stored one.";
+          return;
+        }
+
+        verdict.className = "warn";
+        verdict.textContent =
+          "Not sending. This snapshot carries no endpoint, so nothing you do here" +
+          " leaves the page. Switch Visitor analytics on in the Publish designer" +
+          " and publish again — the endpoint is baked in at publish time.";
+      }
+
       function load(snapshotUrl) {
         if (!snapshotUrl) return;
 
-        form.hidden = true;
-        status.textContent = `Loading ${snapshotUrl}`;
+        docs.hidden = true;
+        // The URL alone, not "Loading …": it stays on screen under the map once
+        // the map is there, and a permanent "Loading" reads as a stuck page.
+        status.textContent = snapshotUrl;
+
+        void reportMeasurement(snapshotUrl);
 
         /*
          * The real snippet, built at runtime rather than written into the file —

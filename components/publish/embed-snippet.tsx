@@ -2,19 +2,10 @@
 
 import { Button, toast } from "@heroui/react";
 import { Copy } from "lucide-react";
-import { useSyncExternalStore } from "react";
 
 import { embedScriptUrl, embedSnippet } from "@/lib/embed/snippet";
-
-/**
- * The origin is an external value, not React state, so it is read with
- * useSyncExternalStore rather than set from an effect. It never changes, hence
- * the no-op subscribe; the server snapshot is null so SSR and the first
- * hydration render agree.
- */
-const subscribe = () => () => {};
-const getOrigin = () => window.location.origin;
-const getServerOrigin = () => null;
+import { TestPageLink } from "./share-dialog/test-page-link";
+import { useOrigin } from "./use-origin";
 
 /**
  * The one line the customer pastes into their site.
@@ -22,10 +13,17 @@ const getServerOrigin = () => null;
  * The script URL is derived from the browser's own origin, so a self-hosted or
  * preview deployment hands out a snippet that actually points at itself. That
  * has to happen after mount — during SSR there is no origin to read, and
- * guessing one would put a wrong URL on the customer's clipboard.
+ * guessing one would put a wrong URL on the customer's clipboard. `useOrigin`
+ * holds that, shared with the test page link beside the copy button.
  */
-export function EmbedSnippet({ snapshotUrl }: { snapshotUrl: string }) {
-  const origin = useSyncExternalStore(subscribe, getOrigin, getServerOrigin);
+export function EmbedSnippet({
+  snapshotUrl,
+  isMeasuring,
+}: {
+  snapshotUrl: string;
+  isMeasuring: boolean;
+}) {
+  const origin = useOrigin();
 
   const snippet = origin
     ? embedSnippet({ scriptUrl: embedScriptUrl(origin), snapshotUrl })
@@ -65,15 +63,21 @@ export function EmbedSnippet({ snapshotUrl }: { snapshotUrl: string }) {
         </code>
       </pre>
 
-      <Button
-        variant="secondary"
-        size="sm"
-        onPress={onCopy}
-        isDisabled={!snippet}
-      >
-        <Copy aria-hidden="true" className="size-4" />
-        Copy embed code
-      </Button>
+      {/* Wraps rather than shrinks: two buttons and a line of prose do not fit
+          one row at 390px. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onPress={onCopy}
+          isDisabled={!snippet}
+        >
+          <Copy aria-hidden="true" className="size-4" />
+          Copy embed code
+        </Button>
+
+        <TestPageLink snapshotUrl={snapshotUrl} isMeasuring={isMeasuring} />
+      </div>
     </div>
   );
 }

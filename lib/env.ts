@@ -29,6 +29,29 @@ export const env = {
    */
   snapshotStorageId: process.env.SNAPSHOT_STORAGE_ID || required("STORAGE_ID"),
   /**
+   * Where published snapshots are served from — `https://cdn.pinglide.com`, the
+   * custom domain on the R2 bucket. **This is the switch**: set, publishing
+   * writes to Cloudflare R2 and the three R2 values below become required; unset,
+   * it writes to Appwrite Storage exactly as before, so a clone with no
+   * Cloudflare account still publishes.
+   *
+   * Unset is not a production option. Appwrite Storage answers 403 to any Origin
+   * not registered as a Web platform, which is every customer's site — see
+   * `lib/snapshot/storage.ts`.
+   */
+  snapshotPublicUrl: (process.env.SNAPSHOT_PUBLIC_URL ?? "").replace(/\/+$/, ""),
+  /**
+   * R2's S3 credentials. Read only when `snapshotPublicUrl` is set, and checked
+   * where they are used (`lib/r2/client.ts`) rather than with `required()`: a
+   * missing key should fail a publish with its name, not take the whole
+   * dashboard down at import. Never `CLOUDFLARE_API_TOKEN` — that one configures
+   * the bucket once (`npm run setup:r2`) and never reaches the deployed site.
+   */
+  r2AccountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? "",
+  r2AccessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
+  r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
+  r2SnapshotBucket: process.env.R2_SNAPSHOT_BUCKET || "snapshots",
+  /**
    * Transactional email, all three optional.
    *
    * Optional and not `required()` on purpose: a clone with no `.env` still has to

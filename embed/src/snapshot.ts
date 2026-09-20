@@ -7,10 +7,11 @@ import type { MapSnapshot } from "@/packages/shared/snapshot";
  * nothing else is loaded, and nothing metered sits in the visitor's path
  * (CLAUDE.md §2).
  *
- * The retry exists for one specific reason: publishing replaces the live file by
- * deleting and recreating it, because Appwrite Storage has no atomic overwrite.
- * That leaves a window, one upload long, where the URL 404s. A visitor who lands
- * in it should see a map a moment later, not a blank box.
+ * The retry was written for the Appwrite store, which replaces the live file by
+ * deleting and recreating it and so 404s for one upload's length. Snapshots now
+ * live on R2, which overwrites atomically (lib/snapshot/storage.ts), so that
+ * window is gone — the retry stays because it costs nothing and a dropped
+ * connection should still end in a map, not a blank box.
  */
 
 const SUPPORTED_VERSION = 1;

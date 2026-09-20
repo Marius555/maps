@@ -60,11 +60,11 @@ Plan; and from your browser, when you use our website and dashboard.
 
 | Provider | What for | Where | Safeguard for transfers |
 |---|---|---|---|
-| Appwrite [VERIFY: contracting entity, from the DPA in the Appwrite console] | Database, file storage, sign-in, published map files, backups | European Union — Frankfurt, Germany. Backups are kept in a separate region [VERIFY: backup region and retention on our Appwrite plan] | EU hosting [VERIFY: safeguard for any access from outside the EEA] |
+| Appwrite [VERIFY: contracting entity, from the DPA in the Appwrite console] | Database, file storage, sign-in, backups | European Union — Frankfurt, Germany. Backups are kept in a separate region [VERIFY: backup region and retention on our Appwrite plan] | EU hosting [VERIFY: safeguard for any access from outside the EEA] |
 | {{hosting.provider}} | Runs our website, the dashboard, and the endpoint that receives visitor measurement | {{hosting.region}} | [VERIFY: once the host is chosen] |
 | Resend [VERIFY: contracting entity] | Sending service emails | United States | EU Standard Contractual Clauses and the EU-US Data Privacy Framework |
 | Geoapify GmbH [REMOVE IF UNUSED] | Placing addresses you import on the map, and calculating routes you draw | Germany and Finland | European Economic Area |
-| Cloudflare, Inc. [IF USED] | Delivering published map files and the embed script | Global network; United States company | EU Standard Contractual Clauses and the EU-US Data Privacy Framework |
+| Cloudflare, Inc. | Storing and delivering published map files | Global network; United States company | EU Standard Contractual Clauses and the EU-US Data Privacy Framework |
 
 **Independent controllers**, whose own privacy policies apply:
 

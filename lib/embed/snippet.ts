@@ -14,12 +14,35 @@
 /** Where the built embed bundle is served from in development. */
 export const EMBED_SCRIPT_PATH = "/embed/map.js";
 
+/** The live-snapshot harness, `embed/dev/live.html` as Vite's publicDir copies it. */
+export const EMBED_TEST_PAGE_PATH = "/embed/live.html";
+
 export const DEFAULT_EMBED_HEIGHT = 520;
 
 export function embedScriptUrl(origin: string): string {
   // Set this to the CDN origin in production. Falling back to the dashboard's
   // own origin keeps development and self-hosting working with no config.
   return process.env.NEXT_PUBLIC_EMBED_SCRIPT_URL || `${origin}${EMBED_SCRIPT_PATH}`;
+}
+
+/**
+ * The map on a page of its own — the published snapshot, the real bundle, and the
+ * tracking that snapshot carries. What an owner presses to see what they sold.
+ *
+ * Two rules, both invisible at the call site:
+ *
+ * **The dashboard's own origin, never `embedScriptUrl`'s.** That one may point at
+ * a CDN serving `map.js` and no harness, and the harness loads `/embed/map.js`
+ * relative to itself.
+ *
+ * **`snapshot=` stays last.** The harness reads it as `/[?&]snapshot=(.+)$/` —
+ * everything to end-of-string, deliberately not `URLSearchParams`, so an
+ * Appwrite-hosted snapshot URL carrying its own `?project=` survives being pasted
+ * in unencoded. A param appended after this one is swallowed into the snapshot
+ * URL, and the failure lands three layers away as a 401 from storage.
+ */
+export function embedTestPageUrl(origin: string, snapshotUrl: string): string {
+  return `${origin}${EMBED_TEST_PAGE_PATH}?snapshot=${encodeURIComponent(snapshotUrl)}`;
 }
 
 export function embedSnippet({

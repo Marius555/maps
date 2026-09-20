@@ -1,7 +1,7 @@
 /**
  * Rendered previews, kept in the browser so a returning owner's maps list draws
  * every card at once instead of re-rendering fifteen maps.
- *
+*
  * IndexedDB rather than localStorage because the value is an image: a Blob
  * stores as bytes, where localStorage would need a base64 string a third larger
  * again, and fifteen of those would crowd its few-megabyte quota.

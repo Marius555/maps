@@ -382,10 +382,10 @@ Last updated: {{legal.effectiveDate}}
 
 | Sub-processor | Processing | Location | Transfer safeguard |
 |---|---|---|---|
-| Appwrite [VERIFY: contracting entity, and its own sub-processors, from the DPA in the Appwrite console] | Database, authentication, file storage, published map files, backups | European Union — Frankfurt, Germany; backups in a separate region | EEA [VERIFY: safeguard for any access from outside the EEA] |
+| Appwrite [VERIFY: contracting entity, and its own sub-processors, from the DPA in the Appwrite console] | Database, authentication, file storage, backups | European Union — Frankfurt, Germany; backups in a separate region | EEA [VERIFY: safeguard for any access from outside the EEA] |
 | {{hosting.provider}} | Hosting of the dashboard and of the visitor measurement endpoint, which receives Visitor Measurement Data | {{hosting.region}} | [VERIFY: once the host is chosen] |
 | Geoapify GmbH, Bgm.-Heinrich-Str. 6, 86415 Mering, Germany [REMOVE IF UNUSED] | Geocoding addresses and calculating routes from Customer Content | Germany and Finland | EEA |
-| Cloudflare, Inc. [IF USED] | Content delivery and storage of published map files and the embed script | Global network; United States company | SCCs; EU-US Data Privacy Framework |
+| Cloudflare, Inc. | Content delivery and storage of published map files | Global network; United States company | SCCs; EU-US Data Privacy Framework |
 
 **Not Sub-processors under this DPA:**
 

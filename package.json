@@ -20,9 +20,11 @@
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run test",
     "setup:appwrite": "node --env-file=.env scripts/setup-appwrite.mjs",
+    "setup:r2": "node --env-file=.env scripts/setup-r2.mjs",
     "migrate:auto-style": "node --env-file=.env scripts/migrate-auto-style.mjs",
     "migrate:shape-kinds": "node --env-file=.env scripts/migrate-shape-kinds.mjs",
     "migrate:style-host": "node --env-file=.env scripts/migrate-style-host.mjs",
+    "migrate:snapshots-to-r2": "node --env-file=.env scripts/migrate-snapshots-to-r2.mjs",
     "migrate:tags": "node --env-file=.env scripts/migrate-categories-to-tags.mjs"
   },
   "dependencies": {
@@ -32,6 +34,7 @@
     "@internationalized/date": "^3.12.3",
     "@tanstack/react-query": "^5.101.4",
     "appwrite": "^26.2.0",
+    "aws4fetch": "^1.0.20",
     "date-fns": "^4.4.0",
     "fflate": "^0.8.3",
     "lucide-react": "^1.30.0",

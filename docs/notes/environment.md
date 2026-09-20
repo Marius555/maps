@@ -21,7 +21,29 @@ this is why each one exists.
   are simply asked about a different plan, which is why the ceilings become pro's
   3,000 places rather than none. Honoured in every environment and it warns once
   per process when it is on. **Delete it with the pricing work.**
-- Optional, server-only: `SNAPSHOT_STORAGE_ID`, defaulting to `STORAGE_ID`. **Appwrite Cloud's free plan allows one bucket per project**, so published snapshots share the assets bucket, which is why `json` is in its allowed extensions. On a paid plan, point this at a dedicated bucket and add a second entry to `BUCKETS` in `scripts/appwrite-schema.mjs`; nothing else changes.
+- Optional, server-only: `SNAPSHOT_STORAGE_ID`, defaulting to `STORAGE_ID`. **Appwrite Cloud's free plan allows one bucket per project**, so published snapshots share the assets bucket, which is why `json` is in its allowed extensions. On a paid plan, point this at a dedicated bucket and add a second entry to `BUCKETS` in `scripts/appwrite-schema.mjs`; nothing else changes. Only read when `SNAPSHOT_PUBLIC_URL` is unset — see the next entry for why that is development-only.
+
+- Optional in code, **required in production**, server-only: `SNAPSHOT_PUBLIC_URL`
+  (`https://cdn.pinglide.com`), `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+  `R2_SECRET_ACCESS_KEY` and `R2_SNAPSHOT_BUCKET` (default `snapshots`) — published snapshots on
+  Cloudflare R2. **`SNAPSHOT_PUBLIC_URL` is the switch**: set, publishing writes to R2 and the
+  three credentials become required, checked in `lib/r2/client.ts` so a missing one fails a
+  publish by name rather than the whole dashboard at import; unset, snapshots go to Appwrite
+  Storage as they always did, so a clone with no Cloudflare account still publishes. **Unset is
+  not a production option**: Appwrite Storage answers 403 `general_unknown_origin` to any
+  Origin not registered as a Web platform, which is every customer's site, and the embed's
+  `fetch` always sends one (`docs/notes/publish-and-embed.md`). The credentials are an R2 API
+  token scoped to **Object Read & Write on the `snapshots` bucket only, with no IP filter** —
+  Appwrite Sites has no fixed outbound IP, so an IP-restricted token works on a laptop and fails
+  every publish on the site. The secret is `APPWRITE_API_KEY`'s class: never a client component,
+  never the embed, never an error message.
+
+- Setup only, server-only, **never on the deployed site**: `CLOUDFLARE_API_TOKEN`. Read by
+  `npm run setup:r2` alone, which attaches the custom domain, sets the bucket's CORS and writes
+  the zone's cache and response-header rules. It needs Workers R2 Storage: Edit on the account
+  and DNS, Cache Rules and Transform Rules: Edit on the zone — far more than the app should ever
+  hold, which is why the app has its own narrow R2 token instead. It can expire once setup
+  prints only `ok`.
 - Optional, browser-safe: `NEXT_PUBLIC_TILES_URL`. Where the basemaps are served from. **Unset means OpenFreeMap and is the current state**; setting it moves `STYLE_URLS` *and* the attribution together, because both come from one pair in `lib/map/style.ts`. Changing it does not move maps that are already published — `styleUrl` is baked into each snapshot at publish time, which is what makes the switch a republish rather than a redeploy of every customer's embed. `npm run migrate:style-host` is what moves them, in either direction.
 - Optional, server-only: `RESEND_API_KEY`, `RESEND_FROM` and `APP_URL` — transactional email.
   **All three are optional and the app boots without any of them**, which is not laziness:

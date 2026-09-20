@@ -35,6 +35,15 @@ rewritten; it is the record of why this area is shaped as it is.
   the side and the placement; `CHROME_SETTING_KEYS` carries it, so toggling it repaints the
   running preview instead of rebuilding the frame. Verified: same iframe, 17 network
   resources before and after.
+- **`/embed/live.html` is a product surface now, not only a dev harness**, because the share
+  dialog's "Open test page" links to it. Two consequences. `snapshot=` must stay the **last**
+  query param — the page reads it as `/[?&]snapshot=(.+)$/`, everything to end-of-string, so
+  that an Appwrite-hosted URL carrying its own `?project=` survives; `embedTestPageUrl` in
+  `lib/embed/snippet.ts` is the one builder and the only place that rule is written down. And
+  it must be built from the **dashboard's** origin, never `embedScriptUrl`'s, which may point
+  at a CDN that serves `map.js` and no harness.
+- **The test page reads measurement off the snapshot it fetched, not off `settings`**, and it
+  is the only thing in the product that does. See the prose below.
 - The Publish page **hides the app nav** (`hidesAppNav` in `lib/layout/app-nav.ts`), so the
   sidebar takes that 15rem and there is no `Container`. The back link in the sidebar header
   is the only way out — structure, not decoration.
@@ -498,8 +507,51 @@ rewritten; it is the record of why this area is shaped as it is.
   new publish writes one. `--lm-focus` in the stylesheet stays `#1c7ed6`, because that is
   what live snapshots were published against (§7). The four remaining tokens stay absent so
   `.lm-root--dark` can still redefine them.
+- **Snapshots are served from R2 at `https://cdn.pinglide.com`, never from Appwrite and never
+  from `pub-*.r2.dev`.** Appwrite Storage answers 403 `general_unknown_origin` to every Origin
+  not registered as a Web platform, and the embed's `fetch` always sends one — so a snapshot
+  on Appwrite loads on the dashboard and on no customer's site. `SNAPSHOT_PUBLIC_URL` picks
+  the store (`lib/snapshot/storage.ts`); unset is development only.
+- **The CORS header comes from a zone response-header rule, not only from the bucket.** R2
+  adds `Access-Control-Allow-Origin` only when the request carries an Origin, so one request
+  without one can fill the edge cache with a copy that has none, and every browser then fails
+  on that URL until it expires. The rule *sets* (never adds — a doubled ACAO also fails)
+  `*` on every response from the host, cached or not. `npm run setup:r2` recreates it along
+  with the custom domain, the bucket CORS and the cache rule; a clean run prints only `ok`.
+- **Cache policy lives on the object, and the zone rule respects it.** `live.json` is
+  `max-age=60` — its URL never changes, so that is how long a republish takes to reach a
+  visitor; archives are a year and `immutable`. Without the cache rule Cloudflare does not
+  cache `.json` at all and every visitor's fetch is a paid R2 read (§2). R2 answers with
+  `Vary: Origin` and the edge honours it, so each customer domain warms its own copy —
+  measured: a new Origin is a MISS, the same Origin again a HIT. At most one R2 read per
+  domain per minute per edge location, which is nothing.
+- **Test an embed change from a foreign origin, never only through the preview.** The
+  preview's `srcdoc` frame inherits the dashboard's origin and so passes every CORS check a
+  customer's page would fail; that is how the Appwrite 403 went unnoticed for a whole phase.
 
 ## Notes
+
+**Published snapshots moved to R2 on 2026-09-19, because on Appwrite they worked nowhere
+but the dashboard.** Measured with curl against a real live file: no Origin → 200;
+`Origin: http://localhost:3000` → 200; `Origin: https://some-customer-shop.com` → 403
+`general_unknown_origin`, "Register your new client … as a new Web platform". Registering
+each customer's domain is not a fix — it is manual per customer and keeps Appwrite in the
+visitor's path, which §2 forbids anyway. The same 200 also carried
+`cache-control: private, max-age=3888000`, 45 days on a URL that never changes across
+republishes. Photos and logos still load from Appwrite, as plain `<img>` (no CORS, so they
+answer 200 with a foreign Referer); moving them is the next piece and reuses
+`lib/r2/client.ts`.
+
+The layout is `{mapId}/live.json` plus `{mapId}/{generatedAt}.json` archives, five kept. R2
+overwrites atomically, so the delete-then-create window the Appwrite store has — and that
+the embed's single retry was written for — does not exist here; the retry stays because it
+costs nothing and still covers a dropped connection. Maps published before the move were
+copied byte for byte by `npm run migrate:snapshots-to-r2`, which reads each map back through
+the public URL with a foreign Origin before repointing `snapshotUrl`. It is not a republish:
+unpublished edits stay unpublished.
+
+The app holds an R2 token scoped to Object Read & Write on the one bucket. The account-wide
+`CLOUDFLARE_API_TOKEN` that `setup:r2` needs never goes onto the site.
 
 **The Publish tab is the map designer, and the whole of what a visitor sees is
 one JSON column.** It was five stacked panels in a 672px `Measure` column — a box
@@ -574,6 +626,43 @@ controls somebody adjusts for as long as they are on the page, and a 20rem colum
 made the snippet a code block scrolled sideways a word at a time.
 `components/publish/share-dialog/` is a `Modal` holding both forms unchanged;
 only their container was ever wrong.
+
+**"Open test page" is the third thing in that dialog, and it exists because
+everything after Publish used to be a `<script>` tag.** Reported as "we only have
+a script tag and that's it, we can't test how it will actually look". True: the
+designer's preview builds a snapshot *in the browser*, renders it in a `srcdoc`
+frame on the dashboard's own origin, and passes no collector URL
+(`lib/snapshot/preview.ts`) — so it can prove a colour and can never prove a
+publish. The only page that could was `/embed/live.html`, which had been in the
+tree the whole time with nothing pointing at it and the snapshot URL pasted by
+hand.
+
+`TestPageLink` is a `LinkButton`, not a `Button` with `window.open`, because it is
+a navigation: middle-click and copy-link-address have to work on a URL somebody
+will send to a colleague. It takes the sidebar's draft `settings.analytics` for
+**the wording of its warning and nothing else** — see the next paragraph for why
+that distinction is the whole point.
+
+**The test page reads measurement off the snapshot it fetched, and it is the only
+thing in the product that reads the published answer rather than the draft.** The
+switch saves immediately; the endpoint is baked in at publish time and a live
+snapshot is immutable. So the states diverge, and the dashboard resolves that
+divergence the wrong way round: the Analytics tab's `isMeasuring`
+(`app/(dashboard)/maps/[id]/analytics/page.tsx`) reads `settings` **as stored, not
+as last published**, so it reports "on" while the live file carries no endpoint and
+nothing is being recorded. A visitor's beacon is answered `204` whether it was
+stored or dropped, deliberately — so from outside there is no signal at all, and
+somebody in that state goes looking for a bug that does not exist. `live.html`
+fetches the snapshot itself and says which of the two it is. The duplicate fetch is
+paid for: R2 serves `live.json` with `max-age=60`, so one of the two is a cache
+hit, and the page is outside the embed's 48KB budget.
+
+**An owner arriving from that button must not land on developer prose.** The page
+had its explanation, its paste form and its Network-tab checklist all visible at
+once, which was right while it was only ever opened by hand. Everything
+explanatory now sits in one `#docs` div hidden the moment a map loads; what stays
+is the map, the verdict, and the warning that this writes real rows against the
+map's monthly ceiling — a consequence, not an explanation, so it survives.
 
 **Everything the designer writes is optional on `SnapshotSettings`, and absent
 means what the embed did before that field existed.** That is §7, and the

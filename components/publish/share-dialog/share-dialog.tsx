@@ -21,7 +21,18 @@ import { EmbedSnippet } from "../embed-snippet";
  * A dialog gives them the width they always needed and gives the column back to
  * the design. Neither form changed; only its container was ever the problem.
  */
-export function ShareDialog({ map }: { map: AppMap }) {
+export function ShareDialog({
+  map,
+  isMeasuring,
+}: {
+  map: AppMap;
+  /**
+   * The measurement switch as the sidebar's draft has it — for the wording of the
+   * test page's warning, and nothing else. What is actually being recorded lives
+   * in the published snapshot, which the test page reads for itself.
+   */
+  isMeasuring: boolean;
+}) {
   return (
     <Modal>
       <Button variant="secondary" size="sm" className="w-full">
@@ -51,7 +62,10 @@ export function ShareDialog({ map }: { map: AppMap }) {
                     <h3 className="text-sm font-semibold text-foreground">
                       Embed code
                     </h3>
-                    <EmbedSnippet snapshotUrl={map.snapshotUrl} />
+                    <EmbedSnippet
+                      snapshotUrl={map.snapshotUrl}
+                      isMeasuring={isMeasuring}
+                    />
                   </section>
 
                   <Separator />

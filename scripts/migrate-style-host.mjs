@@ -34,11 +34,17 @@
  * Run it *after* the styles are uploaded and reachable. The check at the top
  * fetches every URL it is about to write, because pointing live customer maps at a
  * 404 is the one outcome worth going out of the way to avoid.
+ *
+ * Each snapshot is read from the map's own `snapshotUrl` and written back to the
+ * store that URL is on — R2 when it starts with SNAPSHOT_PUBLIC_URL, Appwrite
+ * otherwise. A map still on Appwrite while R2 is configured wants
+ * `npm run migrate:snapshots-to-r2` first; this script does not move stores.
  */
 
 import { Client, ID, Permission, Query, Role, Storage, TablesDB } from "node-appwrite";
 
 import { TABLES } from "./appwrite-schema.mjs";
+import { R2_ENV, snapshotBucket, snapshotPublicUrl } from "./r2.mjs";
 import {
   attributionFor,
   BASEMAP_SOURCES,
@@ -65,6 +71,8 @@ const DATABASE_ID = process.env.DATABASE_ID;
 const BUCKET_ID = process.env.SNAPSHOT_STORAGE_ID || process.env.STORAGE_ID;
 const ENDPOINT = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
 const PROJECT_ID = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
+const R2_BASE = snapshotPublicUrl();
+const r2 = R2_ENV.every((key) => process.env[key]) ? snapshotBucket() : null;
 
 /*
  * Read rather than passed as an argument, on purpose: the snapshots have to end
@@ -75,7 +83,7 @@ const PROJECT_ID = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
 const TILE_BASE = (process.env.NEXT_PUBLIC_TILES_URL ?? "").replace(/\/+$/, "");
 
 const PAGE_SIZE = 100;
-/** Appwrite's ceiling for a file id — mirrors lib/snapshot/storage.ts. */
+/** Appwrite's ceiling for a file id — mirrors lib/snapshot/appwrite-store.ts. */
 const MAX_FILE_ID = 36;
 
 const MAPS_TABLE = TABLES.find((table) => table.id === "maps")?.id;
@@ -134,14 +142,18 @@ console.log("");
 for await (const map of allMaps()) {
   const label = `${map.name} (${map.$id})`;
 
-  if (!map.publishedAt) {
+  if (!map.publishedAt || !map.snapshotUrl) {
     stats.unpublished += 1;
     continue;
   }
 
   try {
-    const fileId = liveFileId(map.$id);
-    const snapshot = await readSnapshot(fileId);
+    const onR2 = R2_BASE !== "" && map.snapshotUrl.startsWith(`${R2_BASE}/`);
+    if (onR2 && !r2) {
+      throw new Error(`snapshot is on R2 but ${R2_ENV.join(", ")} are not all set`);
+    }
+
+    const snapshot = await readSnapshot(map.snapshotUrl, onR2);
     const source = sourceOfStyleUrl(snapshot.styleUrl);
 
     if (!source) {
@@ -158,11 +170,10 @@ for await (const map of allMaps()) {
     }
 
     if (!dryRun) {
-      await writeSnapshot(map.$id, fileId, {
-        ...snapshot,
-        styleUrl,
-        attribution: ATTRIBUTION,
-      });
+      const rewritten = { ...snapshot, styleUrl, attribution: ATTRIBUTION };
+
+      if (onR2) await writeR2Snapshot(map.$id, rewritten);
+      else await writeSnapshot(map.$id, liveFileId(map.$id), rewritten);
     }
 
     stats.moved += 1;
@@ -184,20 +195,29 @@ console.log(
 
 process.exit(stats.failed > 0 ? 1 : 0);
 
-/** Mirrors `liveFileId` in lib/snapshot/storage.ts. */
+/** Mirrors `liveFileId` in lib/snapshot/appwrite-store.ts. */
 function liveFileId(mapId) {
   return `live-${mapId}`.slice(0, MAX_FILE_ID);
 }
 
-async function readSnapshot(fileId) {
-  const url =
-    `${ENDPOINT}/storage/buckets/${BUCKET_ID}/files/${fileId}/view` +
-    `?project=${PROJECT_ID}`;
-
-  const response = await fetch(url);
+/**
+ * Server to server, so Appwrite answers (it only refuses browsers' Origins). On
+ * R2 the query string makes a cache key the edge has never seen, so this reads
+ * what R2 holds now rather than a copy up to a minute old.
+ */
+async function readSnapshot(url, onR2) {
+  const response = await fetch(onR2 ? `${url}?read=${Date.now()}` : url);
   if (!response.ok) throw new Error(`live snapshot returned HTTP ${response.status}`);
 
   return response.json();
+}
+
+/**
+ * Stamped with now, not the snapshot's `generatedAt`: that key already holds the
+ * archive of the original publish, and overwriting it would lose it.
+ */
+async function writeR2Snapshot(mapId, snapshot) {
+  await r2.writeSnapshot(mapId, JSON.stringify(snapshot), new Date().toISOString());
 }
 
 /**
