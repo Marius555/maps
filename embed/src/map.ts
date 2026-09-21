@@ -1,11 +1,8 @@
 import {
-  FullscreenControl,
-  GeolocateControl,
   LngLatBounds,
   Map as MapLibreMap,
   NavigationControl,
   Popup,
-  ScaleControl,
   type GeoJSONSource,
   type LngLatLike,
   type MapGeoJSONFeature,
@@ -265,16 +262,6 @@ export type CreateMapOptions = {
    */
   getMe?: () => Fix | null;
   /**
-   * Told whenever the map's own geolocate control gets a position.
-   *
-   * Pressing that button is the plainest statement of "here I am" the map
-   * offers — the visitor asked for it by name — and it used to be discarded
-   * entirely, so a Directions link drawn one second later still had no
-   * origin. `me` in index.ts keeps the sharpest reading of the session, so
-   * this can only improve the answer or leave it alone.
-   */
-  onLocated?: (at: Fix) => void;
-  /**
    * Where interactions are reported, or omitted for a map that reports nothing.
    *
    * Defaulted to a no-op below rather than tested at each call site: there are
@@ -294,7 +281,6 @@ export function createMap(
     focusPlaceId = null,
     onSelect,
     getMe,
-    onLocated,
     track = () => {},
   }: CreateMapOptions,
 ): MapHandle {
@@ -334,13 +320,25 @@ export function createMap(
   blankMissingIcons(map);
 
   /*
-   * Which controls, and in which corner — the owner's, with absent meaning what
-   * every published map already has: zoom and geolocate, top right, no compass.
+   * Zoom in and zoom out, in the corner the owner chose, and nothing else.
    *
-   * Adding `FullscreenControl` and `ScaleControl` here is close to free, and
-   * that is a fact about the build rather than about them: `maplibre-gl` is
-   * `external` in embed/vite.config.mts, so its dist files ship whole whether we
-   * name these or not. What a switch costs is the line that reads it.
+   * There were four more — a compass on the `NavigationControl`, plus
+   * `GeolocateControl`, `FullscreenControl` and `ScaleControl`, each behind its
+   * own setting. They are gone on request: "there is too many default map
+   * buttons, we don't need ruler, full screen, compass, location button, just
+   * zoom in and out". A store locator's chrome competes with the pins, and a
+   * ruler on somebody's Contact page was never what the map was for.
+   *
+   * **Their settings are retired rather than deleted** (`SnapshotSettings`), so
+   * a snapshot that carries `scale: true` still parses and simply draws no
+   * ruler. Nothing reads them. The one that reaches live maps is the removal
+   * itself: the bundle is shared, so a map published with a fullscreen button
+   * loses it on the next `/embed` deploy without its owner republishing — the
+   * tag-chip trade, taken deliberately again because it was asked for directly.
+   *
+   * Find-my-location is the one worth naming, because it is not simply gone:
+   * "Nearest to me" in the toolbar reads the same browser geolocation and does
+   * something useful with it, which a blue dot on its own never did.
    *
    * `top-right` stays the fallback whatever the designer's default becomes —
    * it is `bottom-left` now — because a snapshot published last year says
@@ -351,58 +349,10 @@ export function createMap(
    * bytes: absent does not mean the default here, it means the corner the
    * default replaced.
    */
-  const corner = snapshot.settings.controlsCorner ?? "top-right";
-
   map.addControl(
-    new NavigationControl({ showCompass: snapshot.settings.compass === true }),
-    corner,
+    new NavigationControl({ showCompass: false }),
+    snapshot.settings.controlsCorner ?? "top-right",
   );
-
-  if (snapshot.settings.geolocate !== false) {
-    /*
-     * High accuracy, and not MapLibre's default of `enableHighAccuracy:
-     * false`, for one reason: the control draws an accuracy circle at the
-     * radius the browser reports, and that circle is the visitor's only
-     * picture of how well anything here knows where they are. Drawing the
-     * cheapest answer while routing from the best one would make it a
-     * picture of something else. **What they see as the circle is what a
-     * Directions link starts from.**
-     */
-    const locate = new GeolocateControl({
-      trackUserLocation: false,
-      positionOptions: { enableHighAccuracy: true, maximumAge: 0 },
-    });
-
-    if (onLocated) {
-      locate.on("geolocate", (event) => {
-        onLocated({
-          lat: event.coords.latitude,
-          lng: event.coords.longitude,
-          accuracy: event.coords.accuracy,
-          timestamp: event.timestamp,
-        });
-      });
-    }
-
-    map.addControl(locate, corner);
-  }
-
-  if (snapshot.settings.fullscreen) {
-    map.addControl(new FullscreenControl(), corner);
-  }
-
-  if (snapshot.settings.scale) {
-    // Bottom-left whatever the stack does: a scale bar is a ruler read against
-    // the map's edge, and stacking it under the zoom buttons puts a 100px bar in
-    // the middle of the chrome.
-    //
-    // Added last, which is what keeps that true now that `bottom-left` is also
-    // where the stack lands by default: MapLibre appends a corner's controls in
-    // the order they are given, so the ruler sits *below* the buttons and still
-    // reads against the bottom edge. Move this call above them and the bar is
-    // back in the middle of the chrome, from the other direction.
-    map.addControl(new ScaleControl({ maxWidth: 96 }), "bottom-left");
-  }
 
   // No AttributionControl is added here on purpose: the `attributionControl`
   // map option above already creates one. Adding a second renders the credit
@@ -1550,7 +1500,25 @@ function wireInteractions(
     const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
     void source?.getClusterExpansionZoom(clusterId).then((zoom) => {
       const [lng, lat] = (feature.geometry as GeoJSON.Point).coordinates;
-      map.easeTo({ center: [lng, lat], zoom });
+
+      /*
+       * `flyTo`, not `easeTo`, and the difference is the duration rather than
+       * the arc.
+       *
+       * `easeTo` with no `duration` takes MapLibre's flat 500ms however far it
+       * is going. That is fine for what a cluster expansion usually is — one or
+       * two zoom levels — and it is unreadable at the only view where clusters
+       * really matter: zoomed out to the whole map, one press crossed about ten
+       * zoom levels in half a second. Reported as "it flies to the group
+       * selector insanely fast, I could almost not even see".
+       *
+       * `flyTo` derives its own duration from the distance, so the short hop
+       * stays a short hop and the long one becomes followable. It is also what
+       * a pin click already does through `flyToCard`, so the map has one way of
+       * saying "go there" rather than two that differ by how far away the
+       * target happens to be.
+       */
+      map.flyTo({ center: [lng, lat], zoom });
     });
   });
 

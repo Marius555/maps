@@ -65,6 +65,17 @@ rewritten; it is the record of why this area is shaped as it is.
   still being created both raise a toast (`onMissed` in `use-draw-route.ts`, written in
   `map-shapes.tsx`); the open-ground one fires once per gesture. The already-last-stop and
   the cap stay silent, because neither is something anybody can act on.
+- **A click never waits on the engine, and no click is ever dropped.** The stop is taken,
+  drawn and announced in the click's own tick; `onCheck` runs behind it and `dropStopsOf`
+  takes the stop back out if the answer is no, with the refusal saying that it did
+  (`onRefused`'s `wasTaken`). The rollback is guarded three ways — `alive` (tool disarmed),
+  an `epoch` bumped by every `reset` (this run of stops finished or escaped), and a check
+  that the stop is still in the list (Backspace took it out). This replaced a `waiting` flag
+  that blocked the click on a throttled upstream call behind three database round trips —
+  one to three seconds on a cold map, with a pulse on a 36px marker as the only feedback and
+  every further click discarded. It read as a dead tool on the first click of the first
+  route and worked on the second, because by then the verdict was cached. Nothing unsafe
+  gets through: `use-route-request.ts` still refuses a bad stop by name at commit.
 - **A stop never bonds to an optimistic place id.** A pin whose create is still in flight
   carries a `temp-` id that is swapped for the server's the moment it lands, and nothing
   rewrites a stop that already holds the old one. Refused in `use-draw-route.ts` rather than
@@ -77,20 +88,76 @@ rewritten; it is the record of why this area is shaped as it is.
   nothing survives. It never collapses a free waypoint (legacy routes have no ids).
 - **Recalculate is offered only when the route is stale** — same condition as the warning
   above it, `isRecalculating` included, or the button vanishes under the pointer.
-- Everything being drawn is **dashed and thin**, through one draft channel (`draw` in
-  `use-shape-layers.ts`): `ShapeProperties.draft`, `SHAPE_LINE_LAYER` filters it out,
-  `SHAPE_DRAFT_LINE_LAYER` paints it. **A second layer, not a `case`** — a `case` puts
-  every feature including saved shapes through the SDF line shader. `line-cap` is `butt`.
+- Everything being drawn goes through one draft channel (`draw` in `use-shape-layers.ts`):
+  `ShapeProperties.draft`, `SHAPE_LINE_LAYER` filters it out, and three layers of its own
+  paint it. **Separate layers, not a `case`** — a `case` puts every feature including saved
+  shapes through the SDF line shader. The dashed one keeps `line-cap: butt`; the other two
+  are continuous and are round.
+- **The draft is three layers, and only the route tool uses the third.** A white casing
+  under everything (`SHAPE_DRAFT_CASING_LAYER`, `DRAFT_LINE_WIDTH + 4` at 0.85 opacity),
+  because a 2px coloured hairline disappears into several of the sixteen basemaps and the
+  draft was the hardest thing on the map to see; the dashed `SHAPE_DRAFT_LINE_LAYER`, which
+  still draws every other tool's whole gesture exactly as before; and
+  `SHAPE_DRAFT_PLACED_LAYER`, solid, for the run a route has actually clicked out.
+  `draftFeatures`' `placed` argument is what splits them, and **a draft with no `placed` is
+  never marked placed** — that is what keeps the circle, polygon and line tools on the
+  dashed layer. The split means the leg hanging off the cursor no longer looks identical to
+  the legs already decided, which is the one question a rubber band exists to answer.
 - `onStopsChange` is a third channel beside `onPreview`/`onDraw` so the breathing marks and
   the stop list cannot drift. The animation carries a static `scale(1.4)` under it, because
   `prefers-reduced-motion` cuts every animation to one pass.
+- **A taken pin wears its number, not just a breath.** `setPinStop` writes `data-stop` and
+  the CSS draws it with `content: attr(data-stop)`; the canvas holds a `ReadonlyMap<id,
+  position>` (first occurrence wins, so a round trip's pin reads "1"). The badge is on
+  `.map-pin` and not on the scaled children — those breathe between 1.2 and 1.55, and a
+  number that breathes cannot be read. The card is hidden while the tool is armed, so until
+  this existed a half-built route could not be read off the map at all.
+- **The "that click landed" ring needs no JavaScript.** It is an animation on
+  `.map-pin--stop::before`, and CSS starts an animation when the box it matches comes into
+  being — which for that pseudo-element is exactly once, on the click that took the pin.
+  `playDrop` cannot work that way, and the note beside it says why: there, the box already
+  exists and the animation would be about a marker being created.
+- **A stop taken before its verdict is in is drawn as provisional** — the badge dims under
+  `.map-pin--stop.map-pin--checking`. It resolves on its own within a second, which is why
+  it dims rather than changing shape.
+- `MapShapesProps.onRouteStops` is **not** called `onStopsChange`: `map-canvas-impl.tsx`
+  passes its own `onStopsChange` and then spreads the caller's prop group after it, so a
+  second prop by that name would silently replace the pins' channel with the hint bar's.
+- **The armed tool's cursor rides `.pointing-cursor`, which is ours, and it used to ride
+  MapLibre's `maplibregl-crosshair`.** `BoxZoomHandler.reset()` ends with an unconditional
+  `this._container.classList.remove("maplibregl-crosshair")` — it never checks whether it
+  added it — and `HandlerManager` resets every handler on a window `blur` and whenever
+  another handler blocks one. So alt-tabbing mid-gesture stripped the class, MapLibre's own
+  `cursor: grab` came back through, and the pointer showed a **hand** over a map whose route
+  tool was still armed and still taking clicks. `map-canvas-impl.tsx`'s effect could not put
+  it back: it only runs when one of its three flags changes, and none of them had.
+  Reproduced with one `window.dispatchEvent(new FocusEvent("blur"))`. The *selectors* in
+  app/globals.css stay MapLibre's shape — they have to reach
+  `.maplibregl-canvas-container.maplibregl-interactive` and its `:active` — and keep their
+  `!important`. Third instance of MapLibre writing to something we were using, after
+  `pointer-events` on a marker and `opacity` on a marker.
+- **The canvas sets `clickTolerance: 6`, and the default was losing clicks.** MapLibre's
+  `MapEventHandler.click` returns early when the pointer moved at least `clickTolerance`
+  pixels between press and release, and `DragHandler.dragEnd` calls `DOM.suppressClick()`
+  on top of it — so at the default 3px a click that drifts fires *nothing at all*, pans the
+  map a hair, and reports no error. On a trackpad that is a routine miss. It is in
+  `use-maplibre.ts` rather than in the route tool because every tool on the canvas reads
+  `map.on("click")`; the only other effect is that a pan engages after 6px of travel.
 - **A pin the engine cannot reach is refused before it is clicked.** `NoSegment` almost
   never fires (OSRM's snapping radius is unlimited — a point 60km out to sea routes
   happily), so the real test is the `nearest` service and `ROUTE_SNAP_MAX_DISTANCE_M`
   (2km, generous on purpose) in `lib/routing/routable.ts`. Both paths are kept.
 - Three things ask: a **sweep** on arming (`lib/map/probe-order.ts`), a **hover** pre-warm,
-  and a **check on click** that blocks until answered. The click check reads the boolean it
-  was handed, **not `unroutableIds`**, which is one render behind at that moment.
+  and a **check on click**. The click check reads the boolean it was handed, **not
+  `unroutableIds`**, which is one render behind at that moment.
+- **The hover pre-warm must not go through `probe`.** `probe` filters on `asked`, and the
+  sweep writes every id in its queue into `asked` before it sends anything — so a pre-warm
+  routed through it returned without asking for exactly the pins the sweep had claimed and
+  not yet reached, which is every pin on a freshly armed map. It was a no-op for the whole
+  of the case it existed for, and the click then paid the full round trip every first time.
+  `warm` and `check` are one `settle` with a `marks` flag, so a dwell and the click 300ms
+  behind it share one promise through `pending`; `settle` claims `asked` before the request
+  and releases it on failure, so the sweep cannot buy the same point again.
 - `useRoutability` holds verdicts in a ref *and* state, with one writer. `asked` is written
   before the request goes out, so it is not `answered`; failures and aborts must come back
   out of it. The sweep's cancellation token belongs to the **gesture**, not the call.

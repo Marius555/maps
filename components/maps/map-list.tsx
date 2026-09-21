@@ -52,7 +52,7 @@ export function MapList({
       {maps.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <PlaceCountBadge count={maps.length} limit={mapLimit} noun="maps" />
-          <CreateMapDialog />
+          <CreateMapDialog align="end" />
         </div>
       ) : null}
 

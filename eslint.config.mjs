@@ -91,6 +91,10 @@ const eslintConfig = defineConfig([
     // Built by `npm run build:embed` from /embed. Linting minified output of our
     // own build produces thousands of meaningless warnings.
     "public/embed/**",
+    // 75,000 domains in one string literal, written by
+    // `npm run build:disposable-domains`. `tsc` still covers it; ESLint has
+    // nothing to say about a megabyte of data and takes a while to say it.
+    "lib/email/disposable-domains.generated.ts",
   ]),
 ]);
 

@@ -248,6 +248,7 @@ export function MapEditor({
     probe: probeRoutability,
     abort: stopProbingRoutability,
     check: checkRoutability,
+    warm: warmRoutability,
     markUnroutable,
     retainOnly: retainRoutability,
   } = useRoutability(map.id);
@@ -279,6 +280,24 @@ export function MapEditor({
   const drawMode = drawKindOf(mode);
   const isRouting = isDrawingRoute(mode);
   const isSelecting = mode === "select";
+
+  /**
+   * How many stops the route being drawn has taken, for the hint bar.
+   *
+   * A count and not the ids: nothing up here has any use for which locations
+   * they are — the pins that have to light up are markers the canvas owns and
+   * get told by their own channel (`onStopsChange` in map-canvas-impl.tsx).
+   * Keeping it a number also means a click that changes nothing re-renders
+   * nothing.
+   *
+   * It clears itself: the drawing hook announces an empty list on cleanup, so
+   * disarming the tool, finishing a route and pressing Escape all arrive here
+   * as zero without this component watching the mode.
+   */
+  const [routeStopCount, setRouteStopCount] = useState(0);
+  const setRouteStops = useCallback((placeIds: readonly string[]) => {
+    setRouteStopCount(placeIds.length);
+  }, []);
 
   // The only place in the app that reaches a routing engine. Its answer is
   // written into a shape and published as plain coordinates, so a map with a
@@ -1414,7 +1433,13 @@ export function MapEditor({
               isSelecting) &&
             selectionSize(selection) === 0
           }
-          message={hintFor({ isDraggingPin, drawMode, isRouting, isSelecting })}
+          message={hintFor({
+            isDraggingPin,
+            drawMode,
+            isRouting,
+            isSelecting,
+            routeStopCount,
+          })}
         />
 
         <SelectionBar
@@ -1513,7 +1538,9 @@ export function MapEditor({
             checkingId,
             onProbeRoutability: (candidates) => void probeRoutability(candidates),
             onCheckRoutability: checkRoutability,
+            onWarmRoutability: warmRoutability,
             onStopProbing: stopProbingRoutability,
+            onRouteStops: setRouteStops,
           }}
           selection={{
             selected: selection,
@@ -1657,19 +1684,39 @@ function hintFor({
   drawMode,
   isRouting,
   isSelecting,
+  routeStopCount,
 }: {
   isDraggingPin: boolean;
   drawMode: ShapeKind | null;
   isRouting: boolean;
   isSelecting: boolean;
+  /** Stops taken by the route being drawn, or 0 when none is being drawn. */
+  routeStopCount: number;
 }): string | undefined {
   if (isDraggingPin) return "Drop the pin where the location is.";
 
-  // Says the one rule this tool has, because it is a rule of omission and those
-  // are invisible: clicks that miss a location do nothing, and a tool that
-  // ignores half your clicks without saying why reads as broken.
+  /*
+   * Says the one rule this tool has, because it is a rule of omission and those
+   * are invisible: clicks that miss a location do nothing, and a tool that
+   * ignores half your clicks without saying why reads as broken.
+   *
+   * And it counts, because the count is the cheapest answer to the question the
+   * gesture actually raises — whether the last click landed. The pill carries
+   * `role="status"`, so the number is announced as it changes rather than only
+   * drawn. Finishing is offered only once there is something to finish: below
+   * two stops Enter does nothing, and naming a key that does nothing is how a
+   * tool teaches somebody it is broken.
+   */
   if (isRouting) {
-    return "Click each location to add it as a stop. Enter to follow the roads, Esc to stop.";
+    if (routeStopCount === 0) {
+      return "Click a location to start the route. Esc to stop.";
+    }
+
+    if (routeStopCount === 1) {
+      return "1 stop. Click the next location, Esc to stop.";
+    }
+
+    return `${routeStopCount} stops. Enter to follow the roads, Esc to stop.`;
   }
 
   switch (drawMode) {

@@ -3,6 +3,10 @@ import { parseBody, withAuth } from "@/lib/api/route";
 import { routerFailure } from "@/lib/api/router-errors";
 import { getMap } from "@/lib/repositories/maps.repository";
 import { assertPlanFeature } from "@/lib/repositories/plan-limits";
+import {
+  assertLookupHeadroom,
+  recordLookups,
+} from "@/lib/repositories/usage.repository";
 import { getRouter } from "@/lib/routing";
 import { directionsSchema } from "@/lib/validation/directions.schema";
 
@@ -34,11 +38,21 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
 
   const input = await parseBody(request, directionsSchema);
 
+  /*
+   * One lookup, whatever the stop count. The engine takes every waypoint in a
+   * single call, so a twenty-five-stop route costs what a two-stop route costs —
+   * which is also why this endpoint was never the expensive half of the feature.
+   * The sweep in `routable` is, and it is metered per point.
+   */
+  await assertLookupHeadroom(ctx.userId, 1, "interactive");
+
   try {
     const outcome = await getRouter().route({
       stops: input.stops,
       profile: input.profile,
     });
+
+    await recordLookups(ctx.userId, 1);
 
     return ok(outcome);
   } catch (error) {

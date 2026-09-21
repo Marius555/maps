@@ -4,6 +4,7 @@ import type { NextRequest, NextResponse } from "next/server";
 import { ZodError, type ZodType, z } from "zod";
 
 import { requireUser } from "@/lib/auth/current-user";
+import { assertEmailVerified } from "@/lib/auth/email-gate";
 import type { AuthUser } from "@/lib/auth/types";
 import { repoContext, type RepoContext } from "@/lib/repositories/context";
 import { RepositoryError } from "@/lib/repositories/errors";
@@ -20,21 +21,41 @@ export type Handler<Params> = (args: {
 type RouteArgs<Params> = { params: Promise<Params> };
 
 /**
- * Wraps a route handler with the four things every one of them does: resolve the
- * caller, await the params promise, build a repo context, and map thrown errors
- * onto the JSON envelope.
+ * Wraps a route handler with the five things every one of them does: resolve the
+ * caller, refuse a write from an account that has not confirmed its address,
+ * await the params promise, build a repo context, and map thrown errors onto the
+ * JSON envelope.
  *
  * `requireUser()` here is the actual authorization check. proxy.ts only decides
  * whether to bother rendering — it authorizes nothing, and a forged cookie has to
  * be stopped at this line.
+ *
+ * **`assertEmailVerified` is the whole email gate, and it is here because this is
+ * the only place it can be complete.** Every authenticated route in the app goes
+ * through this wrapper, so a route added next month is covered by having been
+ * written normally rather than by anyone remembering. The alternative — the
+ * hand-written check the publish route used to carry — is one that holds for
+ * exactly as long as somebody keeps copying it.
+ *
+ * `allowUnverified` is for a route an unconfirmed account must still be able to
+ * reach. Nothing passes it today: everything of that kind (signup, login, logout,
+ * resending the link) is `withoutAuth` and never arrives here. It exists so that
+ * when self-service account deletion lands — which someone who mistyped their
+ * address needs — the answer is a flag on one route rather than a hole in the
+ * gate. See `lib/auth/email-gate.ts` for what the rule actually is.
  */
-export function withAuth<Params = Record<string, never>>(handler: Handler<Params>) {
+export function withAuth<Params = Record<string, never>>(
+  handler: Handler<Params>,
+  options: { allowUnverified?: boolean } = {},
+) {
   return async (
     request: NextRequest,
     args?: RouteArgs<Params>,
   ): Promise<NextResponse> => {
     try {
       const user = await requireUser();
+      if (!options.allowUnverified) assertEmailVerified(user, request.method);
+
       const params = ((await args?.params) ?? {}) as Params;
 
       return await handler({ request, params, user, ctx: repoContext(user.id) });
@@ -90,7 +111,16 @@ export function fieldErrors(error: ZodError): ApiFieldErrors {
   return fields;
 }
 
-/** Parse a JSON body, turning malformed JSON into a 422 rather than a 500. */
+/**
+ * Parse a JSON body, turning malformed JSON into a 422 rather than a 500.
+ *
+ * `parseAsync` rather than `parse`, for every schema whether it needs it or not:
+ * a refinement that has to ask something — `signupServerSchema` asks a DNS
+ * resolver whether a domain receives mail — is only expressible asynchronously,
+ * and a sync `parse` throws on one rather than awaiting it. Both forms raise the
+ * same `ZodError`, so nothing downstream changes, and every caller already
+ * awaited this function.
+ */
 export async function parseBody<T>(
   request: NextRequest,
   schema: ZodType<T>,
@@ -103,5 +133,5 @@ export async function parseBody<T>(
     raw = {};
   }
 
-  return schema.parse(raw);
+  return schema.parseAsync(raw);
 }

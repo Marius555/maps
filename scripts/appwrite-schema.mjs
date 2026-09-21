@@ -433,6 +433,49 @@ export const TABLES = [
     ],
     indexes: [
       { key: "idx_subs_userId", type: "unique", columns: ["userId"], orders: ["asc"] },
+      // The webhook's fallback lookup. A renewal event that arrives without the
+      // checkout's custom_data has only the provider's customer id to go on, and
+      // Appwrite refuses a query on a column with no index — so without this, a
+      // renewal we could not attach to an account would fail rather than resolve.
+      {
+        key: "idx_subs_billingCustomerId",
+        type: "key",
+        columns: ["billingCustomerId"],
+        orders: ["asc"],
+      },
+    ],
+  },
+  {
+    // What an account has spent on the geocoder, and what the whole app has.
+    //
+    // Two shapes of row in one table, told apart by `userId`:
+    //
+    //   userId: "<id>", period: "2026-09"     one account's month
+    //   userId: "*",    period: "2026-09-20"  every account's day, pooled
+    //
+    // The per-account row enforces the plan's allowance. The pooled daily row is
+    // the circuit breaker: the upstream sells a *daily* quota shared by everyone,
+    // so one customer's bulk import can starve every other customer's import and
+    // the only visible symptom is somebody else's feature failing. Two rows, two
+    // different failures, one table — they are written in the same breath by the
+    // same function and splitting them would only mean two writes.
+    //
+    // Like mapSessions, rows carry no owner permission: the admin client is the
+    // only reader, and nothing here is ever fetched by a browser.
+    id: "usage",
+    name: "Usage",
+    columns: [
+      varchar("userId", 36, { required: true }),
+      varchar("period", 10, { required: true }),
+      integer("lookups", { min: 0, xdefault: 0 }),
+    ],
+    indexes: [
+      {
+        key: "idx_usage_user_period",
+        type: "unique",
+        columns: ["userId", "period"],
+        orders: ["asc", "asc"],
+      },
     ],
   },
   {

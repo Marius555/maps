@@ -210,7 +210,7 @@ export function useDragToAdd({
    *
    * The cursor is a **class**, not the inline `body.style.cursor` this used to
    * set. An inline declaration loses to the `!important` on
-   * `.maplibregl-crosshair` (app/globals.css), so dragging a pin across a map
+   * `.pointing-cursor` (app/globals.css), so dragging a pin across a map
    * that already had a tool armed showed the map's cursor rather than the
    * drag's. The class carries the same `!important` and wins wherever the
    * pointer goes. `is-pin-dragging` is also what the add-mode hover ghost

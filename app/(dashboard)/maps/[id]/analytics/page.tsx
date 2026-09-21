@@ -5,6 +5,7 @@ import {
   MeasurementOffEmpty,
   NoVisitsYetEmpty,
   NotPublishedEmpty,
+  PlanRequiredEmpty,
 } from "@/components/analytics/analytics-empty";
 import { DailyChart } from "@/components/analytics/daily-chart";
 import { HeatMap } from "@/components/analytics/heat-map/heat-map";
@@ -30,9 +31,10 @@ import { loadAnalytics, type AnalyticsData } from "@/lib/analytics/load";
 import { readRange } from "@/lib/analytics/range";
 import { requireUser } from "@/lib/auth/current-user";
 import { repoContext } from "@/lib/repositories/context";
-import { NotFoundError } from "@/lib/repositories/errors";
+import { NotFoundError, planFeatureNote } from "@/lib/repositories/errors";
 import { loadMap } from "@/lib/repositories/load-map";
 import { listAllPlaces } from "@/lib/repositories/places.repository";
+import { getUserPlan, planAllows } from "@/lib/repositories/plan-limits";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 
@@ -67,6 +69,17 @@ export default async function MapAnalyticsPage(
   const user = await requireUser();
 
   /*
+   * The plan first, before anything is read.
+   *
+   * Not only so the tab can refuse: `load` below is the most expensive read in
+   * the dashboard — every location on the map, plus a quarter of rollups — and
+   * doing it to draw a locked panel would be paying the whole cost of the feature
+   * to say it is not included.
+   */
+  const plan = await getUserPlan(user.id);
+  const measured = planAllows(plan, "analytics");
+
+  /*
    * The `try` wraps only the fetch, and the JSX is returned after it.
    * React renders children after this function returns, so a `catch` around JSX
    * never fires — the rule the lint config enforces and that
@@ -75,7 +88,7 @@ export default async function MapAnalyticsPage(
   let data: LoadedAnalytics;
 
   try {
-    data = await load(user.id, id, range);
+    data = await load(user.id, id, range, measured);
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
     throw error;
@@ -91,10 +104,14 @@ export default async function MapAnalyticsPage(
         <p className="text-sm text-muted">
           What visitors did on {map.name}
         </p>
-        <RangePicker mapId={map.id} range={range} />
+        {/* Hidden rather than disabled when the tab is locked: a range picker
+            over nothing is a control that does nothing, which reads as broken. */}
+        {analytics ? <RangePicker mapId={map.id} range={range} /> : null}
       </div>
 
-      {!map.publishedAt ? (
+      {!analytics ? (
+        <PlanRequiredEmpty note={planFeatureNote("analytics", plan)} />
+      ) : !map.publishedAt ? (
         <NotPublishedEmpty mapId={map.id} />
       ) : !isMeasuring ? (
         <MeasurementOffEmpty mapId={map.id} />
@@ -296,7 +313,8 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 type LoadedAnalytics = {
   map: AppMap;
   places: Place[];
-  analytics: AnalyticsData;
+  /** Null when the plan does not include this tab — see `load`'s `measured`. */
+  analytics: AnalyticsData | null;
   /** The owner's switch, as stored — not as last published. */
   isMeasuring: boolean;
 };
@@ -308,13 +326,34 @@ type LoadedAnalytics = {
  * The locations are loaded for two reasons and neither is a list of them: the
  * top-locations table needs their names, and the interaction heatmap needs their
  * coordinates. Only those three fields cross to the client.
+ *
+ * `measured` false skips both the locations and the rollups and returns the map
+ * alone. The page still wants the map — it names it in the header and a locked
+ * tab that cannot say *which* map it is locked for is worse than no header — but
+ * nothing else here is worth reading to draw a panel that says "not on this
+ * plan". It also matters for a reason beyond speed: a free map records no
+ * sessions at all (`loadCollectGate`), so there is nothing for these reads to
+ * find.
  */
 async function load(
   userId: string,
   mapId: string,
   range: ReturnType<typeof readRange>,
+  measured: boolean,
 ): Promise<LoadedAnalytics> {
   const ctx = repoContext(userId);
+
+  if (!measured) {
+    const map = await loadMap(userId, mapId);
+
+    return {
+      map,
+      places: [],
+      analytics: null,
+      isMeasuring: readEmbedSettings(map.settings).analytics,
+    };
+  }
+
   const [map, places] = await Promise.all([
     // Primitives, not the context: `loadMap` memoises on argument identity and
     // an object would miss the cache the layout already warmed.

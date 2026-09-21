@@ -102,14 +102,33 @@ export type MapShapesProps = {
   /** Ask about these locations in the background. Answers arrive as they land. */
   onProbeRoutability?: (places: readonly Place[]) => void;
   /**
-   * Settle one location now, waiting for the engine if the answer is not in.
+   * Settle one location, for a click that has already taken it as a stop.
    *
-   * The click path, as opposed to `onProbeRoutability`'s sweep: a stop must
-   * never be accepted on a pin whose verdict simply had not arrived yet.
+   * The click path, as opposed to `onProbeRoutability`'s sweep. Nothing waits on
+   * it: the stop is on the map by the time this is asked, and `false` is what
+   * takes it back off again — see `use-draw-route.ts`.
    */
   onCheckRoutability?: (place: Place) => Promise<boolean>;
+  /**
+   * Ask about one location quietly, because the pointer is resting on it.
+   *
+   * Distinct from `onProbeRoutability`, which is the sweep and skips anything
+   * the sweep has already claimed — which is every pin the user is about to
+   * click, and is why the pre-warm asked nothing at all for the whole of the
+   * gesture it existed for.
+   */
+  onWarmRoutability?: (place: Place) => void;
   /** Stop the background sweep — the tool has disarmed. */
   onStopProbing?: () => void;
+  /**
+   * The locations the route being drawn has taken, for anything outside the
+   * canvas that has to say so — the hint bar counts them.
+   *
+   * Deliberately not called `onStopsChange`: the canvas passes one of those to
+   * this component already and spreads this prop group *after* it, so a second
+   * prop by that name would silently replace the pins' own channel.
+   */
+  onRouteStops?: (placeIds: readonly string[]) => void;
 };
 
 export function MapShapes({
@@ -133,6 +152,7 @@ export function MapShapes({
   unroutableIds,
   onProbeRoutability,
   onCheckRoutability,
+  onWarmRoutability,
   onStopProbing,
   onStopsChange,
 }: MapShapesProps & {
@@ -253,12 +273,17 @@ export function MapShapes({
    * blinks off the map for the length of a round trip and reads as a lost click.
    * The road path replaces it when the engine answers, in the same `draw` channel
    * — so nothing here re-renders React while the map changes.
+   *
+   * Every point is passed as placed, because every one of them is: the stops are
+   * decided and it is the roads between them that are outstanding. Leaving the
+   * count off would re-dash the whole route at the instant the user pressed
+   * Enter, which reads as the gesture going backwards.
    */
   const drawRoute = useCallback(
     async (stops: RouteStop[]) => {
       if (!onRoute) return;
 
-      draw({ kind: "line", points: stops.map((stop) => stop.at) });
+      draw({ kind: "line", points: stops.map((stop) => stop.at) }, stops.length);
 
       const geometry = await onRoute(stops, "car");
       if (!geometry) {
@@ -274,21 +299,28 @@ export function MapShapes({
   );
 
   /**
-   * A click on a pin the engine cannot reach.
+   * A pin the engine cannot reach.
    *
    * Named, because the pin is grey and visibly there — "nothing happened" is
    * exactly the reading this whole feature exists to stop. The same sentence the
    * route request gives when it learns the same thing the expensive way
    * (use-route-request.ts), so a location says the same thing about itself
    * whichever way you find out.
+   *
+   * `wasTaken` adds the one clause the shared sentence cannot carry. A click
+   * takes its stop before the engine has answered, so a refusal that arrives a
+   * second later removes a stop the user watched appear — and a route quietly
+   * losing a stop is worse than one that never took it. The heading stays the
+   * same either way: it is the same fact about the same location.
    */
   const refuseStop = useCallback(
-    (placeId: string) => {
+    (placeId: string, wasTaken: boolean) => {
       const name = places.find((place) => place.id === placeId)?.name;
 
       toast.warning(`${name ?? "That location"} can't be a stop`, {
-        description:
-          "There is no road near it, so the routing engine can't reach it. Move the pin closer to a road, or pick a different location.",
+        description: wasTaken
+          ? "There is no road near it, so the routing engine can't reach it — it has been taken back out of the route. Move the pin closer to a road, or pick a different location."
+          : "There is no road near it, so the routing engine can't reach it. Move the pin closer to a road, or pick a different location.",
         timeout: 6000,
       });
     },
@@ -342,13 +374,21 @@ export function MapShapes({
   const probe = onProbeRoutability;
   const stopProbing = onStopProbing;
 
-  /** The pin the pointer has settled on, asked about one at a time. */
+  /**
+   * The pin the pointer has settled on, asked about one at a time.
+   *
+   * Through the single-pin path, not the sweep. `probe` filters on the set the
+   * sweep claims up front, so this used to return without asking for precisely
+   * the pins the sweep had claimed and not yet reached — every pin on a freshly
+   * armed map, which is every pin somebody is about to click. The pre-warm was a
+   * no-op for the whole of the case it was written for.
+   */
   const considerStop = useCallback(
     (placeId: string) => {
       const place = places.find((candidate) => candidate.id === placeId);
-      if (place) probe?.([place]);
+      if (place) onWarmRoutability?.(place);
     },
-    [places, probe],
+    [places, onWarmRoutability],
   );
 
   /** The pin a click is waiting on, so its marker can say so. */

@@ -3,6 +3,10 @@ import { parseBody, withAuth } from "@/lib/api/route";
 import { routerFailure } from "@/lib/api/router-errors";
 import { getMap } from "@/lib/repositories/maps.repository";
 import { assertPlanFeature } from "@/lib/repositories/plan-limits";
+import {
+  assertLookupHeadroom,
+  recordLookups,
+} from "@/lib/repositories/usage.repository";
 import { getRouter, isRoutableSnap } from "@/lib/routing";
 import { routableSchema } from "@/lib/validation/routable.schema";
 
@@ -34,6 +38,31 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
 
   const input = await parseBody(request, routableSchema);
 
+  /*
+   * One lookup per point, and **the only `background` spender among the editor's
+   * routes.** This is the affordance that greys unreachable pins before they are
+   * clicked; nobody presses it and nobody waits for it, so when the app's shared
+   * daily budget runs low it is the first thing that should stand aside. The pins
+   * simply stay as they are, which is what the sweep's own failure path already
+   * does — see `use-routability.ts`, where a failure is silence by design.
+   *
+   * It is also the largest single spender in the product: arming the tool sweeps
+   * up to `ROUTE_PROBE_LIMIT` pins, and on Geoapify each one bills as a reverse
+   * geocode because that adapter has no native `nearest`.
+   */
+  await assertLookupHeadroom(ctx.userId, input.points.length, "background");
+
+  /*
+   * Declared out here so the catch can still read it.
+   *
+   * The loop is sequential, so its length is exactly how many points the engine
+   * answered before anything went wrong — and those were real upstream requests
+   * whether or not the caller ever sees them. Billing the whole batch would charge
+   * for work nobody did; billing none of it would make a failing sweep the cheapest
+   * way to spend the day's budget.
+   */
+  const results: boolean[] = [];
+
   try {
     const router = getRouter();
 
@@ -43,13 +72,16 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
      * predictable order — and a `Promise.all` over a rejected member would
      * abandon answers already paid for.
      */
-    const results: boolean[] = [];
     for (const point of input.points) {
       results.push(isRoutableSnap(await router.nearest(point, input.profile)));
     }
 
+    await recordLookups(ctx.userId, results.length);
+
     return ok({ results });
   } catch (error) {
+    await recordLookups(ctx.userId, results.length);
+
     return routerFailure(error);
   }
 });

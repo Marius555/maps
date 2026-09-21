@@ -5,6 +5,10 @@ import { getGeocoder, statusFor } from "@/lib/geocoding";
 import type { BatchGeocodeResult } from "@/lib/geocoding/types";
 import { getMap } from "@/lib/repositories/maps.repository";
 import { assertPlaceHeadroom } from "@/lib/repositories/places.repository";
+import {
+  assertLookupHeadroom,
+  recordLookups,
+} from "@/lib/repositories/usage.repository";
 import { geocodeBatchSchema } from "@/lib/validation/geocode.schema";
 
 type Params = { id: string };
@@ -43,12 +47,15 @@ export const maxDuration = 60;
  * the end anyway. `runTotal` is what the client says the whole import will
  * create, so the *first* chunk is the one that gets refused.
  *
- * What it still does not close: geocoding writes nothing, so the server cannot
- * see how far an import has already got, and `runTotal` is a number the client
- * chose. A scripted caller can understate it, or re-send chunk after chunk that
- * each fit the headroom on their own. Bounding that needs a per-user counter
- * with somewhere durable to live, which is a bigger change than this one and is
- * worth making before signup is open to strangers.
+ * **What used to be left open, and now is not.** Geocoding writes nothing, so the
+ * server could not see how far an import had already got, and `runTotal` is a
+ * number the *client* chose — so a scripted caller could understate it, or re-send
+ * chunk after chunk that each fit the headroom on their own, and spend without
+ * limit. `assertLookupHeadroom` closes that: the count is kept per account in the
+ * `usage` table, so it survives the request that caused it and no number the
+ * client sends can talk it down. `runTotal` still earns its place — it is what
+ * makes the *first* chunk the one refused when a file plainly will not fit — but
+ * it is no longer the only thing standing between a stranger and our bill.
  */
 export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   await getMap(ctx, params.id);
@@ -61,7 +68,23 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
     Math.max(input.runTotal ?? 0, input.rows.length),
   );
 
+  /*
+   * Only rows with an address reach the geocoder, so only those are asserted for.
+   * Counting the blank ones would refuse an import for lookups it was never going
+   * to make — and a file with an unmapped address column is mostly blank rows.
+   *
+   * `interactive`, not `background`: an import is somebody sitting in the wizard
+   * watching a progress bar, even though it is long. The thing that stands aside
+   * for it is the routability sweep.
+   */
+  const billable = input.rows.filter((row) => Boolean(row.address)).length;
+
+  await assertLookupHeadroom(ctx.userId, billable, "interactive");
+
   const geocoder = getGeocoder();
+
+  /* Out here so the catch bills what the loop actually got through. */
+  let spent = 0;
 
   try {
     const results: BatchGeocodeResult[] = [];
@@ -84,6 +107,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
         countryCode: input.countryCode,
         limit: 5,
       });
+      spent += 1;
 
       const [best = null, ...alternatives] = candidates;
 
@@ -94,6 +118,8 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
         status: statusFor(best),
       });
     }
+
+    await recordLookups(ctx.userId, spent);
 
     /*
      * The pacing goes back with the results so the wizard can say how long the
@@ -107,6 +133,8 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
      */
     return ok({ results, paceMs: geocoder.paceMs });
   } catch (error) {
+    await recordLookups(ctx.userId, spent);
+
     return geocoderFailure(error);
   }
 });

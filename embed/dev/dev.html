@@ -156,6 +156,19 @@
       as it did before routes existed.
     </p>
     <p class="note">
+      <strong>Map controls: zoom in and zoom out, and nothing else.</strong>
+      No compass, no fullscreen, no scale bar and no find-my-location &mdash;
+      all four went, and their settings are retired rather than deleted
+      (<code>packages/shared/snapshot.ts</code>). The two buttons are 36px
+      square with an 8px corner, the same box as the search field beside them,
+      and the glyph should fill the button rather than float in it.
+    </p>
+    <p class="note">
+      <strong>Directions and the phone number are plain text on one line</strong>,
+      not chips, and each goes bold under the pointer and on keyboard focus. On a
+      narrow panel the number ellipses; the line must never wrap to two.
+    </p>
+    <p class="note">
       Results list: a panel of locations beside the map, with search and the
       filters docked at the top of it. Clicking a row opens that location's card
       and marks the row; clicking a pin scrolls its row into view and marks it.
@@ -255,9 +268,11 @@
       <code>npm run build:gazetteer -- LT</code> first, or the list stays empty
       and the console says why. Pick &ldquo;Kaunas&rdquo;, which has no location
       in it, and the map should fly there while the list re-sorts by distance
-      from Kaunas rather than emptying. A chip under the controls says where the
-      distances are measured from, and clears it. The whole control works from
-      the keyboard: type, arrow down, Enter, Escape.
+      from Kaunas rather than emptying &mdash; and the crosshair inside the field
+      lights, because picking a place is the other way of saying where distances
+      are measured from. The whole control works from the keyboard: type, arrow
+      down, Enter, Escape, and the field answers focus with a darker border
+      rather than a coloured ring.
     </p>
     <p class="note">
       Appearance: the fixture sets <code>labels: "some"</code> and turns points

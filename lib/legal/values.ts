@@ -34,7 +34,24 @@ export const LEGAL_DETAILS = {
     effectiveDate: "",
   },
   billing: {
-    /** e.g. "Paddle.com Market Limited", once chosen. */
+    /**
+     * The legal entity that sells the plans, as it appears on a customer's own
+     * invoice — **not** the brand name on the dashboard you log into.
+     *
+     * Lemon Squeezy is the provider, and the entity behind it has changed: it was
+     * acquired by Stripe in 2024, and invoices issued from 6 April 2026 name a
+     * different company from the ones before it. Which one applies depends on
+     * which arrangement this store is on, and the terms, the privacy policy, the
+     * DPA and the cookie policy all quote this string verbatim to customers.
+     *
+     * **So read it off a real invoice in the Lemon Squeezy dashboard before
+     * filling it in**, and do not copy it from documentation, a blog post or a
+     * search result. Naming the wrong seller in a contract is not a typo.
+     *
+     * Empty means unset, and `lib/brand.ts`'s rule applies: nothing it feeds is
+     * drawn. The legal documents are therefore incomplete until it is filled —
+     * which is correct, because so is the arrangement they describe.
+     */
     merchantOfRecord: "",
     merchantOfRecordTermsUrl: "",
   },

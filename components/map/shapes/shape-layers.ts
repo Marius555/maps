@@ -18,6 +18,7 @@ import {
   dotWidthFilter,
 } from "@/packages/shared/dot-line";
 import {
+  MIN_LINE_POINTS,
   MIN_POLYGON_POINTS,
   shapePoints,
   shapePolygon,
@@ -104,6 +105,41 @@ export const SHAPE_DOTTED_LINE_LAYERS = DOT_WIDTH_BUCKETS.map((width) =>
  * for a click on it to select.
  */
 export const SHAPE_DRAFT_LINE_LAYER = "editor-shape-draft-outlines";
+/**
+ * The halo under the draft, and the leg hanging off the cursor.
+ *
+ * Three layers rather than one, and each answers something the single dashed
+ * line could not.
+ *
+ * The **casing** is what makes the band survive the basemap. A 2px coloured line
+ * is legible over pale streets and disappears into a dark one, into a park, and
+ * into anything it happens to run along — and this map has sixteen looks. A
+ * light halo under a coloured stroke is what every road on every one of those
+ * basemaps already does for the same reason.
+ *
+ * The **placed** layer is the other half, and the split is which end of the
+ * band you are looking at. The legs already clicked out were drawn identically
+ * to the leg hanging off the cursor, so the band said nothing about which part
+ * of it was a decision and which part was the pointer — the one question a
+ * rubber band exists to answer. Placed legs are solid now; the dashed layer
+ * keeps the leg under the cursor, and keeps every other tool exactly as it was,
+ * because only the route tool tells `draftFeatures` where the split is.
+ *
+ * Solid also puts the placed run back off the SDF path, which is the distinction
+ * the note above draws: a dash is a different shader, and only the part that has
+ * to be dashed goes through it.
+ */
+export const SHAPE_DRAFT_CASING_LAYER = "editor-shape-draft-casings";
+export const SHAPE_DRAFT_PLACED_LAYER = "editor-shape-draft-placed";
+
+/**
+ * How heavy the thing being drawn is, before its casing.
+ *
+ * Named because three layers and `draftFeatures` all have to agree about it. It
+ * was 2, which is a hairline: the draft is the only thing on the map that does
+ * not exist yet, and it was also the hardest thing on the map to see.
+ */
+export const DRAFT_LINE_WIDTH = 3;
 export const SHAPE_VERTEX_LAYER = "editor-shape-vertices";
 
 /**
@@ -153,6 +189,15 @@ type ShapeProperties = {
    * question as `id === ""`, which is what hit-testing already asks.
    */
   draft: boolean;
+  /**
+   * The part of a draft that is a decision rather than the pointer.
+   *
+   * True only on the run of points somebody has clicked, and only for a tool
+   * that says where that run ends — which today is the route tool alone. False
+   * everywhere else, including on every saved shape, so the dashed draft layer
+   * goes on drawing exactly what it drew before this existed.
+   */
+  placed: boolean;
 };
 
 export type ShapeFeatures = GeoJSON.FeatureCollection<
@@ -196,6 +241,7 @@ export function shapeFeature(
       width: strokeWidthOf(isLine, shape.strokeWidth),
       stroke: shape.strokeStyle,
       draft: false,
+      placed: false,
     },
   };
 }
@@ -221,6 +267,16 @@ export function draftFeatures(
    * than required so a caller with no map to ask still draws something.
    */
   color: string = DEFAULT_SHAPE_COLOR,
+  /**
+   * How many of these points are placed, with the rest being the cursor.
+   *
+   * Only the route tool passes it, and only it needs to: its gesture is long
+   * enough that "which of these did I click" is a live question, and the leg to
+   * the pointer is then drawn as the guess it is. Absent — every other tool, and
+   * every caller that had one before this existed — the whole draft is one run,
+   * exactly as it has always been drawn.
+   */
+  placed?: number,
 ): GeoJSON.Feature<GeoJSON.Geometry, ShapeProperties>[] {
   const properties: ShapeProperties = {
     id: "",
@@ -228,12 +284,13 @@ export function draftFeatures(
     opacity: DEFAULT_SHAPE_OPACITY,
     selected: true,
     isLine: geometry.kind === "line",
-    // The draft has a layer of its own with its own constant width and dash, so
+    // The draft has layers of its own with their own constant width and dash, so
     // neither of these is read while `draft` is true. They are set to what the
-    // draft layer draws so that the two cannot disagree if that ever changes.
-    width: 2,
+    // draft layers draw so that the two cannot disagree if that ever changes.
+    width: DRAFT_LINE_WIDTH,
     stroke: "solid",
     draft: true,
+    placed: false,
   };
 
   if (geometry.kind === "circle") {
@@ -258,26 +315,66 @@ export function draftFeatures(
    */
   const isArea = geometry.kind === "polygon" && points.length >= MIN_POLYGON_POINTS;
 
-  const outline: GeoJSON.Feature<GeoJSON.Geometry, ShapeProperties> = isArea
-    ? {
+  if (isArea) {
+    return [
+      {
         type: "Feature",
         geometry: { type: "Polygon", coordinates: shapePolygon(geometry) },
         properties,
-      }
-    : {
-        type: "Feature",
-        geometry: { type: "LineString", coordinates: points },
-        properties,
-      };
+      },
+      ...vertices(points, properties),
+    ];
+  }
+
+  /*
+   * The split, and the off-by-one in it is the whole definition.
+   *
+   * `placed` counts points somebody has clicked, so the placed run is
+   * `[0, placed)` and the live one starts at the *last* of them — the leg is
+   * drawn from the last stop to the cursor, not from the cursor alone. Either
+   * run can come out shorter than two points (nothing clicked yet, or nothing
+   * hovered), and a one-point LineString is not a line, so each is dropped when
+   * it does.
+   *
+   * With no `placed` the whole draft is one run and it is *not* marked placed,
+   * which is what keeps the circle, polygon and line tools on the dashed layer
+   * they have always been drawn on: the live run is then a single point and
+   * falls away.
+   */
+  const at = placed ?? points.length;
+  const runs: [GeoJSON.Position[], boolean][] = [
+    [points.slice(0, at), placed !== undefined],
+    [points.slice(Math.max(0, at - 1)), false],
+  ];
 
   return [
-    outline,
-    ...points.map((point) => ({
-      type: "Feature" as const,
-      geometry: { type: "Point" as const, coordinates: point },
-      properties,
-    })),
+    ...runs
+      .filter(([run]) => run.length >= MIN_LINE_POINTS)
+      .map(([run, isPlaced]) => ({
+        type: "Feature" as const,
+        geometry: { type: "LineString" as const, coordinates: run },
+        properties: isPlaced ? { ...properties, placed: true } : properties,
+      })),
+    ...vertices(points, properties),
   ];
+}
+
+/**
+ * A dot per clicked point, so a gesture shows what it has taken.
+ *
+ * Every point including the one under the cursor: the hovered dot is where the
+ * next click would land, which is the same thing the band's live leg says at the
+ * other end of it.
+ */
+function vertices(
+  points: readonly GeoJSON.Position[],
+  properties: ShapeProperties,
+): GeoJSON.Feature<GeoJSON.Geometry, ShapeProperties>[] {
+  return points.map((point) => ({
+    type: "Feature" as const,
+    geometry: { type: "Point" as const, coordinates: point },
+    properties,
+  }));
 }
 
 /**
@@ -426,13 +523,74 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
    * Dash lengths are multiples of the line width, so the 2px width below makes
    * this a 4px dash and a 4px gap. Change one and the other moves.
    */
+  /*
+   * The halo, under both of them.
+   *
+   * Added first so it sits at the bottom of the three — each `addLayer` with the
+   * same `beforeId` lands immediately before that layer, so add order is stacking
+   * order.
+   *
+   * White rather than a theme variable, matching the vertex dots' stroke a few
+   * layers down. This has to separate a coloured line from sixteen different
+   * basemaps, several of which are near-black and several near-white; white
+   * reads against every one of them, where a halo that followed the theme would
+   * vanish into the light basemaps it was meant to help with.
+   *
+   * Round cap and join, unlike the dashed stroke above it: the casing is one
+   * continuous shape, so there are no gaps for a round cap to close, and a butt
+   * cap would leave the coloured line poking out of its own halo at both ends.
+   */
+  if (!map.getLayer(SHAPE_DRAFT_CASING_LAYER)) {
+    map.addLayer(
+      {
+        id: SHAPE_DRAFT_CASING_LAYER,
+        type: "line",
+        source: SHAPE_SOURCE,
+        filter: ["get", "draft"],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": "#ffffff",
+          // Not 1: the draft is drawn over a map somebody is aiming at, and an
+          // opaque 7px band would hide the pin it is running towards.
+          "line-opacity": 0.85,
+          "line-width": DRAFT_LINE_WIDTH + 4,
+        },
+      },
+      beforeId,
+    );
+  }
+
+  /*
+   * The legs already clicked out: solid, and only the route tool produces them.
+   *
+   * Everything else reaching this source carries `placed: false` and is drawn by
+   * the dashed layer below, exactly as it always has been — see `draftFeatures`.
+   */
+  if (!map.getLayer(SHAPE_DRAFT_PLACED_LAYER)) {
+    map.addLayer(
+      {
+        id: SHAPE_DRAFT_PLACED_LAYER,
+        type: "line",
+        source: SHAPE_SOURCE,
+        filter: ["all", ["get", "draft"], ["get", "placed"]],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": ["get", "color"],
+          "line-opacity": 1,
+          "line-width": DRAFT_LINE_WIDTH,
+        },
+      },
+      beforeId,
+    );
+  }
+
   if (!map.getLayer(SHAPE_DRAFT_LINE_LAYER)) {
     map.addLayer(
       {
         id: SHAPE_DRAFT_LINE_LAYER,
         type: "line",
         source: SHAPE_SOURCE,
-        filter: ["get", "draft"],
+        filter: ["all", ["get", "draft"], ["!", ["get", "placed"]]],
         // Butt rather than the round cap above: a round cap adds half a width at
         // each end of every dash, which at this size closes the gaps and draws a
         // solid line with dents in it.
@@ -440,7 +598,9 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
         paint: {
           "line-color": ["get", "color"],
           "line-opacity": 1,
-          "line-width": 2,
+          "line-width": DRAFT_LINE_WIDTH,
+          // Dash lengths are multiples of the line width, so `DRAFT_LINE_WIDTH`
+          // makes this a 6px dash and a 6px gap. Change one and the other moves.
           "line-dasharray": [2, 2],
         },
       },

@@ -107,6 +107,19 @@ export function UserMenu({
 
           <Separator />
 
+          {/* The only way into the account page. It is not a sidebar item: the
+              sidebar is about the map you are working on, and this is about the
+              person, which is what this menu is already for. */}
+          <Dropdown.Item
+            id="account"
+            textValue="Account and plan"
+            href="/account"
+          >
+            <Label>Account and plan</Label>
+          </Dropdown.Item>
+
+          <Separator />
+
           <Dropdown.Section
             selectionMode="single"
             selectedKeys={new Set([theme])}

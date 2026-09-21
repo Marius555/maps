@@ -19,6 +19,7 @@ import { ShareDialog } from "../share-dialog/share-dialog";
 import { ColorsGroup } from "./colors-group";
 import { MapControlsGroup } from "./map-controls-group";
 import { MeasurementGroup } from "./measurement-group";
+import { MobileGroup } from "./mobile-group";
 import { PanelGroup } from "./panel-group";
 import { PanelSurfaceGroup } from "./panel-surface-group";
 import { RowsGroup } from "./rows-group";
@@ -160,17 +161,20 @@ export function DesignSidebar({
         ) : null}
 
         {/*
-          A full-height column holding six unrelated questions — where the
-          panel goes, what it is made of, what a row says, what is on the map,
-          what colour it all is, and whether visitors are counted — so a wall of
-          thirty controls is one nobody reads down.
+          A full-height column holding seven unrelated questions — where the
+          panel goes, what it is made of, what a row says, what becomes of it
+          when there is no room for it, what is on the map, what colour it all
+          is, and whether visitors are counted — so a wall of thirty controls is
+          one nobody reads down.
 
-          Six rather than five because "Results panel" had grown to eleven
+          Seven rather than five because "Results panel" had grown to eleven
           controls with switches at positions 1, 3, 10 and 11, which is the
           wall again inside one fold. Two of them were never panel controls and
           are in "Map controls" now; the three describing the panel’s *surface*
           are their own fold below, because all three are read only on a
-          floating panel and a fold can say that by not being there.
+          floating panel and a fold can say that by not being there; and the
+          drawer switch is "On a phone", because it is the one setting in the
+          designer that no width above 768px reads.
 
           It used to open on "Results panel" and allow several at once, the
           argument being that comparing a panel setting against a colour is a
@@ -201,6 +205,20 @@ export function DesignSidebar({
               <RowsGroup {...design} />
             </PropertyFold>
           ) : null}
+
+          {/* Between the panel's own folds and the map's, because that is
+              where it sits in the question: it is still the results panel, at
+              the one width where it cannot stand beside the map. `isEmpty`
+              rather than a ternary for `PropertyFold`'s own reason, and gated on
+              the same thing the Rows fold is — with no list there is nothing for
+              a drawer to hold. */}
+          <PropertyFold
+            id="mobile"
+            title="On a phone"
+            isEmpty={!design.settings.list}
+          >
+            <MobileGroup {...design} />
+          </PropertyFold>
 
           <PropertyFold id="controls" title="Map controls">
             <MapControlsGroup {...design} />

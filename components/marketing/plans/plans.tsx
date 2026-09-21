@@ -1,8 +1,5 @@
-import { MARKETING_PLANS, RECOMMENDED_PLAN } from "@/lib/marketing/plans";
-
-import { Reveal } from "../reveal";
 import { Section } from "../section";
-import { PlanCard } from "./plan-card";
+import { PlanGrid } from "./plan-grid";
 
 /**
  * The plans — the whole of /pricing.
@@ -11,8 +8,11 @@ import { PlanCard } from "./plan-card";
  * were the fourth thing competing for one scroll; the landing page's cost
  * calculator carries the argument and ends on a link here.
  *
- * Every button goes to signup. There is no billing behind them yet; when it
- * lands, the buttons change and nothing else here does.
+ * The grid below is a client component because of the monthly/yearly toggle, and
+ * the page stays statically rendered all the same — see `plan-grid.tsx`. The
+ * paid cards link to `/upgrade`, which is where a session is read and a checkout
+ * is opened; nothing on this page knows whether anybody is signed in, which is
+ * what keeps it prerenderable.
  */
 export function Plans() {
   return (
@@ -22,15 +22,7 @@ export function Plans() {
       title="Priced by what you build, not by who looks at it."
       lede="The limits below are the ones the app enforces — maps, locations, areas. Views are not among them and never will be."
     >
-      <ul className="grid gap-5 lg:grid-cols-3">
-        {MARKETING_PLANS.map((plan, index) => (
-          <li key={plan.id}>
-            <Reveal delay={index * 0.06} className="h-full">
-              <PlanCard plan={plan} recommended={plan.id === RECOMMENDED_PLAN} />
-            </Reveal>
-          </li>
-        ))}
-      </ul>
+      <PlanGrid />
     </Section>
   );
 }

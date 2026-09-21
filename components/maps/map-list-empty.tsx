@@ -9,7 +9,7 @@ export function MapListEmpty() {
       icon={MapIcon}
       title="No maps yet"
       description="Create a map, then drop your first location on it or import a spreadsheet."
-      action={<CreateMapDialog />}
+      action={<CreateMapDialog align="center" />}
     />
   );
 }

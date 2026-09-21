@@ -8,11 +8,11 @@ Project instructions. Read this fully before writing code.
 
 ## 0. State of the code
 
-**Weeks 1–3 of §10 are done; Week 4 is next.** Of §5's layout, `/app`, `/lib`,
-`/components`, `/scripts`, `/embed`, `/packages/shared` and `/functions` (one function, the
-daily sheet sync) exist. `/app/(marketing)/pricing` exists as the plans alone — no billing
-behind its buttons yet. Still absent, and correctly so — it belongs to Week 4:
-`/app/(marketing)/for/[platform]`.
+**Weeks 1–3 of §10 are done; Week 4 is most of the way through.** Of §5's layout, `/app`,
+`/lib`, `/components`, `/scripts`, `/embed`, `/packages/shared` and `/functions` (one
+function, the daily sheet sync) exist, and so now do `/lib/billing`, `/app/(dashboard)/account`
+and `/app/api/webhooks/billing`. Still absent, and correctly so — it belongs to the rest of
+Week 4: `/app/(marketing)/for/[platform]`.
 
 Working end to end: email auth, map CRUD, the MapLibre editor, the locations list with
 search and tag filters, per-location editing with search-on-submit geocoding and photo
@@ -50,6 +50,20 @@ seconds at most**, so a sync is a series of short idempotent steps, never one lo
 constraint applies to any future long job, too. Full reasoning and the function's setup in
 `docs/notes/sheet-sync.md`.
 
+**Signup refuses throwaway addresses, and an unconfirmed account is read-only.**
+`signupServerSchema` checks the address against 75,000 vendored domains and then asks DNS
+whether the domain has a mail server at all; both refusals land under the Email field
+through the existing `ZodError` → 422 path. The list is `server-only` and must stay out of
+`signupSchema`, which the signup form imports. **Every uncertain DNS answer is a yes** — a
+resolver wobble may never become a signup outage. Then **`withAuth` 403s every non-GET from
+an account that has not confirmed its address** — one check covering every authenticated
+route, with no exemption list, because everything that must answer an unconfirmed account
+(signup, login, logout, resending the link) is `withoutAuth` already. Reads stay open so the
+banner explaining the freeze can render, and **the gate switches itself off when
+`RESEND_API_KEY` is unset**, since a link nobody can send would lock every account forever.
+This overrides §13.4 knowingly; the argument and the three places the UI says so are in
+`docs/notes/auth.md`.
+
 **Auth and transactional email are done, and are the first of Week 4 to land.** A split
 `app/(auth)` group — a drawn map panel on one half, the form on the other — carrying
 email/password, **Google sign-in over Appwrite's OAuth2 *token* flow**, confirm-your-address,
@@ -61,13 +75,38 @@ link that arrives from outside (a mail client, Appwrite's own domain) lands on a
 survives a redirect chain and would bounce a user who had just signed in. Both, and the reason
 Appwrite's tokens are used instead of our own HMAC, are in `docs/notes/auth.md`.
 
-**Not built yet, and next — the rest of Week 4:** billing behind the pricing page, plan-limit UI, MoR billing +
-webhook, landing page, one platform page (Webflow first), docs with screenshots. Plus the two upstreams §12 says are forced before anyone pays us,
-which are now a switch rather than two machines: `GEOCODER_PROVIDER=geoapify` and
-`ROUTING_PROVIDER=geoapify`. What is still owed there is a plan decision, not a build —
-Geoapify's free tier requires its attribution, and a route drawn on it is published onto a
-customer's site. Self-hosted Photon and OSRM stay in the tree as the fallback, runbooks
-intact. The PMTiles archive on R2 is ready and deliberately *not* on that list (§7).
+**Billing is wired, and with it the thing that made billing unsafe.** Lemon Squeezy behind
+the pricing page: a static `/pricing` whose cards link to `/upgrade`, which reads the
+session and opens a checkout; a signature-verified webhook that is the only writer of
+`subscriptions`; and an account page showing the plan, the portal link and what has been
+spent. Plans keep their prices and gain **annual at two months free**, a published
+**monthly lookup allowance**, Free at 25 locations instead of 10, and **analytics behind the
+paid plans**.
+
+**The allowance is the load-bearing half, and it is not a pricing device.** Before it, one
+account could spend 200 geocoder credits by arming the route tool — *and 200 more on every
+page reload* — about 6,600 on one "Sync now", 3,000 on one import, and without limit through
+`geocode/batch`, which sized its own check from a number the client sent. Against an upstream
+selling 3,000 credits a day that is everybody's day, spent by one person, in one gesture.
+Three things now bound it and must not be undone: the per-account monthly counter in
+`usage.repository.ts` (which is what actually closes the `runTotal` hole, because the count
+outlives the request), the **pooled daily circuit breaker** that makes background work stand
+aside at 80% so a nightly sync cannot starve somebody typing an address, and the
+`sessionStorage` cache in `components/map/routes/routability-cache.ts` that stops a reload
+re-spending the sweep. Full reasoning, the rival price table and the sizing arithmetic in
+`docs/notes/billing.md`.
+
+**Not built yet, and next — the rest of Week 4:** landing page, one platform page (Webflow
+first), docs with screenshots. Plus the two upstreams §12 says are forced before anyone pays
+us, which are now a switch rather than two machines: `GEOCODER_PROVIDER=geoapify` and
+`ROUTING_PROVIDER=geoapify`, both currently set. What is owed there is a plan decision and
+one small change — Geoapify's free tier requires its attribution, and a route drawn on it is
+published onto a customer's site; and because `lib/routing/geoapify.ts` has no native
+`nearest` and reverse-geocodes instead, **moving geocoding to Photon does not move the
+routability sweep with it** unless that probe is pointed at the configured geocoder. Self-hosted
+Photon and OSRM stay in the tree as the fallback, runbooks intact. The PMTiles archive on R2
+is ready and deliberately *not* on that list (§7) — tiles are free and unmetered on
+OpenFreeMap and have nothing to do with the geocoder budget above.
 
 Installed since the original scaffold: `zod`, `@tanstack/react-query`, `zustand`,
 `papaparse`, `date-fns`, `vitest`, `vite`, `fflate` (promoted from a pmtiles transitive —
@@ -91,6 +130,9 @@ npm run test         # vitest run
 npm run build:embed  # vite build → public/embed, copy MapLibre runtime, check size
 npm run setup:appwrite  # create missing tables/columns/indexes from scripts/appwrite-schema.mjs
 npm run setup:r2        # snapshot bucket: custom domain, CORS, zone cache + header rules
+npm run setup:lemon     # find the plan variants, write their ids to .env, configure the webhook
+
+npm run build:disposable-domains # re-vendor the throwaway-email domain list (75k, ~1.2MB)
 
 npm run build:tile-styles -- https://tiles.example.com   # our own five style documents
 npm run mirror:tile-assets      # fonts, sprites, Natural Earth raster -> public/tiles/ (414MB)
@@ -182,10 +224,20 @@ one exists: `docs/notes/environment.md`.
   current state**; it moves `STYLE_URLS` and the attribution together, and
   `npm run migrate:style-host` moves maps already published) and
   `NEXT_PUBLIC_EMBED_SCRIPT_URL` (unset, the snippet points at the dashboard's own origin).
-- **Temporary, testing only: `DISABLE_ALL_PLAN`.** Every account reads as `pro`, bypassing
-  every quantity limit and the routes feature gate. One early return in `getUserPlan`, so
-  §6's rule that the checks live in the repositories is intact; warns once per process.
-  **Delete it with the pricing work.**
+- Server-only, **required to sell anything**: `LEMON_API_KEY` (falling back to
+  `LEMON_TEST_API_KEY`, because the provider decides test mode from the key itself and
+  renaming a variable on the day of the first real payment is the worst possible timing),
+  `LEMON_STORE_ID`, `LEMON_WEBHOOK_SECRET` — **unset, the webhook refuses everybody**, the
+  same posture `CRON_SECRET` takes — and one variant id per plan and cadence:
+  `LEMON_VARIANT_STARTER_MONTHLY`, `_STARTER_YEARLY`, `_PRO_MONTHLY`, `_PRO_YEARLY`. All
+  optional in `lib/env.ts` and checked where used, so a missing one fails a checkout with
+  its own name rather than taking the dashboard down.
+- **Development only: `DISABLE_ALL_PLAN`.** Every account reads as `pro`, bypassing every
+  quantity limit, the feature gates and the lookup allowance. One early return in
+  `getUserPlan` and one in `usage.repository.ts`, so §6's rule that the checks live in the
+  repositories is intact; warns once per process. **It is inert in a production build** — a
+  `NODE_ENV` check, not a note asking somebody to delete it, because a paywall bypass set by
+  an environment variable on a host where that is a form field needs a mechanical guarantee.
 
 **Not env, but configured the same way: `brand.json`** at the root — name, tagline, logo,
 favicon, company, contact and legal links. `lib/brand.ts` validates it at module load, so a bad
@@ -278,6 +330,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `components/auth/**`, `lib/auth/**`, `lib/email/**`, `app/(auth)/**`, `app/api/auth/**`, `proxy.ts` | `docs/notes/auth.md` |
 | `lib/sheet-sync/**`, `components/places/sheet-sync/**`, `app/api/**/sheet-link/**`, `app/api/cron/**`, `functions/**` | `docs/notes/sheet-sync.md` |
 | `app/(marketing)/**`, `components/marketing/**`, `lib/marketing/**` | `docs/notes/marketing.md` |
+| `lib/billing/**`, `lib/repositories/{subscriptions,usage,plan-limits}.repository.ts`, `app/api/webhooks/billing/**`, `app/(dashboard)/account/**`, `app/(marketing)/upgrade/**` | `docs/notes/billing.md` |
 | `documents/legal/**`, `lib/legal/**`, `components/legal/**`, the `legal` links in `brand.json` | `documents/legal/README.md` |
 
 Self-hosting runbooks, unchanged: `docs/self-hosting-geocoding.md`,
@@ -484,16 +537,34 @@ absent for every location a sync must never touch. `docs/notes/sheet-sync.md`.
 ### `subscriptions`
 `userId` · `billingCustomerId` · `billingSubscriptionId` · `plan` · `status` · `currentPeriodEnd`
 
-Provider-neutral field names — do not name them after Paddle or Stripe.
+Provider-neutral field names — do not name them after Paddle or Stripe. Written only
+by `app/api/webhooks/billing`, read only by `getUserPlan`, which honours the status
+**and** the date — see `docs/notes/billing.md` for why a cancellation is `active`.
+
+### `usage`
+`userId` · `period` · `lookups`
+
+What an account has spent on the geocoder this month, and — under the sentinel
+`userId: "*"` with a `YYYY-MM-DD` period — what the whole app has spent today. The
+second is a circuit breaker: the upstream sells one daily quota shared by everyone,
+so one customer's bulk import can starve every other customer's and the only symptom
+is somebody else's feature failing. `docs/notes/billing.md`.
 
 ### Plan limits
-| Plan | Maps | Places/map | Shapes/map | Views |
-|---|---|---|---|---|
-| Free | 1 | 10 | 3 | unlimited (badge shown) |
-| Starter €19 | 3 | 300 | 50 | unlimited |
-| Pro €39 | 15 | 3,000 | 250 | unlimited |
+| Plan | Maps | Places/map | Shapes/map | Lookups/month | Routes | Sheets | Analytics | Views |
+|---|---|---|---|---|---|---|---|---|
+| Free | 1 | 25 | 3 | 250 | — | — | — | unlimited |
+| Starter €19 / €190 yr | 3 | 300 | 50 | 4,000 | ✓ | ✓ | ✓ | unlimited |
+| Pro €39 / €390 yr | 15 | 3,000 | 250 | 50,000 | ✓ | ✓ | ✓ | unlimited |
 
 Enforce limits **server-side** in repositories, never only in the UI.
+
+A **lookup** is one request to the geocoder: an address searched, a pin dropped or
+dragged, a row geocoded on import or a sheet sync, or one pin asked about by the
+route tool's sweep. They are pooled because the provider pools them — a routing
+`nearest()` probe bills as a reverse geocode. The allowances are sized **above full
+entitlement** so they never refuse a customer using what they paid for; the property
+to preserve when they move is that the plan is still profitable *at its ceiling*.
 
 ---
 
@@ -566,7 +637,7 @@ Do not start a phase before the previous one works end to end.
 
 One deviation worth knowing: **the embed's search does not geocode.** It filters the places already in the snapshot by name and address. Geocoding a visitor's typed query would be a metered call in the visitor's path, which §2 forbids outright — the geocoder runs at import time and never again. "Find nearest" uses the browser's own geolocation, which is free and more accurate than resolving a typed address anyway.
 
-**Week 4 — Business layer. ← in progress.** Auth (split-screen login/signup, Google OAuth2) and transactional email are **done** — see §0. Still owed: pricing page, plan limits, MoR integration + webhook, landing page, one platform page (Webflow first), docs with screenshots. **Our own geocoding and routing instances belong here too and are the two that are actually forced** — the public Photon and OSRM endpoints both forbid what a paying customer would make us do with them (§12). Own PMTiles on R2 is *not* on this list any more: OpenFreeMap permits commercial use, so that one is insurance to buy when it suits, not a gate to pass.
+**Week 4 — Business layer. ← in progress.** Auth (split-screen login/signup, Google OAuth2), transactional email, the pricing page, plan limits and the MoR integration + webhook are **done** — see §0. Still owed: landing page, one platform page (Webflow first), docs with screenshots. **Our own geocoding and routing instances belong here too and are the two that are actually forced** — the public Photon and OSRM endpoints both forbid what a paying customer would make us do with them (§12). Own PMTiles on R2 is *not* on this list any more: OpenFreeMap permits commercial use, so that one is insurance to buy when it suits, not a gate to pass.
 
 **Then stop building and go get ten customers.** What they ask for decides Phase 2 — not this file.
 

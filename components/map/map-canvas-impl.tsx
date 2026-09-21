@@ -48,12 +48,12 @@ import { useMaplibre } from "./use-maplibre";
 import { usePlaceMarkers } from "./use-place-markers";
 
 /**
- * One frozen empty set, so "no route is being drawn" is the same value every
- * time. `usePlaceMarkers` keys an effect on this identity; a fresh `new Set()`
+ * One frozen empty map, so "no route is being drawn" is the same value every
+ * time. `usePlaceMarkers` keys an effect on this identity; a fresh `new Map()`
  * per render would re-stamp every marker on the map sixty times a second while
  * it is panned.
  */
-const NO_STOPS: ReadonlySet<string> = new Set<string>();
+const NO_STOPS: ReadonlyMap<string, number> = new globalThis.Map<string, number>();
 
 // Module scope: runs once per page load however many canvases mount, which is
 // what CLAUDE.md §7 asks for. Doing it in a root provider instead would drag
@@ -328,7 +328,7 @@ export default function MapCanvasImpl({
    * review takes the same one-tile-load path as the editor.
    */
   /**
-   * The locations the route currently being drawn has already taken.
+   * The locations the route currently being drawn has already taken, in order.
    *
    * State, and held here, for the reason `checkingId` is state in
    * `use-routability.ts`: the marker layer draws it. The gesture belongs to
@@ -336,18 +336,37 @@ export default function MapCanvasImpl({
    * nearest thing that owns both — so the list comes up out of one and goes down
    * into the other without map-editor.tsx learning that a route has a look.
    *
-   * A set rather than the array it arrives as: the marker effect asks
-   * `has(id)` once per marker, and a route may hold 25 stops against 3,000 pins.
+   * A map rather than the array it arrives as: the marker effect asks about one
+   * id at a time, and a route may hold 25 stops against 3,000 pins. It holds the
+   * *position* rather than mere membership because that is what the pin draws —
+   * a numbered badge answers "which ones are mine, and in what order" where the
+   * breathing alone only answered the first half.
+   *
+   * First occurrence wins. A round trip puts one location at two positions, and
+   * "1" is the honest label for a pin the route leaves from and comes back to.
    */
-  const [stopIds, setStopIds] = useState<ReadonlySet<string>>(NO_STOPS);
+  const [stopOrder, setStopOrder] = useState<ReadonlyMap<string, number>>(NO_STOPS);
+
+  /**
+   * The caller's ear for the same list, kept current by the effect further down
+   * that holds every other handler ref. Declared here rather than beside them
+   * because `handleStopsChange` closes over it, and a reader should not have to
+   * go looking three hundred lines away to find out what it holds.
+   */
+  const routeStopsHandler = useRef(shapes?.onRouteStops);
 
   /*
    * Stable, so it never re-binds the drawing effect that closes over it — and it
    * collapses "still empty" back onto `NO_STOPS`, so disarming twice, or a
    * cleanup landing after a reset, does not restyle every marker for nothing.
+   *
+   * It also passes the list on to the caller, which is what lets the hint bar
+   * count the stops. Through a ref, because the caller rebuilds its prop group
+   * every render and this must not.
    */
   const handleStopsChange = useCallback((placeIds: readonly string[]) => {
-    setStopIds(placeIds.length === 0 ? NO_STOPS : new Set(placeIds));
+    setStopOrder(placeIds.length === 0 ? NO_STOPS : stopPositions(placeIds));
+    routeStopsHandler.current?.(placeIds);
   }, []);
 
   const [openingBounds] = useState<ShapeBounds | null>(
@@ -433,16 +452,23 @@ export default function MapCanvasImpl({
    * So the element is rendered with a static class list and never touched by
    * React again, and the modes are added beside MapLibre's rather than over it.
    *
-   * `maplibregl-crosshair`, not Tailwind's `cursor-crosshair`. The cursor the
-   * pointer actually reads is the one on
-   * `.maplibregl-canvas-container.maplibregl-interactive` — a *child* of this
-   * element — and maplibre-gl.css sets it to `grab` at (0,2,0), against a utility
-   * class's (0,1,0). A cursor class here is dead over the canvas, which is why
-   * arming a tool still showed a hand. MapLibre ships this class for exactly this
-   * case: its selectors reach the child and the `:active` state, so it beats both
-   * `grab` and `grabbing`. Ours would have to win on source order against a
-   * stylesheet injected at runtime by this module's own dynamic chunk, which is
-   * not a fight worth picking twice.
+   * `pointing-cursor`, not Tailwind's `cursor-crosshair` and — no longer —
+   * not MapLibre's `maplibregl-crosshair`. The cursor the pointer actually reads
+   * is the one on `.maplibregl-canvas-container.maplibregl-interactive` — a
+   * *child* of this element — and maplibre-gl.css sets it to `grab` at (0,2,0),
+   * against a utility class's (0,1,0). A cursor class here is dead over the
+   * canvas, which is why arming a tool still showed a hand. So app/globals.css
+   * copies MapLibre's selector shape, which reaches the child and the `:active`
+   * state, and wins on `!important`.
+   *
+   * **The class itself has to be ours, and borrowing MapLibre's was a bug.**
+   * `BoxZoomHandler.reset()` removes `maplibregl-crosshair` from this very
+   * element unconditionally, and `HandlerManager` resets every handler on a
+   * window `blur` — alt-tab, a switched tab, anything taking focus off the page.
+   * The class went, MapLibre's `grab` came back, and the pointer showed a hand
+   * over a map whose tool was still armed and still taking clicks. The effect
+   * below cannot put it back either: it only runs when one of the three flags
+   * *changes*, and none of them did.
    *
    * `drawing-shapes` is separate, and the shape tools and the route tool set it.
    * A location's marker is a DOM element over the canvas, roughly 26px across —
@@ -470,7 +496,7 @@ export default function MapCanvasImpl({
     const element = container.current;
     if (!element) return;
 
-    element.classList.toggle("maplibregl-crosshair", isCrosshair);
+    element.classList.toggle("pointing-cursor", isCrosshair);
     element.classList.toggle("drawing-shapes", isDrawing);
     element.classList.toggle("picking-pins", isRouting);
   }, [isCrosshair, isDrawing, isRouting]);
@@ -505,9 +531,9 @@ export default function MapCanvasImpl({
     // what wear it.
     unroutableIds: shapes?.unroutableIds,
     checkingId: shapes?.checkingId,
-    // Which pins the route being drawn has taken. It comes back up out of
-    // `MapShapes` below — see `handleStopsChange`.
-    stopIds,
+    // Which pins the route being drawn has taken, and in what order. It comes
+    // back up out of `MapShapes` below — see `handleStopsChange`.
+    stopOrder,
     onSelect: onSelectPlace,
     onMove: onMovePlace,
   });
@@ -547,6 +573,7 @@ export default function MapCanvasImpl({
     clickHandler.current = onMapClick;
     selectHandler.current = onSelectPlace;
     selectShapeHandler.current = shapes?.onSelectShape;
+    routeStopsHandler.current = shapes?.onRouteStops;
     addingRef.current = isAdding;
     drawingRef.current = isDrawing;
     selectingRef.current = selection?.isSelecting ?? false;
@@ -1013,4 +1040,20 @@ function pickShapes(
   }
 
   return picked;
+}
+
+/**
+ * Where each location sits on the route being drawn, 1-based.
+ *
+ * 1-based because it is a label somebody reads off a pin, not an index anything
+ * looks up by. First occurrence wins — see `stopOrder`.
+ */
+function stopPositions(placeIds: readonly string[]): ReadonlyMap<string, number> {
+  const positions = new globalThis.Map<string, number>();
+
+  placeIds.forEach((placeId, at) => {
+    if (!positions.has(placeId)) positions.set(placeId, at + 1);
+  });
+
+  return positions;
 }

@@ -102,6 +102,17 @@ describe("isRetryableStatus", () => {
     expect(isRetryableStatus(422)).toBe(false);
     expect(isRetryableStatus(404)).toBe(false);
   });
+
+  /*
+   * The exception among the 5xx, and the one worth a test of its own because the
+   * rule around it is "retry everything from 500 up". 503 is what this API sends
+   * when the day's shared lookup budget is gone, and that clears when the day
+   * turns, not in the four seconds a backoff waits.
+   */
+  it("does not retry the one 5xx a backoff cannot outlast", () => {
+    expect(isRetryableStatus(503)).toBe(false);
+    expect(isRetryableStatus(500)).toBe(true);
+  });
 });
 
 describe("waitFor", () => {

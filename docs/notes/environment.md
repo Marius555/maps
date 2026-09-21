@@ -10,17 +10,38 @@ this is why each one exists.
 - Optional, all server-only, all defaulted: `GEOCODER_URL` (defaults to the public Photon instance), `GEOCODER_MIN_INTERVAL_MS` (defaults to 1000, and now spaces request *starts* rather than waiting for each round trip to finish — see `lib/geocoding/throttle.ts`) and `GEOCODER_USER_AGENT`. Point the first at a self-hosted Photon and lower the second before any real import volume. The third exists because public OSM-derived services block unidentified clients and Node's default UA is exactly that: a 403 from a WAF is otherwise indistinguishable from the service being down, and both arrive as a 502.
 - Optional, all server-only, all defaulted: `ROUTING_URL` (defaults to the public OSRM demo server), `ROUTING_MIN_INTERVAL_MS` (defaults to 1000) and `ROUTING_USER_AGENT`. Exactly the geocoder's three, for exactly the geocoder's reasons — and with a sharper deadline: the demo server's terms forbid reselling access and warn that it can be withdrawn without notice, so `ROUTING_URL` has to point somewhere of our own before the first paying customer. `docs/self-hosting-routing.md` is the runbook, including why Valhalla beats OSRM the moment coverage goes past one country. Nothing published moves when this changes — a route's geometry is baked at draw time, which is the whole feature.
 - Optional, all server-only, all defaulted: `GEOAPIFY_API_KEY`, `GEOCODER_PROVIDER` and `ROUTING_PROVIDER`. Set either provider variable to `geoapify` and that half moves onto Geoapify (`lib/geoapify/client.ts`, plus a thin adapter in each folder); unset, Photon and OSRM answer exactly as they always did, which is what makes this switchable per half and reversible. The two switches are deliberately independent — they share an account and a credit budget but not a decision, since geocoding is judged on an import of real addresses and routing on a drawn line. `GEOAPIFY_MIN_INTERVAL_MS` paces **both**, out of one process-wide throttle, because one account has one rate limit; it defaults far below the demo servers' 1000ms since arming the route tool sweeps up to 200 pins. The key is unprefixed and belongs to `APPWRITE_API_KEY`'s class — it must never reach a client component or the embed (§9), and `geoapifyGet` appends it last and keeps it out of every error message so an upstream failure cannot log it.
-- **Temporary, and testing only: `DISABLE_ALL_PLAN`.** Set to `1`/`true`/`yes`, every
-  account reads as `pro` — so every quantity limit and the routes feature gate is
-  bypassed. It exists because routes are a paid feature on an account that has no
-  billing yet (§10 Week 4), which makes the routing half of a provider swap
-  unreachable by hand, and by hand is the only way that half's failures show:
-  they are plausible wrong answers, not errors. It is one early return in
-  `getUserPlan` — the single point the plan is resolved — so §6's rule that the
-  checks live in the repositories is intact and every one of them still runs; they
-  are simply asked about a different plan, which is why the ceilings become pro's
-  3,000 places rather than none. Honoured in every environment and it warns once
-  per process when it is on. **Delete it with the pricing work.**
+- **Development only: `DISABLE_ALL_PLAN`.** Set to `1`/`true`/`yes`, every account reads as
+  `pro` — so every quantity limit, every feature gate and the monthly lookup allowance are
+  bypassed. It exists because paid features cannot be exercised by hand on an account that
+  has not bought anything, and by hand is the only way some of their failures show: a
+  mis-snapped route is a plausible wrong answer, not an error. It is one early return in
+  `getUserPlan` — the single point the plan is resolved — plus its twin in
+  `usage.repository.ts`, so §6's rule that the checks live in the repositories is intact and
+  every one of them still runs; they are simply asked about a different plan, which is why
+  the ceilings become pro's 3,000 places rather than none. It warns once per process when
+  it is on. **It is inert when `NODE_ENV` is `production`**, and that check replaced a note
+  asking somebody to delete the variable before launch: this hands the paid product to
+  everybody, it is set by an environment variable, and on Appwrite Sites setting one is a
+  form field and a redeploy. "Remember not to" is a plan; the check is a guarantee.
+
+- Optional in code, **required to sell anything**, server-only: `LEMON_API_KEY`,
+  `LEMON_STORE_ID`, `LEMON_WEBHOOK_SECRET` and four variant ids —
+  `LEMON_VARIANT_STARTER_MONTHLY`, `LEMON_VARIANT_STARTER_YEARLY`,
+  `LEMON_VARIANT_PRO_MONTHLY`, `LEMON_VARIANT_PRO_YEARLY`. All are read as optional in
+  `lib/env.ts` and checked where they are used, the way the R2 credentials are: a missing one
+  should fail a checkout with its own name in the message, not take down every page in the
+  dashboard belonging to people who are not buying anything. Three things worth knowing.
+  **`LEMON_API_KEY` falls back to `LEMON_TEST_API_KEY`** because the provider decides test
+  mode from the key itself rather than from a flag — the test key and the live key are one
+  setting with two values, and naming the variable after the mode would mean renaming it on
+  the day of the first real payment, which is the worst possible day to be editing
+  environment variables. **`LEMON_WEBHOOK_SECRET` unset means the webhook refuses
+  everybody**, exactly as `CRON_SECRET` unset makes the cron route refuse everybody: an
+  unguarded endpoint that writes `subscriptions` is a free Pro plan for anyone who finds the
+  URL. And the **variant ids are configuration rather than code** because they differ between
+  test and production and are re-created whenever a price changes — otherwise selling the
+  same product at a new price would be a deploy. `docs/notes/billing.md`.
+
 - Optional, server-only: `SNAPSHOT_STORAGE_ID`, defaulting to `STORAGE_ID`. **Appwrite Cloud's free plan allows one bucket per project**, so published snapshots share the assets bucket, which is why `json` is in its allowed extensions. On a paid plan, point this at a dedicated bucket and add a second entry to `BUCKETS` in `scripts/appwrite-schema.mjs`; nothing else changes. Only read when `SNAPSHOT_PUBLIC_URL` is unset — see the next entry for why that is development-only.
 
 - Optional in code, **required in production**, server-only: `SNAPSHOT_PUBLIC_URL`
@@ -59,6 +80,17 @@ this is why each one exists.
   a spoofed `Host` mint a working reset link pointing at the attacker's own server. Set it per
   environment; it is not browser-safe and does not need to be, since nothing on the client
   composes a link.
+- Optional, server-only: `EMAIL_DOMAIN_ALLOWLIST` — a comma-separated list of domains that may
+  sign up whatever the disposable-address check thinks of them. **Unset is the normal state**
+  and means the vendored list decides. It exists because
+  `lib/email/disposable-domains.generated.ts` is 75,000 domains somebody else maintains, and
+  the day it is wrong about a real customer's domain is the day they are locked out at 2am —
+  this un-blocks them in the time it takes to set a variable and redeploy. An entry covers its
+  own subdomains, the same rule the embed's allowlist uses. The durable fix is `KEEP` in
+  `scripts/build-disposable-domains.mjs`, which survives the next regeneration; move the domain
+  there once the fire is out. There is deliberately **no switch for the MX lookup** that runs
+  beside it — it already treats every uncertain answer as a yes, so there is nothing for an
+  off-switch to rescue. `docs/notes/auth.md` has the reasoning for both.
 
 - Optional, server-only: `CRON_SECRET` and `SHEET_SYNC_STEP_MS` — Google Sheets sync
   (`docs/notes/sheet-sync.md`). **`CRON_SECRET` gates the daily sync's route, and unset means

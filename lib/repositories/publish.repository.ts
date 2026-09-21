@@ -42,6 +42,14 @@ export type PublishResult = {
 /** Named in full in the response; beyond this the UI summarises. */
 const MAX_REPORTED_SKIPS = 5;
 
+/**
+ * **The confirmed-address gate is not here, and must not be moved here.** It sits
+ * in `app/api/maps/[id]/publish/route.ts`, where `withAuth` has a real Appwrite
+ * user to read `emailVerified` from. This function's other caller is the nightly
+ * sheet sync, which republishes an already-live map from a cron with no session —
+ * a check at this level would either break it or make every sync pay for a user
+ * lookup. The route's docblock carries the full reasoning.
+ */
 export async function publishMap(
   ctx: RepoContext,
   mapId: string,

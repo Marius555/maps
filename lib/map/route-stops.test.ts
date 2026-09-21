@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import { MAX_ROUTE_STOPS } from "@/lib/validation/shape.schema";
 import type { LngLatTuple, RouteStop } from "@/packages/shared/shapes";
 import type { Snap } from "./snap-to-place";
-import { appendStop, canRemoveStop, removeStopAt } from "./route-stops";
+import {
+  appendStop,
+  canRemoveStop,
+  dropStopsOf,
+  removeStopAt,
+} from "./route-stops";
 
 const DEPOT: LngLatTuple = [25.28, 54.687];
 const SHOP: LngLatTuple = [25.3, 54.7];
@@ -132,5 +137,44 @@ describe("removeStopAt", () => {
       { at: PORT },
       { at: DEPOT },
     ]);
+  });
+});
+
+describe("dropStopsOf", () => {
+  it("takes the refused location out of the middle of a route", () => {
+    const drawn = [stop(DEPOT, "depot"), stop(SHOP, "shop"), stop(PORT, "port")];
+
+    expect(dropStopsOf(drawn, "shop")).toEqual([
+      stop(DEPOT, "depot"),
+      stop(PORT, "port"),
+    ]);
+  });
+
+  it("takes every copy of it, not only the one that was clicked", () => {
+    // The engine cannot reach that location at stop 3 either, and a route still
+    // holding it is one that is still refused without saying why.
+    const drawn = [stop(SHOP, "shop"), stop(DEPOT, "depot"), stop(SHOP, "shop")];
+
+    expect(dropStopsOf(drawn, "shop")).toEqual([stop(DEPOT, "depot")]);
+  });
+
+  it("collapses the repeat a removal leaves behind", () => {
+    // A -> B -> A with B refused is A -> A: nought metres, and a question the
+    // engine has no answer to. Same rule removeStopAt follows.
+    const loop = [stop(DEPOT, "depot"), stop(SHOP, "shop"), stop(DEPOT, "depot")];
+
+    expect(dropStopsOf(loop, "shop")).toEqual([stop(DEPOT, "depot")]);
+  });
+
+  it("leaves a route that never held it alone", () => {
+    const drawn = [stop(DEPOT, "depot"), stop(SHOP, "shop")];
+
+    expect(dropStopsOf(drawn, "port")).toEqual(drawn);
+  });
+
+  it("never drops a free waypoint, which carries no id at all", () => {
+    const legacy: RouteStop[] = [{ at: DEPOT }, stop(SHOP, "shop"), { at: PORT }];
+
+    expect(dropStopsOf(legacy, "shop")).toEqual([{ at: DEPOT }, { at: PORT }]);
   });
 });

@@ -23,6 +23,13 @@ function toAuthUser(account: Models.User<Models.Preferences>): AuthUser {
   };
 }
 
+/**
+ * **The address has already been judged by the time it gets here.** Whether it is
+ * a throwaway, and whether its domain receives mail at all, are decided by
+ * `signupServerSchema` — because those checks belong to a 422 with a sentence
+ * under the Email field, not to a thrown repository error. Said here because it
+ * is invisible from this file: nothing below would tell you the rule exists.
+ */
 export async function registerUser(input: {
   name: string;
   email: string;

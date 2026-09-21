@@ -77,9 +77,19 @@ export type GeocodeRunSummary = {
  *
  * `undefined` covers a fetch that never got a response at all — a dropped
  * connection, a sleeping laptop — which is the case most worth retrying.
+ *
+ * **503 is excluded, and it is the only 5xx that is.** It is the one status this
+ * API sends to mean "the day's shared lookup budget is spent"
+ * (`DailyBudgetError`), and that is not a wobble a second's backoff outlasts — it
+ * clears when the day turns. Retrying it twice per chunk buys nothing, delays the
+ * honest message by fifteen seconds, and turns a clear refusal into what looks
+ * like an outage. Everything else in the 500s — 500 from us, 502 from a geocoder
+ * we could not reach, 504 from one that timed out — is exactly the transient
+ * failure this retry exists for.
  */
 export function isRetryableStatus(status: number | undefined): boolean {
   if (status === undefined) return true;
+  if (status === 503) return false;
 
   return status === 408 || status === 429 || status >= 500;
 }

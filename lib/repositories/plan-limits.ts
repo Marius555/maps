@@ -10,7 +10,7 @@ import { PlanFeatureError, type GatedFeature } from "./errors";
 
 /** CLAUDE.md §6. Enforced in the repositories, never only in the UI. */
 export const PLAN_LIMITS = {
-  free: { maps: 1, places: 10, shapes: 3 },
+  free: { maps: 1, places: 25, shapes: 3 },
   starter: { maps: 3, places: 300, shapes: 50 },
   pro: { maps: 15, places: 3000, shapes: 250 },
 } as const;
@@ -49,6 +49,40 @@ export const SESSION_LIMITS = {
 export type PlanId = keyof typeof PLAN_LIMITS;
 
 /**
+ * How many upstream address lookups an account may cause in a calendar month.
+ *
+ * **Its own table rather than a fourth key in `PLAN_LIMITS`, for two reasons.**
+ * The mechanical one: `lib/marketing/plans.test.ts` compares the page's numbers
+ * to `PLAN_LIMITS[plan.id]` with an exact-shape `toEqual`, so a fourth key there
+ * is a broken test rather than a new row. The real one is the same distinction
+ * `SESSION_LIMITS` is drawn on — everything in `PLAN_LIMITS` is a thing the owner
+ * *creates and can see*, and this bounds something they *spend*.
+ *
+ * A lookup is one request to the geocoder: an address searched, a pin dropped or
+ * dragged, a row geocoded on import or on a sheet sync, or one pin asked about by
+ * the route tool's routability sweep. They are pooled because the provider pools
+ * them — on Geoapify a routing `nearest()` probe is billed as a reverse geocode,
+ * so counting routing separately would describe a bill nobody sends us.
+ *
+ * **Sized above full entitlement, deliberately.** Pro's 15 maps × 3,000 places is
+ * 45,000 locations, and importing all of them inside one month has to work — a
+ * ceiling that refuses a customer using exactly what they paid for is a bug with
+ * a number attached. So 50,000 is entitlement plus slack, and at roughly
+ * $0.20/1,000 on a hosted provider the worst case is about $10 against ~€35.80 net
+ * of the merchant-of-record's fee. The property to preserve when these move: the
+ * plan must still be profitable *at its ceiling*.
+ *
+ * What this number is therefore for is scripted abuse, not thrift. Bursts — one
+ * import draining a shared daily allowance and stalling every other customer —
+ * are the daily circuit breaker's job in `usage.repository.ts`, not this table's.
+ */
+export const LOOKUP_LIMITS = {
+  free: { perMonth: 250 },
+  starter: { perMonth: 4_000 },
+  pro: { perMonth: 50_000 },
+} as const satisfies Record<PlanId, { perMonth: number }>;
+
+/**
  * What a plan can do, as against how much of it. §6's table is quantities; this
  * is the on/off half, kept beside it so a plan is described in one place.
  *
@@ -65,11 +99,19 @@ export type PlanId = keyof typeof PLAN_LIMITS;
  * whatever changed, which is spend nobody pressed a button for. Enforced where
  * the link is created and again on every sync, so a downgraded account's links
  * go quiet rather than keep spending.
+ *
+ * Analytics is the odd one out: it is a pricing decision and not a cost one. Its
+ * cost is already bounded by `SESSION_LIMITS`, and it is gated because it is what
+ * the paid plans are *worth* — the comparable products charge between $39 and $70
+ * a month for this one tab. Enforced on the page that reads it and again in
+ * `loadCollectGate`, so a free map stops being written to as well as stops being
+ * shown; a map that was free therefore records nothing, and upgrading starts its
+ * history that day rather than backfilling one.
  */
 export const PLAN_FEATURES = {
-  free: { routes: false, sheetSync: false },
-  starter: { routes: true, sheetSync: true },
-  pro: { routes: true, sheetSync: true },
+  free: { routes: false, sheetSync: false, analytics: false },
+  starter: { routes: true, sheetSync: true, analytics: true },
+  pro: { routes: true, sheetSync: true, analytics: true },
 } as const satisfies Record<PlanId, Record<GatedFeature, boolean>>;
 
 /**
@@ -101,26 +143,31 @@ export async function assertPlanFeature(
 }
 
 /**
- * TEMPORARY, and testing only — delete this with the browser pass it exists for.
+ * Development only: read every account as `pro`.
  *
- * Routes are a paid feature and everyone reads as `free` until Week 4 wires up
- * billing, so both endpoints that reach the routing engine answer 403 and the
- * Draw menu greys its Route row. That leaves the routing half of a provider swap
- * unreachable by hand — and by hand is the only way its failures show up, since
- * they are plausible wrong answers rather than errors.
- *
- * `DISABLE_ALL_PLAN` answers `pro` for everyone instead. It sits here, at the
- * one point the plan is resolved, rather than at any of the ten places a limit
- * is actually enforced: CLAUDE.md §6 says those checks live in the repositories
- * and never only in the UI, and every one of them still runs untouched — they
- * are simply asked about a different plan. The ceilings therefore become pro's
- * 3,000 places and 250 shapes rather than no ceiling at all, which is
- * indistinguishable from unlimited for testing and keeps every "n of N" badge
+ * Paid features cannot be exercised by hand on an account that has not bought
+ * anything, and by hand is the only way some of their failures show up — a
+ * mis-snapped route is a plausible wrong answer rather than an error. So this
+ * answers `pro` for everyone, at the one point the plan is resolved rather than
+ * at any of the places a limit is enforced: CLAUDE.md §6 says those checks live
+ * in the repositories, and every one of them still runs untouched — they are
+ * simply asked about a different plan. The ceilings become pro's 3,000 places and
+ * 250 shapes rather than no ceiling at all, which keeps every "n of N" badge
  * reading like a sentence.
+ *
+ * **It is inert in a production build, and that is not belt-and-braces.** This is
+ * a switch that hands the paid product to everybody, configured by an environment
+ * variable, on a platform where setting one is a form field and a redeploy. It
+ * used to be marked "delete this before it is in front of anyone", which is a plan
+ * rather than a guarantee — and the day it is wrong is the day nobody notices for
+ * a month. Refusing to read it outside development makes the guarantee mechanical:
+ * there is no value anybody can set in production that opens this.
  *
  * Read at call time rather than at module load, so a test can set it per case.
  */
 function planChecksDisabled(): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+
   const raw = process.env.DISABLE_ALL_PLAN;
   if (!raw || !/^(1|true|yes)$/i.test(raw.trim())) return false;
 
@@ -147,13 +194,29 @@ function warnOnce(): void {
 type SubscriptionRow = Models.Row & {
   plan?: string | null;
   status?: string | null;
+  currentPeriodEnd?: string | null;
 };
 
 /**
- * Everyone is on the free plan until Week 4 wires up billing. This reads the
- * table rather than hardcoding, so turning billing on changes no code here.
+ * Which plan an account is on, read from the `subscriptions` table the billing
+ * webhook writes.
  *
  * `cache()` keeps it to one read per request even when several creates check it.
+ *
+ * **Two conditions, not one, and the second is the safety net.** `status` is what
+ * the webhook says; `currentPeriodEnd` is when what it said stops being true. They
+ * are separate because a cancellation does *not* end access — Lemon Squeezy keeps
+ * a cancelled subscription running to the end of its paid period, so the webhook
+ * writes `active` with `currentPeriodEnd` set and expects a later
+ * `subscription_expired` to close it. If that event is missed, dropped or retried
+ * into a failure, the row sits at `active` forever and the account keeps a plan it
+ * stopped paying for. Reading the date here means the worst a lost webhook can do
+ * is expire somebody a little early, which they can see and fix, rather than
+ * silently give the product away.
+ *
+ * An absent date means no expiry is known, which is the free row's state and the
+ * state of anything written before this column was used. Absent must go on meaning
+ * what it meant before.
  */
 export const getUserPlan = cache(async (userId: string): Promise<PlanId> => {
   // TEMPORARY — see planChecksDisabled above. Skips the read as well as the check.
@@ -167,8 +230,23 @@ export const getUserPlan = cache(async (userId: string): Promise<PlanId> => {
 
   const subscription = result.rows[0];
   if (!subscription || subscription.status !== "active") return "free";
+  if (hasLapsed(subscription.currentPeriodEnd)) return "free";
 
   return subscription.plan && subscription.plan in PLAN_LIMITS
     ? (subscription.plan as PlanId)
     : "free";
 });
+
+/**
+ * Whether a period end has passed. An unparseable date is read as *not* lapsed,
+ * for the reason every uncertain DNS answer in `lib/email/mx.ts` is read as a
+ * yes: a value we cannot understand must not lock a paying customer out of the
+ * thing they are paying for.
+ */
+function hasLapsed(currentPeriodEnd: string | null | undefined): boolean {
+  if (!currentPeriodEnd) return false;
+
+  const endsAt = Date.parse(currentPeriodEnd);
+
+  return Number.isFinite(endsAt) && endsAt < Date.now();
+}

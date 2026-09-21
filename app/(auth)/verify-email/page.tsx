@@ -4,6 +4,8 @@ import Link from "next/link";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { ResendVerificationForm } from "@/components/auth/resend-verification-form";
 import { LinkButton } from "@/components/ui/link-button";
+import { ResendLinkButton } from "@/components/verify-email/resend-link-button";
+import { getCurrentUser } from "@/lib/auth/current-user";
 
 export const metadata: Metadata = {
   title: "Confirm your email",
@@ -25,6 +27,12 @@ export const metadata: Metadata = {
  * `expired` covers spent, timed out and never-valid together, because they are
  * indistinguishable to the person holding the link and the way out of all three
  * is the same.
+ *
+ * `sent` is the odd one out: it is not an outcome of that route at all, it is
+ * where signup lands. The visitor is **signed in** when they see it, which is why
+ * it is the one branch that can name the address instead of asking for it, and the
+ * one that needs no link off it — the others end on *Back to log in* because their
+ * visitor may be anybody.
  */
 export default async function VerifyEmailPage(props: PageProps<"/verify-email">) {
   const { status } = await props.searchParams;
@@ -41,6 +49,8 @@ export default async function VerifyEmailPage(props: PageProps<"/verify-email">)
       </AuthShell>
     );
   }
+
+  if (status === "sent") return <JustSignedUp />;
 
   if (status === "expired") {
     return (
@@ -71,6 +81,51 @@ export default async function VerifyEmailPage(props: PageProps<"/verify-email">)
       }
     >
       <ResendVerificationForm />
+    </AuthShell>
+  );
+}
+
+/**
+ * Straight after signup: the account exists, the mail is on its way, and nothing
+ * in the dashboard will save until the link is opened.
+ *
+ * Reads the session rather than a query parameter, so the address on screen is
+ * the one the account actually has — a signup that landed here having corrected
+ * a typo in the form would otherwise be told to check the wrong inbox. If there
+ * is somehow no session (a shared link, a cookie that did not stick) it falls
+ * through to the ordinary resend form rather than guessing.
+ *
+ * **There is no way past this screen offered here.** The action worth pressing is
+ * in a mail client, and an exit into a dashboard where nothing will save is not
+ * an exit — the app shell's own banner picks the visitor up once they go there by
+ * themselves. So the only control is the one that sends the mail again, centred
+ * under the heading because it is the only thing on the column.
+ */
+async function JustSignedUp() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return (
+      <AuthShell
+        title="Confirm your email"
+        description="Enter your address and we'll send the confirmation link again."
+        footer={
+          <Link href="/login" className="text-foreground underline">
+            Back to log in
+          </Link>
+        }
+      >
+        <ResendVerificationForm />
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell
+      title="Check your inbox"
+      description={`We sent a confirmation link to ${user.email}. Open it and your account is ready — until then nothing you change will save.`}
+    >
+      <ResendLinkButton email={user.email} size="md" variant="secondary" align="center" />
     </AuthShell>
   );
 }

@@ -4,7 +4,8 @@ import { Button, Popover, Separator } from "@heroui/react";
 import { Circle, Pentagon, Route, Shapes, Slash, Upload } from "lucide-react";
 import { useId, useState } from "react";
 
-import { PlanLimitNote, PlanNote } from "@/components/map/plan-limit-note";
+import { PlanLimitNote } from "@/components/map/plan-limit-note";
+import { ControlNote } from "@/components/ui/control-note";
 import { isAtLimit, type PlanHeadroom } from "@/lib/map/plan-headroom";
 import type { ShapeKind } from "@/packages/shared/shapes";
 
@@ -228,7 +229,7 @@ export function ShapeToolsButton({
 
             {isRouteLocked && routesNote ? (
               <div className="max-w-64 px-2 pt-1.5">
-                <PlanNote id={routeNoteId}>{routesNote}</PlanNote>
+                <ControlNote id={routeNoteId}>{routesNote}</ControlNote>
               </div>
             ) : null}
           </div>

@@ -30,6 +30,10 @@ import {
   recordSheetSync,
 } from "@/lib/repositories/sheet-links.repository";
 import type { Place } from "@/lib/repositories/types";
+import {
+  assertLookupHeadroom,
+  recordLookups,
+} from "@/lib/repositories/usage.repository";
 import { createPlaceSchema, type CreatePlaceInput } from "@/lib/validation/place.schema";
 import { diffSheet, type SheetRow } from "./diff";
 import { isEmptyPatch, sheetPatch, type SheetPlacePatch } from "./patch";
@@ -305,6 +309,7 @@ async function step(
    * ---------------------------------------------------------------- */
 
   const lookups = await lookUpAddresses(
+    link.userId,
     [
       ...updatesThisStep
         .filter((update) => update.needsGeocode)
@@ -323,6 +328,15 @@ async function step(
     notes.push(
       "The address lookup stopped answering, so some rows weren't placed. The next sync tries them again.",
     );
+  }
+
+  /*
+   * The allowance, not the engine. Its own note because the remedy is different —
+   * waiting is the answer to one and upgrading may be the answer to the other —
+   * and the sentence comes from the repository that knows which.
+   */
+  if (lookups.ranOut) {
+    notes.push(`${lookups.ranOut} The next sync tries these rows again.`);
   }
 
   const answerFor = (address: string) => lookups.answers.get(normalizeAddress(address));
@@ -506,20 +520,44 @@ function placeDraft(
 /** Three failures in a row is an outage, not three bad addresses. */
 const MAX_CONSECUTIVE_FAILURES = 3;
 
+type LookupOutcome = {
+  answers: Map<string, LookupAnswer>;
+  stoppedEarly: boolean;
+  timedOut: boolean;
+  /**
+   * Why the allowance stopped this step, if it did — already a finished sentence
+   * for the report, because the two things that can stop it say different things
+   * and only the repository knows which.
+   */
+  ranOut: string | null;
+};
+
 /**
- * One lookup per distinct address, in order, until the deadline.
+ * One lookup per distinct address, in order, until the deadline or the allowance.
  *
  * Folded on `normalizeAddress`, the import's own rule for "the same question",
  * so a sheet with twenty rows at one retail park costs one request. An address
  * in `failedLookups` is answered from there without asking, and a new failure
  * is added to it — which is what stops one unfindable address costing a request
  * on every step of every day.
+ *
+ * **Metered as `background`, which is the whole reason the spend classes exist.**
+ * Nobody is watching a nightly sync, and a "Sync now" press is somebody watching a
+ * job they know is long — neither is owed the last of the day's shared budget
+ * ahead of a person typing an address into a form. So this stands aside at the
+ * reserve, and the step ends the way it already ends when the geocoder goes quiet:
+ * a note, no error, and the rows tried again next time.
+ *
+ * Measured before the meter existed, one press of "Sync now" could walk 300 steps
+ * at roughly 22 lookups each — about 6,600 requests, with nothing counting the
+ * presses. That is what this bounds.
  */
 async function lookUpAddresses(
+  userId: string,
   addresses: string[],
   deadline: number,
   failedLookups: SheetLink["failedLookups"],
-): Promise<{ answers: Map<string, LookupAnswer>; stoppedEarly: boolean; timedOut: boolean }> {
+): Promise<LookupOutcome> {
   const answers = new Map<string, LookupAnswer>();
   const toAsk = new Map<string, string>();
 
@@ -533,35 +571,67 @@ async function lookUpAddresses(
     else toAsk.set(key, address);
   }
 
-  if (toAsk.size === 0) return { answers, stoppedEarly: false, timedOut: false };
+  const settled = { answers, stoppedEarly: false, timedOut: false, ranOut: null };
+
+  if (toAsk.size === 0) return settled;
+
+  try {
+    await assertLookupHeadroom(userId, toAsk.size, "background");
+  } catch (error) {
+    /*
+     * All or nothing for this step, rather than asking for whatever still fits.
+     * Partial progress is already the normal shape here — a step that times out
+     * leaves rows for the next one — so stopping cleanly and saying why beats
+     * dribbling out the last of an allowance a few addresses at a time, which
+     * would leave a sheet half-placed with no obvious reason.
+     */
+    if (error instanceof RepositoryError) {
+      return { ...settled, ranOut: error.message };
+    }
+
+    throw error;
+  }
 
   const geocoder = getGeocoder();
   let failures = 0;
+  let spent = 0;
 
-  for (const [key, address] of toAsk) {
-    if (Date.now() > deadline) return { answers, stoppedEarly: false, timedOut: true };
+  try {
+    for (const [key, address] of toAsk) {
+      if (Date.now() > deadline) return { ...settled, timedOut: true };
 
-    try {
-      const [best = null] = await geocoder.search({ address, limit: 1 });
-      const status = statusFor(best);
+      try {
+        const [best = null] = await geocoder.search({ address, limit: 1 });
+        spent += 1;
 
-      answers.set(key, { candidate: best, status });
-      failures = 0;
+        const status = statusFor(best);
 
-      if (status !== "ok") {
-        failedLookups[hash(key)] = { at: new Date().toISOString(), status };
-      }
-    } catch (error) {
-      failures += 1;
+        answers.set(key, { candidate: best, status });
+        failures = 0;
 
-      if (failures >= MAX_CONSECUTIVE_FAILURES) {
-        console.error("Sheet sync: address lookup stopped answering:", error);
-        return { answers, stoppedEarly: true, timedOut: false };
+        if (status !== "ok") {
+          failedLookups[hash(key)] = { at: new Date().toISOString(), status };
+        }
+      } catch (error) {
+        failures += 1;
+
+        if (failures >= MAX_CONSECUTIVE_FAILURES) {
+          console.error("Sheet sync: address lookup stopped answering:", error);
+          return { ...settled, stoppedEarly: true };
+        }
       }
     }
-  }
 
-  return { answers, stoppedEarly: false, timedOut: false };
+    return settled;
+  } finally {
+    /*
+     * In a `finally` because this function has five exits and every one of them
+     * has already spent what it spent. A `return` inside the loop that skipped
+     * the count would make the cheapest way to use the geocoder be to fail
+     * halfway through.
+     */
+    await recordLookups(userId, spent);
+  }
 }
 
 function emptyReport(message?: string): SheetSyncReport {

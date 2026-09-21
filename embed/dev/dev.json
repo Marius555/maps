@@ -17,7 +17,7 @@
       "cycling": true
     }
   },
-  "attribution": "© <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noreferrer\">OpenStreetMap</a> contributors · tiles by <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noreferrer\">OpenFreeMap</a>",
+  "attribution": "\u00a9 <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noreferrer\">OpenStreetMap</a> contributors \u00b7 tiles by <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noreferrer\">OpenFreeMap</a>",
   "center": {
     "lat": 54.687,
     "lng": 25.28,
@@ -101,12 +101,12 @@
     },
     {
       "id": "p3",
-      "name": "Užupis kiosk",
+      "name": "U\u017eupis kiosk",
       "lat": 54.6809,
       "lng": 25.2963,
-      "address": "Užupio g. 3, Vilnius",
+      "address": "U\u017eupio g. 3, Vilnius",
       "icon": "custom:logo",
-      "description": "Custom image pin — decoded from the snapshot, no request of its own.",
+      "description": "Custom image pin \u2014 decoded from the snapshot, no request of its own.",
       "tags": [
         "shops",
         "bikes"
@@ -126,9 +126,9 @@
       "name": "Naujamiestis depot",
       "lat": 54.6701,
       "lng": 25.2545,
-      "address": "Savanorių pr. 1, Vilnius",
+      "address": "Savanori\u0173 pr. 1, Vilnius",
       "icon": "custom:trade",
-      "description": "Trade counter only. Custom glyph pin — keeps its own green, not the depots blue.",
+      "description": "Trade counter only. Custom glyph pin \u2014 keeps its own green, not the depots blue.",
       "tags": [
         "depots",
         "skis",
@@ -138,7 +138,7 @@
     },
     {
       "id": "p5",
-      "name": "Šnipiškės depot",
+      "name": "\u0160nipi\u0161k\u0117s depot",
       "lat": 54.7011,
       "lng": 25.2731,
       "address": "Konstitucijos pr. 20, Vilnius",
@@ -258,10 +258,6 @@
     "rowDistance": true,
     "rowActions": true,
     "controlsCorner": "bottom-left",
-    "compass": false,
-    "geolocate": true,
-    "fullscreen": false,
-    "scale": false,
     "scrollZoom": false,
     "panelDrawer": true,
     "pinColor": "#f54600"

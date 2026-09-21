@@ -165,7 +165,7 @@ export function setPinChecking(element: HTMLElement, isChecking: boolean): void 
 }
 
 /**
- * Whether this location is already a stop on the route being drawn.
+ * Where this location sits on the route being drawn, or null for not a stop.
  *
  * A route is clicked out pin by pin, and until this existed nothing on the map
  * said which pins had been taken. On a dense map that is a real question: the
@@ -179,11 +179,40 @@ export function setPinChecking(element: HTMLElement, isChecking: boolean): void 
  * an endless animation is affordable here and is not on the ambient
  * `.picking-pins` ripple that plays on every marker of a 3,000-pin map.
  *
+ * **The number, and not just the fact.** Breathing answers "is this one mine";
+ * it cannot answer "in what order", and on a route of eight stops that is the
+ * question — the card is closed while the tool is armed, so the badges are the
+ * only reading of the route there is until it commits. The CSS draws it with
+ * `content: attr(data-stop)`, which is why this writes an attribute rather than
+ * a child element: a marker is recycled between locations, and an attribute
+ * cannot be left behind in a subtree somebody forgot to clear.
+ *
  * The same recycled-marker rule as `setPinUnroutable`: written on every pin, so
  * a marker reused for a different location cannot keep a mark it earned as
  * something else. No ARIA — `aria-current` already belongs to `setPinSelected`,
  * and two writers on one attribute is a fight neither wins.
  */
-export function setPinStop(element: HTMLElement, isStop: boolean): void {
-  element.classList.toggle("map-pin--stop", isStop);
+export function setPinStop(element: HTMLElement, position: number | null): void {
+  element.classList.toggle("map-pin--stop", position !== null);
+
+  if (position === null) element.removeAttribute("data-stop");
+  else element.setAttribute("data-stop", String(position));
 }
+
+/*
+ * There is no `playStopTaken` beside `playDrop`, and the difference is worth
+ * writing down.
+ *
+ * A click that lands does need saying at the moment it happens — the breath
+ * above is a state ("this is one of mine") and cannot answer "did that one
+ * count", which on five to ten clicks at thumbnail size is the live question.
+ * But it needs no JavaScript, because the thing that should flash is generated
+ * by the class this function already writes: CSS starts an animation when the
+ * box it matches comes into being, and `.map-pin--stop`'s pseudo-elements come
+ * into being exactly once, on the click that took the pin. See the ring and the
+ * badge at `.picking-pins .map-pin--stop` in app/globals.css.
+ *
+ * `playDrop` cannot work that way and the note there says why: its animation
+ * would otherwise be about a marker element being created, which happens on
+ * every page load and twice per drop.
+ */

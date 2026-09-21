@@ -31,6 +31,46 @@ export class ForbiddenError extends RepositoryError {
   }
 }
 
+/**
+ * Thrown when an account has not confirmed its email address and is trying to
+ * change something.
+ *
+ * Its own error and its own code rather than a `ForbiddenError`, because the two
+ * sentences ask for different things. "You don't have access to that" is the end
+ * of a conversation; this one is a door with a key already in the user's inbox,
+ * and the client has to be able to tell them apart to offer the button that
+ * resends it.
+ *
+ * The address is carried rather than looked up again: `withAuth` has just
+ * resolved a real Appwrite user, and naming the inbox is most of what makes the
+ * refusal actionable — plenty of people do not remember which address they
+ * signed up with.
+ */
+export class EmailUnverifiedError extends RepositoryError {
+  constructor(readonly email: string) {
+    super("email_unverified", emailUnverifiedMessage(email), 403);
+  }
+}
+
+/**
+ * The fact on its own, for the line that sits under a control this has switched
+ * off.
+ *
+ * Split from the full message for the reason `planLimitUsage` and
+ * `planFeatureNote` are: a note is read *beside* the greyed button it explains
+ * and earns its space by being short, while a refusal that interrupts a gesture
+ * owes the way out as well. Client-safe on the same terms as the rest of this
+ * file — nothing here is imported for anything but its type.
+ */
+export function emailUnverifiedNote(email: string): string {
+  return `Confirm your email first — we sent a link to ${email}.`;
+}
+
+/** The same fact with what to do about it, which is what a 403 owes. */
+export function emailUnverifiedMessage(email: string): string {
+  return `${emailUnverifiedNote(email)} Open it, then try again.`;
+}
+
 export class NotFoundError extends RepositoryError {
   constructor(message = "We couldn't find that.") {
     super("not_found", message, 404);
@@ -70,7 +110,7 @@ export class PlanLimitError extends RepositoryError {
  * remedy rather than two, and its own code lets the client offer an upgrade
  * where a limit would have pointed at a list.
  */
-export type GatedFeature = "routes" | "sheetSync";
+export type GatedFeature = "routes" | "sheetSync" | "analytics";
 
 const FEATURES: Record<GatedFeature, { noun: string; verb: string }> = {
   routes: { noun: "Routes", verb: "draw them" },
@@ -78,6 +118,7 @@ const FEATURES: Record<GatedFeature, { noun: string; verb: string }> = {
     noun: "Linked Google Sheets",
     verb: "keep this map in sync with a sheet",
   },
+  analytics: { noun: "Analytics", verb: "see what visitors do" },
 };
 
 export class PlanFeatureError extends RepositoryError {
@@ -107,6 +148,80 @@ export function planFeatureMessage(
   plan: PlanId,
 ): string {
   return `${planFeatureNote(feature, plan)} Upgrade to ${FEATURES[feature].verb}.`;
+}
+
+/**
+ * Thrown when an account has spent its month's address lookups.
+ *
+ * **A third error rather than a fourth `LimitedResource`, and the copy is why.**
+ * `planLimitMessage` ends "Delete a location to add another, or upgrade for more",
+ * and there is nothing to delete here — a lookup is spent, not held. The other
+ * half of the difference is that this one comes back on its own: a plan limit is
+ * permanent until the user acts, an allowance refills when the month turns, so the
+ * remedy this sentence owes is *two* ways out where a feature gate owes one and a
+ * quantity limit owes a different two.
+ *
+ * It reuses the `plan_limit_reached` code rather than minting one. The client's
+ * only use for the code is `isPlanLimit` deciding to toast, and the toast renders
+ * `error.message` verbatim — a new code would mean a new branch in every place
+ * that already handles this one, to say the same thing.
+ */
+export class LookupLimitError extends RepositoryError {
+  constructor(
+    readonly limit: number,
+    readonly plan: PlanId,
+  ) {
+    super("plan_limit_reached", lookupLimitMessage(limit, plan), 403);
+  }
+}
+
+/** The fact on its own, for a note beside the control it has switched off. */
+export function lookupLimitNote(limit: number, plan: PlanId): string {
+  return `You've used all ${grouped(limit)} address lookups included on the ${plan} plan this month.`;
+}
+
+/** The same fact with the two ways out, which is what a refusal owes. */
+export function lookupLimitMessage(limit: number, plan: PlanId): string {
+  return (
+    `${lookupLimitNote(limit, plan)} ` +
+    "They reset on the 1st, or upgrade for more now."
+  );
+}
+
+/**
+ * Thrown when the app as a whole has spent its day's upstream budget.
+ *
+ * **Deliberately says nothing about the caller's plan, and that is the point.**
+ * The geocoder sells one daily quota shared by every account, so the person this
+ * stops is usually not the person who spent it — telling them to upgrade would be
+ * both wrong and insulting, and telling them their plan is full would be a lie
+ * they could check. It is a 503 rather than a 403 for the same reason: nothing
+ * about the request was refused, the service was.
+ *
+ * `rate_limited` is the closest existing code and the client already treats it as
+ * "not your fault, try again", which is exactly right here.
+ */
+export class DailyBudgetError extends RepositoryError {
+  constructor() {
+    super(
+      "rate_limited",
+      "Address lookups are busy right now. Try again in a few minutes — nothing was lost.",
+      503,
+    );
+  }
+}
+
+/**
+ * Thousands separators, written out rather than taken from `Intl`.
+ *
+ * Deliberate: CLAUDE.md records that `Intl.NumberFormat` does not agree across
+ * Node and Chrome, and these strings are composed on both sides of the wire — the
+ * server builds the one in a 403, the browser builds the one in an inline note.
+ * Two runtimes printing one allowance two ways is exactly the bug that rule exists
+ * for, and grouping is not worth reopening it.
+ */
+function grouped(value: number): string {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 /** What each resource is called in a sentence, singular and plural. */

@@ -13,7 +13,7 @@ import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import type { RepoContext } from "./context";
 import { toMapSession } from "./mappers";
 import { getMap } from "./maps.repository";
-import { getUserPlan, SESSION_LIMITS } from "./plan-limits";
+import { getUserPlan, planAllows, SESSION_LIMITS } from "./plan-limits";
 import type {
   DeviceKind,
   MapDailyRow,
@@ -169,6 +169,25 @@ async function loadCollectGate(mapId: string): Promise<CollectGate | null> {
       getUserPlan(row.userId),
       countSessionsThisMonth(mapId),
     ]);
+
+    /*
+     * The plan, checked on the write and not only on the read.
+     *
+     * Gating the tab alone would leave a free map still recording every visitor
+     * it has — rows we store, index and are the data controller for, to draw a
+     * screen nobody is allowed to open. Refusing here means a free map is not
+     * measured at all, which is the honest shape of the offer and is also the
+     * cheaper one.
+     *
+     * The consequence, and it is stated in the tab's own copy rather than left
+     * for somebody to discover: upgrading starts the history that day. There is
+     * nothing to backfill, because nothing was kept.
+     *
+     * Silent, like every other refusal on this path. A visitor's browser is not
+     * owed an explanation of somebody else's subscription, and the beacon is
+     * fire-and-forget in any case.
+     */
+    if (!planAllows(plan, "analytics")) return null;
 
     return {
       ownerId: row.userId,

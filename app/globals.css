@@ -1288,24 +1288,40 @@ html {
 /*
  * What an armed tool's cursor actually is.
  *
- * `maplibregl-crosshair` is MapLibre's own class and map-canvas-impl.tsx toggles
- * it, for the reasons written there: the cursor the pointer reads comes from
+ * The *selectors* are MapLibre's, repeated verbatim; the class is ours, and that
+ * split is the whole rule. The cursor the pointer reads comes from
  * `.maplibregl-canvas-container.maplibregl-interactive`, a *child* of the
  * container, and MapLibre's rule for it sits at (0,2,0) — a utility class on the
- * container is dead over the canvas. So the class stays, and this changes what
- * it draws.
+ * container is dead over the canvas. So the shape of the selector has to be
+ * copied. What must not be copied is the class name.
  *
- * The selectors are MapLibre's own, repeated verbatim, plus `!important`.
- * Matching its specificity is not enough on its own: maplibre-gl.css is injected
- * at runtime by the map's dynamic chunk, so which of the two stylesheets comes
- * last is not something this file can decide. `!important` also beats the inline
- * cursor `use-shape-layers.ts` writes on a shape hover — which is correct, and
- * is the same conclusion that file already reached from the other side: an armed
- * tool owns the pointer for the length of its gesture.
+ * **This used to toggle `maplibregl-crosshair`, which is MapLibre's own, and
+ * MapLibre takes it back.** `BoxZoomHandler.reset()` ends with
+ * `this._container.classList.remove("maplibregl-crosshair")` *unconditionally* —
+ * it never checks whether it put the class there — and `HandlerManager` resets
+ * every handler on a `blur`, and on any event where another handler blocks that
+ * one. A window blur is switching tabs, alt-tabbing, or anything at all taking
+ * focus out of the page. So mid-gesture the class vanished, MapLibre's own
+ * `cursor: grab` came back through, and the pointer showed a *hand* over a map
+ * whose route tool was still armed and still taking clicks. The tool worked and
+ * the cursor said it did not, which is the worse half of that pair.
+ *
+ * Measured, not reasoned: one `window.dispatchEvent(new FocusEvent("blur"))`
+ * with the route tool armed takes the class off and the computed cursor back to
+ * `grab`. Third instance of the same trap in this file — see the notes on
+ * `pointer-events` and `opacity` above, both about MapLibre writing to the thing
+ * we were using. Ours cannot be reached by any of them.
+ *
+ * `!important` stays, and matching specificity is not enough on its own:
+ * maplibre-gl.css is injected at runtime by the map's dynamic chunk, so which of
+ * the two stylesheets comes last is not something this file can decide. It also
+ * beats the inline cursor `use-shape-layers.ts` writes on a shape hover — which
+ * is correct, and is the same conclusion that file already reached from the
+ * other side: an armed tool owns the pointer for the length of its gesture.
  */
-.maplibregl-crosshair,
-.maplibregl-crosshair .maplibregl-interactive,
-.maplibregl-crosshair .maplibregl-interactive:active {
+.pointing-cursor,
+.pointing-cursor .maplibregl-interactive,
+.pointing-cursor .maplibregl-interactive:active {
   cursor: var(--cursor-point) !important;
 }
 
@@ -1782,6 +1798,114 @@ html {
   }
   50% {
     transform: scale(1.55);
+  }
+}
+
+/*
+ * Which stop it is, drawn on the pin.
+ *
+ * The breath above answers "is this one mine" and cannot answer "in what
+ * order" — and while the tool is armed the card is hidden (map-shapes.tsx), so
+ * until this existed a half-built route could not be read off the map at all.
+ * On a route of eight stops that is the whole question: you click them out one
+ * at a time, and the only way to check the order was to finish and open the
+ * card.
+ *
+ * `content: attr(data-stop)`, written by `setPinStop` in
+ * components/map/pin-marker.ts. An attribute rather than a child element
+ * because markers are recycled between locations, and an attribute cannot be
+ * left behind in a subtree somebody forgot to clear.
+ *
+ * On `.map-pin` itself and not on the scaled children, deliberately: those are
+ * breathing between 1.2 and 1.55, and a number that breathes with them is a
+ * number nobody can read. It sits at the pin's top-right corner, which is
+ * outside the 36px glyph and therefore off the part of the pin that carries the
+ * colour.
+ *
+ * Surface on foreground with the pin's own colour as the ring — the same three
+ * the drag handles use — because the one thing a badge cannot do is inherit the
+ * pin's fill: a white "3" on a pale yellow pin is not a label.
+ */
+.picking-pins .map-pin--stop::after {
+  content: attr(data-stop);
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.1875rem;
+  border-radius: 9999px;
+  border: 2px solid var(--pin-color, var(--accent));
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.35);
+}
+
+/*
+ * A stop whose verdict has not come back yet.
+ *
+ * The click takes the stop at once and asks the routing engine behind it
+ * (components/map/routes/use-draw-route.ts), so for a second or so this pin is a
+ * stop that might still be taken back out. Dimmed rather than marked with
+ * anything of its own: it is a *provisional* label, it resolves on its own, and
+ * a badge that changed shape halfway through would be asking to be read twice.
+ *
+ * Three classes against the two above, so it wins wherever it sits in the file.
+ */
+.picking-pins .map-pin--stop.map-pin--checking::after {
+  opacity: 0.55;
+}
+
+/*
+ * That click landed — said once, at the moment it did.
+ *
+ * The badge and the breath are both *states*: true for as long as the pin is a
+ * stop. Neither answers the question a click actually raises, which is whether
+ * this one counted — a route is five to ten clicks at thumbnail size, and the
+ * cost of a miss is the whole click.
+ *
+ * No JavaScript, and that is the point of putting it here. CSS starts an
+ * animation when the box it matches comes into being, and this box comes into
+ * being exactly once: when `setPinStop` adds the class. `playDrop` needs a class
+ * and an `animationend` precisely because it cannot say that — a rule on a
+ * marker's own children would be animating "a marker was created", which happens
+ * on every page load.
+ *
+ * It rings the pin rather than flashing it. The pin is already carrying a
+ * colour, a scale and a breath; one more thing changing *on* it would be
+ * unreadable, where something travelling outward from it is not competing with
+ * any of them. `--pin-color` is inline on the marker, so the ring is the
+ * location's own colour and matches the leg of the route it just joined.
+ *
+ * `prefers-reduced-motion` cuts this to a single 0.01ms pass, which is correct
+ * and costs nothing: the badge is the static carrier, and it says the same thing
+ * a moment later.
+ */
+.picking-pins .map-pin--stop::before {
+  content: "";
+  position: absolute;
+  inset: -0.25rem;
+  border-radius: 9999px;
+  border: 2px solid var(--pin-color, var(--accent));
+  opacity: 0;
+  animation: map-pin-taken 520ms ease-out 1;
+}
+
+@keyframes map-pin-taken {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.55);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
   }
 }
 

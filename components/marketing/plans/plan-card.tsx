@@ -2,7 +2,7 @@ import { Card } from "@heroui/react";
 import { Check, Minus } from "lucide-react";
 
 import { LinkButton } from "@/components/ui/link-button";
-import type { MarketingPlan } from "@/lib/marketing/plans";
+import type { MarketingPlan, PlanCadence } from "@/lib/marketing/plans";
 
 const NUMBERS = new Intl.NumberFormat("en-GB");
 
@@ -20,10 +20,20 @@ const NUMBERS = new Intl.NumberFormat("en-GB");
 export function PlanCard({
   plan,
   recommended,
+  cadence,
 }: {
   plan: MarketingPlan;
   recommended: boolean;
+  cadence: PlanCadence;
 }) {
+  /*
+   * Free has no year to buy, so it prints "€0" under either setting rather than
+   * disappearing from the grid or showing a blank price when the toggle moves.
+   */
+  const yearly = cadence === "yearly" && plan.amountYearly !== undefined;
+  const price = yearly ? plan.priceYearly : plan.price;
+  const per = yearly ? "a year" : plan.cadence;
+
   return (
     <Card
       /*
@@ -47,12 +57,21 @@ export function PlanCard({
         </div>
 
         <p className="mk-display mt-2 text-4xl text-foreground">
-          {plan.price}
-          {plan.cadence ? (
+          {price}
+          {per ? (
             <span className="ml-2 font-sans text-sm font-normal tracking-normal text-muted">
-              {plan.cadence}
+              {per}
             </span>
           ) : null}
+        </p>
+
+        {/* The saving said as what it is rather than as a percentage, and held
+            in the layout either way so the toggle does not move the cards. */}
+        <p
+          className={`text-xs ${yearly ? "text-accent" : "invisible"}`}
+          aria-hidden={!yearly}
+        >
+          Two months free
         </p>
 
         <Card.Description>{plan.pitch}</Card.Description>
@@ -64,8 +83,15 @@ export function PlanCard({
           <Quantity label="Locations on a map" value={plan.places} />
           <Quantity label="Areas and routes drawn" value={plan.shapes} />
           <Feature label="Views" on note="Unlimited" />
+          {/*
+            Stated, because it is the one limit here a customer can reach without
+            doing anything they would call "adding" something. A ceiling nobody
+            was told about is discovered as a refusal mid-import.
+          */}
+          <Quantity label="Address lookups a month" value={plan.lookups} />
           <Feature label="Routes with drive times" on={plan.routes} />
           <Feature label="Google Sheets sync" on={plan.sheetSync} />
+          <Feature label="Visitor analytics" on={plan.analytics} />
         </dl>
 
         <p className="mt-5 text-sm text-pretty text-foreground">
@@ -74,8 +100,19 @@ export function PlanCard({
       </Card.Content>
 
       <Card.Footer className="mt-auto">
+        {/*
+         * A plain link, and that is what keeps this page statically rendered.
+         * `/upgrade` is where the session is read and the checkout is opened; a
+         * button here that knew whether you were signed in would make the whole
+         * public page dynamic. CLAUDE.md §8: the action keeps its name through
+         * the flow, so "Start on Starter" leads to a Starter checkout.
+         */}
         <LinkButton
-          href="/signup"
+          href={
+            plan.id === "free"
+              ? "/signup"
+              : `/upgrade?plan=${plan.id}&cadence=${cadence}`
+          }
           fullWidth
           variant={recommended ? undefined : "secondary"}
         >

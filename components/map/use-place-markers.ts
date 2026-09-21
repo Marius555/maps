@@ -37,7 +37,7 @@ export function usePlaceMarkers({
   isArmed,
   unroutableIds,
   checkingId,
-  stopIds,
+  stopOrder,
   onSelect,
   onMove,
 }: {
@@ -92,14 +92,19 @@ export function usePlaceMarkers({
    */
   checkingId?: string | null;
   /**
-   * The locations already taken as stops by the route being drawn.
+   * The locations already taken as stops by the route being drawn, and where
+   * each of them sits on it.
    *
    * Empty at every other moment, and undefined on every canvas that never
    * routes. It is the *in-progress* list and not a saved route's — a finished
    * route's stops are read off the shape, and marking them here would leave
    * pins pulsing at a map nobody is drawing on.
+   *
+   * The position, not merely membership: the pin draws it as a numbered badge,
+   * so a half-built route can be read off the map rather than only off the card,
+   * which is closed for the length of the gesture.
    */
-  stopIds?: ReadonlySet<string>;
+  stopOrder?: ReadonlyMap<string, number>;
   onSelect: (placeId: string) => void;
   /** Fired once, on drop. Dragging is how a bad geocode gets corrected (§7). */
   onMove?: (placeId: string, coords: { lng: number; lat: number }) => void;
@@ -333,9 +338,9 @@ export function usePlaceMarkers({
    */
   useEffect(() => {
     for (const [id, marker] of markers.current) {
-      setPinStop(marker.getElement(), stopIds?.has(id) ?? false);
+      setPinStop(marker.getElement(), stopOrder?.get(id) ?? null);
     }
-  }, [stopIds, places]);
+  }, [stopOrder, places]);
 
   /*
    * Which locations are pins and which a cluster bubble is counting.

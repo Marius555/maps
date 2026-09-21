@@ -40,15 +40,6 @@ import { hexColorSchema } from "./common";
  * option the schema rejects as a 400.
  */
 export const PANEL_SIDES = ["left", "right"] as const;
-/**
- * How a results row's Directions and phone links are painted.
- *
- * `"outline"` first because it is the pill every published row already draws —
- * `chromeAttrs` writes no attribute for it, so the order here is also the order
- * "absent, then the three departures from it" is written everywhere else.
- * Mirrors `SnapshotRowLinkStyle`, which is the type half of the same list.
- */
-export const ROW_LINK_STYLES = ["outline", "soft", "solid", "plain"] as const;
 export const CONTROL_CORNERS = [
   "top-left",
   "top-right",
@@ -145,9 +136,6 @@ export const embedSettingsSchema = z.object({
   rowAddress: z.boolean(),
   rowDistance: z.boolean(),
   rowActions: z.boolean(),
-  rowLinkStyle: z.enum(ROW_LINK_STYLES),
-  /** 999 is the pill; the ceiling is the pill, not a corner anyone can pick. */
-  rowLinkRadius: z.number().int().min(0).max(999),
   /**
    * Whether pressing a results row opens the location's card.
    *
@@ -156,11 +144,15 @@ export const embedSettingsSchema = z.object({
    */
   rowCard: z.boolean(),
 
+  /*
+   * The corner is the only thing left to say about MapLibre's own controls.
+   *
+   * `compass`, `geolocate`, `fullscreen` and `scale` were four more switches
+   * here and are gone: the map draws zoom in and zoom out and nothing else.
+   * They are retired rather than deleted on `SnapshotSettings`, so a snapshot
+   * carrying one still parses — see there, and `embed/src/map.ts`, for why.
+   */
   controlsCorner: z.enum(CONTROL_CORNERS),
-  compass: z.boolean(),
-  geolocate: z.boolean(),
-  fullscreen: z.boolean(),
-  scale: z.boolean(),
   scrollZoom: z.boolean(),
 
   /*
@@ -256,12 +248,6 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   rowAddress: true,
   rowDistance: true,
   rowActions: true,
-  // The pill the panel has always drawn. Both of these start at what a live map
-  // renders, because neither is a design anybody has asked us to change — they
-  // are there so an owner whose own site has square, filled buttons can stop the
-  // map being the one round-cornered thing on the page.
-  rowLinkStyle: "outline",
-  rowLinkRadius: 999,
   // Off: a row press flies to the pin and marks the row, and the card stays
   // shut. A card opened from the panel usually does not fit the part of the map
   // the panel leaves, and the row is already saying which location it is. A pin
@@ -277,10 +263,6 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   // floating search toolbar wraps into the top corners, and left keeps the stack
   // out from under a right-hand results panel.
   controlsCorner: "bottom-left",
-  compass: false,
-  geolocate: true,
-  fullscreen: false,
-  scale: false,
   // Held back deliberately: a map on someone's landing page must not swallow
   // the page scroll.
   scrollZoom: false,
@@ -342,12 +324,6 @@ export function readEmbedSettings(
     rowAddress: readFlag(settings.rowAddress, d.rowAddress),
     rowDistance: readFlag(settings.rowDistance, d.rowDistance),
     rowActions: readFlag(settings.rowActions, d.rowActions),
-    rowLinkStyle: readChoice(
-      settings.rowLinkStyle,
-      ROW_LINK_STYLES,
-      d.rowLinkStyle,
-    ),
-    rowLinkRadius: readNumber(settings.rowLinkRadius, 0, 999, d.rowLinkRadius),
     rowCard: readFlag(settings.rowCard, d.rowCard),
 
     controlsCorner: readChoice(
@@ -355,10 +331,6 @@ export function readEmbedSettings(
       CONTROL_CORNERS,
       d.controlsCorner,
     ),
-    compass: readFlag(settings.compass, d.compass),
-    geolocate: readFlag(settings.geolocate, d.geolocate),
-    fullscreen: readFlag(settings.fullscreen, d.fullscreen),
-    scale: readFlag(settings.scale, d.scale),
     scrollZoom: readFlag(settings.scrollZoom, d.scrollZoom),
     analytics: readFlag(settings.analytics, d.analytics),
 

@@ -3,7 +3,7 @@
 import type { Map as MapLibreMap, MapMouseEvent } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 
-import { appendStop } from "@/lib/map/route-stops";
+import { appendStop, dropStopsOf } from "@/lib/map/route-stops";
 import { isOptimisticPlaceId } from "@/lib/query/places";
 import {
   ROUTE_SNAP_RADIUS_PX,
@@ -47,15 +47,28 @@ import {
  * and the whole difference between a rule and a broken tool is whether the tool
  * tells you which it is.
  *
- * **And a pin nobody has asked about yet is asked about now.** The verdicts
- * arrive from a sweep and from a hover pre-warm, both of which a deliberate
- * click can outrun — the sweep is one pin per second on the public engine, and
- * a click lands about 300ms after the pointer settles. Reading only what had
- * already arrived meant the refusal fired for the pins nobody was in a hurry to
- * click and never for the ones they were. So an unanswered pin blocks its own
- * click for as long as the answer takes — the caller marks the pin, since it is
- * the caller that knows it is asking — and the outcome is then one of the two
- * above. On a warm cache none of this runs at all.
+ * **A pin nobody has asked about yet becomes a stop now and is undone later.**
+ * The verdicts arrive from a sweep and from a hover pre-warm, both of which a
+ * deliberate click can outrun — the sweep is one pin per second on the public
+ * engine, and a click lands about 300ms after the pointer settles. Reading only
+ * what had already arrived meant the refusal fired for the pins nobody was in a
+ * hurry to click and never for the ones they were.
+ *
+ * This used to be answered by making the click *wait*, which was the wrong half
+ * of the trade and is the bug this file was rewritten to fix. The wait is a
+ * throttled upstream call behind three database round trips — one to three
+ * seconds on a cold map — and for the whole of it the only thing on screen was a
+ * pulse on a 36px marker, while every further click was dropped on the floor.
+ * The gesture read as broken at exactly the moment it had to work: the first
+ * click of the first route. The second attempt always worked, because by then
+ * the verdict was cached.
+ *
+ * So the click takes its stop at once and the question is asked behind it. A
+ * refusal removes the stop again and says why, in the same sentence it always
+ * used (`onRefused`). That is a visible undo rather than an invisible wait, and
+ * the rare case pays for itself instead of the common one paying for it. The
+ * route request refuses a bad stop by name on its own account
+ * (`use-route-request.ts`), so nothing unsafe can survive a commit either way.
  *
  * The engine is not called from here. This hook yields stops; the caller turns
  * them into a route — which is what keeps the one metered request in one place
@@ -85,12 +98,28 @@ export function useDrawRoute({
   places: Place[];
   /** Locations the routing engine cannot reach, which may not become stops. */
   unroutableIds: ReadonlySet<string>;
-  /** The stops as they currently stand, including the point under the cursor. */
-  onPreview: (geometry: LineGeometry | null) => void;
+  /**
+   * The stops as they currently stand, including the point under the cursor.
+   *
+   * `placed` is how many of those points are decisions somebody has made — so
+   * the run past it is the leg hanging off the cursor, and the renderer can draw
+   * the two differently. Until it existed they were one undifferentiated dashed
+   * line, and "what I have built" looked exactly like "where I am pointing".
+   */
+  onPreview: (geometry: LineGeometry | null, placed?: number) => void;
   /** A finished list of stops. The caller asks the engine and saves the shape. */
   onDraw: (stops: RouteStop[]) => void;
-  /** A click on a location the engine cannot reach. The caller says so. */
-  onRefused: (placeId: string) => void;
+  /**
+   * A location the engine cannot reach, and whether it had already been taken.
+   *
+   * Two genuinely different things have happened by the time this fires. Either
+   * the click landed on a pin already known to be unreachable, and nothing
+   * changed — or the stop was added, drawn, and has just been removed again
+   * under the user's eyes. The second needs saying, because a stop vanishing
+   * from a route with no explanation is the failure this whole gesture was
+   * rewritten to stop.
+   */
+  onRefused: (placeId: string, wasTaken: boolean) => void;
   /**
    * A click that added no stop, and why.
    *
@@ -110,11 +139,13 @@ export function useDrawRoute({
    */
   onMissed: (reason: "empty" | "saving") => void;
   /**
-   * Settle whether this location can be a stop, waiting if it has to.
+   * Settle whether this location can be a stop.
    *
    * Resolves from what the caller already knows where it can, and asks the
-   * engine where it cannot. It never rejects: a broken affordance must not stop
-   * someone drawing, because the route request refuses on its own account.
+   * engine where it cannot. Nothing waits on it — the stop is already on the map
+   * by the time this is called, and `false` takes it back off. It never rejects:
+   * a broken affordance must not stop someone drawing, because the route request
+   * refuses on its own account.
    */
   onCheck: (placeId: string) => Promise<boolean>;
   /**
@@ -182,6 +213,17 @@ export function useDrawRoute({
     let alive = true;
 
     /**
+     * Which run of stops the list currently holds.
+     *
+     * Bumped by every `reset`, so a verdict that lands after the gesture it
+     * belonged to is over cannot edit the list that replaced it. `alive` says
+     * the tool has been disarmed; this says the same thing one level down, for a
+     * route that was finished, escaped or emptied while the tool stayed armed —
+     * which is the ordinary case now that a click no longer waits.
+     */
+    let epoch = 0;
+
+    /**
      * Pins this gesture has already put a question to.
      *
      * Kept here as well as in the caller because the caller's set is state and
@@ -246,7 +288,11 @@ export function useDrawRoute({
 
       // No `route` on the preview geometry, so nothing downstream mistakes a
       // straight draft for an answer from the engine.
-      handlers.current.onPreview({ kind: "line", points: preview });
+      //
+      // `stops.length` is the count of placed points whether or not a hover is
+      // on the end, which is what makes the leg to the cursor the only thing
+      // drawn as unplaced.
+      handlers.current.onPreview({ kind: "line", points: preview }, stops.length);
     };
 
     /**
@@ -268,32 +314,21 @@ export function useDrawRoute({
 
     const reset = () => {
       stops = [];
+      epoch += 1;
       handlers.current.onPreview(null);
       announce();
     };
 
-    /**
-     * Whether a click is currently waiting on the engine, and what to do about
-     * a finish that arrives during that wait.
+    /*
+     * There is no `waiting` flag here any more, and its absence is the point.
      *
-     * A second *click* while one is in flight is dropped, not queued: queueing
-     * would let someone build a route out of clicks made before they could see
-     * what the first one did. A *finish* is different — the first click of a
-     * double-click is very often the one that adds the last stop, and throwing
-     * the finish away would commit a route one stop short of what was drawn. So
-     * it is held and replayed the moment the answer lands.
+     * It used to drop every click made while a verdict was in flight, and to
+     * hold a finish back until the answer landed — both of which existed only
+     * because a click could not proceed without the engine. Nothing waits now,
+     * so a second click is a second stop and a double-click finishes when it is
+     * made, which is what those two lines were apologising for.
      */
-    let waiting = false;
-    let finishWhenReady = false;
-
     const commit = () => {
-      if (waiting) {
-        finishWhenReady = true;
-        // True, so the caller still swallows the browser's own double-click
-        // zoom: the finish is accepted, it just has not happened yet.
-        return true;
-      }
-
       if (stops.length < MIN_LINE_POINTS) return false;
 
       const drawn = stops;
@@ -303,13 +338,14 @@ export function useDrawRoute({
     };
 
     /**
-     * A click, once its pin's verdict is in.
+     * A click, turned into a stop.
      *
-     * Split from `onClick` because the wait sits between them: everything here
-     * has to be able to run a second after the pointer went down, against a
-     * `stops` list that may have moved on.
+     * Returns the location it took, or null when the click changed nothing —
+     * which is what tells `onClick` whether there is anything to ask the engine
+     * about. Everything it refuses, it refuses *now*: these are the four
+     * answers available without leaving the browser.
      */
-    const take = (snap: Snap | null) => {
+    const take = (snap: Snap | null): string | null => {
       /*
        * A pin the engine cannot reach. Refused here rather than in `appendStop`,
        * which stays a rule about the list of stops and knows nothing about
@@ -322,8 +358,8 @@ export function useDrawRoute({
        * to name.
        */
       if (snap?.placeId && live.current.unroutableIds.has(snap.placeId)) {
-        handlers.current.onRefused(snap.placeId);
-        return;
+        handlers.current.onRefused(snap.placeId, false);
+        return null;
       }
 
       /*
@@ -342,7 +378,7 @@ export function useDrawRoute({
        */
       if (snap?.placeId && isOptimisticPlaceId(snap.placeId)) {
         handlers.current.onMissed("saving");
-        return;
+        return null;
       }
 
       // A click on open ground. Said once per gesture — see `onMissed`.
@@ -351,76 +387,75 @@ export function useDrawRoute({
           warnedEmpty = true;
           handlers.current.onMissed("empty");
         }
-        return;
+        return null;
       }
 
       // On the pin that is already the last stop, or at the cap: both change
       // nothing, and neither is worth interrupting anyone about. See
       // `appendStop`.
       const next = appendStop(stops, snap);
-      if (!next) return;
+      if (!next) return null;
 
       stops = next;
       show();
       announce();
+
+      return snap.placeId;
     };
 
-    const onClick = (event: MapMouseEvent) => {
-      if (waiting) return;
-
-      const snap = snapAt(event);
-
-      // Nothing to settle: open ground, a pin this gesture already waited for,
-      // or one that does not exist on the server yet — asking the engine about
-      // a temporary id would spend a request on a location it has never heard
-      // of. `onCheck` answers a known pin without a request, so the common case
-      // never reaches the branch below at all.
-      if (
-        !snap?.placeId ||
-        asked.has(snap.placeId) ||
-        isOptimisticPlaceId(snap.placeId)
-      ) {
-        take(snap);
-        return;
-      }
-
-      const placeId = snap.placeId;
-      asked.add(placeId);
-      waiting = true;
+    /**
+     * The stop is on the map; now find out whether it was allowed.
+     *
+     * Runs behind the click rather than in front of it, and everything awkward
+     * about it follows from that: by the time the answer lands the list has
+     * moved on, and the stop being undone may be at any index, or gone, or
+     * belong to a route that has already been drawn.
+     *
+     * Three guards, and each covers a different way that happens. `alive` is
+     * the tool disarmed; `epoch` is this run of stops finished, escaped or
+     * emptied under a tool still armed; and the `some` is the stop already
+     * taken out by Backspace, where saying it aloud would be a toast about a
+     * decision the user has already reversed. The pin greys either way — that is
+     * `onCheck`'s own doing — which is the part of the message that matters.
+     */
+    const settle = (placeId: string) => {
+      const mine = epoch;
 
       void handlers.current
         .onCheck(placeId)
         .catch(() => true)
         .then((isRoutable) => {
-          waiting = false;
+          if (isRoutable || !alive || mine !== epoch) return;
+          if (!stops.some((stop) => stop.placeId === placeId)) return;
 
-          // Cancelled while we waited. `stops` is still this closure's, but the
-          // gesture it belonged to is over.
-          if (!alive) return;
+          stops = dropStopsOf(stops, placeId);
 
-          /*
-           * The answer we were handed, not `live.current.unroutableIds`.
-           *
-           * That set is React state, and it is one render behind at this exact
-           * moment: `onCheck` records the verdict by calling `setState`, and
-           * this runs in the promise's own microtask, before React has
-           * committed anything or refreshed the ref. Reading it here accepted
-           * the stop and stayed silent — the pin greyed a moment later, which
-           * is the tool telling you afterwards that it should not have let you
-           * do the thing it just did. Measured, on a pin clicked a quarter of a
-           * second after the tool was armed.
-           */
-          if (!isRoutable) {
-            handlers.current.onRefused(placeId);
-          } else {
-            take(snap);
-          }
+          // `show` draws what is left, but with nothing left there is no band
+          // to draw and it would leave the last one on the map — `onMouseMove`
+          // returns early at no stops, so nothing would ever clear it.
+          if (stops.length === 0) handlers.current.onPreview(null);
+          else show();
 
-          if (finishWhenReady) {
-            finishWhenReady = false;
-            commit();
-          }
+          announce();
+          handlers.current.onRefused(placeId, true);
         });
+    };
+
+    const onClick = (event: MapMouseEvent) => {
+      const taken = take(snapAt(event));
+      if (!taken) return;
+
+      /*
+       * Nothing left to settle: this gesture has already asked about that pin.
+       * `onCheck` answers a pin the sweep or the hover pre-warm has covered
+       * without a request at all, so on a warm map this costs nothing — the set
+       * is here as well as in the caller because two quick clicks on the same
+       * pin run before React has committed anything.
+       */
+      if (asked.has(taken)) return;
+
+      asked.add(taken);
+      settle(taken);
     };
 
     const onMouseMove = (event: MapMouseEvent) => {

@@ -54,6 +54,33 @@ export function appendStop(
 }
 
 /**
+ * The stops without any that stand on this location.
+ *
+ * What undoes a stop the engine turns out to refuse. A click takes its stop at
+ * once and the verdict arrives behind it (`use-draw-route.ts`), so the rollback
+ * has to reach a list that has moved on — by the time the answer lands the user
+ * may have clicked three more pins, and the refused one may be at any index.
+ *
+ * **Every occurrence, not the one that was clicked.** If the engine cannot put
+ * that location on a road it cannot do so at stop 2 either, so leaving the other
+ * copies would leave a route that is still refused and no longer says why.
+ *
+ * `collapseRepeats` afterwards for `removeStopAt`'s reason: taking the middle
+ * out of A→B→A leaves A→A, which is nought metres and a question the engine has
+ * no answer to.
+ *
+ * It can return fewer than two stops, and that is not this function's problem to
+ * solve — a gesture in progress is allowed to be one stop long, and `commit`
+ * already refuses to finish below `MIN_LINE_POINTS`.
+ */
+export function dropStopsOf(
+  stops: readonly RouteStop[],
+  placeId: string,
+): RouteStop[] {
+  return collapseRepeats(stops.filter((stop) => stop.placeId !== placeId));
+}
+
+/**
  * Whether this particular stop can be taken out.
  *
  * Per stop, not per route, because the answer genuinely differs between rows of

@@ -350,7 +350,6 @@ async function render(
     focusPlaceId: readFocusPlaceId(),
     onSelect: (placeId) => list?.select(placeId),
     getMe: () => me,
-    onLocated: remember,
     track,
   });
 

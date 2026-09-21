@@ -456,20 +456,20 @@ export type SnapshotSettings = {
   /** The Directions and phone links under a row. `false` hides them. */
   rowActions?: boolean;
   /**
-   * How those two links are painted. Absent means the outlined pill, which is
-   * what every published row draws — see `SnapshotRowLinkStyle`.
+   * **Retired**, both of them, like `filters` above.
    *
-   * Only read when `rowActions` leaves them on the row at all.
+   * A results row's two links were an outlined pill with three alternative
+   * treatments and four corners behind them. They are plain text now, bold
+   * under the pointer, on request — "I don't want directions, phone number and
+   * other options to be in chip, just put in plain text and on hover make it
+   * bold". A treatment nobody can choose needs no setting, so the designer's
+   * two controls went with the CSS.
+   *
+   * Nothing writes these and nothing reads them; they stay in the type because
+   * every snapshot published before the change still carries them and must keep
+   * parsing.
    */
   rowLinkStyle?: SnapshotRowLinkStyle;
-  /**
-   * Their corner radius, in pixels. Absent means 999 — the pill above — and a
-   * `0` here is the square-cornered chip an owner asks for by picking it.
-   *
-   * A number rather than a member of the style union, because the two questions
-   * are genuinely separate: a solid chip and an outlined one both have a corner,
-   * and folding them together would be eight names for four answers.
-   */
   rowLinkRadius?: number;
   /**
    * Whether pressing a results row opens that location's card, as well as
@@ -486,8 +486,20 @@ export type SnapshotSettings = {
 
   /** Absent means top-right, where they have always been. */
   controlsCorner?: SnapshotCorner;
+  /**
+   * **Retired**, all four, like `filters` above.
+   *
+   * The map draws zoom in and zoom out and nothing else now — "there is too
+   * many default map buttons, we don't need ruler, full screen, compass,
+   * location button, just zoom in and out". Find-my-location is the only one
+   * that did a job, and "Nearest to me" in the toolbar does it better.
+   *
+   * Nothing writes these and nothing reads them; they stay in the type because
+   * every snapshot published before the change still carries them and must keep
+   * parsing. A live map loses the buttons on the next `/embed` deploy without
+   * its owner republishing, which is the trade this file's §7 note describes.
+   */
   compass?: boolean;
-  /** `false` hides it. Absent means shown, which is what ships today. */
   geolocate?: boolean;
   fullscreen?: boolean;
   scale?: boolean;

@@ -43,7 +43,11 @@ let existingPlaceCount = 0;
 /** How many shapes the map already has. Set per test. */
 let existingShapeCount = 0;
 /** The row `plan-limits` reads. Empty array means the free plan. */
-let subscriptionRows: { plan?: string; status?: string }[] = [];
+let subscriptionRows: {
+  plan?: string;
+  status?: string;
+  currentPeriodEnd?: string;
+}[] = [];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -540,6 +544,59 @@ describe("assertPlanFeature", () => {
   });
 });
 
+describe("getUserPlan and the end of a paid period", () => {
+  /*
+   * Two conditions decide a plan — the status the webhook wrote, and the date it
+   * wrote beside it — and the second exists because the first is not enough.
+   *
+   * A cancellation does not end access: the provider keeps a cancelled
+   * subscription running to the end of the period already paid for, so the
+   * webhook stores `active` with an end date and *expects a later event* to close
+   * it. If that event is dropped, retried into a failure or never sent, the row
+   * sits at `active` for ever and the account keeps a plan it stopped paying for.
+   * Reading the date here means the worst a lost webhook can do is expire
+   * somebody slightly early, which they can see and we can fix.
+   */
+
+  it("keeps a plan that is active and has not reached its end date", async () => {
+    subscriptionRows = [
+      { plan: "pro", status: "active", currentPeriodEnd: "2099-01-01T00:00:00.000Z" },
+    ];
+    const { getUserPlan } = await planLimits();
+
+    await expect(getUserPlan(USER_ID)).resolves.toBe("pro");
+  });
+
+  it("drops to free once the paid period has passed", async () => {
+    subscriptionRows = [
+      { plan: "pro", status: "active", currentPeriodEnd: "2020-01-01T00:00:00.000Z" },
+    ];
+    const { getUserPlan } = await planLimits();
+
+    await expect(getUserPlan(USER_ID)).resolves.toBe("free");
+  });
+
+  it("keeps the plan when no end date is known", async () => {
+    // Absent has to go on meaning what it meant before the column was used, or
+    // every row written before this check would expire the moment it shipped.
+    subscriptionRows = [{ plan: "starter", status: "active" }];
+    const { getUserPlan } = await planLimits();
+
+    await expect(getUserPlan(USER_ID)).resolves.toBe("starter");
+  });
+
+  it("keeps the plan when the date cannot be read at all", async () => {
+    // Fails towards the customer, deliberately: a value we cannot parse must not
+    // lock somebody out of what they are paying for.
+    subscriptionRows = [
+      { plan: "starter", status: "active", currentPeriodEnd: "not a date" },
+    ];
+    const { getUserPlan } = await planLimits();
+
+    await expect(getUserPlan(USER_ID)).resolves.toBe("starter");
+  });
+});
+
 describe("planFeatureMessage", () => {
   /* The same split `planLimitMessage` is held to above: the menu shows the
      first half, the 403 carries the whole thing, and one composer builds both
@@ -610,6 +667,23 @@ describe("DISABLE_ALL_PLAN", () => {
 
       await expect(getUserPlan(USER_ID)).resolves.toBe("free");
     }
+  });
+
+  /*
+   * The property the whole switch now rests on. It used to be marked "delete this
+   * before it is in front of anyone", which is a plan rather than a guarantee —
+   * and this is a paywall bypass configured by an environment variable, on a host
+   * where setting one is a form field and a redeploy.
+   */
+  it("is inert in a production build whatever it is set to", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DISABLE_ALL_PLAN", "1");
+    const { getUserPlan, assertPlanFeature } = await planLimits();
+
+    await expect(getUserPlan(USER_ID)).resolves.toBe("free");
+    await expect(assertPlanFeature(USER_ID, "routes")).rejects.toMatchObject({
+      code: "plan_feature_required",
+    });
   });
 
   it("stays shut when it is not set at all", async () => {

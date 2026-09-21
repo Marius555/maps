@@ -17,15 +17,19 @@ import type { EmbedDesign } from "./use-embed-design";
  * off, because they all describe a thing that is not on the map — and a column
  * of live-looking controls that change nothing is worse than a shorter panel.
  *
- * **This fold held eleven controls and now holds six, and the two that left did
- * not go because the fold was long — they went because they were never panel
- * controls.** Search and Nearest are drawn on a map with the list switched off,
+ * **This fold held eleven controls and now holds five, and nothing left it
+ * because the fold was long — each one left because it was never a panel
+ * control.** Search and Nearest are drawn on a map with the list switched off,
  * floating over the basemap; hiding their toggles inside this fold's `list`
  * branch left an owner looking at a search box with no way in this panel to
  * switch it off, and no way to switch it *on* for a bare map either. They are in
  * "Map controls" now, with the glass switch that is about those same controls
  * floating, and that fold was already the one shaped like this: a choice, a row
  * of tiles, and one run of switches at the end.
+ *
+ * **The drawer went last, to "On a phone".** Every control left here describes a
+ * panel standing beside a map, and that switch describes the one width at which
+ * none of them is read — see `mobile-group.tsx`.
  *
  * **The surface — transparency, blur, corners — is its own fold.** It is read
  * only on a *floating* panel (opacity on a docked column reveals the page's own
@@ -91,12 +95,6 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
               panel down to its corners and does not want the browser's chrome in
               the middle of it.
 
-              "Narrow", not "mobile": the embed sizes off its own box, so a 360px
-              map in a sidebar on a 1440px monitor gets the drawer and a phone
-              held sideways may not. Both are inside the `list` branch because a
-              drawer is where the list goes, and there is no list to put anywhere
-              with the panel switched off.
-
               The row's card switch is off by default: a card opened from the
               panel rarely fits the part of the map the panel leaves. It is only
               offered while pins open cards at all ("Map controls"), because with
@@ -113,19 +111,6 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
               label="Show the list's scrollbar"
               isSelected={settings.panelScrollbar}
               onChange={(value) => set("panelScrollbar", value)}
-            />
-            {/* **Named for what it turns on, because both positions are a
-                drawer.** On it is the bottom sheet a thumb drags up; off it is
-                the side drawer behind a button in the toolbar, which is what
-                this had before the sheet. The old label said "on narrow
-                screens", which read as the only alternative being no drawer at
-                all — and the stacked layout it seemed to promise is now reached
-                by neither position, being what a snapshot written before this
-                setting draws and nothing else (§7). */}
-            <PropertySwitch
-              label="Use a bottom drawer"
-              isSelected={settings.panelDrawer}
-              onChange={(value) => set("panelDrawer", value)}
             />
           </PropertySwitches>
         </>

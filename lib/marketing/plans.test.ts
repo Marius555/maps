@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { MARKETING_PLANS, RECOMMENDED_PLAN } from "./plans";
+import { MARKETING_PLANS, RECOMMENDED_PLAN, YEARLY_MONTHS } from "./plans";
 
 /*
  * `plan-limits.ts` reaches the admin Appwrite client at module load, which
@@ -18,7 +18,7 @@ vi.mock("@/lib/env", () => ({
 
 vi.mock("@/lib/appwrite/admin", () => ({ admin: { tablesDB: {} } }));
 
-const { PLAN_FEATURES, PLAN_LIMITS } = await import(
+const { LOOKUP_LIMITS, PLAN_FEATURES, PLAN_LIMITS } = await import(
   "@/lib/repositories/plan-limits"
 );
 type PlanId = keyof typeof PLAN_LIMITS;
@@ -48,13 +48,45 @@ describe("marketing plans", () => {
   });
 
   it.each(MARKETING_PLANS)("quotes $id's real features", (plan) => {
-    expect({ routes: plan.routes, sheetSync: plan.sheetSync }).toEqual(
-      PLAN_FEATURES[plan.id],
-    );
+    expect({
+      routes: plan.routes,
+      sheetSync: plan.sheetSync,
+      analytics: plan.analytics,
+    }).toEqual(PLAN_FEATURES[plan.id]);
+  });
+
+  /*
+   * The allowance lives in its own table rather than in PLAN_LIMITS, so the
+   * exact-shape comparison above cannot cover it. It needs covering for the same
+   * reason everything else here does: this is the number a refusal will quote back
+   * at somebody who read the page.
+   */
+  it.each(MARKETING_PLANS)("quotes $id's real lookup allowance", (plan) => {
+    expect(plan.lookups).toBe(LOOKUP_LIMITS[plan.id].perMonth);
   });
 
   it.each(MARKETING_PLANS)("prints $id's price as the amount it charts", (plan) => {
     expect(plan.price).toBe(`€${plan.amount}`);
+  });
+
+  /*
+   * A year is ten months, and both halves of that have to be true at once: the
+   * number the card prints and the number a checkout would charge. Getting this
+   * wrong is a page advertising a discount the invoice does not give.
+   */
+  it.each(MARKETING_PLANS.filter((plan) => plan.amount > 0))(
+    "prices $id's year at two months free",
+    (plan) => {
+      expect(plan.amountYearly).toBe(plan.amount * YEARLY_MONTHS);
+      expect(plan.priceYearly).toBe(`€${plan.amountYearly}`);
+    },
+  );
+
+  it("offers no year on the plan that costs nothing", () => {
+    const free = MARKETING_PLANS.find((plan) => plan.id === "free");
+
+    expect(free?.amountYearly).toBeUndefined();
+    expect(free?.priceYearly).toBeUndefined();
   });
 
   it("recommends a plan that exists", () => {

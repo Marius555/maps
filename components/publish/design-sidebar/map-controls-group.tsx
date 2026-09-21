@@ -1,6 +1,6 @@
 "use client";
 
-import { Compass, LocateFixed, Maximize, Ruler, Search } from "lucide-react";
+import { LocateFixed, Search } from "lucide-react";
 
 import { PropertyChoice } from "@/components/ui/properties/property-fields";
 import {
@@ -12,22 +12,20 @@ import { CONTROL_CORNERS } from "@/lib/validation/embed-settings.schema";
 import type { EmbedDesign } from "./use-embed-design";
 
 /**
- * MapLibre's own controls: which of them, and where — plus the two switches
- * that are about the pins rather than about the controls.
+ * Where MapLibre's own controls sit, our two toolbar controls, and the switches
+ * that are about what the map *does* rather than about what is drawn on it.
  *
- * "Group nearby pins" was already one of those and sets the precedent: this
- * fold is what the map *does*, not only what MapLibre draws on it. "Open a card
- * when a pin is clicked" joins it there rather than in the Results panel fold,
- * because the card is the map's answer to a press and the panel is the other
- * one — an owner switching the card off is usually keeping the panel.
+ * **There was a four-tile "On the map" row here and it is gone** — Find my
+ * location, Compass, Fullscreen, Scale bar. The map draws zoom in and zoom out
+ * and nothing else now, so the only question left about MapLibre's controls is
+ * which corner they stand in. The reasoning, and why the four settings are
+ * retired rather than deleted, is at `embed/src/map.ts`.
  *
- * Every one of these is close to free in the embed's byte budget, and that is a
- * fact about the build rather than about the controls: `maplibre-gl` is external
- * to the bundle, so its dist files ship whole whether a map names Fullscreen or
- * not. What a switch costs is the line that reads it — which is why this group
- * can be generous where the rest of the designer has to be careful.
+ * That leaves Corner offering a choice for a single pair of buttons, which is
+ * still worth asking: it is the one piece of chrome that can land on top of a
+ * customer's own content.
  *
- * Two things a customer might expect are deliberately not here. **Traffic and
+ * Three things a customer might expect are deliberately not here. **Traffic and
  * satellite** are metered third-party feeds in the visitor's path, which is the
  * one thing CLAUDE.md §2 forbids outright. And **the attribution** has no
  * switch: credit for OpenStreetMap and the tile provider is required on every
@@ -42,18 +40,6 @@ export function MapControlsGroup({ settings, set }: EmbedDesign) {
         value={settings.controlsCorner}
         options={CORNERS}
         onChange={(value) => set("controlsCorner", value)}
-      />
-
-      <PropertyToggles
-        label="On the map"
-        options={CONTROLS}
-        selected={[
-          ...(settings.geolocate ? (["geolocate"] as const) : []),
-          ...(settings.compass ? (["compass"] as const) : []),
-          ...(settings.fullscreen ? (["fullscreen"] as const) : []),
-          ...(settings.scale ? (["scale"] as const) : []),
-        ]}
-        onChange={(value, isSelected) => set(value, isSelected)}
       />
 
       {/* Ours rather than MapLibre’s, and that is the only thing that ever made
@@ -130,13 +116,6 @@ export function MapControlsGroup({ settings, set }: EmbedDesign) {
 const TOOLS = [
   { value: "search", label: "Search box", icon: Search },
   { value: "nearest", label: "Nearest to me", icon: LocateFixed },
-] as const;
-
-const CONTROLS = [
-  { value: "geolocate", label: "Find my location", icon: LocateFixed },
-  { value: "compass", label: "Compass", icon: Compass },
-  { value: "fullscreen", label: "Fullscreen", icon: Maximize },
-  { value: "scale", label: "Scale bar", icon: Ruler },
 ] as const;
 
 /* Named for where they land on the map rather than for the CSS corner, which is

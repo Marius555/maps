@@ -8,10 +8,10 @@ import { createVerificationLink } from "@/lib/auth/tokens";
 import { greetingName } from "@/lib/email/greeting";
 import { sendEmail } from "@/lib/email/resend";
 import { verifyEmailMessage } from "@/lib/email/templates/verify-email";
-import { signupSchema } from "@/lib/validation/auth.schema";
+import { signupServerSchema } from "@/lib/validation/auth.server.schema";
 
 export const POST = withoutAuth(async (request) => {
-  const input = await parseBody(request, signupSchema);
+  const input = await parseBody(request, signupServerSchema);
   const { user, session } = await registerUser(input);
 
   await setSessionCookie(session);
@@ -34,9 +34,15 @@ export const POST = withoutAuth(async (request) => {
    * the invocation alive for it where a floating promise would be cut off on a
    * serverless host.
    *
-   * Nothing gates on `emailVerified` yet, so an unsent confirmation costs the
-   * user nothing today beyond an email they can ask for again from
-   * `/verify-email`.
+   * **An unsent confirmation is not free any more, and that is the reason for
+   * every line above.** Until this address is confirmed the account is read-only
+   * — `withAuth` refuses every write — so a message that silently fails to send
+   * leaves a person signed in to something that does nothing. The recoveries are
+   * that the link can be asked for again from `/verify-email` and from the
+   * banner on every dashboard page, and that the gate switches itself off
+   * entirely when there is no `RESEND_API_KEY` to send with
+   * (`lib/auth/email-gate.ts`). Neither covers a key that is present and broken,
+   * which is what the `console.error` below is for.
    */
   after(async () => {
     try {

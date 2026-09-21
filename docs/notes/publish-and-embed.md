@@ -109,6 +109,71 @@ rewritten; it is the record of why this area is shaped as it is.
 - `.lm-list__item:hover` carries the row hover ground, **not `.lm-list__row`** — the actions
   are its sibling, so hovering stopped above the links. `--on` must be more specific rather
   than merely later.
+- **The embed renders into the host document and there is no shadow DOM, so every bare
+  element selector on a customer's page reaches it.** `.lm-root :is(button, a, input, ul, li)`
+  in `embed/src/styles.css` is the floor that stands between them, and it carries only
+  properties the stylesheet does not already state on those elements. The weight is counted
+  rather than assumed: `:is()` takes its heaviest argument, all bare element selectors, so the
+  rule is (0,1,1) — above a host's `button` at (0,0,1) and below every one of our class rules
+  at (0,2,0)+. A host rule at `.promo button` ties and wins on order; that is the accepted
+  limit of doing this without a shadow root. **This was found the expensive way.**
+  `/embed/live.html` styled its own Load map button with a bare `button { margin-top: 8px }`,
+  which landed on the map's zoom stack (group 72 → 88px, 8px above each button) and on
+  find-nearest inside the search field (8px low). It was reported three times as an embed bug
+  — "the zoom buttons are too big", "padding top and bottom", "the nearest-to-me button is
+  lower than the search bar" — and chased through three rounds of fixes to `styles.css`,
+  because `/embed/dev.html` has no such rule and measured clean every time. **Neither harness
+  may ever style a bare element**: the moment one does it stops predicting what a customer
+  sees, which is the only reason either page exists. Both are scoped to `#form` now.
+- **The map draws zoom in and zoom out and nothing else.** Compass, find-my-location,
+  fullscreen and the scale bar went on request ("there is too many default map buttons, we
+  don't need ruler, full screen, compass, location button, just zoom in and out"), and the
+  designer's four-tile "On the map" row went with them — a switch for a control that no longer
+  exists is worse than no switch. `compass`, `geolocate`, `fullscreen` and `scale` are
+  **retired** on `SnapshotSettings`, like `filters`: still parsed, never written, never read.
+  Find-my-location is the only one that did a job, and "Nearest to me" in the toolbar does it
+  better — it re-sorts the list rather than dropping a blue dot.
+- **A results row's two links are plain text that takes the accent under the pointer, and
+  there is no choice.** They were an outlined pill with `soft`, `solid` and `plain`
+  alternatives and four corners behind a pair of designer controls; now they are words ("I
+  don't want directions, phone number and other options to be in chip, just put in plain
+  text"). `rowLinkStyle` and `rowLinkRadius` are retired, `data-lm-link` and
+  `--lm-link-radius` are gone from `chromeVars`/`chromeAttrs`, and the row is `flex-wrap:
+  nowrap` — the wrapping was the other half of the report, two chips at 9px of padding in a
+  25% panel less a 52px indent running out of width and stacking into a column. The phone
+  link is the one that gives way (`--phone`, `flex: 0 1 auto` with an ellipsis); Directions is
+  fixed.
+- **The hover is the accent and nothing else, and that is the general rule here: a state may
+  repaint a control and may not resize it.** For one revision the hover also set
+  `font-weight: 600`, which is what had been asked for, and this file argued the growth was
+  affordable — measured, the sibling moved a pixel, and the pointer was on the word that grew.
+  The next request was "remove bold state and make sure they dont change in size, just change
+  color on hover", and both halves of it are the one deleted declaration. Re-measured after:
+  hovering Directions leaves its own box at x 965.19 / width 53.2 and the phone number at
+  x 1030.39 / width 85.95 — identical to a pixel — while the colour moves from
+  `rgb(242,243,245)` to `rgb(77,171,247)`. The rest of the stylesheet already worked this way:
+  `.lm-list__item--on` draws its bar with an inset shadow, and focus is an `outline`. Both are
+  out of flow on purpose.
+- **A results row's type is 14 / 13 / 12, and the address is the 12.** The name inherits the
+  root's 14px at 600, the distance beside it is 13px, and the address dropped from 13 to 12
+  on request. The reason it is the one that gives way: the street confirms a result once the
+  name has been read, where the name and the distance are the two columns a visitor actually
+  scans down, and at 13px it carried the same weight in the row as both of them. It is level
+  with the two links below it now.
+- **This pass reaches maps that are already live** — the hover, the field width and the
+  address size all ship in the shared bundle, so a map published today picks them up on the
+  next deploy of `/embed` without its owner republishing. That is the tag-chip trade again,
+  and unlike the toolbar fixes these are design changes rather than broken states becoming
+  working ones. Taken because each was asked for directly, and recorded here rather than
+  assumed.
+- **The search field answers focus with its own border, not the accent ring.** `.lm-root
+  :focus-visible` stays — it is the only focus affordance anything in the embed has, and §8
+  lists visible keyboard focus as a quality floor — but on this one control `outline-offset:
+  2px` drew a coloured halo outside a box already sitting in a 7px-padded toolbar. The
+  override is `.lm-root .lm-search__input:focus-visible`, and **the weight is counted, not
+  guessed**: a pseudo-class counts as a class, so it is (0,3,0) and beats `.lm-toolbar--docked
+  .lm-search__input` at (0,2,0) a thousand lines later. Without the pseudo-class in the count
+  the two would tie and a docked field would have no focus state at all.
 - **The tag filter chips are gone from the embed, and that is the one place §7 is not
   honoured** — the bundle is shared, so a published map loses them on the next `/embed`
   deploy without republishing. `settings.filters` stays in the type; nothing reads it.
@@ -440,13 +505,25 @@ rewritten; it is the record of why this area is shaped as it is.
   already on a customer's site says, so a map with no groups publishes the bytes it
   always published. `lib/map/group-colors.ts` is the single statement of the
   precedence, and the canvas, the PNG export and publish all read it.
-- **The designer's "Results panel" fold is three folds.** Search and Nearest and the
+- **The designer's "Results panel" fold is four folds.** Search and Nearest and the
   glass switch were never panel controls — the embed draws them on a map with the
   list switched off — and they are in "Map controls" now. Transparency, blur and
   corners are a "Panel surface" fold that is `isEmpty` unless the panel floats,
-  because a trigger opening onto nothing is worse than no trigger. What is left is a
-  master switch, three selectors and one run of switches, which is the shape the rest
-  of the designer already had.
+  because a trigger opening onto nothing is worse than no trigger. And the drawer
+  switch is **"On a phone"** (`mobile-group.tsx`), because `panelDrawer` is the one
+  setting in the whole designer that no width above 768px reads, and it was sitting
+  among controls — side, placement, width — that the same width cancels. What is left
+  in the original fold is a master switch, three selectors and one run of switches,
+  which is the shape the rest of the designer already had.
+- **"On a phone" is a shorter truth than the setting's own, taken deliberately.** The embed
+  sizes off its *own* box, so a 360px map in a sidebar on a desktop gets the drawer and a
+  phone held sideways may not — which is why the panel fold's copy said "narrow, not mobile".
+  The fold is named the way an owner would say it and the header's device tiles are how
+  either case is checked. It holds one switch and is meant to: **`toolbarGlass` is the one
+  that looks like it belongs there and does not**, because the toolbar floats at any width
+  once the results panel is off, so a list-less desktop map wears that glass too. The fold is
+  `isEmpty={!settings.list}` for the Rows fold's reason — with no list there is nothing for a
+  drawer to hold.
 - **The toolbar's controls are 36px tall, on the root's own 14px type.** They have been
   four sizes, and the route is a circle worth knowing about. `font: inherit` at 14px with 7px
   of padding made a 36px box; asked for a third off, the row stated `font-size: 12px` on
@@ -458,16 +535,59 @@ rewritten; it is the record of why this area is shaped as it is.
   36px. `font: inherit` on the field is what reads the row's type, and the search dropdown
   inherits it too. **Do not restate `font-size` on `.lm-toolbar`**: twice now the fix has been
   to delete that declaration. A control a finger presses on a phone does not get to be 32px.
-- **Four numbers have to move with it or something breaks silently.**
-  `.lm-button--icon` is a square sized to the field's height (36px); `.lm-search__action`, the
-  find-nearest button inside the field, is the height less its 2px inset either side (32px);
-  `.lm-search__input`'s `padding-right` has to stay at or above that button's width plus the
-  inset, so 34px was exactly flush and it is 38px, the same 4px of air it had at the smaller
-  size; and the MapLibre top-corner clearance is the control height plus an 8px gap, **in both
-  places** (`:has(> .lm-toolbar)` and its 480px twin): 42 at the first 36px, 31 at 23px, 40 at
-  32px, 44 now. (42 rather than 44 the first time was the hairline counted on one side only;
-  44 is the honest arithmetic.) Too large is a phantom band with nothing in it; too small is
-  the overlap that rule exists to end.
+- **Three numbers have to move with it or something breaks silently, and there were four.**
+  `.lm-button--icon` is a square sized to the field's height (36px);
+  `.lm-search__input`'s `padding-right` has to stay at or above the in-field button's width,
+  now 36px, so 40px is that with 4px of air; and the MapLibre top-corner clearance is the
+  control height plus an 8px gap, **in both places** (`:has(> .lm-toolbar)` and its 480px
+  twin): 42 at the first 36px, 31 at 23px, 40 at 32px, 44 now. (42 rather than 44 the first
+  time was the hairline counted on one side only; 44 is the honest arithmetic.) Too large is
+  a phantom band with nothing in it; too small is the overlap that rule exists to end.
+- **The fourth number was `.lm-search__action`'s height and it is gone, because deriving it
+  by arithmetic got it wrong twice.** It was the field's 36 less a 2px inset either side, so
+  32px — a control *centred in* the field without being *the same height as* it. At rest that
+  is invisible; hovered or lit it is a short well with a 2px shelf above and below. Reported
+  as "the search input field and the nearest-to-me button are different heights, they are not
+  aligned", and then reported a second time, because the first pass measured the two
+  centre-lines, found them equal to within 0.05px, and called it fixed. **Centred is not the
+  same as the same height, and a centre-line measurement cannot tell the difference.** It is
+  `height: 100%` now, against `.lm-search`, which already tracks the field — flush to the
+  edge, `border-radius: 0 8px 8px 0` so its outer corners are the field's. Verified: input
+  and button both 35.9px, top, bottom and right deltas all exactly 0.
+- **The floating field is 266px; the docked one is not a number at all, and neither is the
+  narrow one.** `.lm-search__input`'s own `width` is read in exactly one arrangement — the
+  toolbar floating over the basemap, which is a map with the results panel switched off at
+  any width and a narrow one whose list is a drawer. Docked, `.lm-toolbar--docked
+  .lm-search__input` is `width: 100%` against a panel-width column; below 480px of the
+  embed's *own* width the container query is `100%` again in a toolbar spanning the map.
+  Three complete answers to one question, which is why changing this one moves nothing else.
+  It was 190px and was reported too small in precisely the case it governs: with the panel
+  off the field is the only thing on the map and it was shrink-wrapped to under a quarter of
+  it. **266px is that plus the 40% asked for.** Measured in the publish preview with the list
+  off: 266.0 at the Desktop tile (1105px embed) and 266.0 at the Tablet tile (766px, where
+  the drawer floats the toolbar, and the zoom stack is 602px clear of it); 368.8 at the Phone
+  tile (389px), which is the full-width rule and did not move. With the list back on and the
+  toolbar docked, 254.6 in a Slim panel — untouched.
+- **MapLibre's control icons are stroked paths in a 29px viewBox, so `background-size` scales
+  the stroke too.** The embed skins those controls to match the toolbar — 36px square, 8px
+  corner, `--lm-*` tokens — and the glyph is sized by `background-size` alone, there being no
+  element inside a `background-image` to size. It shipped at 44px for one revision on the
+  reasoning that 18px is what `icon()` writes for *our* controls; but ours are SVG elements
+  whose box is 18px, and 44px here gave an 18px glyph on a 4.6px bar filling half the button.
+  Reported as "why did you make the zoom icons big and bold". **The number to match is the
+  proportion, not the glyph size**: MapLibre draws 12px in a 29px button, 41% of the box, on a
+  3px bar, and 34px in our 36px button is 14px at 39% on a 3.5px bar. Rendered and compared in
+  the browser against 29px (33%, airier than MapLibre's own default, which is the complaint
+  the skin exists to answer) and 44px.
+- **A cluster expands with `flyTo`, not `easeTo`, and the reason is the duration.** `easeTo`
+  with no `duration` takes MapLibre's flat 500ms however far it travels — fine for what a
+  cluster expansion usually is, one or two zoom levels, and unreadable at the one view where
+  clusters matter most: from the whole map, a single press crossed about ten zoom levels in
+  half a second. Reported as "it flies to the group selector insanely fast, I could almost not
+  even see". `flyTo` derives its duration from the distance, so the short hop stays short and
+  the long one becomes followable, and it is what a pin click already does through
+  `flyToCard` — one vocabulary for "go there" instead of two that differ by how far the target
+  happens to be.
 - **There is no `.lm-toolbar svg` rule any more, and its absence is load-bearing enough to
   have a comment holding the space.** It shrank `icon()`'s `width`/`height` of 18 —
   presentation attributes, which any rule beats, and which have to stay 18 in `dom.ts` because

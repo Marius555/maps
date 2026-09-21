@@ -28,10 +28,24 @@ export function SignupForm() {
     defaultValues: { name: "", email: "", password: "" },
   });
 
+  /**
+   * Straight to "check your inbox", not to the dashboard.
+   *
+   * The account exists and the session cookie is written by this point, so
+   * `/maps` would render — and every control on it would be dead, because an
+   * unconfirmed address is refused every write (`lib/auth/email-gate.ts`). The
+   * one thing this person needs to do next is in their email, so that is the
+   * screen they get; it links on to the dashboard for anyone who wants to look
+   * around first.
+   *
+   * `/verify-email` is outside `proxy.ts`'s matcher, which matters for a
+   * different reason on this path than on the emailed one: here the navigation is
+   * same-site and the cookie would be sent either way.
+   */
   const onSubmit = handleSubmit(async (values) => {
     try {
       await signup.mutateAsync(values);
-      router.replace("/maps");
+      router.replace("/verify-email?status=sent");
       router.refresh();
     } catch (error) {
       applyFieldErrors(error, setError);

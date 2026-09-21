@@ -94,8 +94,18 @@ export function useShapeLayers({
 
   /** id → the geometry a held handle is currently describing. */
   const previews = useRef(new globalThis.Map<string, ShapeGeometry>());
-  /** The shape being drawn, which has no id yet. */
-  const drawing = useRef<ShapeGeometry | null>(null);
+  /**
+   * The shape being drawn, which has no id yet — and how much of it is placed.
+   *
+   * The count travels with the geometry rather than beside it so the two cannot
+   * be written a frame apart: a band drawn from new points against a stale split
+   * would dash the wrong leg. Undefined means "all of it", which is what every
+   * tool but the route tool means.
+   */
+  const drawing = useRef<{
+    geometry: ShapeGeometry;
+    placed?: number;
+  } | null>(null);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -222,11 +232,11 @@ export function useShapeLayers({
 
     /*
      * Nothing while a tool is armed. This writes an *inline* cursor onto the
-     * canvas, and inline beats the `maplibregl-crosshair` class the container
+     * canvas, and inline beats the `pointing-cursor` class the container
      * wears in draw mode — so without the guard, dragging a circle across an
-     * existing shape swapped the crosshair for a pointer mid-gesture. `leave`
-     * resetting to `""` would not restore it either, since the crosshair is not
-     * something this handler ever knew about.
+     * existing shape swapped the tool's cursor for a pointer mid-gesture.
+     * `leave` resetting to `""` would not restore it either, since that cursor
+     * is not something this handler ever knew about.
      */
     const enter = () => {
       if (isArmed) return;
@@ -283,10 +293,17 @@ export function useShapeLayers({
     [redraw],
   );
 
-  /** Show a shape that is still being drawn. */
+  /**
+   * Show a shape that is still being drawn.
+   *
+   * `placed` is how many of a line's points have been clicked out, with the
+   * rest being wherever the cursor is — the route tool passes it so the leg
+   * hanging off the pointer can be drawn as the guess it is. Every other caller
+   * passes one argument and gets exactly what it always got.
+   */
   const draw = useCallback(
-    (geometry: ShapeGeometry | null) => {
-      drawing.current = geometry;
+    (geometry: ShapeGeometry | null, placed?: number) => {
+      drawing.current = geometry ? { geometry, placed } : null;
       redraw();
     },
     [redraw],
@@ -311,7 +328,7 @@ function buildFeatures(
   colorFor: ((shape: Shape) => string) | undefined,
   draftColorFor: ((geometry: ShapeGeometry) => string) | undefined,
   previews: globalThis.Map<string, ShapeGeometry>,
-  drawing: ShapeGeometry | null,
+  drawing: { geometry: ShapeGeometry; placed?: number } | null,
 ): ShapeFeatures {
   const features = shapes.map((shape) =>
     shapeFeature(
@@ -325,7 +342,15 @@ function buildFeatures(
     ),
   );
 
-  if (drawing) features.push(...draftFeatures(drawing, draftColorFor?.(drawing)));
+  if (drawing) {
+    features.push(
+      ...draftFeatures(
+        drawing.geometry,
+        draftColorFor?.(drawing.geometry),
+        drawing.placed,
+      ),
+    );
+  }
 
   return { type: "FeatureCollection", features };
 }

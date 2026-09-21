@@ -284,7 +284,15 @@ export function createList(
       // locator on a phone. Everything else a place carries stays in the popup —
       // a list row is for choosing between places, not for reading one.
       if (place.phone) {
-        actions.append(link("lm-list__link", place.phone, `tel:${place.phone}`));
+        actions.append(
+          link(
+            // `--phone` because it is the one that gives way when the row runs
+            // out of width — see `.lm-list__link--phone`.
+            "lm-list__link lm-list__link--phone",
+            place.phone,
+            `tel:${place.phone}`,
+          ),
+        );
       }
 
       item.append(actions);

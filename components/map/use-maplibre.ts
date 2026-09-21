@@ -195,6 +195,25 @@ export function useMaplibre(
               fitBoundsOptions: { padding: 48, maxZoom: maxFitZoom, duration: 0 },
             }
           : {}),
+        /*
+         * How far a click may drift before it stops being a click.
+         *
+         * MapLibre's default is 3px, and what it does at 3px is not "treat this
+         * as a drag as well" — it is `MapEventHandler.click` returning early and
+         * `DOM.suppressClick()` killing the DOM event, so the map fires nothing
+         * at all. A pointer that wobbles between press and release therefore
+         * pans the map a hair and reports no click, with no error and nothing on
+         * screen: the gesture simply did not happen. On a trackpad that is a
+         * routine miss, and it is the whole of "my click sometimes does nothing".
+         *
+         * Six, because every tool on this canvas reads `map.on("click")` — the
+         * route tool, where a missed click costs the stop and the user has no way
+         * to tell a miss from a refusal, but also dropping a pin, a polygon's
+         * vertices and selecting a shape. The only other thing it changes is that
+         * a pan engages after 6px of travel rather than 3px, and a pan that has
+         * not started yet moves nothing.
+         */
+        clickTolerance: 6,
         // MapLibre defaults antialias to false, which leaves every road casing,
         // building edge and diagonal label looking jagged. Vector basemaps are
         // almost all diagonal geometry, so this is the single biggest visual win

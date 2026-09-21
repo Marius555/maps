@@ -13,10 +13,29 @@ import type {
 import { apiFetch } from "./fetcher";
 import { queryKeys } from "./keys";
 
+/**
+ * Who is signed in, and — the part everything else hangs off — whether they have
+ * confirmed their address.
+ *
+ * **The two option overrides are load-bearing and were a real bug.** The global
+ * defaults are `staleTime: 30_000` and `refetchOnWindowFocus: false`
+ * (`lib/query/client.ts`), and with them this query never notices a confirmation
+ * that happened somewhere else. That is the ordinary way out of the email gate:
+ * the link opens in a new tab, and the tab the user came from is the frozen
+ * dashboard they go back to. Left on the defaults it stays frozen — banner up,
+ * Create map dead — until something remounts, which reads exactly like the
+ * confirmation not having worked.
+ *
+ * So this one query asks again every time the window regains focus, and treats
+ * what it has as stale so the refetch actually fires. It is one small request
+ * against the single most confusing failure this feature has.
+ */
 export function useMe() {
   return useQuery({
     queryKey: queryKeys.me,
     queryFn: () => apiFetch<{ user: AuthUser }>("/api/auth/me"),
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
 

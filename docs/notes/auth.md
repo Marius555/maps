@@ -46,6 +46,25 @@ emails.
 - **`env.appUrl` is configured, never read from the request.** A spoofed `Host`
   header would otherwise mint a working reset link pointing at an attacker's
   domain.
+- **An address check that cannot decide must let the signup through.**
+  `domainAcceptsMail` returns `true` on a timeout, a SERVFAIL, a refused
+  connection and an error it does not recognise. Only two answers are decisive:
+  the domain does not exist, or it has published nowhere to deliver. The
+  alternative is a DNS wobble becoming a signup outage.
+- **`lib/email/disposable-domains.generated.ts` is a megabyte and must never
+  reach a browser.** `lib/email/disposable.ts` is its only reader and carries
+  `server-only`; `signupSchema` stays free of it so the signup form can keep
+  importing it, and `signupServerSchema` is the half that knows.
+- **The confirmed-address gate lives in `withAuth` and nowhere else.** One check
+  covers every authenticated route in the app, safe methods pass, and every route
+  that must answer an unconfirmed account is `withoutAuth` already — so it needs
+  no exemption list. A second hand-written copy of it anywhere is a bug.
+- **Reads are never gated, and the gate is off entirely without a Resend key.**
+  A frozen account still has to render the banner that explains the freeze, and a
+  confirmation nobody can send would lock every account on the install forever.
+- **Nothing that opens the gate may be behind it.** `POST /api/auth/verify-email`
+  resends the link and takes an address rather than a session, precisely so it
+  works for someone signed out. It is `withoutAuth` and must stay that way.
 - **The auth back arrow is the browser's Back with a floor, and `?next=` means go
   home.** `AuthBackButton` (pinned to the form column by `app/(auth)/layout.tsx`)
   calls `router.back()` unless the history is one entry long (a fresh tab, an
@@ -209,13 +228,160 @@ around that, and it is worth knowing before anyone reports it as a bug.
 Google-created accounts arrive with `emailVerification: true`, so they skip the
 confirmation email and get the welcome one straight away.
 
-## Nothing gates on `emailVerified` yet
+## An unconfirmed account is read-only
 
-The field has been plumbed from Appwrite to the client since Week 1 and read by
-nothing. It is now written by a real flow, and still read by nothing: no route
-refuses an unverified user. That is a product decision rather than an oversight —
-blocking a day-one signup behind an inbox is the friction CLAUDE.md §13.4 warns
-about. The plumbing is here when the decision changes.
+For most of this project's life `emailVerified` was plumbed from Appwrite to the
+client and read by nothing, and then for a short while it gated publishing alone.
+Both of those were argued from CLAUDE.md §13.4 — blocking a day-one signup behind
+an inbox is friction that does not get a stranger closer to paying — and the
+argument is still a real one. It is worth writing down that it was overridden
+rather than forgotten.
+
+**What changed is that the mail now arrives.** The publish-only gate was chosen
+while `RESEND_FROM` was still `onboarding@resend.dev`, which delivers to the
+Resend account owner and to nobody else. A gate whose key cannot be posted is a
+lockout; a gate whose key lands in the inbox thirty seconds later is a step. With
+a verified domain and a working key the owner asked for the wider one, and this
+is it.
+
+So: **`withAuth` refuses every non-GET request from an account that has not
+confirmed its address.** Signing in, reading, and looking at what you already
+built all stay open. Creating a map, importing a spreadsheet, moving a pin,
+saving a design, geocoding, publishing — all 403 with `email_unverified`.
+
+Three properties make that one check enough, and all three are load-bearing:
+
+- **Every route that has to answer an unconfirmed account is `withoutAuth`
+  already.** Signup, login, logout, both halves of verify-email, forgot and reset
+  password, the OAuth exchange. They are unauthenticated because they run before
+  or across a session, and the happy consequence is that the one way out of the
+  gate can never accidentally end up inside it. No exemption list exists and none
+  is needed.
+- **Safe methods pass.** The banner that explains the freeze asks
+  `GET /api/auth/me` for the address to name in it. Gate that and the product
+  goes quiet instead of explaining itself.
+- **The gate is inert when `RESEND_API_KEY` is unset.** `sendEmail` warns once and
+  resolves `{ sent: false }` without a key, so a confirmation link would never be
+  delivered and every account on that install would be permanently unusable. A
+  clone with no `.env` has to boot — the same posture `lib/env.ts` takes for every
+  optional value. `lib/auth/email-gate.ts` owns this.
+
+`allowUnverified` on `withAuth` is the seam for the route that does not exist
+yet. Self-service account deletion is the one that matters: somebody who mistyped
+their address has no way to change it and no way to delete the account, so today
+their only move is to sign up again with the right one. The flag is there so that
+when the account page lands the answer is one opt-out rather than a hole.
+
+**The gate is not inside `publishMap`, and never was.** `withAuth` has already
+resolved a real Appwrite user, so `emailVerified` is a fact rather than a
+cookie's claim — and `RepoContext` carries only a user id, by design (the session
+secret never leaves `/lib/auth`). The repository's other caller is
+`lib/sheet-sync/run.ts`, which republishes an already-live map from the daily
+cron with no session at all. A check down that layer would either refuse every
+nightly sync or make each one pay for an Appwrite lookup to re-answer a question
+settled at signup. Nothing a customer has already published goes down when their
+address lapses into unconfirmed, and that is deliberate.
+
+### Saying it three times, on purpose
+
+The rule at `lib/query/toast-error.ts` decides which channel carries what: *an
+error about something that just happened is a toast; a message explaining why a
+button is disabled stays beside the button.* The gate needs both, plus something
+neither provides.
+
+1. **The banner** (`components/verify-email/verify-email-banner.tsx`, mounted in
+   `AppShell`) is the standing explanation and the button that fixes it. It is on
+   every dashboard page because the server refuses *every* write, and greying
+   every control that could provoke one would mean touching several dozen
+   components and missing some.
+2. **A `ControlNote` under the two controls that do grey** — Create map and
+   Publish. They are doors rather than actions: everything else is reached
+   through one of them. The note is built from `emailUnverifiedNote`, the same
+   composer the 403's message starts with, so the greyed button and the refusal
+   cannot describe the same state differently.
+3. **One toast**, raised centrally from the `MutationCache` in
+   `lib/query/client.ts`, for every write that was never disabled. Per-hook
+   handling would cover the hooks somebody remembered; this covers the ones that
+   do not exist yet. Without it, dragging a pin on a frozen account does nothing
+   at all — which is exactly the grey-button-with-no-reason failure
+   `lib/query/plan-limit-toast.ts` exists to record.
+
+**`ErrorMessage` drops this one error on the floor, and that is the fourth
+place.** Twenty-six components render a mutation's error inline, and the gate can
+come back from any of them — so the toast above and an inline alert printed the
+identical sentence twice, measured on the Settings tab by toggling a layer. The
+filter lives in `components/ui/error-message.tsx` rather than at those
+twenty-six call sites for the same reason the toast is central: there is one of
+that file. Anything given its own global channel has to be silenced in the
+inline one, or the two channels are not two channels.
+
+Both client halves read `useMe()`, and **both disable only once it has answered**,
+never while it is loading. The server owns the decision either way, so the costs
+are asymmetric: a moment of a live button that fails honestly is nothing, and a
+confirmed customer staring at a permanently dead Publish is a support ticket.
+
+`useMe()` also carries `refetchOnWindowFocus: true` and `staleTime: 0`, against
+the global defaults, and that is not a preference. The ordinary way out of this
+gate is a link that opens in a **second tab**; the tab the user came from is the
+frozen dashboard they return to. On the defaults it stays frozen until something
+remounts, which reads exactly like the confirmation having failed. This file
+claimed the refetch behaviour for months before it was true — it was inherited
+from a version of the notice that predated `makeQueryClient` turning focus
+refetching off globally. Check it in a browser, not here.
+
+Verified with the control run, which is the only version of that test worth
+anything: on one synthetic focus event `/api/auth/me` refetched and the map
+detail query on the same page did not. Two traps if you repeat it — TanStack v5
+binds `visibilitychange` on **`window`**, so an event dispatched on `document`
+without `bubbles: true` never reaches it and reads as a failed refetch; and a
+HeroUI toast is two nested nodes that both carry an alert role, so counting them
+reports one toast as two.
+
+Signup lands on `/verify-email?status=sent` rather than `/maps`, for the obvious
+reason: the next useful action is in a mail client, not on a dashboard where
+nothing saves. That branch is the only one of the four that can name the address,
+because it is the only one whose visitor is signed in.
+
+## The disposable check is friction, not a guarantee
+
+`lib/email/disposable.ts` holds 75,000 domains, vendored by
+`npm run build:disposable-domains` from two lists — one CC0 and hand-curated, one
+MIT and regenerated daily. It is stale the day after it is generated, and the
+services on it mint new domains faster than anyone re-runs a script.
+
+So it is the same kind of thing as `lib/auth/throttle.ts` and the embed's domain
+allowlist: it raises the cost of doing something we would rather people didn't,
+and it does not pretend to make that thing impossible. Anyone determined can
+register a domain. What this stops is the ten-second throwaway from the first
+result for "temp mail", which is the case that actually happens.
+
+`lib/email/mx.ts` is the half that does not go stale — it asks whether the domain
+somebody just typed has a mail server *today*, which catches both the throwaway
+registered this morning and the ordinary typo (`gmail.co`, `hotnail.com`) that
+would otherwise become an account nobody can ever confirm. Its rule is in the
+Invariants above and is the one thing here not to touch without argument: every
+uncertain answer is a yes.
+
+Both run in `signupServerSchema` rather than in `registerUser`. §6's "enforce in
+the repositories" is about plan limits — quantities a client could otherwise talk
+us out of; this is validation, and expressed as a Zod schema it inherits the
+whole path that already exists: `parseBody` throws `ZodError`,
+`toErrorResponse` turns it into a 422 carrying `fields.email`, and
+`applyFieldErrors` renders the sentence under the Email field. No UI, no new
+error code, no new envelope. The one mechanical requirement is that `parseBody`
+calls `parseAsync` — a refinement that asks a resolver something cannot be
+expressed synchronously.
+
+**Neither check runs for Google sign-in**, which never reaches that route.
+Appwrite creates the account during the OAuth exchange, so refusing one would
+mean deleting a user we had just been handed — and a Google account is already an
+address somebody proved they control.
+
+Two escape hatches, and they are not the same. `EMAIL_DOMAIN_ALLOWLIST` un-blocks
+a domain with no deploy, which is what you want when a real customer is locked
+out at 2am. `KEEP` in `scripts/build-disposable-domains.mjs` is the durable one:
+a name there survives the next regeneration, which the environment variable's
+effect does not depend on but a colleague's memory does.
 
 ## The throttle is friction, not a guarantee
 

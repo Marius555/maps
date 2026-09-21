@@ -29,7 +29,9 @@ function getClient(): Resend | null {
       warned = true;
       console.warn(
         "RESEND_API_KEY is not set — transactional email is disabled. " +
-          "Signup, password reset and verification still work; the messages are not sent.",
+          "Signup and password reset still work; the messages are not sent. " +
+          "The confirm-your-email gate is off too, since no link could ever arrive " +
+          "to open it (lib/auth/email-gate.ts).",
       );
     }
     return null;

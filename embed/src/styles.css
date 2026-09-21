@@ -78,6 +78,113 @@
 }
 
 /*
+ * The host page's CSS, held off the things this bundle draws.
+ *
+ * **The embed renders into a stranger's document and there is no shadow DOM**,
+ * so every bare element selector on their site reaches it. That is not a
+ * hypothetical: the product's own `/embed/live.html` styles its "Load map"
+ * button with `button { margin-top: 8px; padding: 8px 14px }`, and that rule
+ * landed on every button the map draws — the zoom stack grew 16px (8px above
+ * each button, group 72 → 88px) and find-nearest hung 8px below the field it
+ * sits in. Reported three times as "the zoom buttons are too big", "the zoom-in
+ * button has padding top and bottom" and "the nearest-to-me button is lower
+ * than the search bar", and chased through three rounds of fixes to the wrong
+ * file, because `/embed/dev.html` has no such rule and measured clean.
+ *
+ * Probed with a realistic hostile stylesheet, this is what a customer's site
+ * could do before this rule existed, and each line here answers one of them:
+ *
+ *   button { margin: 6px }                -> every control displaced
+ *   button { min-height: 48px }           -> zoom 36 -> 48px, results rows 48px
+ *   button { text-transform: uppercase }  -> location names SHOUT
+ *   button { letter-spacing: .08em }      -> n a m e s   s p a c e d   o u t
+ *   ul { list-style: disc }               -> bullet points down the results
+ *
+ * **Only properties the embed does not already state on these elements.**
+ * `a { text-decoration }`, `a { color }`, `input { box-shadow }` and the search
+ * dropdown's own `padding`/`list-style` are already declared and already win;
+ * restating them here would be dead weight that also has to be kept in step.
+ *
+ * **The weight is counted.** `:is()` takes the specificity of its heaviest
+ * argument, and these are all bare element selectors, so this rule is (0,1,1) —
+ * above a host page's `button` at (0,0,1), and below every one of our own class
+ * rules at (0,2,0) or more, so it decides nothing the stylesheet already does.
+ * A host rule at `.promo button` (0,1,1) ties and wins on order; that is the
+ * accepted limit of doing this without a shadow root, not an oversight.
+ */
+.lm-root :is(button, a, input, ul, li) {
+  margin: 0;
+  min-width: 0;
+  min-height: 0;
+  text-transform: none;
+  letter-spacing: normal;
+  list-style: none;
+}
+
+/*
+ * MapLibre's own zoom buttons, in the embed's own language.
+ *
+ * Its stock geometry is a 29px button holding a 29px SVG whose glyph spans
+ * about 12px — so roughly 8px of air on every side, which is what "they just
+ * have a lot of available space in the box where the icon lives" was. Beside
+ * our own 36px toolbar controls it read as a second, smaller design language on
+ * the same map.
+ *
+ * So the group takes the skin `.lm-search__input` and `.lm-button` already
+ * wear (see that rule for why the ground is `--lm-tool-bg` with a fallback),
+ * and the button takes `.lm-button--icon`'s 36px square. The two clusters are
+ * one set of controls now.
+ *
+ * **`background-size` is the line that answers the complaint, and the number is
+ * a ratio rather than a glyph size.** Nothing else can do it: the icons are
+ * `background-image` data URIs, so there is no element to size.
+ *
+ * It was 44px for one revision, on the reasoning that 18px is what `icon()`
+ * writes for our own controls in dom.ts — and that was wrong in a way worth
+ * recording. Our glyphs are SVG elements whose *box* is 18px; MapLibre's is a
+ * filled path inside a 29px viewBox, so scaling the image scales the stroke
+ * with it. 44px gave an 18px glyph with a 4.6px bar filling half the button,
+ * and it read as a fat `+`. Reported as "why did you make the zoom icons big
+ * and bold".
+ *
+ * So the number to match is the proportion MapLibre itself draws: a 12px glyph
+ * in a 29px button, 41% of the box, on a 3px bar. **34px in our 36px button is
+ * a 14px glyph at 39% on a 3.5px bar** — stock's proportions carried up to the
+ * larger control. Rendered and compared in the browser: 29px (33%, and airier
+ * than MapLibre's own default, which is the complaint this block exists to
+ * answer) and 44px (50%, too heavy) are the two edges it sits between.
+ *
+ * **This does not move the clearance numbers**, and the temptation to make it
+ * is why they are named here. `padding-top: 44px` below is the floating
+ * *toolbar's* height plus 8, and the drawer's `padding-bottom: 42px` is that
+ * same 44 plus 8 less MapLibre's own 10px margin. Both are about what the zoom
+ * stack has to clear, never about how tall the stack itself is — see the
+ * comment on the `:has(> .lm-toolbar)` rule for the bug that came of confusing
+ * the two.
+ */
+.lm-root .maplibregl-ctrl-group {
+  border-radius: 8px;
+  background: var(--lm-tool-bg, var(--lm-surface));
+  /* MapLibre's own is `0 0 0 2px rgba(0,0,0,.1)`, a hard ring rather than a
+     shadow, and it is the other half of why these looked like somebody else's
+     buttons. */
+  box-shadow: var(--lm-shadow);
+}
+
+.lm-root .maplibregl-ctrl-group button {
+  width: 36px;
+  height: 36px;
+}
+
+.lm-root .maplibregl-ctrl-group button + button {
+  border-top-color: var(--lm-border);
+}
+
+.lm-root .maplibregl-ctrl-icon {
+  background-size: 34px;
+}
+
+/*
  * MapLibre's own controls, which ship light-only CSS: white button groups, dark
  * SVG icons and a translucent-white attribution bar.
  *
@@ -402,7 +509,26 @@
 }
 
 .lm-search__input {
-  width: 190px;
+  /*
+   * **This number is the floating toolbar's alone**, which is what makes it
+   * safe to change: docked inside the panel the field is `width: 100%`
+   * (`.lm-toolbar--docked .lm-search__input`, far below), and under 480px of
+   * the embed's own width it is `100%` again in a toolbar spanning the map. What
+   * is left is the one arrangement this states — the search box over the
+   * basemap, on a map with no results panel and on a narrow one whose list is a
+   * drawer.
+   *
+   * It was 190px, and that is the state it was reported too small in: with the
+   * panel switched off the field is the only thing on the map and it was
+   * shrink-wrapped to less than a third of it. 266px is that plus the 40% asked
+   * for. Nothing below 480px moves, which is where the field already fills the
+   * row.
+   *
+   * `max-width: 100%`, in a toolbar capped at `calc(100% - 20px)`, is what stops
+   * it overflowing a box narrower than itself; `min-width: 0` below is what lets
+   * it give way further still rather than pushing find-nearest out of the row.
+   */
+  width: 266px;
   max-width: 100%;
   /*
    * An input carries an intrinsic width of its own — roughly twenty characters —
@@ -414,10 +540,11 @@
   min-width: 0;
   /* Room at the end for whatever sits inside the field — the magnifier, or the
      find-nearest button, which is the wider of the two. **It has to stay at or
-     above that control's width plus its 2px inset**, which is 34px now the
-     button is 32px; 38px is that with 4px of air, the same slack it had at the
-     smaller size. Flush was the state this number was in before the resize. */
-  padding: 7px 38px 7px 10px;
+     above that control's width**, now 36px with the button flush to the edge
+     rather than inset; 40px is that with 4px of air, the same slack this number
+     has carried through every resize. Flush was the state it was in once, and
+     the text ran under the glyph. */
+  padding: 7px 40px 7px 10px;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -553,14 +680,33 @@
  * actually needs is therefore restated here.
  */
 .lm-search__action {
-  inset-inline-end: 2px;
+  inset-inline-end: 0;
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  /*
+   * The field's own height, and a percentage rather than the number.
+   *
+   * This was `32px` — the field's 36 less a 2px inset either side — so the
+   * control was *centred in* the field without being *the same height as* it.
+   * At rest that is invisible; hovered or lit it is a short well with a 2px
+   * shelf above and below, which is what "the search input and the nearest
+   * button are different heights, they are not aligned" meant. Reported twice,
+   * because the first pass measured the two centre-lines, found them equal to
+   * within 0.05px, and called it aligned.
+   *
+   * `100%` resolves against `.lm-search`, the wrapper that already tracks the
+   * field, so the two cannot disagree again. That also deletes one of the four
+   * numbers the note below `.lm-toolbar` says have to move together whenever
+   * the row is resized — and it was this one, derived by arithmetic from the
+   * field height, that was wrong both times.
+   */
+  height: 100%;
   padding: 0;
   place-items: center;
   border: 0;
-  border-radius: 6px;
+  /* Square where it meets the text, the field's own corner where it meets the
+     edge it now sits flush against. */
+  border-radius: 0 8px 8px 0;
   background: none;
   cursor: pointer;
 }
@@ -591,6 +737,39 @@
 .lm-root :focus-visible {
   outline: 2px solid var(--lm-focus);
   outline-offset: 2px;
+}
+
+/*
+ * The search field answers with its own border instead of the ring.
+ *
+ * Reported as "remove the on-focus coloured outline in the search bar". The
+ * shared rule above is the only focus affordance anything in this embed has, so
+ * it stays — §8 lists visible keyboard focus as a quality floor, and a field a
+ * keyboard visitor cannot find is a worse bug than a loud ring. What goes is the
+ * *ring on this one control*, where it is loudest: `outline-offset: 2px` draws
+ * it outside a box that already sits in a 7px-padded toolbar, so on a floating
+ * toolbar it is a coloured halo over the basemap.
+ *
+ * A border is the right answer here and nowhere else, because this is the one
+ * control in the row that already has one to darken.
+ *
+ * **The weight is counted, not guessed, and `:focus-visible` is what pays for
+ * it.** A pseudo-class counts as a class, so this is (0,3,0) — enough to beat
+ * both the shared ring above and `.lm-toolbar--docked .lm-search__input` at
+ * (0,2,0), which paints `border-color: transparent` a thousand lines *later* in
+ * this file. Without the pseudo-class in the count the two would tie and the
+ * docked rule would win on source order, leaving a docked field with no focus
+ * state at all. Docked, the resting border is that transparent one, so focus is
+ * a border appearing rather than darkening — which is the same statement said
+ * against a different ground.
+ */
+.lm-root .lm-search__input:focus-visible {
+  outline: none;
+  border-color: color-mix(
+    in oklab,
+    var(--lm-foreground) 45%,
+    var(--lm-border)
+  );
 }
 
 .lm-status {
@@ -1961,14 +2140,27 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
   color: var(--lm-muted);
-  font-size: 13px;
+  /* A step under the name's inherited 14px and under the 13px distance on the
+     line above: the street is what confirms a result once the name has been
+     read, not the thing a visitor scans down, and at 13 it carried the same
+     weight in the row as the two lines that are. */
+  font-size: 12px;
   line-height: 1.45;
 }
 
 .lm-list__actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  /*
+   * Never two rows.
+   *
+   * `wrap` is what "directions and number are in a column when they should be
+   * in line" was: two chips at 9px of padding each, in a panel that is 25% of
+   * the embed less a 52px indent, ran out of width and stacked. Plain text is
+   * narrow enough to fit, and the phone link gives way rather than breaking the
+   * line — see `.lm-list__link--phone`.
+   */
+  flex-wrap: nowrap;
+  gap: 12px;
   /* Pulled up under the row, whose own padding closes the gap when these are
      switched off (`.lm-list__item--bare`). */
   margin-top: -2px;
@@ -1979,19 +2171,26 @@
 }
 
 /*
- * Small outlined pills, not blue underlined links.
+ * Words, not chips.
  *
- * These were `#1c7ed6` with an underline on hover — a hardcoded blue that
- * ignored the owner's accent, and the single thing that made a designed panel
- * read as an undesigned web page. The treatment is `.lm-popup__link--cta`'s,
- * which the card already uses for the owner's own call to action, so this is the
- * embed's existing vocabulary rather than a second one.
+ * These have been three things. Blue underlined links (`#1c7ed6`, hardcoded,
+ * ignoring the owner's accent), then small outlined pills with three
+ * alternative treatments and four corners behind a pair of designer controls,
+ * and now plain text that takes the accent under the pointer — "I don't want
+ * directions, phone number and other options to be in chip, just put in plain
+ * text", and then, of the bold that arrived with that, "remove bold state and
+ * make sure they dont change in size, just change color on hover".
+ *
+ * So `--lm-link-bd`, `--lm-link-pad`, `--lm-link-radius` and the three
+ * `[data-lm-link]` variant blocks are gone, along with `rowLinkStyle` and
+ * `rowLinkRadius` (retired on `SnapshotSettings`; nothing writes or reads
+ * them). `--lm-link-fg` stays, because the hover below still moves it.
+ *
+ * **This reaches maps that are already live** on the next `/embed` deploy,
+ * without their owners republishing — the tag-chip trade, taken deliberately
+ * because it was asked for directly.
  */
 .lm-list__link {
-  padding: 3px var(--lm-link-pad, 9px);
-  border: 1px solid var(--lm-link-bd, var(--lm-border));
-  border-radius: var(--lm-link-radius, 999px);
-  background: var(--lm-link-bg, transparent);
   color: var(--lm-link-fg, var(--lm-foreground));
   font-size: 12px;
   line-height: 1.5;
@@ -2000,78 +2199,45 @@
 }
 
 /*
- * Hover, written as the four tokens rather than as the four properties.
+ * The accent, and nothing with a width in it.
  *
- * That is what makes one rule serve every treatment below: a variant sets those
- * tokens on `.lm-root`, where they reach the link by inheritance, and *any*
- * declaration on the element itself beats an inherited value however light the
- * selector is. Painted as real properties here, this rule would be one class
- * against a variant's two and every chip would have gone dead under the pointer.
+ * This was the accent *and* `font-weight: 600` for one revision, which is what
+ * had been asked for; the weight is gone on the next request — "remove bold
+ * state and make sure they dont change in size, just change color on hover" —
+ * and the two halves of that are one deletion. **A weight is a width**: bold
+ * grew each word by a pixel or two, so hovering Directions, which is first,
+ * nudged the number beside it along. The comment that stood here spent fifteen
+ * lines arguing that was affordable and rejecting the hidden-`::after` fix as
+ * costing more than the symptom. Neither argument is needed by a colour.
+ *
+ * So the rule to keep is the one this file already follows everywhere else: a
+ * state may repaint a control and may not resize it. `.lm-list__item--on` draws
+ * its bar with an inset shadow for the same reason, and the focus ring is an
+ * `outline`, which is out of flow.
+ *
+ * `:focus-visible` shares it so the keyboard gets the same answer the pointer
+ * does.
  */
-.lm-list__link:hover {
-  --lm-link-bg: color-mix(in oklab, var(--lm-focus) 8%, transparent);
+.lm-list__link:hover,
+.lm-list__link:focus-visible {
   --lm-link-fg: var(--lm-focus);
 }
 
 /*
- * The line is the outlined pill's own hover, so it is scoped to the outlined
- * pill rather than painted on everything and undone three times.
+ * A long international number gives way before the line does.
  *
- * It cannot live in the rule above: that one sets the token **on the element**,
- * which outweighs a variant's inherited `transparent` however heavy the
- * variant's selector is, so every borderless chip grew an outline the moment a
- * pointer touched it. `:not([data-lm-link])` is exactly the absent state, which
- * is what the outlined pill *is*.
+ * `nowrap` on the row means something has to: at a Slim panel width there is not
+ * always room for "Directions" and "+370 600 00000" both. Directions is the
+ * fixed one — the same word on every row, and the one whose width the bold state
+ * is measured against — so the number is what shrinks and ellipses.
  */
-.lm-root:not([data-lm-link]) .lm-list__link:hover {
-  --lm-link-bd: color-mix(in oklab, var(--lm-focus) 45%, var(--lm-border));
-}
-
-/*
- * The three treatments that are not the outlined pill.
- *
- * Absent is that pill, which is what every published row draws (§7) — the same
- * way `CardButtonVariant` leaves its own filled default unnamed. They sit on
- * `.lm-root` rather than on the link so the hover above keeps winning; see it
- * for why that matters.
- *
- * The corner is not here. It is `--lm-link-radius`, a length written straight
- * onto the root by `chromeVars`, because a square chip and a pill are the same
- * three treatments with a different corner rather than six treatments.
- */
-.lm-root[data-lm-link="soft"] {
-  --lm-link-bd: transparent;
-  --lm-link-bg: color-mix(in oklab, var(--lm-foreground) 7%, transparent);
-}
-
-.lm-root[data-lm-link="solid"] {
-  --lm-link-bd: transparent;
-  --lm-link-bg: var(--lm-focus);
-  /* The card's filled button already reads white on the owner's accent, and
-     this is that button at chip size. */
-  --lm-link-fg: #ffffff;
-}
-
-/* Deepened rather than tinted: the generic hover lightens a *ground*, and over a
-   filled accent that reads as the control switching off. */
-.lm-root[data-lm-link="solid"] .lm-list__link:hover {
-  --lm-link-bg: color-mix(in oklab, var(--lm-focus) 86%, #000000);
-  --lm-link-fg: #ffffff;
-}
-
-/* No box at all — the links as words under the address, for an owner whose
-   panel is already full of chips. The padding goes with the border, or the row
-   keeps a 9px indent around nothing. */
-.lm-root[data-lm-link="plain"] {
-  --lm-link-bd: transparent;
-  --lm-link-pad: 0;
-  --lm-link-fg: var(--lm-focus);
-}
-
-/* A ground would be a chip again, so this one says it the way words do. */
-.lm-root[data-lm-link="plain"] .lm-list__link:hover {
-  --lm-link-bg: transparent;
-  text-decoration: underline;
+.lm-list__link--phone {
+  /* The only shrinkable item in a `nowrap` row; everything else is `auto`, whose
+     `min-width` floor is its own content. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Both are the panel talking about itself rather than about a place, so they are

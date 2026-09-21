@@ -7,6 +7,7 @@ import { MAX_ROUTABLE_POINTS } from "@/lib/validation/routable.schema";
 
 import type { Place } from "@/lib/repositories/types";
 import type { LngLatTuple } from "@/packages/shared/shapes";
+import { recall, remember, retain } from "./routability-cache";
 
 /**
  * Which locations the routing engine can actually reach.
@@ -20,9 +21,16 @@ import type { LngLatTuple } from "@/packages/shared/shapes";
  * Held in a hook rather than in lib/stores/editor-store.ts, which is deliberately
  * transient UI state and nothing else. This is knowledge about data, gathered
  * from a server, and it is the same shape as `useAddressResolution`'s — sets of
- * ids, kept for as long as the editor is open. Not persisted: a pin dragged onto
- * a road becomes routable, and a column recording otherwise would be wrong from
- * the moment it was written.
+ * ids, kept for as long as the editor is open.
+ *
+ * **Not stored on the row**, and that has not changed: a pin dragged onto a road
+ * becomes routable, and a column recording otherwise would be wrong from the
+ * moment it was written. What *is* kept is a `sessionStorage` cache keyed on the
+ * pin's coordinates rather than on its id (`routability-cache.ts`), which answers
+ * that objection instead of overruling it — move the pin and the key stops
+ * matching, so the engine is asked again. It exists because the refs below die
+ * with the page, and a reload was therefore spending the whole two-hundred-pin
+ * sweep a second time, and a third, without limit.
  *
  * **Nothing here can reach a visitor.** Every call is an edit-time request made
  * while somebody is drawing (CLAUDE.md §2), and no answer is baked into a
@@ -141,6 +149,7 @@ export function useRoutability(mapId: string) {
   const record = useCallback(
     (batch: readonly Place[], results: boolean[]) => {
       const next = new Set(known.current);
+      const learned: { place: Place; routable: boolean }[] = [];
       let changed = false;
 
       batch.forEach((place, index) => {
@@ -152,6 +161,7 @@ export function useRoutability(mapId: string) {
         if (typeof verdict !== "boolean") return;
 
         answered.current.add(place.id);
+        learned.push({ place, routable: verdict });
         const isUnroutable = !verdict;
 
         if (isUnroutable && !next.has(place.id)) {
@@ -163,9 +173,17 @@ export function useRoutability(mapId: string) {
         }
       });
 
+      /*
+       * Everything answered, not only what changed. `changed` is about whether the
+       * markers need repainting; the cache is about not paying for this answer
+       * again, and a pin that was routable and still is cost exactly as much to
+       * find out.
+       */
+      remember(mapId, learned);
+
       if (changed) commit(next);
     },
-    [commit],
+    [commit, mapId],
   );
 
   /**
@@ -194,7 +212,37 @@ export function useRoutability(mapId: string) {
    */
   const probe = useCallback(
     async (places: readonly Place[]) => {
-      const queue = places.filter((place) => !asked.current.has(place.id));
+      const unasked = places.filter((place) => !asked.current.has(place.id));
+      if (unasked.length === 0) return;
+
+      /*
+       * The cache first, and in one pass before any request goes out.
+       *
+       * This is the whole saving: on a reload of a map that has been swept once,
+       * every pin is recalled and `queue` comes out empty, so arming the tool
+       * costs nothing instead of two hundred upstream requests. A pin that has
+       * moved since is not recalled — the key is its coordinates — so it falls
+       * through to the engine exactly as it should.
+       */
+      const queue: Place[] = [];
+      const recalled: { place: Place; routable: boolean }[] = [];
+
+      for (const place of unasked) {
+        const verdict = recall(mapId, place);
+
+        if (verdict === null) queue.push(place);
+        else recalled.push({ place, routable: verdict });
+      }
+
+      if (recalled.length > 0) {
+        for (const { place } of recalled) asked.current.add(place.id);
+
+        record(
+          recalled.map((entry) => entry.place),
+          recalled.map((entry) => entry.routable),
+        );
+      }
+
       if (queue.length === 0) return;
 
       const mine = gesture.current;
@@ -220,7 +268,7 @@ export function useRoutability(mapId: string) {
         }
       }
     },
-    [check, record],
+    [check, mapId, record],
   );
 
   /**
@@ -241,26 +289,74 @@ export function useRoutability(mapId: string) {
   }, []);
 
   /**
-   * One location, answered before the caller acts on it.
+   * One location, settled on its own rather than as part of a sweep.
    *
-   * The sweep and the hover pre-warm are both races the user can win — a
-   * deliberate click lands about 300ms after the pointer settles and the public
-   * engine takes about a second to answer — and losing that race is what made
-   * the tool silently accept a stop it was meant to refuse. So the click asks,
-   * and waits. On a warm cache, which is the whole point of the sweep and the
-   * pre-warm, this returns without a request at all.
+   * The one path behind both things that ask about a single pin — the hover
+   * pre-warm and the click — so that a dwell and the click 300ms behind it share
+   * **one** request through `pending` instead of buying the same point twice.
    *
-   * A failure resolves `true`. This check is a courtesy in front of the route
-   * request, which does its own refusing with a named stop
-   * (use-route-request.ts); blocking a stop because our own affordance broke
-   * would be worse than the thing it exists to prevent.
+   * It has to exist separately from `probe` because `probe` filters on
+   * `asked`, and the sweep claims every pin in its queue up front. So the hover
+   * pre-warm, whose whole job was to answer for the pin somebody is about to
+   * click, returned immediately without asking for exactly the pins the sweep
+   * had claimed and not yet reached — which is every pin on a freshly armed map.
+   * That is what made the click pay the full round trip every first time.
+   *
+   * `asked` is claimed *before* the request goes out and released on failure,
+   * exactly as the sweep does it, so the sweep cannot follow behind and buy the
+   * same point again.
+   *
+   * A failure resolves `true`. This is a courtesy in front of the route request,
+   * which does its own refusing with a named stop (use-route-request.ts);
+   * refusing a stop because our own affordance broke would be worse than the
+   * thing it exists to prevent.
    */
-  const checkOne = useCallback(
-    async (place: Place): Promise<boolean> => {
+  /**
+   * Draw this pin as waiting on a verdict, for exactly as long as it is.
+   *
+   * Its own function because two paths reach it — a click that starts the
+   * request, and a click that joins one a hover started a moment earlier. The
+   * second used to fall through unmarked, so whether a stop looked provisional
+   * depended on whether the pointer had rested on the pin first, which is not a
+   * distinction anybody can see or act on.
+   */
+  const mark = useCallback(
+    async (placeId: string, answer: Promise<boolean>): Promise<boolean> => {
+      setCheckingId(placeId);
+
+      try {
+        return await answer;
+      } finally {
+        // Only if nothing newer has taken the mark: two clicks in a row would
+        // otherwise clear the second pin's while the first resolves.
+        setCheckingId((current) => (current === placeId ? null : current));
+      }
+    },
+    [],
+  );
+
+  const settle = useCallback(
+    async (place: Place, marks: boolean): Promise<boolean> => {
       if (answered.current.has(place.id)) return !known.current.has(place.id);
 
       const inFlight = pending.current.get(place.id);
-      if (inFlight) return inFlight;
+      if (inFlight) return marks ? mark(place.id, inFlight) : inFlight;
+
+      /*
+       * A remembered verdict answers without a request, which is worth as much
+       * for the wait as for the credit: the sweep that would have warmed this
+       * pin may not have reached it yet after a reload.
+       */
+      const remembered = recall(mapId, place);
+
+      if (remembered !== null) {
+        asked.current.add(place.id);
+        record([place], [remembered]);
+
+        return remembered;
+      }
+
+      asked.current.add(place.id);
 
       const answer = (async () => {
         try {
@@ -269,11 +365,13 @@ export function useRoutability(mapId: string) {
             profile: "car",
           });
 
-          asked.current.add(place.id);
           record([place], results);
 
           return results[0] !== false;
         } catch {
+          // Back on the shelf, for `probe`'s reason: an id left in `asked`
+          // after a 500 is a pin nothing will ever ask about again.
+          asked.current.delete(place.id);
           return true;
         } finally {
           pending.current.delete(place.id);
@@ -281,17 +379,39 @@ export function useRoutability(mapId: string) {
       })();
 
       pending.current.set(place.id, answer);
-      setCheckingId(place.id);
 
-      try {
-        return await answer;
-      } finally {
-        // Only if nothing newer has taken the mark: two clicks in a row would
-        // otherwise clear the second pin's spinner when the first resolves.
-        setCheckingId((current) => (current === place.id ? null : current));
-      }
+      return marks ? mark(place.id, answer) : answer;
     },
-    [check, record],
+    [check, mapId, mark, record],
+  );
+
+  /**
+   * The click path: settle this pin, and mark it while we wait.
+   *
+   * The wait no longer blocks the click — `use-draw-route.ts` takes the stop at
+   * once and undoes it if this comes back false — so the mark is about a verdict
+   * still outstanding on a stop already taken, not about a click that has been
+   * swallowed.
+   */
+  const checkOne = useCallback(
+    (place: Place): Promise<boolean> => settle(place, true),
+    [settle],
+  );
+
+  /**
+   * The hover path: the same question, asked silently.
+   *
+   * The pause before a deliberate click is free time, and spending it on the
+   * answer is what makes the click's own verdict arrive before anybody notices
+   * it was outstanding. No `checkingId`: nobody is waiting on this, and a pin
+   * that pulsed every time the cursor rested on it would be marking the map
+   * rather than a decision.
+   */
+  const warmOne = useCallback(
+    (place: Place): void => {
+      void settle(place, false);
+    },
+    [settle],
   );
 
   /**
@@ -315,12 +435,17 @@ export function useRoutability(mapId: string) {
       if (!placeIds.has(placeId)) answered.current.delete(placeId);
     }
 
+    // And the cache, for the same reason and more urgently: it is the only one of
+    // the three that outlives the page, so a reused id would inherit a verdict
+    // from a location deleted in a previous session.
+    retain(mapId, placeIds);
+
     const current = known.current;
     const next = new Set([...current].filter((id) => placeIds.has(id)));
 
     // Nothing written when nothing was dropped, so this cannot loop a render.
     if (next.size !== current.size) commit(next);
-  }, [commit]);
+  }, [commit, mapId]);
 
   return {
     unroutableIds,
@@ -328,6 +453,7 @@ export function useRoutability(mapId: string) {
     probe,
     abort,
     check: checkOne,
+    warm: warmOne,
     markUnroutable,
     retainOnly,
   };

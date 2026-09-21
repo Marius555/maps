@@ -30,14 +30,33 @@
         color: #1b1d21;
         font-size: 14px;
       }
-      input {
+      /*
+       * Scoped to the form, and it has to stay that way.
+       *
+       * These were bare `input` and `button` selectors, and the embed renders
+       * into this very document — so `button { margin-top: 8px; padding: 8px
+       * 14px }`, written for the Load map button below, landed on the map's
+       * zoom stack and on find-nearest inside the search field. The zoom group
+       * grew 16px and the crosshair hung 8px low, and it was reported three
+       * times as a bug in the embed before anyone looked at this file.
+       *
+       * **This page's whole job is to show what a customer sees.** A bare
+       * element selector here makes it show its own styling instead, which is
+       * worse than no harness. `embed/dev/dev.html` has never had one, which is
+       * exactly why the same map measured clean there and broken here.
+       *
+       * The embed now carries a reset for this (`.lm-root :is(button, a, input,
+       * ul, li)` in embed/src/styles.css) — but that is a floor for pages we do
+       * not control, not a licence for ours to be one of them.
+       */
+      #form input {
         width: 100%;
         font: inherit;
         padding: 8px;
         border: 1px solid #ced4da;
         border-radius: 6px;
       }
-      button {
+      #form button {
         font: inherit;
         padding: 8px 14px;
         margin-top: 8px;
@@ -129,6 +148,8 @@
     -->
     <p class="note" id="verdict"></p>
 
+    <p class="note" id="design"></p>
+
     <p class="note" id="status"></p>
 
     <script>
@@ -137,6 +158,7 @@
       const status = document.getElementById("status");
       const docs = document.getElementById("docs");
       const verdict = document.getElementById("verdict");
+      const design = document.getElementById("design");
 
       /*
        * Everything after `snapshot=` to the end of the string, deliberately not
@@ -201,6 +223,8 @@
           return;
         }
 
+        reportDesign(snapshot);
+
         if (snapshot && snapshot.analytics && snapshot.analytics.url) {
           verdict.className = "note";
           /*
@@ -228,10 +252,65 @@
           " and publish again — the endpoint is baked in at publish time.";
       }
 
+      /*
+       * Whether the owner's basemap and colours actually made it into the file.
+       *
+       * This exists because of a report that reads as a rendering bug and is
+       * usually not one: "map styles are not passed to this map, it has default
+       * map theme, default colors different". Three different things produce
+       * exactly that, and only one of them is a bug:
+       *
+       *  - the map has not been republished since the style or the colours were
+       *    chosen, so the live file honestly carries neither. By far the most
+       *    common, and the reason this page is the right place to say it — the
+       *    dashboard reads settings as *stored*, this reads what was *published*.
+       *  - `appearance` is absent because the owner's choices resolve to nothing
+       *    to do (`isPlainAppearance`), which is correct and draws the plain
+       *    basemap on purpose.
+       *  - `loadMapStyle` threw in the browser, and the embed fell back to the
+       *    untinted style URL without a word (embed/src/index.ts). Deliberate —
+       *    a stranger's site must not sprout our diagnostics — which is exactly
+       *    why something outside the bundle has to be able to tell you.
+       *
+       * The first two are distinguishable from the file alone, which is all this
+       * does. If it says both arrived and the map below still looks default, it
+       * is the third, and the console in *this* tab will have the fetch error.
+       */
+      function reportDesign(snapshot) {
+        if (!snapshot) return;
+
+        const colors = snapshot.settings && snapshot.settings.colors;
+        const has = [];
+        const missing = [];
+
+        (snapshot.appearance ? has : missing).push("basemap appearance");
+        (colors && Object.keys(colors).length ? has : missing).push("colours");
+
+        if (!missing.length) {
+          design.className = "note";
+          design.textContent =
+            "Design published. This snapshot carries the basemap appearance" +
+            " and the colour tokens, so what you see below is what the owner" +
+            " designed. If it still looks like the default theme, the style" +
+            " fetch failed in the browser — check this tab's console.";
+          return;
+        }
+
+        design.className = "warn";
+        design.textContent =
+          `This snapshot carries no ${missing.join(" and no ")}` +
+          (has.length ? `, only ${has.join(" and ")}` : "") +
+          ". Most often that means the map has not been republished since" +
+          " those were chosen — the endpoint, the theme and the colours are" +
+          " all baked in at publish time. It can also be correct: an" +
+          " appearance that changes nothing is not written at all.";
+      }
+
       function load(snapshotUrl) {
         if (!snapshotUrl) return;
 
         docs.hidden = true;
+        design.textContent = "";
         // The URL alone, not "Loading …": it stays on screen under the map once
         // the map is there, and a permanent "Loading" reads as a stuck page.
         status.textContent = snapshotUrl;

@@ -16,6 +16,7 @@ export const TABLES = {
   groups: "groups",
   cardDesigns: "cardDesigns",
   subscriptions: "subscriptions",
+  usage: "usage",
   mapSessions: "mapSessions",
   mapDaily: "mapDaily",
   sheetLinks: "sheetLinks",
