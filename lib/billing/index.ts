@@ -27,7 +27,9 @@ export type {
   BillingProvider,
   Checkout,
   CheckoutRequest,
+  KeptPlan,
   PaidPlanId,
+  PlanChangeRequest,
   SubscriptionState,
   SubscriptionStatus,
 } from "./types";

@@ -322,25 +322,31 @@
 }
 
 /*
- * The window's scrollbar is always allowed for, whether or not it is drawn.
+ * The scrolling element's scrollbar is always allowed for, whether or not it is
+ * drawn.
  *
- * The dashboard's pages grow the document — `AppShell` is `min-h-[100dvh]`, a
- * floor rather than an app frame — so anything that opens can cross the viewport
- * boundary and bring the scrollbar in with it. On a classic (non-overlay)
- * scrollbar that takes ~15px out of the layout in one frame, and the whole page
- * jumps sideways: reported on the import wizard's Review step, where pressing
- * **Fix** on a short list does exactly that.
+ * Anything that opens can push a scroller past its box and bring the scrollbar in
+ * with it. On a classic (non-overlay) scrollbar that takes ~15px out of the layout
+ * in one frame, and the whole page jumps sideways: reported on the import wizard's
+ * Review step, where pressing **Fix** on a short list does exactly that.
  *
  * `stable` reserves the gutter up front, so appearing costs nothing. It is the
  * same bug `block-editor-form.tsx` solved one level down by handing its panel to
- * `ScrollShadow hideScrollBar`; the document has no such wrapper, and hiding the
- * page's own scrollbar is not on the table.
+ * `ScrollShadow hideScrollBar`; hiding a page's own scrollbar is not on the table.
  *
- * On the root element rather than on a page: only the scrolling element can
- * reserve a gutter, and every page is inside this one.
+ * **Two scrollers, so two rules.** Marketing, auth and docs pages grow the
+ * document, so the window scrolls and the gutter belongs on the root. The
+ * dashboard is a frame one viewport tall (`AppShell`, `data-app-frame`) whose
+ * `<main>` scrolls instead — `<main>` reserves its own gutter, and the root must
+ * stop reserving one, or every dashboard page carries a permanently empty 15px
+ * strip down its right edge where a scrollbar can never appear.
  */
 html {
   scrollbar-gutter: stable;
+}
+
+html:has([data-app-frame]) {
+  scrollbar-gutter: auto;
 }
 
 /*

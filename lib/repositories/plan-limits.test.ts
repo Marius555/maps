@@ -47,6 +47,8 @@ let subscriptionRows: {
   plan?: string;
   status?: string;
   currentPeriodEnd?: string;
+  keptPlan?: string;
+  keptUntil?: string;
 }[] = [];
 
 beforeEach(() => {
@@ -580,6 +582,37 @@ describe("getUserPlan and the end of a paid period", () => {
     // Absent has to go on meaning what it meant before the column was used, or
     // every row written before this check would expire the moment it shipped.
     subscriptionRows = [{ plan: "starter", status: "active" }];
+    const { getUserPlan } = await planLimits();
+
+    await expect(getUserPlan(USER_ID)).resolves.toBe("starter");
+  });
+
+  it("keeps a downgraded account on the plan it paid for until the renewal", async () => {
+    // The provider already bills Starter; Pro was paid for until 2099.
+    subscriptionRows = [
+      {
+        plan: "starter",
+        status: "active",
+        currentPeriodEnd: "2099-01-01T00:00:00.000Z",
+        keptPlan: "pro",
+        keptUntil: "2099-01-01T00:00:00.000Z",
+      },
+    ];
+    const { getUserPlan } = await planLimits();
+
+    await expect(getUserPlan(USER_ID)).resolves.toBe("pro");
+  });
+
+  it("moves a downgraded account to the plan it is billed for once the renewal passes", async () => {
+    subscriptionRows = [
+      {
+        plan: "starter",
+        status: "active",
+        currentPeriodEnd: "2099-01-01T00:00:00.000Z",
+        keptPlan: "pro",
+        keptUntil: "2020-01-01T00:00:00.000Z",
+      },
+    ];
     const { getUserPlan } = await planLimits();
 
     await expect(getUserPlan(USER_ID)).resolves.toBe("starter");

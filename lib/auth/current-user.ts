@@ -5,6 +5,7 @@ import { cache } from "react";
 import { isUnauthorized } from "@/lib/appwrite/errors";
 import { createSessionClient } from "@/lib/appwrite/session";
 import { UnauthorizedError } from "@/lib/repositories/errors";
+import { readsAsVerified } from "./email-gate";
 import { readSessionSecret } from "./session-cookie";
 import type { AuthUser } from "./types";
 
@@ -26,7 +27,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
       id: account.$id,
       email: account.email,
       name: account.name,
-      emailVerified: account.emailVerification,
+      emailVerified: readsAsVerified(account.emailVerification),
     };
   } catch (error) {
     // An expired, revoked or forged cookie is a logged-out user, not a crash.

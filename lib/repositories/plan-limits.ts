@@ -5,6 +5,8 @@ import { Query, type Models } from "node-appwrite";
 
 import { admin } from "@/lib/appwrite/admin";
 import { TABLES } from "@/lib/appwrite/config";
+import { withKeptPlan } from "@/lib/billing/plan-change";
+import { hasLapsed } from "@/lib/billing/standing";
 import { env } from "@/lib/env";
 import { PlanFeatureError, type GatedFeature } from "./errors";
 
@@ -195,7 +197,13 @@ type SubscriptionRow = Models.Row & {
   plan?: string | null;
   status?: string | null;
   currentPeriodEnd?: string | null;
+  keptPlan?: string | null;
+  keptUntil?: string | null;
 };
+
+function asPlan(value: string | null | undefined): PlanId | null {
+  return value && value in PLAN_LIMITS ? (value as PlanId) : null;
+}
 
 /**
  * Which plan an account is on, read from the `subscriptions` table the billing
@@ -217,6 +225,11 @@ type SubscriptionRow = Models.Row & {
  * An absent date means no expiry is known, which is the free row's state and the
  * state of anything written before this column was used. Absent must go on meaning
  * what it meant before.
+ *
+ * **A downgrade waits for the renewal here, not at the provider.** The provider
+ * already bills the lower plan the moment it is asked; `keptPlan` is the higher
+ * one the customer paid this period for, granted until `keptUntil`. It only ever
+ * raises what a live subscription grants — see `withKeptPlan`.
  */
 export const getUserPlan = cache(async (userId: string): Promise<PlanId> => {
   // TEMPORARY — see planChecksDisabled above. Skips the read as well as the check.
@@ -232,21 +245,12 @@ export const getUserPlan = cache(async (userId: string): Promise<PlanId> => {
   if (!subscription || subscription.status !== "active") return "free";
   if (hasLapsed(subscription.currentPeriodEnd)) return "free";
 
-  return subscription.plan && subscription.plan in PLAN_LIMITS
-    ? (subscription.plan as PlanId)
-    : "free";
+  const keptPlan = asPlan(subscription.keptPlan);
+
+  return withKeptPlan(
+    asPlan(subscription.plan) ?? "free",
+    keptPlan && subscription.keptUntil
+      ? { plan: keptPlan, until: subscription.keptUntil }
+      : null,
+  );
 });
-
-/**
- * Whether a period end has passed. An unparseable date is read as *not* lapsed,
- * for the reason every uncertain DNS answer in `lib/email/mx.ts` is read as a
- * yes: a value we cannot understand must not lock a paying customer out of the
- * thing they are paying for.
- */
-function hasLapsed(currentPeriodEnd: string | null | undefined): boolean {
-  if (!currentPeriodEnd) return false;
-
-  const endsAt = Date.parse(currentPeriodEnd);
-
-  return Number.isFinite(endsAt) && endsAt < Date.now();
-}

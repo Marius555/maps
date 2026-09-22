@@ -6,6 +6,7 @@ import { admin } from "@/lib/appwrite/admin";
 import { isAppwriteException } from "@/lib/appwrite/errors";
 import { createSessionClient } from "@/lib/appwrite/session";
 import { ConflictError, UnauthorizedError } from "@/lib/repositories/errors";
+import { readsAsVerified } from "./email-gate";
 import { consumeToken } from "./tokens";
 import type { AuthUser } from "./types";
 
@@ -19,7 +20,7 @@ function toAuthUser(account: Models.User<Models.Preferences>): AuthUser {
     id: account.$id,
     email: account.email,
     name: account.name,
-    emailVerified: account.emailVerification,
+    emailVerified: readsAsVerified(account.emailVerification),
   };
 }
 

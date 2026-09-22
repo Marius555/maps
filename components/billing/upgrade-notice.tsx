@@ -70,9 +70,12 @@ export function UpgradeSignedOut({ plan }: { plan: string }) {
  */
 export function UpgradeFailed({
   plan,
+  cadence,
   message,
 }: {
   plan: string;
+  /** Carried into Try again, or a failed yearly checkout retries as monthly. */
+  cadence: string;
   message: string;
 }) {
   return (
@@ -83,7 +86,7 @@ export function UpgradeFailed({
       action={
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Link
-            href={`/upgrade?plan=${plan}`}
+            href={`/upgrade?plan=${plan}&cadence=${cadence}`}
             className={`${ACTION} bg-accent text-accent-foreground`}
           >
             Try again

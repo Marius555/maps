@@ -48,6 +48,8 @@ export const SHAPE_KINDS = ["circle", "polygon", "line"];
 // lib/validation/shape.schema.ts: this script is plain .mjs and cannot import TS.
 export const SHAPE_STROKE_STYLES = ["solid", "dashed", "dotted"];
 export const PLANS = ["free", "starter", "pro"];
+// The plans a subscription can be on — `free` is never bought, so never kept.
+export const PAID_PLANS = ["starter", "pro"];
 // Hand-copied from lib/validation/collect.schema.ts, the way SHAPE_KINDS is
 // copied from lib/validation/shape.schema.ts.
 export const DEVICE_KINDS = ["desktop", "tablet", "mobile"];
@@ -60,6 +62,8 @@ export const SUBSCRIPTION_STATUSES = [
   "paused",
   "trialing",
 ];
+// Hand-copied from lib/billing/types.ts's BillingCadence, on the same terms.
+export const BILLING_CADENCES = ["monthly", "yearly"];
 
 export const TABLES = [
   {
@@ -430,6 +434,19 @@ export const TABLES = [
       enumeration("plan", PLANS, { xdefault: "free" }),
       enumeration("status", SUBSCRIPTION_STATUSES, { xdefault: "active" }),
       datetime("currentPeriodEnd"),
+      // Optional, with no default, deliberately: every row written before this
+      // column existed has no cadence, and a default would print a price the
+      // customer is not paying. Absent means "unknown", never "monthly".
+      enumeration("cadence", BILLING_CADENCES),
+      // A downgrade booked for the renewal: the plan and cadence already paid
+      // for, kept until `keptUntil`, while `plan`/`cadence` above already say
+      // what the provider will bill next. All three optional with no default —
+      // absent, or a `keptUntil` in the past, means no change is pending, which
+      // is every row written before these existed. Written only by the
+      // change-plan route; the webhook never touches them.
+      enumeration("keptPlan", PAID_PLANS),
+      enumeration("keptCadence", BILLING_CADENCES),
+      datetime("keptUntil"),
     ],
     indexes: [
       { key: "idx_subs_userId", type: "unique", columns: ["userId"], orders: ["asc"] },

@@ -8,6 +8,8 @@ import {
 import { Section } from "@/components/marketing/section";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { BillingError, getBilling } from "@/lib/billing";
+import { billingStanding } from "@/lib/billing/standing";
+import { getSubscription } from "@/lib/repositories/subscriptions.repository";
 import { checkoutSchema } from "@/lib/validation/billing.schema";
 
 export const metadata: Metadata = { title: "Upgrade", robots: { index: false } };
@@ -55,6 +57,17 @@ export default async function UpgradePage(props: PageProps<"/upgrade">) {
   }
 
   /*
+   * **Somebody who already pays is not sold a second subscription.** `/pricing`
+   * is static and cannot know who is looking, so its cards send a subscriber
+   * here like anyone else — and a checkout for them opens a second subscription
+   * beside the first, charged separately. Their plan is moved in place from the
+   * account page instead, which is where this sends them.
+   */
+  if (billingStanding(await getSubscription(user.id)) === "switchable") {
+    redirect("/account");
+  }
+
+  /*
    * The `try` wraps only the call and returns no JSX. React renders children
    * after this function returns, so a `catch` around JSX never fires — the rule
    * the lint config enforces and that `maps/[id]/settings/page.tsx` documents.
@@ -80,7 +93,11 @@ export default async function UpgradePage(props: PageProps<"/upgrade">) {
      */
     return (
       <Section eyebrow="Plans" headingLevel="h1" title="Something went wrong">
-        <UpgradeFailed plan={parsed.data.plan} message={error.message} />
+        <UpgradeFailed
+          plan={parsed.data.plan}
+          cadence={parsed.data.cadence}
+          message={error.message}
+        />
       </Section>
     );
   }

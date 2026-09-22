@@ -23,9 +23,10 @@ emails.
   another's browser. Forwarding belongs on `createSessionClient`, which is built
   fresh per call.
 - **Every cross-site landing goes to a page outside `proxy.ts`'s matcher, never
-  to a server redirect that ends at `/maps`.** See *The SameSite trap* below.
-  This governs `/auth/success` and `/verify-email` and is the single most
-  breakable thing in this area.
+  to a server redirect that ends at `/maps` or `/account`.** See *The SameSite
+  trap* below. This governs `/auth/success`, `/verify-email` and
+  `/checkout/done`, and is the single most breakable thing in this area — it was
+  broken a third time, by billing, after being written down twice.
 - **`proxy.ts` redirects towards `/login` and never away from it.** Bouncing a
   signed-in visitor off `/login` is `redirectIfSignedIn()`, called by the two
   pages that want it, because a proxy redirect answers a client-side navigation
@@ -62,24 +63,39 @@ emails.
 - **Reads are never gated, and the gate is off entirely without a Resend key.**
   A frozen account still has to render the banner that explains the freeze, and a
   confirmation nobody can send would lock every account on the install forever.
+- **The development bypass changes the answer, never the gate.**
+  `DISABLE_EMAIL_VERIFICATION` is read by `readsAsVerified`, which both `AuthUser`
+  mappers run `emailVerification` through — not by `assertEmailVerified`, which is
+  untouched and must stay that way. Resolving the value once is what keeps the
+  invariant above true and what keeps the three UI explanations in step with the
+  server. Inert when `NODE_ENV` is `production`.
 - **Nothing that opens the gate may be behind it.** `POST /api/auth/verify-email`
   resends the link and takes an address rather than a session, precisely so it
   works for someone signed out. It is `withoutAuth` and must stay that way.
-- **The auth back arrow is the browser's Back with a floor, and `?next=` means go
-  home.** `AuthBackButton` (pinned to the form column by `app/(auth)/layout.tsx`)
-  calls `router.back()` unless the history is one entry long (a fresh tab, an
-  email link) or the URL carries `next` — which only `proxy.ts` writes, so the
-  entry behind it is the protected page that bounced the visitor, and Back would
-  only bounce them again. Both cases `router.push("/")`. `AuthShell` is centred
-  under a lock badge; its `description` is optional, omitted on Log in and Sign
-  up and kept wherever it carries instructions.
+- **The auth back arrow never calls `router.back()`.** `AuthBackButton` (pinned to
+  the form column by `app/(auth)/layout.tsx`) has one declared destination per
+  page: `/` from `/login` and `/signup`, `/login` from the other five. The entry
+  behind an auth page is very often a dashboard page the visitor is no longer
+  allowed to see, and going back to it restores rather than requests — see *Back
+  is not a request* below. `AuthShell` is centred under a lock badge; its
+  `description` is optional, omitted on Log in and Sign up and kept wherever it
+  carries instructions.
+- **Logging out is a document navigation, and the logout route sends
+  `Clear-Site-Data`.** `UserMenu` calls `window.location.replace("/login")`, not
+  `router.replace`, and `POST /api/auth/logout` answers its 204 with
+  `Clear-Site-Data: "cache"`. Between them they are the only reason Back after a
+  sign-out reaches a guard at all: a soft replace consumes one history entry and
+  leaves the rest of the dashboard live in the client router cache, and bfcache
+  would hand back the whole document without asking anyone. `"cache"` and not
+  `"storage"`, which would take the theme, the sidebar width and the map-preview
+  store with it.
 
 ## The SameSite trap
 
-The session cookie is `sameSite: "strict"`. Two links in this feature arrive from
-somewhere that is not us — a mail client, and Appwrite's own domain after Google
-— and browsers classify those as cross-site navigations *and carry that
-classification through a server redirect chain*.
+The session cookie is `sameSite: "strict"`. Three navigations in this app arrive
+from somewhere that is not us — a mail client, Appwrite's own domain after
+Google, and Lemon Squeezy's after a payment — and browsers classify all three as
+cross-site *and carry that classification through a server redirect chain*.
 
 So the obvious implementation of both flows is wrong in the same way:
 
@@ -109,6 +125,20 @@ a Strict cookie.
 - OAuth: `/auth/success` is a client page. The exchange is a same-origin `fetch`
   (so the `Set-Cookie` lands) and the hop to `/maps` is `router.replace` (so the
   cookie goes with it).
+- Billing: `/checkout/done` is a marketing-group page, and `CheckoutReturn` does
+  `router.replace("/account")` from the client.
+
+**Billing walked into this a third time, and it is worth saying why it got
+past two written warnings.** The other two flows are *about* authentication, so
+the cookie is on the author's mind; the billing redirect is one string in a
+provider request body (`lib/billing/lemon.ts`), written while thinking about
+variants and prices. Nothing about `redirect_url: ".../account"` looks like a
+session decision. It is one, and `lib/billing/lemon.test.ts` now asserts the
+value is outside the matcher so the next person does not have to notice.
+
+The symptom is also the worst of the three. A confirmation link that bounces
+costs a click; this one answers a completed purchase with a login form, and the
+customer has no way to tell that from having lost their money.
 
 This is also why `/auth/success`, `/auth/failure`, `/forgot-password`,
 `/reset-password` and `/verify-email` never got a signed-in bounce of their own.
@@ -167,6 +197,58 @@ The signed-out direction keeps its 307 and should. It answers a document request
 — a typed URL, an old bookmark — and the one navigation that can reach it, a
 session expiring with the dashboard open, is a case where a reload is the honest
 outcome.
+
+## Back is not a request
+
+Signing out landed on `/login`; pressing the back arrow there landed on `/maps`,
+which painted a signed-out user's dashboard and then logged
+
+```
+[map-preview] "6aa1cccd000084b92b0f" ApiError: Log in to continue.
+```
+
+The error is honest and the hook that logs it is correct. `render-preview.ts`
+fetches `/api/maps/{id}/preview`, `withAuth` runs `requireUser()`, and
+`UnauthorizedError` carries that exact default message; `useMapPreview` catches
+it, keeps the last good picture up and says so on the console. **It was the only
+thing in the whole page that talked to a server**, which is why it was the only
+thing that noticed nobody was signed in.
+
+That is the shape of the bug. This app has three guards and every one of them is
+on the request path — `proxy.ts` reads a cookie off a request, the dashboard
+layout calls `getCurrentUser()` while rendering one, `requireUser()` runs inside
+a handler. **A backward history traversal is not a request.** Next restores a
+soft-navigated entry from the client router cache; a browser restores a
+cross-document one from bfcache. Neither asks the server anything, so all three
+guards sit the navigation out and the dashboard comes back exactly as the signed-in
+user left it, down to the mounted React tree.
+
+`router.refresh()` at the logout site did not help and could not. It refreshes the
+route you are on, on the way out of it. The entries behind it in the stack are
+what Back reaches.
+
+So the fix is on the navigation side, in three places, and none of them is in
+`use-map-preview.ts` — swallowing a 401 there would have hidden the next instance
+of this instead of fixing this one:
+
+- **The arrow stopped guessing.** `router.back()` with a floor was a reasonable
+  control for a login page a stranger arrives at and a wrong one for a login page
+  a customer was just dumped on. It has fixed destinations now, and `?next=` no
+  longer needs a special case because going home is what it already did.
+- **Logging out tears the document down.** `window.location.replace("/login")`
+  ends the SPA, so the dashboard entries behind it can only be reached
+  cross-document — a real request, which `proxy.ts` answers with the 307 it is
+  documented above as keeping. `/login` is outside the matcher, so this adds no
+  redirect chain and does not go near the SameSite trap.
+- **The logout response sends `Clear-Site-Data: "cache"`.** Without it, bfcache
+  can restore that torn-down document anyway and the second change buys nothing.
+  This is the one part that depends on the browser rather than on us, so it is
+  measured and not assumed: Back after a sign-out should show a request in the
+  Network panel. No request plus a dashboard repaint means this header was not
+  honoured, and the fallback is a `pageshow`/`event.persisted` reload guard in the
+  dashboard shell — deliberately not built in advance, because
+  `lib/stores/import-persist.ts` pays real attention to keeping these pages
+  bfcache-eligible and an unconditional reload on restore spends that.
 
 ## Why Appwrite's tokens rather than our own
 
@@ -281,6 +363,27 @@ cron with no session at all. A check down that layer would either refuse every
 nightly sync or make each one pay for an Appwrite lookup to re-answer a question
 settled at signup. Nothing a customer has already published goes down when their
 address lapses into unconfirmed, and that is deliberate.
+
+**The development bypass is a resolved value, not a second gate.** Working on
+anything that writes means either confirming an address on every throwaway account
+or unsetting `RESEND_API_KEY` — and the second also turns off the mail you might be
+trying to test, so it answers the wrong question. `DISABLE_EMAIL_VERIFICATION`
+answers it directly, and it is built the way `DISABLE_ALL_PLAN` is: that flag does
+not switch off the plan checks, it makes `getUserPlan` answer `pro`, so every check
+in every repository still runs and is simply asked about a different plan. This one
+makes `readsAsVerified` answer `true`, at the one point Appwrite's
+`emailVerification` becomes our `AuthUser.emailVerified`. `assertEmailVerified` is
+untouched; the invariant that the gate lives in `withAuth` and nowhere else survives
+intact, because there is no second copy of the rule to drift from the first.
+
+Resolving the value is also the only version that keeps the screen honest. All three
+explanations below read `emailVerified` off `useMe()`, which is the same resolved
+value — so they go quiet together with the 403. A switch that only silenced the
+server would have left a banner saying *nothing will save* above a dashboard where
+everything saved, and left Create map and Publish greyed with no visible reason.
+Inert in a production build, for the reason `docs/notes/billing.md` gives for its
+twin: a note asking somebody to unset it is a plan, and a `NODE_ENV` check is a
+guarantee.
 
 ### Saying it three times, on purpose
 

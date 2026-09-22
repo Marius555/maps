@@ -1,6 +1,7 @@
 "use client";
 
 import { Skeleton } from "@heroui/react";
+import { useEffect } from "react";
 import {
   ChartColumn,
   LayoutTemplate,
@@ -22,6 +23,16 @@ import { SidebarNavItem, type NavItem } from "./sidebar-nav-item";
  * rather than the map layout — which is what keeps the shell mounted across
  * navigations, so switching sections swaps only the page body.
  *
+ * **It also follows you out of the map.** Off a `/maps/<id>` route the sidebar
+ * shows the map the layout chose (`remembered`): the last opened if this account
+ * owns it, else its most recently edited — so Account and the maps list keep the
+ * section rather than emptying the sidebar to two rows. The layout already drops
+ * an id that belongs to whoever signed in on this browser before; what is left
+ * for this is a map deleted since the page loaded, where the owner-scoped query
+ * 404s, the group disappears and the memory is dropped (`onGone`) rather than
+ * leaving a skeleton where a name will never arrive. Only for a remembered map: a
+ * 404 on the map you are standing in is the page's to explain.
+ *
  * The map name is read from the query cache. On a cold load of the Map tab that
  * costs one small `/api/maps/[id]` request; every other section has already
  * primed the cache, and react-query dedupes it either way. It's a dashboard
@@ -29,16 +40,29 @@ import { SidebarNavItem, type NavItem } from "./sidebar-nav-item";
  */
 export function SidebarMapNav({
   mapId,
+  remembered,
+  onGone,
   pathname,
   isCollapsed,
   onNavigate,
 }: {
   mapId: string;
+  /** True when the id came from memory rather than from the URL. */
+  remembered: boolean;
+  /** Called once a remembered map turns out not to be there any more. */
+  onGone: () => void;
   pathname: string;
   isCollapsed: boolean;
   onNavigate?: () => void;
 }) {
-  const { data: map } = useMap(mapId);
+  const { data: map, isError } = useMap(mapId);
+  const isGone = remembered && isError;
+
+  useEffect(() => {
+    if (isGone) onGone();
+  }, [isGone, onGone]);
+
+  if (isGone) return null;
 
   const items: NavItem[] = [
     { href: `/maps/${mapId}`, label: "Map", icon: MapIcon, exact: true },

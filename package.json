@@ -23,6 +23,7 @@
     "setup:appwrite": "node --env-file=.env scripts/setup-appwrite.mjs",
     "setup:r2": "node --env-file=.env scripts/setup-r2.mjs",
     "setup:lemon": "node --env-file=.env scripts/setup-lemon.mjs",
+    "billing:replay": "node --env-file=.env scripts/replay-webhook.mjs",
     "migrate:auto-style": "node --env-file=.env scripts/migrate-auto-style.mjs",
     "migrate:shape-kinds": "node --env-file=.env scripts/migrate-shape-kinds.mjs",
     "migrate:style-host": "node --env-file=.env scripts/migrate-style-host.mjs",

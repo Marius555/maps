@@ -24,3 +24,23 @@ export const checkoutSchema = z.object({
 });
 
 export type CheckoutInput = z.output<typeof checkoutSchema>;
+
+/**
+ * What the account page may ask a running subscription to become.
+ *
+ * The same plan-and-cadence pair as a checkout, for the same reason — never a
+ * variant id from the client — with one difference: **no default cadence.** A
+ * checkout that defaults to monthly opens a page where the buyer still sees the
+ * price; a switch that defaults to monthly moves a yearly customer's billing
+ * with nobody looking. So the caller has to say which one it means.
+ */
+export const changePlanSchema = z.object({
+  plan: z.enum(["starter", "pro"], {
+    message: "Choose the Starter or Pro plan.",
+  }),
+  cadence: z.enum(["monthly", "yearly"], {
+    message: "Choose monthly or yearly billing.",
+  }),
+});
+
+export type ChangePlanInput = z.output<typeof changePlanSchema>;

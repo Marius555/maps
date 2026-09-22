@@ -8,6 +8,22 @@ import { randomBytes } from "node:crypto";
  * `npm run setup:lemon` — idempotent, and safe to re-run. Nothing here creates or
  * deletes a product; it reads what the store has and writes down what it found.
  *
+ * ## Three modes
+ *
+ * - `npm run setup:lemon` — resolve the variants, write their ids into `.env`,
+ *   configure the webhook.
+ * - `--dry-run` — resolve and report what it would set. Writes nothing.
+ * - `--verify` — compare what `.env` **already holds** against the store and exit
+ *   non-zero on any disagreement. Reads no file, writes nothing, so it can gate a
+ *   deploy.
+ *
+ * `--verify` exists because re-running this script is already its own fix, but
+ * nothing forces the re-run — and a `.env` edited by hand is invisible until a
+ * customer meets it. Both ways of getting it wrong have happened here: a
+ * **product** id pasted where a variant id belongs (every checkout 404s, and every
+ * webhook matches no plan), and one cadence's id pasted into both slots (the
+ * yearly button quietly opens the monthly price).
+ *
  * ## Why this exists rather than a list of steps in a README
  *
  * The store has to be configured **twice** — once in test mode and again in live
@@ -71,6 +87,7 @@ const EVENTS = [
 ];
 
 const dryRun = process.argv.includes("--dry-run");
+const verify = process.argv.includes("--verify");
 
 const apiKey = process.env.LEMON_API_KEY || process.env.LEMON_TEST_API_KEY;
 
@@ -222,6 +239,73 @@ if (missing.length > 0) {
 /* ---------------------------------------------------------------- *
  * Everything below only runs once all four variants resolved.
  * ---------------------------------------------------------------- */
+
+/*
+ * `--verify`: what `.env` holds, against what the store says.
+ *
+ * Deliberately placed here — after the variants have resolved, before
+ * `readEnvFile()`. This mode reads no file, writes no file, generates no secret
+ * and does not touch the webhook, and keeping it above every one of those calls
+ * is what makes that true by construction rather than by a flag checked in five
+ * places.
+ *
+ * It matters most on the day the store is configured a **second** time, in live
+ * mode, against a different key and a different set of products — the run where
+ * a wrong id charges a real card the wrong price, and the run done in a hurry.
+ */
+if (verify) {
+  const problems = [];
+
+  const check = (label, name, expected) => {
+    const value = (process.env[name] ?? "").trim();
+
+    if (!value) {
+      problems.push(name);
+      console.log(`  UNSET ${label.padEnd(16)} store says ${expected}  (${name})`);
+    } else if (value !== expected) {
+      problems.push(name);
+      console.log(
+        `  WRONG ${label.padEnd(16)} .env=${value}  store=${expected}  (${name})`,
+      );
+    } else {
+      console.log(`  ok    ${label.padEnd(16)} ${value}`);
+    }
+  };
+
+  console.log();
+  console.log(".env against the store:");
+  console.log();
+
+  check("Store", "LEMON_STORE_ID", store.id);
+  for (const entry of resolved) check(entry.label, entry.env, entry.id);
+
+  /*
+   * Not a variant, but the same class of failure and the same cost of missing
+   * it: unset, the webhook refuses every delivery it is sent, and that presents
+   * as a broken endpoint rather than as a missing variable.
+   */
+  if (!(process.env.LEMON_WEBHOOK_SECRET ?? "").trim()) {
+    problems.push("LEMON_WEBHOOK_SECRET");
+    console.log(
+      `  UNSET ${"Webhook secret".padEnd(16)} the webhook would refuse every delivery  (LEMON_WEBHOOK_SECRET)`,
+    );
+  }
+
+  if (problems.length === 0) {
+    console.log();
+    console.log("All correct. Nothing was written.");
+    process.exit(0);
+  }
+
+  console.log();
+  console.log(
+    `.env disagrees with the store on ${problems.length} ${
+      problems.length === 1 ? "value" : "values"
+    }.`,
+  );
+  console.log("Run without --verify to correct it. Nothing was written.");
+  process.exit(1);
+}
 
 let env = readEnvFile();
 

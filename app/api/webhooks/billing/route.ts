@@ -16,9 +16,11 @@ import {
 /**
  * Where the merchant of record tells us what somebody paid for.
  *
- * This is the only writer of the `subscriptions` table, and therefore the only
- * thing in the app that can grant a paid plan. Everything about it is shaped by
- * that.
+ * This is the only thing in the app that can grant a paid plan *from nothing*,
+ * and everything about it is shaped by that. Two other writers exist, and both
+ * only ever write the provider's own answer about a subscription that already
+ * exists, read through the same `toState`: `PATCH /api/account/subscription`
+ * (the reply to a plan change) and the account page's one-time cadence backfill.
  *
  * **Not `withAuth`, and not `withoutAuth` either.** There is no session — the
  * caller is a machine in somebody else's data centre — and `withoutAuth` would
@@ -147,13 +149,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     if (!state) {
       /*
-       * A variant that is not one of ours — another product in the same store, or
-       * a price that was replaced without the environment being updated. Logged,
-       * because the second of those is a configuration error that would otherwise
-       * present as "the customer paid and nothing happened".
+       * Two ways to get here, and the log says which because they need different
+       * things done about them.
+       *
+       * Either the variant is not one of ours — another product in the same
+       * store, or a price replaced without the environment being updated — or,
+       * for a payment event only, the provider has no such subscription. The
+       * first is a configuration error that would otherwise present as "the
+       * customer paid and nothing happened"; the second is not ours to fix.
+       *
+       * Both are 200. Neither will come out differently on a retry.
        */
       console.error(
-        `Billing webhook ${event.name}: no plan matches that subscription's variant. Check LEMON_VARIANT_*.`,
+        PAYMENT.has(event.name)
+          ? `Billing webhook ${event.name}: subscription ${subscriptionIdOf(body) ?? "(none)"} could not be read, or its variant matches no plan. Check LEMON_VARIANT_*.`
+          : `Billing webhook ${event.name}: no plan matches that subscription's variant. Check LEMON_VARIANT_*.`,
       );
 
       return ok({ handled: false });

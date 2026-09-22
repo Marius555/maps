@@ -24,6 +24,20 @@ this is why each one exists.
   everybody, it is set by an environment variable, and on Appwrite Sites setting one is a
   form field and a redeploy. "Remember not to" is a plan; the check is a guarantee.
 
+- **Development only: `DISABLE_EMAIL_VERIFICATION`.** Set to `1`/`true`/`yes`, every account
+  reads as having confirmed its address — so `withAuth` stops 403ing writes, the banner in
+  the shell disappears, and Create map and Publish come back. It exists because the only
+  other way to open that gate while developing is to unset `RESEND_API_KEY`, which also
+  turns off the mail you may be trying to test. Shaped exactly like `DISABLE_ALL_PLAN` and
+  for the same reason: it does not touch `assertEmailVerified`, it changes the answer to
+  "has this address been confirmed" at the one point the value is resolved
+  (`readsAsVerified` in `lib/auth/email-gate.ts`, called by both `AuthUser` mappers). The
+  gate keeps living in `withAuth` and nowhere else, and — the half a server-only switch
+  would have missed — the three places the UI explains the freeze all read the same
+  resolved value, so the screen agrees with the server instead of showing a banner saying
+  "nothing will save" above a dashboard where everything saves. It warns once per process,
+  and **it is inert when `NODE_ENV` is `production`**, for the reason above it.
+
 - Optional in code, **required to sell anything**, server-only: `LEMON_API_KEY`,
   `LEMON_STORE_ID`, `LEMON_WEBHOOK_SECRET` and four variant ids —
   `LEMON_VARIANT_STARTER_MONTHLY`, `LEMON_VARIANT_STARTER_YEARLY`,

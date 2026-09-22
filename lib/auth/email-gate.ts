@@ -46,6 +46,72 @@ export function emailGateActive(): boolean {
 }
 
 /**
+ * Development only: read every account as confirmed.
+ *
+ * **This is the second bypass in the app and it is deliberately shaped like the
+ * first.** `DISABLE_ALL_PLAN` does not disable the plan checks — it makes
+ * `getUserPlan` answer `pro`, so every check in every repository still runs, just
+ * about a different plan (`lib/repositories/plan-limits.ts`). This does the same
+ * one level up: it does not touch `assertEmailVerified`, it changes the answer to
+ * "has this address been confirmed". The invariant that the gate lives in
+ * `withAuth` and nowhere else stays literally true, and there is no second copy of
+ * the rule to drift.
+ *
+ * **Resolving the value rather than the gate is also what keeps the screen
+ * honest.** Three places in the UI explain the freeze, and all three read
+ * `emailVerified` off `useMe()` — the banner in the shell, the note under Create
+ * map and Publish, and `useEmailUnverified()`. A switch that only silenced the
+ * server would leave a banner saying "nothing will save" above a dashboard where
+ * everything saved, and leave two buttons greyed for no reason anybody could see.
+ *
+ * **Inert in a production build**, by the same argument
+ * `planChecksDisabled()` makes: a switch that skips address confirmation, set by
+ * an environment variable, on a host where that is a form field. A note asking
+ * somebody to unset it is a plan; refusing to read it outside development is a
+ * guarantee.
+ *
+ * Read at call time rather than at module load, so a test can set it per case.
+ */
+function verificationDisabled(): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+
+  const raw = process.env.DISABLE_EMAIL_VERIFICATION;
+  if (!raw || !/^(1|true|yes)$/i.test(raw.trim())) return false;
+
+  warnOnce();
+  return true;
+}
+
+/**
+ * Once per process. `getCurrentUser` is `cache()`d per request, but a request is
+ * not a process — a warning inside the resolver would print on every page load
+ * until it stopped being read as a warning.
+ */
+let warned = false;
+
+function warnOnce(): void {
+  if (warned) return;
+  warned = true;
+
+  console.warn(
+    "DISABLE_EMAIL_VERIFICATION is set: every account reads as confirmed, so the email gate is bypassed. Testing only — unset it before this is in front of anyone.",
+  );
+}
+
+/**
+ * Whether an account counts as having confirmed its address.
+ *
+ * The one place the raw `emailVerification` flag from Appwrite is turned into the
+ * value the rest of the app believes. Both places that build an `AuthUser` go
+ * through it — `lib/auth/current-user.ts`, which feeds `withAuth` and
+ * `GET /api/auth/me`, and `toAuthUser` in `lib/auth/account.ts`, which feeds the
+ * user a fresh signup or login is seeded with.
+ */
+export function readsAsVerified(verified: boolean): boolean {
+  return verified || verificationDisabled();
+}
+
+/**
  * Throws unless this request is allowed to change something.
  *
  * `user` comes from `requireUser()`, which asks Appwrite — so `emailVerified` is

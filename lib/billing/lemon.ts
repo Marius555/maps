@@ -3,13 +3,13 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { env } from "@/lib/env";
-import type { PlanId } from "@/lib/repositories/plan-limits";
 import type {
   BillingCadence,
   BillingProvider,
   Checkout,
   CheckoutRequest,
   PaidPlanId,
+  PlanChangeRequest,
   SubscriptionState,
   SubscriptionStatus,
 } from "./types";
@@ -56,6 +56,7 @@ export function createLemonProvider(): BillingProvider {
     name: "lemonsqueezy",
     createCheckout,
     portalUrl,
+    changePlan,
   };
 }
 
@@ -79,7 +80,7 @@ function apiKey(): string {
 
 async function send<T>(
   path: string,
-  init: { method: "GET" | "POST"; body?: unknown },
+  init: { method: "GET" | "POST" | "PATCH"; body?: unknown },
 ): Promise<T> {
   const key = apiKey();
 
@@ -163,7 +164,20 @@ async function createCheckout(request: CheckoutRequest): Promise<Checkout> {
           custom: { user_id: request.userId },
         },
         product_options: {
-          redirect_url: `${env.appUrl}/account?checkout=done`,
+          /*
+           * **Not `/account`, and that is a cookie decision rather than a
+           * cosmetic one.** This navigation arrives from the provider's domain,
+           * the session cookie is `sameSite: "strict"`, and browsers withhold a
+           * Strict cookie on a cross-site top-level navigation — so a return
+           * straight to `/account` reached `proxy.ts` with no cookie visible and
+           * bounced somebody who had just paid onto the login page.
+           *
+           * `/checkout/done` is outside the proxy's matcher and hops to
+           * `/account` from the client, where the cookie is visible again. See
+           * that page, and `docs/notes/auth.md`'s SameSite section for the two
+           * earlier flows this one repeats.
+           */
+          redirect_url: `${env.appUrl}/checkout/done`,
         },
       },
       relationships: {
@@ -209,6 +223,58 @@ async function portalUrl(billingSubscriptionId: string): Promise<string | null> 
      */
     return null;
   }
+}
+
+/**
+ * A new variant on the subscription the customer already has.
+ *
+ * `variant_id` is what the provider needs to move a plan, and it moves the
+ * interval too — monthly to yearly is the same call as Starter to Pro. **The
+ * provider applies it at once, whatever else is sent**; its guide says so in as
+ * many words, and there is no field that books a change for the renewal.
+ *
+ * What can be chosen is the money. `invoice_immediately` is never sent: nothing
+ * here charges a card on the spot from one press of a button. A prorated change
+ * (an upgrade) takes the provider's default, which adds the difference to the
+ * next bill. An unprorated one (a downgrade, or undoing one) sends
+ * `disable_prorations`, so nothing is credited or charged and the next renewal is
+ * simply the new price — the period already paid for is kept instead, by
+ * `getUserPlan`, not refunded.
+ *
+ * The reply is the updated subscription object, read through the same `toState`
+ * the webhook uses — so what this returns and the `subscription_updated` event
+ * that follows it cannot be interpreted two different ways.
+ */
+async function changePlan(
+  request: PlanChangeRequest,
+): Promise<Omit<SubscriptionState, "userId"> | null> {
+  const variant = variantFor(request.plan, request.cadence);
+
+  const json = await send<{
+    data?: { id?: string; attributes?: SubscriptionAttributes };
+  }>(`/subscriptions/${request.billingSubscriptionId}`, {
+    method: "PATCH",
+    body: {
+      data: {
+        type: "subscriptions",
+        id: request.billingSubscriptionId,
+        attributes: {
+          // A number, as the provider's own examples send it. The env holds it
+          // as a string because that is what every other use of it wants.
+          variant_id: Number(variant),
+          // Absent rather than `false` when prorating: the default is the
+          // behaviour wanted, and saying it twice is a second place to be wrong.
+          ...(request.prorate ? {} : { disable_prorations: true }),
+        },
+      },
+    },
+  });
+
+  const attributes = json.data?.attributes;
+
+  return attributes
+    ? toState(attributes, String(json.data?.id ?? request.billingSubscriptionId))
+    : null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -287,11 +353,21 @@ export function toStatus(status: string): SubscriptionStatus {
   return map[status as LemonStatus] ?? "canceled";
 }
 
-/** Which of our plans a variant id is. Unknown ids are nobody's plan. */
-export function planForVariant(variantId: string): PlanId | null {
+/**
+ * Which of our plans a variant id is, and at which cadence. Unknown ids are
+ * nobody's plan.
+ *
+ * Both halves, because the variant is the only place the cadence is ever
+ * written down — this used to return the plan alone and the loop threw the
+ * other half away, which is why the account page could not tell a yearly
+ * customer from a monthly one.
+ */
+export function offerForVariant(
+  variantId: string,
+): { plan: PaidPlanId; cadence: BillingCadence } | null {
   for (const plan of ["starter", "pro"] as const) {
     for (const cadence of ["monthly", "yearly"] as const) {
-      if (env.lemonVariants[plan][cadence] === variantId) return plan;
+      if (env.lemonVariants[plan][cadence] === variantId) return { plan, cadence };
     }
   }
 
@@ -346,14 +422,15 @@ function toState(
 ): Omit<SubscriptionState, "userId"> | null {
   const variantId =
     attributes.variant_id === undefined ? "" : String(attributes.variant_id);
-  const plan = planForVariant(variantId);
+  const offer = offerForVariant(variantId);
 
-  if (!plan) return null;
+  if (!offer) return null;
 
   return {
-    // `planForVariant` answers from the configured variants alone, so this is
-    // already one of ours — there is nothing left to validate here.
-    plan,
+    // `offerForVariant` answers from the configured variants alone, so both are
+    // already ours — there is nothing left to validate here.
+    plan: offer.plan,
+    cadence: offer.cadence,
     status: toStatus(attributes.status ?? ""),
     billingCustomerId:
       attributes.customer_id === undefined ? "" : String(attributes.customer_id),
@@ -392,15 +469,30 @@ export function subscriptionIdOf(body: unknown): string | null {
   return id === undefined || id === null || id === "" ? null : String(id);
 }
 
-/** What the API says about a subscription right now. Null if it cannot be read. */
+/**
+ * What the API says about a subscription right now. Null if it cannot be read.
+ *
+ * **A 404 is null, and every other failure still throws.** That split is the
+ * difference between an event worth retrying and one that will produce the same
+ * nothing tomorrow, and the route turns it into a 200 or a 500 accordingly. A
+ * subscription the provider says does not exist is not a transient fault: a 500
+ * there would put the event back in their queue to fail identically on every
+ * attempt. A timeout or a 5xx is the opposite — that one *should* come back.
+ */
 export async function fetchSubscriptionState(
   subscriptionId: string,
 ): Promise<Omit<SubscriptionState, "userId"> | null> {
   if (!subscriptionId) return null;
 
-  const json = await send<{
-    data?: { id?: string; attributes?: SubscriptionAttributes };
-  }>(`/subscriptions/${subscriptionId}`, { method: "GET" });
+  let json: { data?: { id?: string; attributes?: SubscriptionAttributes } };
+
+  try {
+    json = await send(`/subscriptions/${subscriptionId}`, { method: "GET" });
+  } catch (error) {
+    if (error instanceof BillingError && error.status === 404) return null;
+
+    throw error;
+  }
 
   const attributes = json.data?.attributes;
 

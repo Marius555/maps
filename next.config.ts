@@ -23,8 +23,26 @@ const embedCorsHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Allow your local network IP to access the HMR/dev resources
-  allowedDevOrigins: ["192.168.1.212"],
+  /*
+   * Origins the **dev server** will serve its own assets to. Ignored in a
+   * production build.
+   *
+   * The IP is for testing on a phone over the local network. The two wildcards
+   * are for tunnels, which are the only way to receive a real billing webhook
+   * before the app is deployed: the provider has to reach us from the internet,
+   * and the browser then has to reach the dev server on the tunnel's hostname
+   * rather than `localhost`. Without an entry here Next blocks that hostname
+   * from fetching `/_next/*` and the page arrives unstyled with no hydration —
+   * a failure that looks like a broken app rather than a config gap.
+   *
+   * Wildcards are supported and matter, because a free tunnel's subdomain
+   * changes on every restart. See `docs/notes/billing.md` for the runbook.
+   */
+  allowedDevOrigins: [
+    "192.168.1.212",
+    "*.ngrok-free.app",
+    "*.trycloudflare.com",
+  ],
 
   async headers() {
     return [

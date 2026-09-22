@@ -1,4 +1,5 @@
 import type { ApiErrorCode } from "@/lib/api/error-codes";
+import { formatCount } from "@/lib/format/number";
 import type { PlanId } from "./plan-limits";
 
 /**
@@ -175,9 +176,17 @@ export class LookupLimitError extends RepositoryError {
   }
 }
 
-/** The fact on its own, for a note beside the control it has switched off. */
+/**
+ * The fact on its own, for a note beside the control it has switched off.
+ *
+ * `formatCount` rather than a private grouper, and rather than a bare
+ * `toLocaleString`: this sentence is composed on both sides of the wire — the
+ * server builds the one in a 403, the browser builds the one in an inline note —
+ * and a pinned locale is what stops one allowance being spelled two ways on one
+ * screen. See `lib/format/number.ts`.
+ */
 export function lookupLimitNote(limit: number, plan: PlanId): string {
-  return `You've used all ${grouped(limit)} address lookups included on the ${plan} plan this month.`;
+  return `You've used all ${formatCount(limit)} address lookups included on the ${plan} plan this month.`;
 }
 
 /** The same fact with the two ways out, which is what a refusal owes. */
@@ -209,19 +218,6 @@ export class DailyBudgetError extends RepositoryError {
       503,
     );
   }
-}
-
-/**
- * Thousands separators, written out rather than taken from `Intl`.
- *
- * Deliberate: CLAUDE.md records that `Intl.NumberFormat` does not agree across
- * Node and Chrome, and these strings are composed on both sides of the wire — the
- * server builds the one in a 403, the browser builds the one in an inline note.
- * Two runtimes printing one allowance two ways is exactly the bug that rule exists
- * for, and grouping is not worth reopening it.
- */
-function grouped(value: number): string {
-  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 /** What each resource is called in a sentence, singular and plural. */

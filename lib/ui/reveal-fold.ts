@@ -370,12 +370,14 @@ export function revealFold(
  * which is the whole trick this file is built on.
  *
  * **The scroller may be the document.** `scrollableAncestor` looks for a computed
- * `overflow-y` of `auto` or `scroll` and finds none for the page, and the import
- * wizard's Review step is deliberately page-scrolled (its map is `lg:sticky`
- * against it). `revealFold`'s answer there is a bare `scrollIntoView`, which
- * fires *before* the row grows and so under-scrolls exactly the rows near the
- * bottom of the screen — the ones that most need revealing. So this falls back to
- * the scrolling element and keeps driving.
+ * `overflow-y` of `auto` or `scroll`. Inside the dashboard it finds `AppShell`'s
+ * `<main>`, which is the page's scroller since the shell became a one-viewport
+ * frame — the import wizard's Review step included, whose map is `lg:sticky`
+ * against it. Outside the dashboard it finds nothing, and `revealFold`'s answer
+ * there is a bare `scrollIntoView`, which fires *before* the row grows and so
+ * under-scrolls exactly the rows near the bottom of the screen — the ones that
+ * most need revealing. So this falls back to the scrolling element and keeps
+ * driving.
  *
  * `scroll-margin-top` is honoured by hand for the same reason: the arithmetic
  * path never reaches `scrollIntoView`, which is what normally applies it, and on

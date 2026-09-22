@@ -77,9 +77,12 @@ Appwrite's tokens are used instead of our own HMAC, are in `docs/notes/auth.md`.
 
 **Billing is wired, and with it the thing that made billing unsafe.** Lemon Squeezy behind
 the pricing page: a static `/pricing` whose cards link to `/upgrade`, which reads the
-session and opens a checkout; a signature-verified webhook that is the only writer of
-`subscriptions`; and an account page showing the plan, the portal link and what has been
-spent. Plans keep their prices and gain **annual at two months free**, a published
+session and opens a checkout; a signature-verified webhook that writes `subscriptions`;
+and an account page showing the portal link and what has been spent, where a paying
+customer changes plan or cadence **in place** (`PATCH /api/account/subscription`) —
+never through a second checkout, which would be a second subscription. **The buyer returns to `/checkout/done`, never to `/account`** — that is the
+`sameSite: "strict"` rule in the auth notes, which billing broke a third time after it
+had been written down twice, answering a completed purchase with a login form. Plans keep their prices and gain **annual at two months free**, a published
 **monthly lookup allowance**, Free at 25 locations instead of 10, and **analytics behind the
 paid plans**.
 
@@ -131,6 +134,8 @@ npm run build:embed  # vite build → public/embed, copy MapLibre runtime, check
 npm run setup:appwrite  # create missing tables/columns/indexes from scripts/appwrite-schema.mjs
 npm run setup:r2        # snapshot bucket: custom domain, CORS, zone cache + header rules
 npm run setup:lemon     # find the plan variants, write their ids to .env, configure the webhook
+npm run setup:lemon -- --verify  # check .env's ids against the store; non-zero if they disagree
+npm run billing:replay -- <event> --email you@example.com  # signed webhook at a running server
 
 npm run build:disposable-domains # re-vendor the throwaway-email domain list (75k, ~1.2MB)
 
@@ -238,6 +243,12 @@ one exists: `docs/notes/environment.md`.
   repositories is intact; warns once per process. **It is inert in a production build** — a
   `NODE_ENV` check, not a note asking somebody to delete it, because a paywall bypass set by
   an environment variable on a host where that is a form field needs a mechanical guarantee.
+- **Development only: `DISABLE_EMAIL_VERIFICATION`.** Every account reads as having
+  confirmed its address, so `withAuth` stops refusing writes and the banner, the two greyed
+  controls and the 403 all go quiet together. One call to `readsAsVerified` in each of the
+  two `AuthUser` mappers — the gate in `withAuth` is untouched, it is simply asked about a
+  different user, which is why the three places the UI explains the freeze agree with it.
+  Warns once, and **inert in a production build** by the same `NODE_ENV` check.
 
 **Not env, but configured the same way: `brand.json`** at the root — name, tagline, logo,
 favicon, company, contact and legal links. `lib/brand.ts` validates it at module load, so a bad
@@ -535,11 +546,17 @@ have one writer each. `places.sourceKey` is the other half: which sheet row a lo
 absent for every location a sync must never touch. `docs/notes/sheet-sync.md`.
 
 ### `subscriptions`
-`userId` · `billingCustomerId` · `billingSubscriptionId` · `plan` · `status` · `currentPeriodEnd`
+`userId` · `billingCustomerId` · `billingSubscriptionId` · `plan` · `status` · `currentPeriodEnd` · `cadence?` · `keptPlan?` · `keptCadence?` · `keptUntil?`
 
 Provider-neutral field names — do not name them after Paddle or Stripe. Written only
-by `app/api/webhooks/billing`, read only by `getUserPlan`, which honours the status
-**and** the date — see `docs/notes/billing.md` for why a cancellation is `active`.
+with the provider's own answer read through `toState` — by the webhook, the change-plan
+route and the account page's one-time cadence backfill. Entitlement is read only by
+`getUserPlan`, which honours the status **and** the date — see `docs/notes/billing.md`
+for why a cancellation is `active`. `cadence` absent means unknown, never monthly.
+The three `kept*` columns are the exception to "the provider's answer": a downgrade
+waits for the renewal, the provider cannot schedule one, so the plan already paid for
+is kept here until `keptUntil` — written only by the change-plan route, never by the
+webhook.
 
 ### `usage`
 `userId` · `period` · `lookups`

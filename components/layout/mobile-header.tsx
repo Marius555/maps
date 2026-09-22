@@ -2,8 +2,10 @@
 
 import { Menu } from "lucide-react";
 
+import { PlanBadge } from "@/components/billing/plan-badge";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { IconButton } from "@/components/ui/icon-button";
+import type { PlanId } from "@/lib/repositories/plan-limits";
 import { MobileHeaderSlot } from "./mobile-header-slot";
 import { useSidebar } from "./sidebar/sidebar-context";
 
@@ -23,7 +25,7 @@ import { useSidebar } from "./sidebar/sidebar-context";
  * own — the card designer's panel is the first. Empty on every other page, which
  * costs a flex box with nothing in it.
  */
-export function MobileHeader() {
+export function MobileHeader({ plan }: { plan: PlanId }) {
   const { setMobileOpen } = useSidebar();
 
   return (
@@ -37,6 +39,11 @@ export function MobileHeader() {
       <span className="truncate text-sm font-semibold tracking-tight text-foreground">
         <BrandLogo />
       </span>
+
+      {/* The badge follows the product name wherever it is drawn. Below `md` the
+          sidebar is a drawer you have to open first, so leaving this line out
+          would make the plan invisible on a phone. */}
+      <PlanBadge plan={plan} />
 
       <MobileHeaderSlot />
     </header>

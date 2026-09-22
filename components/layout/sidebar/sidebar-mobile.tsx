@@ -2,8 +2,10 @@
 
 import { Button, Drawer } from "@heroui/react";
 
+import { PlanBadge } from "@/components/billing/plan-badge";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import type { AuthUser } from "@/lib/auth/types";
+import type { PlanId } from "@/lib/repositories/plan-limits";
 import { UserMenu } from "../user-menu";
 import { useSidebar } from "./sidebar-context";
 import { SidebarNav } from "./sidebar-nav";
@@ -15,7 +17,7 @@ import { SidebarNav } from "./sidebar-nav";
  * header without prop-drilling. Choosing a destination closes it — a drawer left
  * open over the page it just navigated to is the classic mobile-nav bug.
  */
-export function SidebarMobile({ user }: { user: AuthUser }) {
+export function SidebarMobile({ user, plan }: { user: AuthUser; plan: PlanId }) {
   const { isMobileOpen, setMobileOpen } = useSidebar();
 
   return (
@@ -23,8 +25,9 @@ export function SidebarMobile({ user }: { user: AuthUser }) {
       <Drawer.Content placement="left" className="w-72 max-w-[85vw]">
         <Drawer.Dialog className="flex h-full flex-col">
           <Drawer.Header>
-            <Drawer.Heading className="text-sm font-semibold">
+            <Drawer.Heading className="flex items-center gap-2 text-sm font-semibold">
               <BrandLogo />
+              <PlanBadge plan={plan} />
             </Drawer.Heading>
           </Drawer.Header>
 
@@ -36,7 +39,7 @@ export function SidebarMobile({ user }: { user: AuthUser }) {
           </Drawer.Body>
 
           <Drawer.Footer className="flex-col items-stretch">
-            <UserMenu user={user} />
+            <UserMenu user={user} plan={plan} />
             <Button slot="close" variant="tertiary" size="sm">
               Close
             </Button>

@@ -5,9 +5,11 @@ import { ChevronsLeft } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { PlanBadge } from "@/components/billing/plan-badge";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { IconButton } from "@/components/ui/icon-button";
 import type { AuthUser } from "@/lib/auth/types";
+import type { PlanId } from "@/lib/repositories/plan-limits";
 import { hidesAppNav } from "@/lib/layout/app-nav";
 import { UserMenu } from "../user-menu";
 import { useSidebar } from "./sidebar-context";
@@ -32,7 +34,7 @@ import { SidebarNav } from "./sidebar-nav";
  * `overflow-hidden` is what makes the clip clean. It is safe for the user menu
  * and the tooltips because React Aria portals both out of this subtree.
  */
-export function Sidebar({ user }: { user: AuthUser }) {
+export function Sidebar({ user, plan }: { user: AuthUser; plan: PlanId }) {
   const { isCollapsed, toggleCollapsed } = useSidebar();
   const pathname = usePathname();
 
@@ -58,18 +60,35 @@ export function Sidebar({ user }: { user: AuthUser }) {
           isCollapsed ? "justify-center gap-0" : "gap-1"
         }`}
       >
-        <Link
-          href="/maps"
-          aria-hidden={isCollapsed}
-          tabIndex={isCollapsed ? -1 : undefined}
-          className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm font-semibold tracking-tight text-foreground transition-[max-width,opacity,padding] duration-[var(--duration-panel)] ease-[var(--ease-out-fluid)] ${
+        {/*
+         * One collapsing wrapper around the name *and* the plan badge, because
+         * the badge belongs to the name and has to leave with it — a chip left
+         * floating beside the chevron on a 3.5rem rail reads as a bug. Two links
+         * inside it rather than one: the badge goes to /account and the name to
+         * /maps, and an anchor inside an anchor is invalid markup.
+         *
+         * `inert` rather than the `aria-hidden` + `tabIndex={-1}` pair this used
+         * to carry: there are two focusable things in here now, and `inert` takes
+         * the whole subtree out of the tab order and the accessibility tree at
+         * once instead of needing a prop threaded into each of them.
+         */}
+        <div
+          inert={isCollapsed}
+          className={`flex min-w-0 flex-1 items-center gap-2 overflow-hidden transition-[max-width,opacity,padding] duration-[var(--duration-panel)] ease-[var(--ease-out-fluid)] ${
             isCollapsed
               ? "pointer-events-none max-w-0 px-0 opacity-0"
               : "max-w-full px-1.5 opacity-100"
           }`}
         >
-          <BrandLogo />
-        </Link>
+          <Link
+            href="/maps"
+            className="min-w-0 truncate whitespace-nowrap text-sm font-semibold tracking-tight text-foreground"
+          >
+            <BrandLogo />
+          </Link>
+
+          <PlanBadge plan={plan} />
+        </div>
 
         {/* One icon that rotates, not two that swap. A swap is a cut in the
             middle of a transition that is otherwise continuous. */}
@@ -89,7 +108,7 @@ export function Sidebar({ user }: { user: AuthUser }) {
       </ScrollShadow>
 
       <div className="p-2">
-        <UserMenu user={user} isCollapsed={isCollapsed} />
+        <UserMenu user={user} plan={plan} isCollapsed={isCollapsed} />
       </div>
     </aside>
   );

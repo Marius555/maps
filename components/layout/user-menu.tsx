@@ -9,24 +9,45 @@ import {
   Separator,
   useTheme,
 } from "@heroui/react";
-import { Monitor, Moon, Sun } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
 
 import type { AuthUser } from "@/lib/auth/types";
 import { BRAND } from "@/lib/brand";
 import { useLogout } from "@/lib/query/auth";
+import type { PlanId } from "@/lib/repositories/plan-limits";
 
 const THEMES = [
-  { id: "light", label: "Light", icon: Sun },
-  { id: "dark", label: "Dark", icon: Moon },
-  { id: "system", label: "System", icon: Monitor },
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+  { id: "system", label: "System" },
 ] as const;
 
 /**
- * The account menu: identity, appearance, log out.
+ * The account menu: identity, the way up a plan, appearance, log out.
  *
  * Sits in the sidebar footer, which is where a persistent shell puts it — the
  * avatar is then in the same place on every page.
+ *
+ * **Text rows, and one icon.** Only Log out carries one, below a separator of
+ * its own: it is the row that ends the session, and the icon plus the rule above
+ * it make it the one a hand finds without reading. Every other row used to carry
+ * an icon too, which gave them all the same weight and made none of them easier
+ * to find.
+ *
+ * Appearance is a submenu. The three theme choices used to sit in a labelled
+ * section on this menu, which was four of its six lines spent on a setting almost
+ * nobody changes twice. The chosen one is marked by `Dropdown.ItemIndicator`
+ * alone now that the trigger row no longer wears the theme's icon.
+ *
+ * Selection moves with them. It belongs to the submenu's own `Dropdown.Menu`
+ * rather than to a section of the outer one; the outer `onAction` never handled a
+ * theme key and still does not.
+ *
+ * **The account row changes its name with the plan.** "Upgrade your account" in
+ * accent is the honest label for somebody on Free or Starter, and the page it
+ * opens is where a plan is changed. On Pro there is nothing above to sell, so it reads
+ * "Account and billing" in the ordinary colour — an accented invitation to buy
+ * what you have already bought is worse than no accent at all.
  *
  * `useTheme` is HeroUI's own hook. It persists to localStorage and sets both the
  * `.dark` class and `data-theme`, which is exactly what globals.css keys off, so
@@ -35,18 +56,20 @@ const THEMES = [
  */
 export function UserMenu({
   user,
+  plan,
   isCollapsed = false,
 }: {
   user: AuthUser;
+  plan: PlanId;
   isCollapsed?: boolean;
 }) {
-  const router = useRouter();
   const logout = useLogout();
   // The cross-fade needs no coordination here: globals.css transitions the
   // registered colour tokens on :root, so changing the theme is enough.
   const { theme, setTheme } = useTheme();
 
   const initials = getInitials(user.name, user.email);
+  const isTopPlan = plan === "pro";
 
   return (
     <Dropdown>
@@ -95,10 +118,14 @@ export function UserMenu({
             if (key !== "logout") return;
 
             await logout.mutateAsync();
-            router.replace("/login");
-            // The dashboard is server-rendered, so the cleared session has to
-            // reach the server before the redirect paints.
-            router.refresh();
+
+            // A document navigation, not `router.replace`. A soft replace
+            // consumes the one page you are on and leaves every dashboard page
+            // behind it in the history stack, reachable through the client
+            // router cache — where no guard runs, because a history restore
+            // makes no request. Tearing the document down is what makes Back a
+            // real request that `proxy.ts` can answer.
+            window.location.replace("/login");
           }}
         >
           <Dropdown.Section>
@@ -112,33 +139,41 @@ export function UserMenu({
               person, which is what this menu is already for. */}
           <Dropdown.Item
             id="account"
-            textValue="Account and plan"
+            textValue={isTopPlan ? "Account and billing" : "Upgrade your account"}
             href="/account"
           >
-            <Label>Account and plan</Label>
+            {/* Tinted rather than given a variant: `menuItemVariants` offers
+                `default` and `danger` only, and danger is the wrong word for
+                this entirely. */}
+            <Label className={isTopPlan ? undefined : "text-accent"}>
+              {isTopPlan ? "Account and billing" : "Upgrade your account"}
+            </Label>
           </Dropdown.Item>
 
-          <Separator />
+          <Dropdown.SubmenuTrigger>
+            <Dropdown.Item id="appearance" textValue="Appearance">
+              <Label>Appearance</Label>
+              <Dropdown.SubmenuIndicator />
+            </Dropdown.Item>
 
-          <Dropdown.Section
-            selectionMode="single"
-            selectedKeys={new Set([theme])}
-            onSelectionChange={(keys) => {
-              const next = [...keys][0];
-              if (typeof next === "string") setTheme(next);
-            }}
-          >
-            <Header>Appearance</Header>
-            {THEMES.map(({ id, label, icon: Icon }) => (
-              <Dropdown.Item key={id} id={id} textValue={label}>
-                <Icon aria-hidden="true" className="size-4" />
-                <Label>{label}</Label>
-                <Dropdown.ItemIndicator />
-              </Dropdown.Item>
-            ))}
-          </Dropdown.Section>
-
-          <Separator />
+            <Dropdown.Popover className="min-w-40">
+              <Dropdown.Menu
+                selectionMode="single"
+                selectedKeys={new Set([theme])}
+                onSelectionChange={(keys) => {
+                  const next = [...keys][0];
+                  if (typeof next === "string") setTheme(next);
+                }}
+              >
+                {THEMES.map(({ id, label }) => (
+                  <Dropdown.Item key={id} id={id} textValue={label}>
+                    <Label>{label}</Label>
+                    <Dropdown.ItemIndicator />
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown.SubmenuTrigger>
 
           {/* Only once brand.json has an address: an item that opens an empty
               email to nobody is a control that does nothing. */}
@@ -148,7 +183,12 @@ export function UserMenu({
             </Dropdown.Item>
           ) : null}
 
+          {/* Directly above Log out, so the one row that ends the session is
+              set apart from everything that does not. */}
+          <Separator />
+
           <Dropdown.Item id="logout" textValue="Log out" variant="danger">
+            <LogOut aria-hidden="true" className="size-4" />
             <Label>Log out</Label>
           </Dropdown.Item>
         </Dropdown.Menu>

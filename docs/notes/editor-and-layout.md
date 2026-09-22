@@ -87,13 +87,29 @@ rewritten; it is the record of why this area is shaped as it is.
   the closing transition needs it. Measured after: 64 frames, **zero direction reversals**,
   a clean ease-out from 9.6px to 0.8px a frame. Single-open folds help on their own, by
   leaving far less `scrollTop` to clamp.
-- **The window's scrollbar gutter is reserved, once, on `html`.** The dashboard's pages
-  grow the document (`AppShell` is `min-h-[100dvh]`, a floor rather than an app frame),
-  so anything that opens can cross the viewport boundary and bring a classic scrollbar in
-  with it — taking ~15px out of the layout in one frame. `scrollbar-gutter: stable` in
-  `app/globals.css`. Reported on the import wizard's Review step, where pressing **Fix**
-  on a short list did exactly that; the fix is deliberately global rather than per screen,
-  because every page here can do it.
+- **The dashboard is a frame, and `<main>` is its scroller.** `AppShell` is
+  `h-[100dvh] flex-none overflow-hidden`; the window never scrolls inside the dashboard.
+  It used to be `min-h-[100dvh]` — a floor — so the document scrolled and the sidebar, a
+  stretch-aligned flex child, grew to the page's full height: its `ScrollShadow` never
+  scrolled and the user menu sat at the foot of the *page*, below the fold on anything
+  long. `flex-none` is the same trap as the editor row's: `flex-1` beside a height and the
+  height is ignored. Measured after, at 1442x732 on `/account`: document
+  `scrollHeight === clientHeight` (732), `<main>` 1069 in 732, the aside exactly 732 with
+  the user menu's bottom at y=724 while `<main>` is scrolled to its end. The editor, card
+  and publish rows are unchanged — `<main>` is 100dvh on desktop, so their
+  `calc(100dvh-…)` arithmetic is too.
+- **The scrollbar gutter is reserved on whichever element scrolls.** Anything that opens
+  can push a scroller past its box and bring a classic scrollbar in with it — taking
+  ~15px out of the layout in one frame (reported on the import wizard's Review step, where
+  pressing **Fix** on a short list did exactly that). So `<main>` carries
+  `[scrollbar-gutter:stable]`, and `html` keeps `scrollbar-gutter: stable` for the
+  marketing, auth and docs pages that still scroll the document — **except** under
+  `html:has([data-app-frame])`, where it is `auto`, because a root that never overflows
+  would otherwise keep an empty 15px strip down every dashboard page's right edge.
+- **Anything reading "the page's scroll position" must ask `<main>`, not the window.**
+  `scrollableAncestor` (and so `reveal-fold.ts` and edge autoscroll) already finds it by
+  computed `overflow-y`; `lg:sticky` in the Review step now sticks against it. A new
+  `window.scrollY` or `window.scrollTo` in the dashboard reads a constant 0.
 - **The import wizard is centred down the page with `my-auto`, never `justify-center`.**
   Auto margins resolve to zero when free space is negative, so the tall Columns and
   Review steps still start at their top edge and scroll normally. `justify-content:

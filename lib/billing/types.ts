@@ -65,6 +65,49 @@ export type SubscriptionState = {
   billingSubscriptionId: string;
   /** ISO, or null when no end is known. Absent must keep meaning "no expiry". */
   currentPeriodEnd: string | null;
+  /**
+   * Monthly or yearly, or null when it is not known.
+   *
+   * Null is not "monthly". Every subscription recorded before this field existed
+   * has none, and printing a monthly price for one would be telling a yearly
+   * customer they pay something they do not. It only ever decides what the
+   * account page shows and what a plan switch asks for — never what a plan
+   * grants, which is `plan` alone.
+   */
+  cadence: BillingCadence | null;
+};
+
+/** What a plan switch asks the provider for. */
+export type PlanChangeRequest = {
+  billingSubscriptionId: string;
+  plan: PaidPlanId;
+  cadence: BillingCadence;
+  /**
+   * Whether the difference is settled against the period already paid for.
+   *
+   * True for an upgrade: the new plan starts now and the difference is added to
+   * the next bill. False for a downgrade, and for undoing one: the next bill is
+   * simply the new price and no money moves today, because the period already
+   * paid for is kept rather than credited back — see `planChange`.
+   */
+  prorate: boolean;
+};
+
+/**
+ * A plan already paid for, kept until the renewal after a downgrade.
+ *
+ * The provider moves a subscription the moment it is asked and has no way to
+ * book a change for the end of the period — so a downgrade is sent at once,
+ * without proration, and this is what keeps the customer on what they paid for
+ * in the meantime. `getUserPlan` grants it until `until`, and the account page
+ * says so.
+ */
+export type KeptPlan = {
+  plan: PaidPlanId;
+  /** Null only for a subscription whose cadence was never known. */
+  cadence: BillingCadence | null;
+  /** ISO. The renewal the downgrade takes effect at. */
+  until: string;
 };
 
 /**
@@ -96,4 +139,18 @@ export type BillingProvider = {
    * works for a week and then quietly does not.
    */
   portalUrl(billingSubscriptionId: string): Promise<string | null>;
+  /**
+   * Move a running subscription to another plan or cadence, in place.
+   *
+   * **Not a second checkout.** A checkout for somebody who already pays opens a
+   * second subscription beside the first, and they are then charged twice for
+   * one account. This changes the one they have, **immediately** — the provider
+   * has no scheduled change — prorating the difference onto the next renewal
+   * or, with `prorate: false`, simply billing the new price from then on.
+   *
+   * Resolves to the subscription as the provider now reports it, or null when
+   * the answer names no plan of ours. Throws when the provider refuses — unlike
+   * `portalUrl`, a change that did not happen has to be said out loud.
+   */
+  changePlan(request: PlanChangeRequest): Promise<Omit<SubscriptionState, "userId"> | null>;
 };

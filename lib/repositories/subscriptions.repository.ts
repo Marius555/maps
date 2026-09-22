@@ -5,7 +5,7 @@ import { ID, Query, type Models } from "node-appwrite";
 import { admin } from "@/lib/appwrite/admin";
 import { TABLES } from "@/lib/appwrite/config";
 import { toRepositoryError } from "@/lib/appwrite/errors";
-import type { SubscriptionState } from "@/lib/billing/types";
+import type { KeptPlan, SubscriptionState } from "@/lib/billing/types";
 import { env } from "@/lib/env";
 import { ownerPermissions } from "./maps.repository";
 import { PLAN_LIMITS, type PlanId } from "./plan-limits";
@@ -35,6 +35,10 @@ export type SubscriptionRow = Models.Row & {
   plan?: string | null;
   status?: string | null;
   currentPeriodEnd?: string | null;
+  cadence?: string | null;
+  keptPlan?: string | null;
+  keptCadence?: string | null;
+  keptUntil?: string | null;
 };
 
 async function findRow(userId: string): Promise<SubscriptionRow | null> {
@@ -47,7 +51,15 @@ async function findRow(userId: string): Promise<SubscriptionRow | null> {
   return result.rows[0] ?? null;
 }
 
-export type Subscription = SubscriptionState & { updatedAt: string };
+export type Subscription = SubscriptionState & {
+  updatedAt: string;
+  /**
+   * The plan already paid for, kept after a downgrade until the renewal — or
+   * null. Read it through `pendingKept`, which also checks the date: a kept plan
+   * whose renewal has passed is left in the row and means nothing.
+   */
+  kept: KeptPlan | null;
+};
 
 /** The account's subscription, or null for one that has never bought anything. */
 export async function getSubscription(
@@ -68,11 +80,31 @@ export async function getSubscription(
       billingCustomerId: row.billingCustomerId ?? "",
       billingSubscriptionId: row.billingSubscriptionId ?? "",
       currentPeriodEnd: row.currentPeriodEnd ?? null,
+      // Null for every row written before the column existed, and it stays
+      // null rather than being guessed — see `SubscriptionState.cadence`.
+      cadence:
+        row.cadence === "monthly" || row.cadence === "yearly" ? row.cadence : null,
       updatedAt: row.$updatedAt,
+      kept: keptOf(row),
     };
   } catch (error) {
     throw toRepositoryError(error);
   }
+}
+
+function keptOf(row: SubscriptionRow): KeptPlan | null {
+  if ((row.keptPlan !== "starter" && row.keptPlan !== "pro") || !row.keptUntil) {
+    return null;
+  }
+
+  return {
+    plan: row.keptPlan,
+    cadence:
+      row.keptCadence === "monthly" || row.keptCadence === "yearly"
+        ? row.keptCadence
+        : null,
+    until: row.keptUntil,
+  };
 }
 
 /**
@@ -88,9 +120,16 @@ export async function getSubscription(
  * owns, even though nothing reads it through a session client — `getUserPlan`
  * uses the admin client. Consistency is the point: a row with no permissions is a
  * row somebody has to think about later.
+ *
+ * **`kept` is written only when it is passed**, and only the change-plan route
+ * passes it. The webhook and the cadence backfill leave it alone, which matters
+ * because the provider answers a downgrade with a `subscription_updated` event:
+ * a write that cleared the kept plan there would take away, seconds later, the
+ * month of Pro the downgrade had just promised. `null` clears it.
  */
 export async function upsertSubscription(
   state: SubscriptionState,
+  kept?: KeptPlan | null,
 ): Promise<void> {
   const data = {
     plan: state.plan,
@@ -98,6 +137,14 @@ export async function upsertSubscription(
     billingCustomerId: state.billingCustomerId,
     billingSubscriptionId: state.billingSubscriptionId,
     currentPeriodEnd: state.currentPeriodEnd,
+    cadence: state.cadence,
+    ...(kept === undefined
+      ? {}
+      : {
+          keptPlan: kept?.plan ?? null,
+          keptCadence: kept?.cadence ?? null,
+          keptUntil: kept?.until ?? null,
+        }),
   };
 
   try {

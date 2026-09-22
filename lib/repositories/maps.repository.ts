@@ -69,6 +69,42 @@ export async function getMap(ctx: RepoContext, mapId: string): Promise<AppMap> {
   return toAppMap(row);
 }
 
+/**
+ * The map whose section the dashboard sidebar shows outside a map's own pages:
+ * `preferred` (the last one opened, from a cookie) when this account owns it,
+ * otherwise the account's most recently edited map, or null for an account with
+ * none.
+ *
+ * **The fallback is the point.** The cookie belongs to the browser, not the
+ * account, so it is empty until a map has been opened here and holds somebody
+ * else's id after an account switch — and either way the sidebar used to shrink
+ * to "All maps" and "Documentation" on Account for a signed-in owner with maps.
+ * One owner-scoped query of ids decides both halves.
+ */
+export async function sidebarMapId(
+  ctx: RepoContext,
+  preferred: string | null,
+): Promise<string | null> {
+  try {
+    const result = await admin.tablesDB.listRows<MapRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.maps,
+      queries: [
+        Query.equal("userId", ctx.userId),
+        Query.select(["$id"]),
+        Query.orderDesc("$updatedAt"),
+        Query.limit(MAX_MAPS_PER_PAGE),
+      ],
+    });
+
+    const ids = result.rows.map((row) => row.$id);
+
+    return preferred && ids.includes(preferred) ? preferred : (ids[0] ?? null);
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
 export async function countMaps(ctx: RepoContext): Promise<number> {
   try {
     // One row over the wire; `total` still reports the real count.
