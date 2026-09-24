@@ -1,11 +1,17 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
-import type { BillingCadence, KeptPlan, PaidPlanId } from "@/lib/billing/types";
+import type {
+  BillingCadence,
+  InvoicePage,
+  KeptPlan,
+  PaidPlanId,
+} from "@/lib/billing/types";
 import type { ChangePlanInput } from "@/lib/validation/billing.schema";
 import { apiFetch } from "./fetcher";
+import { queryKeys } from "./keys";
 
 /**
  * Move this account's running subscription to another plan or cadence.
@@ -30,6 +36,49 @@ export function useChangePlan() {
         "/api/account/subscription",
         { method: "PATCH", body: JSON.stringify(input) },
       ),
+    onSuccess: () => router.refresh(),
+  });
+}
+
+/**
+ * One page of invoices. Page one arrives with the Billing page itself, as
+ * `initialData`, so the table is there on the first frame; the rest are fetched
+ * as the pager asks.
+ *
+ * `keepPreviousData` holds the page on screen while the next one loads, so the
+ * table never empties and collapses under the pager in between.
+ */
+export function useInvoices(page: number, firstPage: InvoicePage) {
+  return useQuery({
+    queryKey: queryKeys.invoices(page),
+    queryFn: () => apiFetch<InvoicePage>(`/api/account/invoices?page=${String(page)}`),
+    initialData: page === firstPage.page ? firstPage : undefined,
+    placeholderData: keepPreviousData,
+    // An invoice does not change once issued, and the next one is a month away.
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Stop the renewal. The plan stays until the period paid for ends. */
+export function useCancelPlan() {
+  const router = useRouter();
+
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ endsAt: string | null }>("/api/account/subscription", { method: "DELETE" }),
+    onSuccess: () => router.refresh(),
+  });
+}
+
+/** Undo a cancellation while the period has not ended. */
+export function useResumePlan() {
+  const router = useRouter();
+
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ renewsAt: string | null }>("/api/account/subscription/resume", {
+        method: "POST",
+      }),
     onSuccess: () => router.refresh(),
   });
 }

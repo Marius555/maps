@@ -630,3 +630,156 @@ describe("changePlan", () => {
     ).rejects.toBeInstanceOf(BillingError);
   });
 });
+
+/**
+ * What the Billing page draws, read out of the provider's objects.
+ *
+ * Worth pinning for the same reason as everything above: a card read as
+ * nothing, or a cancelled subscription read as renewing, renders a page that
+ * looks fine and says the wrong thing.
+ */
+describe("toDetails", () => {
+  const subscription = (attributes: Record<string, unknown>) => ({
+    data: {
+      id: "sub-9",
+      attributes: {
+        status: "active",
+        customer_id: 42,
+        variant_id: 221,
+        renews_at: "2026-10-20T00:00:00.000Z",
+        ends_at: null,
+        ...attributes,
+      },
+    },
+  });
+
+  it("reads the card, the links and a running subscription", async () => {
+    const { toDetails } = await lemon();
+
+    const details = toDetails(
+      subscription({
+        card_brand: "visa",
+        card_last_four: "4242",
+        payment_processor: "stripe",
+        urls: {
+          customer_portal: "https://portal.test/p",
+          update_payment_method: "https://portal.test/card",
+        },
+      }),
+      "sub-9",
+    );
+
+    expect(details).toMatchObject({
+      cancelled: false,
+      renewsAt: "2026-10-20T00:00:00.000Z",
+      endsAt: null,
+      payment: { method: "card", brand: "visa", lastFour: "4242" },
+      portalUrl: "https://portal.test/p",
+      updatePaymentUrl: "https://portal.test/card",
+    });
+    expect(details?.state?.plan).toBe("pro");
+  });
+
+  it("says a cancelled subscription is cancelled, while the plan it grants stays active", async () => {
+    const { toDetails } = await lemon();
+
+    const details = toDetails(
+      subscription({ status: "cancelled", cancelled: true, ends_at: "2026-10-20T00:00:00.000Z" }),
+      "sub-9",
+    );
+
+    expect(details?.cancelled).toBe(true);
+    expect(details?.endsAt).toBe("2026-10-20T00:00:00.000Z");
+    // The row keeps granting the plan until the end date — see toStatus.
+    expect(details?.state?.status).toBe("active");
+  });
+
+  it("names PayPal as PayPal, with no card to describe", async () => {
+    const { toDetails } = await lemon();
+
+    const details = toDetails(
+      subscription({ payment_processor: "paypal", card_brand: "", card_last_four: "" }),
+      "sub-9",
+    );
+
+    expect(details?.payment).toEqual({ method: "paypal", brand: null, lastFour: null });
+  });
+
+  it("claims no method when the provider sends none", async () => {
+    const { toDetails } = await lemon();
+
+    expect(toDetails(subscription({}), "sub-9")?.payment.method).toBeNull();
+    expect(toDetails({}, "sub-9")).toBeNull();
+  });
+});
+
+describe("toInvoicePage", () => {
+  const invoice = (id: number, attributes: Record<string, unknown>) => ({
+    id,
+    attributes: {
+      billing_reason: "renewal",
+      status: "paid",
+      total_formatted: "€39.00",
+      created_at: "2026-09-20T10:00:00.000Z",
+      urls: { invoice_url: `https://invoices.test/${String(id)}.pdf` },
+      ...attributes,
+    },
+  });
+
+  it("reads each invoice with its reason, total, status and PDF", async () => {
+    const { toInvoicePage } = await lemon();
+
+    const page = toInvoicePage({
+      data: [invoice(2, {}), invoice(1, { billing_reason: "initial" })],
+      meta: { page: { currentPage: 1, lastPage: 3 } },
+    });
+
+    expect(page).toEqual({
+      page: 1,
+      lastPage: 3,
+      invoices: [
+        {
+          id: "2",
+          createdAt: "2026-09-20T10:00:00.000Z",
+          reason: "renewal",
+          total: "€39.00",
+          status: "paid",
+          url: "https://invoices.test/2.pdf",
+        },
+        {
+          id: "1",
+          createdAt: "2026-09-20T10:00:00.000Z",
+          reason: "initial",
+          total: "€39.00",
+          status: "paid",
+          url: "https://invoices.test/1.pdf",
+        },
+      ],
+    });
+  });
+
+  it("links nothing for a pending invoice, which has no PDF yet", async () => {
+    const { toInvoicePage } = await lemon();
+
+    const page = toInvoicePage({ data: [invoice(3, { status: "pending" })] });
+
+    expect(page.invoices[0]?.url).toBeNull();
+  });
+
+  it("drops an invoice whose status it does not know, rather than guess", async () => {
+    const { toInvoicePage } = await lemon();
+
+    const page = toInvoicePage({
+      data: [invoice(4, { status: "on_hold" }), invoice(5, { billing_reason: "surprise" })],
+    });
+
+    expect(page.invoices.map((entry) => entry.id)).toEqual(["5"]);
+    expect(page.invoices[0]?.reason).toBe("other");
+  });
+
+  it("answers one empty page for no data at all", async () => {
+    const { toInvoicePage } = await lemon();
+
+    expect(toInvoicePage({})).toEqual({ invoices: [], page: 1, lastPage: 1 });
+  });
+});

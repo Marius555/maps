@@ -44,6 +44,7 @@ import { SelectBox, type SelectBoxHandle } from "./select-box/select-box";
 import { useSelectBox } from "./select-box/use-select-box";
 import { MapShapes, type MapShapesProps } from "./shapes/map-shapes";
 import { SHAPE_HIT_LAYERS } from "./shapes/shape-layers";
+import { MapUnsupported } from "./map-unsupported";
 import { useMaplibre } from "./use-maplibre";
 import { usePlaceMarkers } from "./use-place-markers";
 
@@ -386,7 +387,7 @@ export default function MapCanvasImpl({
     [storedCardLayout],
   );
 
-  const { map, isReady } = useMaplibre(frame, container, {
+  const { map, isReady, isUnsupported } = useMaplibre(frame, container, {
     center,
     zoom,
     bounds: openingBounds,
@@ -892,6 +893,8 @@ export default function MapCanvasImpl({
          */
         className="h-full w-full"
       />
+
+      {isUnsupported ? <MapUnsupported /> : null}
 
       {selection ? <SelectBox ref={selectBox} /> : null}
 

@@ -5,8 +5,8 @@ import { useSyncExternalStore } from "react";
 /**
  * Is the dashboard currently dark?
  *
- * Read off `<html>` rather than from `useTheme()`. HeroUI's hook exposes
- * `resolvedTheme`, but it is `undefined` on the first client render — and things
+ * Read off `<html>` rather than from a theme hook. A hook that resolves the
+ * choice itself is `undefined` on the first client render — and things
  * that need the answer *at mount*, like the basemap a MapLibre instance is
  * constructed with, would take the light branch and then correct themselves a
  * tick later. That is a visible flash on every page load.
@@ -18,7 +18,7 @@ import { useSyncExternalStore } from "react";
  *
  * Watching the class attribute rather than `matchMedia` is deliberate too — it
  * catches an explicit light/dark choice *and* the "system" setting following the
- * OS, because HeroUI's `setTheme` resolves both down to this one class.
+ * OS, because `lib/theme/theme-choice.ts` resolves both down to this one class.
  */
 
 function subscribe(onChange: () => void): () => void {

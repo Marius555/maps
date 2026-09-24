@@ -2,7 +2,7 @@ import "server-only";
 
 import type { Models } from "node-appwrite";
 
-import { admin } from "@/lib/appwrite/admin";
+import { admin, createSessionIssuer } from "@/lib/appwrite/admin";
 import { isAppwriteException } from "@/lib/appwrite/errors";
 import { env } from "@/lib/env";
 import { UnauthorizedError } from "@/lib/repositories/errors";
@@ -77,14 +77,14 @@ export function createResetLink(userId: string): Promise<string> {
 export async function consumeToken(
   userId: string,
   secret: string,
+  userAgent?: string,
 ): Promise<Models.Session> {
   try {
-    // The admin client and not a per-request one: `createSession` is the API
-    // key's call, and the memoised client must never be mutated to carry a
-    // forwarded user agent — it is shared by every concurrent request, so a
-    // setter here would attribute one visitor's session to another's browser.
-    // The forwarding happens on `createSessionClient`, which is built per call.
-    return await admin.account.createSession({ userId, secret });
+    // A per-call issuer, not the memoised admin client: `createSession` is the
+    // API key's call, and the shared client must never be mutated to carry a
+    // forwarded user agent — it serves every concurrent request, so a setter on
+    // it would attribute one visitor's session to another's browser.
+    return await createSessionIssuer(userAgent).createSession({ userId, secret });
   } catch (error) {
     if (isAppwriteException(error) && (error.code === 401 || error.code === 400)) {
       throw new UnauthorizedError(

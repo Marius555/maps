@@ -20,6 +20,32 @@ const client = new Client()
   .setProject(APPWRITE_PROJECT_ID)
   .setKey(env.appwriteApiKey);
 
+/**
+ * An `Account` that creates sessions with the key, **and says whose browser it
+ * is doing it for.** Built fresh per call, never memoised.
+ *
+ * Sessions in this app are created on the server (the cookie has to be ours,
+ * see docs/notes/auth.md), so Appwrite records whatever user agent made the
+ * request. Through the shared client above that is this Node process, and every
+ * row of Settings → Account's device list read "Unknown device". Forwarding the
+ * browser's own user agent fixes that, but it cannot be done on the shared
+ * client: a setter on a memoised client would attribute one visitor's session
+ * to whichever request set it last. Hence a client per session.
+ *
+ * The IP cannot be forwarded the same way, so a session's recorded location is
+ * our server's, and the device list does not show it.
+ */
+export function createSessionIssuer(userAgent?: string): Account {
+  const issuer = new Client()
+    .setEndpoint(APPWRITE_ENDPOINT)
+    .setProject(APPWRITE_PROJECT_ID)
+    .setKey(env.appwriteApiKey);
+
+  if (userAgent) issuer.setForwardedUserAgent(userAgent);
+
+  return new Account(issuer);
+}
+
 export const admin = {
   account: new Account(client),
   tablesDB: new TablesDB(client),

@@ -38,8 +38,8 @@ export function PlanBadge({
 
   return (
     <Link
-      href="/account"
-      aria-label={`${name} plan — see your account`}
+      href="/settings/billing"
+      aria-label={`${name} plan — see billing`}
       className={`shrink-0 rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)] ${className}`}
     >
       <Chip

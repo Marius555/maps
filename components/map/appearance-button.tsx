@@ -11,10 +11,10 @@ import type { MapAppearanceSettings } from "@/lib/validation/map-appearance.sche
 /**
  * How the map looks, one click from the map.
  *
- * The same controls live on the Settings tab, and that is where they used to
- * only live — which meant changing a basemap was: leave the editor, change it,
- * come back, look. Restyling is a thing you do by eye, so it belongs where the
- * eye already is.
+ * The only place these controls live. They started on the Settings tab alone —
+ * which meant changing a basemap was: leave the editor, change it, come back,
+ * look — then lived in both places, and now only here. Restyling is a thing you
+ * do by eye, so it belongs where the eye already is.
  *
  * On the right of the toolbar's rule, with Save this view and Preview. The rule
  * separates tools that change what a gesture *means* from things you do *to* the

@@ -18,6 +18,7 @@ import type { AppMap, Place } from "@/lib/repositories/types";
 import { tagGroupsInUse, wornTagIds } from "@/lib/tags/tag-usage";
 import { tagGroupIndex } from "@/packages/shared/tags";
 import { ImportHelpLink } from "./import-help-link";
+import { VocabularyButton } from "./manage-vocabulary/vocabulary-button";
 import { PlaceCountBadge } from "./place-count-badge";
 import { PlaceEditDialog } from "./place-form/place-edit-dialog";
 import { PlaceList } from "./place-list";
@@ -179,6 +180,7 @@ export function PlacesManager({
         hasPlaces={places.length > 0}
         actions={
           <>
+            <VocabularyButton map={map} places={places} />
             <SheetSyncButton mapId={map.id} initialLink={initialSheetLink} />
             <LinkButton variant="secondary" href={`/maps/${map.id}/places/import`}>
               Import locations

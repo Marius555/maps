@@ -20,10 +20,14 @@ emails.
   nothing to await.
 - **The admin client is memoised and must never be mutated per request.**
   `setForwardedUserAgent` on it would attribute one visitor's session to
-  another's browser. Forwarding belongs on `createSessionClient`, which is built
-  fresh per call.
+  another's browser. Every session is created through `createSessionIssuer`
+  (`lib/appwrite/admin.ts`) instead, which is a keyed client built fresh per call
+  with the browser's user agent forwarded. Before it existed, sessions were
+  created through the shared client and recorded no browser at all, and the
+  device list in Settings read "Unknown device" on every row. The IP cannot be
+  forwarded, so a session's recorded location is always our server's.
 - **Every cross-site landing goes to a page outside `proxy.ts`'s matcher, never
-  to a server redirect that ends at `/maps` or `/account`.** See *The SameSite
+  to a server redirect that ends at `/maps`, `/settings` or `/account`.** See *The SameSite
   trap* below. This governs `/auth/success`, `/verify-email` and
   `/checkout/done`, and is the single most breakable thing in this area — it was
   broken a third time, by billing, after being written down twice.
@@ -32,6 +36,15 @@ emails.
   pages that want it, because a proxy redirect answers a client-side navigation
   with a bare 307 and the router decodes the wrong route's payload. See *The
   proxy cannot redirect a navigation* below.
+- **Account operations run as the user, never with the key, wherever Appwrite
+  can check something.** Changing a password goes through the session client so
+  Appwrite verifies `oldPassword` itself; the admin client's `updatePassword`
+  checks nothing, and a stolen session could use it to lock the owner out. The
+  device list and sign-outs go the same way, so Appwrite scopes them to the
+  caller. `lib/auth/sessions.ts` reads the secret itself; it never leaves
+  `lib/auth`.
+- **A password change signs out every other session**, as a reset does, and
+  keeps this one. It is often done because somebody else has been in.
 - **A token is single-use, so nothing that spends one may retry.**
   `useOAuthSession` and `useResetPassword` both set `retry: false`, and
   `OAuthCallback` guards its effect with a ref against StrictMode's double
@@ -348,11 +361,13 @@ Three properties make that one check enough, and all three are load-bearing:
   clone with no `.env` has to boot — the same posture `lib/env.ts` takes for every
   optional value. `lib/auth/email-gate.ts` owns this.
 
-`allowUnverified` on `withAuth` is the seam for the route that does not exist
-yet. Self-service account deletion is the one that matters: somebody who mistyped
-their address has no way to change it and no way to delete the account, so today
-their only move is to sign up again with the right one. The flag is there so that
-when the account page lands the answer is one opt-out rather than a hole.
+`allowUnverified` on `withAuth` was written for self-service account deletion,
+and that route uses it now (`POST /api/account/deletion` and its steps):
+somebody who mistyped their address can neither confirm it nor change it, and
+deleting the account is their way out. The only other routes that pass it sign
+other devices out (`DELETE /api/account/sessions…`), which defends an account
+rather than changing anything it owns. Changing the password and the name stay
+behind the gate like every other write. See `docs/notes/settings.md`.
 
 **The gate is not inside `publishMap`, and never was.** `withAuth` has already
 resolved a real Appwrite user, so `emailVerified` is a fact rather than a

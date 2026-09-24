@@ -19,7 +19,10 @@ import { resetPasswordSchema } from "@/lib/validation/auth.schema";
 export const POST = withoutAuth(async (request) => {
   const input = await parseBody(request, resetPasswordSchema);
 
-  const { user, session } = await resetPasswordForUser(input);
+  const { user, session } = await resetPasswordForUser(
+    input,
+    request.headers.get("user-agent") ?? undefined,
+  );
 
   await setSessionCookie(session);
 

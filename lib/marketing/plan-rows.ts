@@ -4,7 +4,7 @@ import type { MarketingPlan } from "./plans";
  * What a plan card lists, and in what order.
  *
  * **Extracted because two pages draw it now.** `/pricing` sells to a stranger and
- * `/account` shows a customer what they already have against what they could
+ * Settings → Billing shows a customer what they already have against what they could
  * have; the layouts differ, the rows must not. The labels used to live inside
  * `components/marketing/plans/plan-card.tsx`, which meant the second caller would
  * have retyped them — and a limit described as "Areas and routes drawn" on one

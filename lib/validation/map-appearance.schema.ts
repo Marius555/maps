@@ -13,8 +13,9 @@ import {
  * mechanical: `settings` means "which of the embed's optional controls are on",
  * it belongs to the Publish tab's form, and `updateMap` writes it by
  * `JSON.stringify`ing the **whole** object. Two forms writing one blob is a lost
- * update, and the appearance controls are on two screens at once — the toolbar
- * and the Settings tab.
+ * update. The appearance controls are the editor toolbar's alone now (they were
+ * on the Settings tab too), but the reason for the split never depended on that:
+ * `settings` still belongs to Publish, and this still does not.
  *
  * The label level and the layer toggles live here. The *theme* does not: that is
  * still the `style` column, because it is still one choice from one list and

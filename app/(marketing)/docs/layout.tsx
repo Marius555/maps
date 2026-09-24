@@ -3,7 +3,7 @@ import { DocsShell } from "@/components/docs/docs-shell";
 /**
  * Public, and deliberately inside `(marketing)` rather than `(dashboard)`.
  *
- * `proxy.ts` matches only `/maps` and `/account`, so nothing here needs a
+ * `proxy.ts` matches only `/maps`, `/account` and `/settings`, so nothing here needs a
  * session — which is the point. A guide that a signed-out visitor, a support
  * reply or a search engine cannot open is half a guide.
  *

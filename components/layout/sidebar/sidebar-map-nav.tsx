@@ -7,7 +7,6 @@ import {
   LayoutTemplate,
   MapIcon,
   MapPin,
-  Settings,
   Share2,
 } from "lucide-react";
 
@@ -71,10 +70,8 @@ export function SidebarMapNav({
     // have to have some before designing what they show.
     { href: `/maps/${mapId}/card`, label: "Card", icon: LayoutTemplate },
     { href: `/maps/${mapId}/publish`, label: "Publish", icon: Share2 },
-    // After Publish, because it reports on the map rather than changing it —
-    // and before Settings, which is where you go to change how it works.
+    // After Publish, because it reports on the map rather than changing it.
     { href: `/maps/${mapId}/analytics`, label: "Analytics", icon: ChartColumn },
-    { href: `/maps/${mapId}/settings`, label: "Settings", icon: Settings },
   ];
 
   return (
@@ -86,7 +83,7 @@ export function SidebarMapNav({
         flash of "Loading…" that becomes the map name is worse than the label
         simply appearing — still true, and still why there is no word in here.
         What it missed is that the box is ~28px tall (`max-h-6` + `pb-1`), so its
-        arrival shoved all six nav items down the sidebar, on every cold load of
+        arrival shoved all five nav items down the sidebar, on every cold load of
         a map. `AppShell` renders the sidebar before `<main>`, so this observer
         creates the `maps.detail` query without the `initialData` the page
         already holds, and there is a real round trip to wait through.

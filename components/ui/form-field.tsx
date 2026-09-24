@@ -2,6 +2,7 @@
 
 import {
   Button,
+  Description,
   FieldError,
   Input,
   InputGroup,
@@ -49,16 +50,35 @@ type FieldProps<T extends FieldValues> = {
    * password ever looked like it.
    */
   placeholder?: string;
+  /**
+   * One line of help under the field — and the line an error takes over.
+   *
+   * Given, the slot under the input is always occupied: the description, or the
+   * error in its place. So a failed submit swaps one line for another instead of
+   * inserting one and pushing everything below the field down, which is what the
+   * settings pages promise (`docs/notes/settings.md`). Omitted, the field behaves
+   * exactly as it always has: nothing under it until there is an error.
+   */
+  description?: string;
   autoComplete?: string;
   isDisabled?: boolean;
   autoFocus?: boolean;
 };
+
+/** The line under a field: the error when there is one, else the description. */
+function FieldNote({ error, description }: { error?: string; description?: string }) {
+  if (error) return <FieldError>{error}</FieldError>;
+  if (description) return <Description>{description}</Description>;
+
+  return null;
+}
 
 export function FormTextField<T extends FieldValues>({
   control,
   name,
   label,
   placeholder,
+  description,
   autoComplete,
   isDisabled,
   autoFocus,
@@ -92,7 +112,7 @@ export function FormTextField<T extends FieldValues>({
               autoComplete={autoComplete}
               autoFocus={autoFocus}
             />
-            {error ? <FieldError>{error}</FieldError> : null}
+            <FieldNote error={error} description={description} />
           </TextField>
         );
       }}
@@ -160,6 +180,7 @@ export function FormPasswordField<T extends FieldValues>({
   name,
   label,
   placeholder,
+  description,
   autoComplete,
   isDisabled,
   autoFocus,
@@ -212,7 +233,7 @@ export function FormPasswordField<T extends FieldValues>({
                 </Button>
               </InputGroup.Suffix>
             </InputGroup>
-            {error ? <FieldError>{error}</FieldError> : null}
+            <FieldNote error={error} description={description} />
           </TextField>
         );
       }}

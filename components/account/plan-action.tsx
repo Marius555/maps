@@ -31,10 +31,14 @@ export type PlanActionKind =
   | "booked"
   /** Another paid plan, bought fresh — for an account with nothing to move. */
   | "checkout"
-  /** Free, while paying: cancelling is the provider portal's job. */
-  | "cancel-in-portal"
-  /** A past-due or paused subscription: the portal first, then a switch. */
-  | "held";
+  /** Free, while paying: that is Cancel plan, in the Plan section above. */
+  | "cancel-above"
+  /** A past-due or paused subscription: the card first, then a switch. */
+  | "held"
+  /** Free, while a cancelled subscription runs out: it arrives by itself. */
+  | "moves-to-free"
+  /** Any other paid plan while cancelled: resuming comes before switching. */
+  | "resume-first";
 
 /** A downgrade waiting for the renewal: what it moves to, and when. */
 export type PendingChange = { next: Offer; until: string };
@@ -46,6 +50,7 @@ export function planActionFor({
   currentCadence,
   standing,
   pending,
+  endsOn,
 }: {
   plan: MarketingPlan;
   cadence: PlanCadence;
@@ -54,13 +59,30 @@ export function planActionFor({
   currentCadence: PlanCadence | null;
   standing: BillingStanding;
   pending: PendingChange | null;
+  /**
+   * The last day of a cancelled subscription, or null when it is not cancelled.
+   * Our row cannot say this (a cancelled subscription is `active` in it), so the
+   * Billing page reads it from the provider and passes it in.
+   */
+  endsOn: string | null;
 }): PlanActionKind | null {
   const isCurrent = plan.id === current;
+
+  /*
+   * Cancelled comes first. Every switch would move a subscription that is about
+   * to end, so none is offered: the plan paid for says so, Free says when it
+   * arrives, and every other column points at Resume.
+   */
+  if (endsOn && standing !== "none") {
+    if (plan.id === "free") return "moves-to-free";
+
+    return isCurrent && cadence === currentCadence ? "on-it" : "resume-first";
+  }
 
   if (plan.id === "free") {
     if (isCurrent) return "on-it";
 
-    return standing === "switchable" ? "cancel-in-portal" : null;
+    return standing === "switchable" ? "cancel-above" : null;
   }
 
   if (pending && plan.id === pending.next.plan && cadence === pending.next.cadence) {
@@ -133,7 +155,7 @@ export function PlanAction({
   current,
   currentCadence,
   pending,
-  portalUrl,
+  endsOn,
   isPending,
   isBusy,
   onChange,
@@ -144,7 +166,8 @@ export function PlanAction({
   current: PlanId;
   currentCadence: PlanCadence | null;
   pending: PendingChange | null;
-  portalUrl: string | null;
+  /** The last day of a cancelled subscription — see `planActionFor`. */
+  endsOn: string | null;
   /** This column's own switch is in flight. */
   isPending: boolean;
   /** Any column's switch is in flight — one change at a time. */
@@ -207,20 +230,33 @@ export function PlanAction({
         </LinkButton>
       );
 
-    case "cancel-in-portal":
-      return portalUrl ? (
+    case "cancel-above":
+      return (
         <p className="text-sm text-muted">
-          Cancelling is done from Manage subscription, above.
+          To move to Free, use Cancel plan above. You keep what you&apos;ve paid for
+          until then.
         </p>
-      ) : null;
+      );
 
     case "held":
       return (
         <p className="text-sm text-muted">
-          {portalUrl
-            ? "Sort out the payment in Manage subscription first, then change plan here."
-            : "Sort out the payment first, then change plan here."}
+          Update your card under Payment first, then change plan here.
         </p>
+      );
+
+    case "moves-to-free":
+      // A disabled button, like "Current plan", so this footer is the same
+      // height as its neighbours and the columns stay in line.
+      return (
+        <Button fullWidth isDisabled variant="secondary">
+          Starts {endsOn ? formatDate(endsOn) : "when your plan ends"}
+        </Button>
+      );
+
+    case "resume-first":
+      return (
+        <p className="text-sm text-muted">Resume your plan above to change it.</p>
       );
 
     default:

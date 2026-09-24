@@ -83,7 +83,7 @@ export default async function MapAnalyticsPage(
    * The `try` wraps only the fetch, and the JSX is returned after it.
    * React renders children after this function returns, so a `catch` around JSX
    * never fires — the rule the lint config enforces and that
-   * `maps/[id]/settings/page.tsx` documents at length.
+   * `maps/[id]/places/(list)/page.tsx` documents at length.
    */
   let data: LoadedAnalytics;
 

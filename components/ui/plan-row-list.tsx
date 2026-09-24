@@ -5,7 +5,7 @@ import type { PlanRow } from "@/lib/marketing/plan-rows";
 
 /**
  * A plan's limits as a definition list — the same rows on `/pricing` and on
- * `/account`.
+ * Settings → Billing.
  *
  * The rows themselves come from `lib/marketing/plan-rows.ts`; this is only how
  * they are drawn, kept here because both callers draw them identically and a

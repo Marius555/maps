@@ -205,7 +205,7 @@ console.log(
 if (stats.overflowed > 0) {
   console.log("");
   console.log("Maps over a ceiling were left alone. Remove some tags in");
-  console.log("Settings → Filters on those maps, then run this again.");
+  console.log("Locations → Tags & fields on those maps, then run this again.");
 }
 
 if (stats.maps > 0 && !dryRun) {

@@ -30,7 +30,16 @@ import { TagGroupRow } from "./tag-group-row";
  * to reach for. Categories merged in: a tag carries a colour, a location wears
  * as many as apply, and the first one it was given is what colours its pin.
  */
-export function TagGroupEditor({ map, places }: { map: AppMap; places: Place[] }) {
+export function TagGroupEditor({
+  map,
+  places,
+  className,
+}: {
+  map: AppMap;
+  places: Place[];
+  /** Passed to the panel — the Tags & fields dialog flattens it. */
+  className?: string;
+}) {
   const updateMap = useUpdateMap(map.id);
   const [draft, setDraft] = useState<MapTagGroup[]>(map.tagGroups);
   const [problem, setProblem] = useState<string | null>(null);
@@ -84,6 +93,7 @@ export function TagGroupEditor({ map, places }: { map: AppMap; places: Place[] }
 
   return (
     <SectionPanel
+      className={className}
       title="Filters"
       description="Tags let visitors narrow the map by what a location offers. Tags in the same group widen the results; tags in different groups narrow them."
       action={

@@ -4,6 +4,7 @@ import {
   BillingError,
   getBilling,
   type KeptPlan,
+  type SubscriptionDetails,
   type SubscriptionState,
 } from "@/lib/billing";
 import { pendingKept, planChange } from "@/lib/billing/plan-change";
@@ -56,7 +57,26 @@ export const PATCH = withAuth(async ({ request, user }) => {
   if (standing === "held") {
     return fail(
       "conflict",
-      "This subscription can't be changed right now. Open Manage subscription to sort out the payment first.",
+      "This subscription can't be changed right now. Update your card under Payment first, then try again.",
+      409,
+    );
+  }
+
+  /*
+   * A cancelled subscription is still `active` in our row — correctly, it runs
+   * to the end of what was paid for — so the standing above cannot see it. The
+   * provider can: ask once, and refuse, because moving a subscription that is
+   * about to end would bill a plan change nobody will use. A read that fails
+   * lets the change through; the provider still has the last word on it.
+   */
+  const live = await getBilling()
+    .subscriptionDetails(subscription.billingSubscriptionId)
+    .catch(() => null);
+
+  if (live?.cancelled) {
+    return fail(
+      "conflict",
+      "Your plan is set to end. Resume it first, then change plans.",
       409,
     );
   }
@@ -136,4 +156,44 @@ export const PATCH = withAuth(async ({ request, user }) => {
   await upsertSubscription({ ...state, userId: user.id }, kept);
 
   return ok({ plan: state.plan, cadence: state.cadence, kept });
+});
+
+/**
+ * Cancel: stop the renewal, keep the plan until the period paid for ends.
+ *
+ * **In the app now, where it used to be the portal's alone.** The provider
+ * still does all of it — this is one call to its own cancel, and the invoice,
+ * the proration and the end date are all its decisions. What changed is that a
+ * customer no longer has to leave the dashboard and find the button on somebody
+ * else's site to stop paying us, which is the kind of friction that ends in a
+ * chargeback rather than a cancellation.
+ *
+ * A past-due subscription may be cancelled too — somebody whose card failed and
+ * who wants to stop is the last person to send round a portal. Only an account
+ * with nothing running is refused.
+ *
+ * The reply is written through `toState` like every other write to the row, and
+ * reads as `active` until `ends_at`: the `cancelled → active` mapping in
+ * `lib/billing/lemon.ts` is what keeps the plan they paid for until then.
+ */
+export const DELETE = withAuth(async ({ user }) => {
+  const subscription = await getSubscription(user.id);
+
+  if (!subscription?.billingSubscriptionId || billingStanding(subscription) === "none") {
+    return fail("conflict", "There's no running plan on this account to cancel.", 409);
+  }
+
+  let details: SubscriptionDetails | null;
+
+  try {
+    details = await getBilling().cancelSubscription(subscription.billingSubscriptionId);
+  } catch (error) {
+    if (!(error instanceof BillingError)) throw error;
+
+    return fail("internal_error", error.message, 502);
+  }
+
+  if (details?.state) await upsertSubscription({ ...details.state, userId: user.id });
+
+  return ok({ endsAt: details?.endsAt ?? details?.state?.currentPeriodEnd ?? null });
 });

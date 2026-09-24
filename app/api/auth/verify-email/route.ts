@@ -42,7 +42,11 @@ export const GET = withoutAuth(async (request) => {
   if (!userId || !secret) return landing("expired");
 
   try {
-    const session = await consumeToken(userId, secret);
+    const session = await consumeToken(
+      userId,
+      secret,
+      request.headers.get("user-agent") ?? undefined,
+    );
     const user = await markEmailVerified(userId);
 
     // Confirming signs you in. The token proved control of the address, the

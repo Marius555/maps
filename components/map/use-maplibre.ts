@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { effectiveAppearance } from "@/lib/map/appearance";
 import { carryRuntimeLayers } from "@/lib/map/carry-style";
 import { resolveStyleUrl, type MapStyleKey } from "@/lib/map/style";
+import { canRenderMaps } from "@/lib/map/webgl";
 import { collapseAttribution } from "@/packages/shared/attribution";
 import { loadMapStyle } from "@/packages/shared/load-style";
 import { blankMissingIcons } from "@/packages/shared/missing-icons";
@@ -89,6 +90,18 @@ export function useMaplibre(
   const [isReady, setIsReady] = useState(false);
 
   /*
+   * True when this browser cannot draw a map, so the caller can say so in the
+   * frame instead of leaving it grey — see lib/map/webgl.ts for why a map built
+   * anyway fails silently.
+   *
+   * Answered in the initialiser rather than an effect so the first render is
+   * already the right one. Safe to touch `document` here: every importer of this
+   * hook is loaded with `ssr: false`, because MapLibre touches `window` at module
+   * load.
+   */
+  const [isUnsupported, setIsUnsupported] = useState(() => !canRenderMaps());
+
+  /*
    * `auto` resolves here so no caller has to know it exists — they pass whatever
    * the map is set to and get the right basemap either way.
    *
@@ -131,7 +144,8 @@ export function useMaplibre(
   useEffect(() => {
     const element = container.current;
     const box = frame.current;
-    if (!element || !box || mapRef.current) return;
+    // Before the style fetch too — there is nothing to spend it on.
+    if (isUnsupported || !element || !box || mapRef.current) return;
 
     let map: MapLibreMap | null = null;
     let observer: ResizeObserver | null = null;
@@ -240,6 +254,24 @@ export function useMaplibre(
          */
         attributionControl: { compact: true },
       });
+
+      /*
+       * The probe said yes and the real context still failed — Chrome's
+       * per-page context limit, or the GPU resetting between the two.
+       *
+       * MapLibre has already logged it and returned a map with no painter, and
+       * nothing below may touch that: the ResizeObserver's first `resize()` and
+       * the cleanup's `remove()` both dereference the painter and throw. So undo
+       * what the constructor put in the container, drop the reference so the
+       * cleanup skips it, and let the caller say why the frame is empty.
+       */
+      if (!map.painter) {
+        element.replaceChildren();
+        element.classList.remove("maplibregl-map");
+        map = null;
+        setIsUnsupported(true);
+        return;
+      }
 
       // Kept across `setStyle`, so one call covers every theme switch after it.
       // See packages/shared/missing-icons.ts.
@@ -457,7 +489,7 @@ export function useMaplibre(
       mapRef.current = null;
       setIsReady(false);
     };
-  }, [container, frame]);
+  }, [container, frame, isUnsupported]);
 
   /**
    * Restyle in place when the basemap changes.
@@ -518,7 +550,7 @@ export function useMaplibre(
     };
   }, [isReady, styleUrl, appearance, look]);
 
-  return { map: mapRef, isReady };
+  return { map: mapRef, isReady, isUnsupported };
 }
 
 /** What the editor has always framed at, and so what everything else gets. */

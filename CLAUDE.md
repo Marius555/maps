@@ -10,8 +10,8 @@ Project instructions. Read this fully before writing code.
 
 **Weeks 1–3 of §10 are done; Week 4 is most of the way through.** Of §5's layout, `/app`,
 `/lib`, `/components`, `/scripts`, `/embed`, `/packages/shared` and `/functions` (one
-function, the daily sheet sync) exist, and so now do `/lib/billing`, `/app/(dashboard)/account`
-and `/app/api/webhooks/billing`. Still absent, and correctly so — it belongs to the rest of
+function, the daily sheet sync) exist, and so now do `/lib/billing`, `/app/(dashboard)/settings`
+(which `/account` now redirects to) and `/app/api/webhooks/billing`. Still absent, and correctly so — it belongs to the rest of
 Week 4: `/app/(marketing)/for/[platform]`.
 
 Working end to end: email auth, map CRUD, the MapLibre editor, the locations list with
@@ -78,13 +78,22 @@ Appwrite's tokens are used instead of our own HMAC, are in `docs/notes/auth.md`.
 **Billing is wired, and with it the thing that made billing unsafe.** Lemon Squeezy behind
 the pricing page: a static `/pricing` whose cards link to `/upgrade`, which reads the
 session and opens a checkout; a signature-verified webhook that writes `subscriptions`;
-and an account page showing the portal link and what has been spent, where a paying
-customer changes plan or cadence **in place** (`PATCH /api/account/subscription`) —
-never through a second checkout, which would be a second subscription. **The buyer returns to `/checkout/done`, never to `/account`** — that is the
+and Settings → Billing, where a paying customer changes plan or cadence **in place**
+(`PATCH /api/account/subscription`) — never through a second checkout, which would be a
+second subscription — and cancels, resumes, updates the card and downloads invoices. **The buyer returns to `/checkout/done`, never to `/settings/billing`** — that is the
 `sameSite: "strict"` rule in the auth notes, which billing broke a third time after it
 had been written down twice, answering a completed purchase with a login form. Plans keep their prices and gain **annual at two months free**, a published
 **monthly lookup allowance**, Free at 25 locations instead of 10, and **analytics behind the
 paid plans**.
+
+**Settings is a claude.ai-style section of its own**: General (name, theme), Account
+(password, signed-in devices, delete account), Billing, Usage. It replaced `/account` and the
+account menu's theme submenu. **Nothing on those pages moves when touched**: `.steady` switches
+off HeroUI's press scale and keeps pending buttons at their width, and every dialog opened
+from there carries the class itself because it portals out. Account deletion runs in
+bounded steps for the 30-second host limit, subscription cancelled first. The theme lives in
+one store (`lib/theme/theme-choice.ts`), not HeroUI's `useTheme`, because the account menu's
+copy was what followed the OS while "System" was chosen. Everything else in `docs/notes/settings.md`.
 
 **The allowance is the load-bearing half, and it is not a pricing device.** Before it, one
 account could spend 200 geocoder credits by arming the route tool — *and 200 more on every
@@ -162,7 +171,7 @@ deliberately.
 Linting is **ESLint flat config** (`eslint.config.mjs`, `eslint-config-next` core-web-vitals + typescript), not Biome. §3 chooses Biome; when you migrate, swap the `lint` script and delete the ESLint config. Until then `npm run lint` is the check.
 
 Two lint rules bite repeatedly, and both are right:
-- **No JSX inside a `try`/`catch`.** React renders children after the handler returns, so the catch never fires. Fetch inside the try, assign to a `let`, return JSX after it — see `app/(dashboard)/maps/[id]/settings/page.tsx`.
+- **No JSX inside a `try`/`catch`.** React renders children after the handler returns, so the catch never fires. Fetch inside the try, assign to a `let`, return JSX after it — see `app/(dashboard)/maps/[id]/places/(list)/page.tsx`.
 - **No `watch()` from react-hook-form.** It returns a fresh function each render, so the React Compiler opts the whole component out of memoization. Use `useWatch({ control, name })`.
 
 Tests are `vitest` (`vitest.config.mts`), unit only, `lib/**/*.test.ts` and `packages/**/*.test.ts`. Single file: `npx vitest run lib/import/detect/score.test.ts`. Covered per §9: import column detection, geocode result handling, plan-limit enforcement. The default environment is `node`; the few files touching `DOMParser` or `File` opt in with a `// @vitest-environment jsdom` docblock. **jsdom, not happy-dom** — happy-dom's XML parser rejects CDATA outright, and store-locator feeds wrap names in it constantly, so it cannot tell us whether the XML source works. `lib/import/pipeline.test.ts` runs bytes-to-drafts over realistically-shaped files; it is the one that catches seam bugs the per-stage tests each miss. Snapshot generation is untested because it doesn't exist yet — add it with Week 3. `server-only` is aliased to a stub (`lib/test/server-only-stub.ts`) so repositories can be tested; the real guard still applies to every Next build.
@@ -341,7 +350,8 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `components/auth/**`, `lib/auth/**`, `lib/email/**`, `app/(auth)/**`, `app/api/auth/**`, `proxy.ts` | `docs/notes/auth.md` |
 | `lib/sheet-sync/**`, `components/places/sheet-sync/**`, `app/api/**/sheet-link/**`, `app/api/cron/**`, `functions/**` | `docs/notes/sheet-sync.md` |
 | `app/(marketing)/**`, `components/marketing/**`, `lib/marketing/**` | `docs/notes/marketing.md` |
-| `lib/billing/**`, `lib/repositories/{subscriptions,usage,plan-limits}.repository.ts`, `app/api/webhooks/billing/**`, `app/(dashboard)/account/**`, `app/(marketing)/upgrade/**` | `docs/notes/billing.md` |
+| `lib/billing/**`, `lib/repositories/{subscriptions,usage,plan-limits}.repository.ts`, `app/api/webhooks/billing/**`, `app/(dashboard)/settings/billing/**`, `app/(marketing)/upgrade/**` | `docs/notes/billing.md` |
+| `app/(dashboard)/settings/**`, `components/user-settings/**`, `lib/theme/**`, `lib/account-deletion/**`, `lib/auth/sessions.ts`, the `.steady` block in `globals.css` | `docs/notes/settings.md` |
 | `documents/legal/**`, `lib/legal/**`, `components/legal/**`, the `legal` links in `brand.json` | `documents/legal/README.md` |
 
 Self-hosting runbooks, unchanged: `docs/self-hosting-geocoding.md`,
@@ -454,8 +464,8 @@ It started type-only and now holds a little runtime too, because the editor and 
     /maps
     /maps/[id]            Map editor
     /maps/[id]/places
-    /maps/[id]/settings
-    /account
+    /settings             The person: general, account, billing, usage
+    /account              Redirects to /settings/billing
   /api
     /webhooks/billing     MoR webhook → subscription state
 /embed                    Vite build, vanilla TS, ships to CDN
@@ -495,8 +505,9 @@ Use plain `lat` / `lng` doubles, **not** spatial Point columns. Spatial types ex
 `appearance` is the label level and the layer toggles. Its own column rather than another key
 in `settings`, and the reason is mechanical: `settings` means "which of the embed's optional
 controls are on", it belongs to the Publish tab's form, and `updateMap` writes it by
-serialising the **whole** object — two forms writing one blob is a lost update, and the
-appearance controls are on two screens at once. `style` stays where it is: still one choice
+serialising the **whole** object — two forms writing one blob is a lost update. The
+appearance controls are the editor toolbar's alone now; the split stands because `settings`
+still belongs to Publish. `style` stays where it is: still one choice
 from one list, and moving it would orphan every map already saved. It is a `varchar(32)`, so
 theme keys stay short.
 

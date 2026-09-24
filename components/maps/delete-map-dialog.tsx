@@ -8,10 +8,9 @@ import { useDeleteMap } from "@/lib/query/maps";
 /**
  * The confirmation, without a trigger of its own.
  *
- * Two things open it: the Delete button on a map's settings page, and the Delete
- * item in a map card's menu. A menu item cannot own a modal — the menu closes,
- * and unmounts what it holds, the moment an item is chosen — so the dialog is
- * controlled from outside by whichever of the two is its parent.
+ * Opened by the Delete item in a map card's menu. A menu item cannot own a
+ * modal — the menu closes, and unmounts what it holds, the moment an item is
+ * chosen — so the dialog is controlled from outside by the menu's parent.
  */
 export function DeleteMapDialog({
   mapId,

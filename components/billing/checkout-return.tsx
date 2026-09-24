@@ -15,7 +15,7 @@ import { LinkButton } from "@/components/ui/link-button";
  * is `sameSite: "strict"`, and a browser returning from `lemonsqueezy.com` is
  * making a cross-site top-level navigation — so it withholds the cookie, and
  * carries that classification through any server redirect chain. Sending the
- * buyer straight to `/account` therefore handed `proxy.ts` a request with no
+ * buyer straight to the dashboard therefore handed `proxy.ts` a request with no
  * cookie on it and bounced somebody who had just paid us onto the login page.
  *
  * `components/auth/oauth-callback.tsx` exists for the identical reason and
@@ -26,7 +26,7 @@ import { LinkButton } from "@/components/ui/link-button";
  * same-site page initiates does carry a Strict cookie.
  *
  * `router.refresh()` after the `replace` is load bearing, not belt and braces:
- * `/account` is server-rendered, so the cookie has to reach the *server* before
+ * `/settings/billing` is server-rendered, so the cookie has to reach the *server* before
  * the destination paints.
  *
  * **The link is not a fallback afterthought.** With JavaScript off the effect
@@ -44,7 +44,7 @@ export function CheckoutReturn() {
     if (moved.current) return;
     moved.current = true;
 
-    router.replace("/account?checkout=done");
+    router.replace("/settings/billing?checkout=done");
     router.refresh();
   }, [router]);
 
@@ -59,7 +59,7 @@ export function CheckoutReturn() {
             <Spinner aria-label="Opening your account" />
           </div>
 
-          <LinkButton href="/account">Go to your account</LinkButton>
+          <LinkButton href="/settings/billing">Go to your account</LinkButton>
         </div>
       }
     />

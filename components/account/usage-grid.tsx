@@ -40,7 +40,9 @@ export function UsageGrid({
   const limits = PLAN_LIMITS[plan];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    // Two across at most: this sits in the settings column, which is a reading
+    // measure, and four meters in it would each be too narrow for its note.
+    <div className="grid gap-4 sm:grid-cols-2">
       <UsageMeter
         label="Maps"
         icon={MapIcon}

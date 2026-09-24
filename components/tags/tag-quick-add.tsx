@@ -36,7 +36,7 @@ import {
  * an imported column, so a hand-made tag and an imported one land in one place
  * rather than in two groups meaning the same thing. Asking which *question* a
  * tag answers, in the middle of filling in a location, is a concept lesson at
- * the wrong moment; regrouping is one drag in Settings → Filters, where the
+ * the wrong moment; regrouping is one drag in Locations → Tags & fields, where the
  * groups are visible side by side.
  *
  * Renaming, recolouring, regrouping and removing all stay there for the same

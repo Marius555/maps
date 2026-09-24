@@ -26,7 +26,7 @@ import { PlanCard } from "./plan-card";
  * which is a canonical-tag problem on the page we most want indexed cleanly.
  *
  * The toggle itself lives in `components/ui/cadence-toggle.tsx`, because
- * `/account` holds the same control over its own plan columns.
+ * Settings → Billing holds the same control over its own plan columns.
  */
 export function PlanGrid() {
   const [cadence, setCadence] = useState<PlanCadence>("monthly");

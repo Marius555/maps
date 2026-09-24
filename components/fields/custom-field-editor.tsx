@@ -28,7 +28,16 @@ import { CustomFieldRow } from "./custom-field-row";
  * be removed but the list is otherwise left in the order it was built — an owner
  * arranging their card is arranging this.
  */
-export function CustomFieldEditor({ map, places }: { map: AppMap; places: Place[] }) {
+export function CustomFieldEditor({
+  map,
+  places,
+  className,
+}: {
+  map: AppMap;
+  places: Place[];
+  /** Passed to the panel — the Tags & fields dialog flattens it. */
+  className?: string;
+}) {
   const updateMap = useUpdateMap(map.id);
   const [draft, setDraft] = useState<MapField[]>(map.fields);
   const [problem, setProblem] = useState<string | null>(null);
@@ -82,6 +91,7 @@ export function CustomFieldEditor({ map, places }: { map: AppMap; places: Place[
 
   return (
     <SectionPanel
+      className={className}
       title="Extra fields"
       description="Anything your locations carry that the built-in fields don't cover — a booking link, a menu, a dealer code. They appear on the card a visitor opens."
       action={

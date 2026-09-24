@@ -49,7 +49,7 @@ import { Chip } from "@heroui/react";
  * A tag's colour answers a different question — *which pin is this?* — and it is
  * drawn where that question is asked: on the card and the list row, beside the
  * thing wearing it (`TagChips` in components/card/card-block.tsx, which likewise
- * draws no dot), and in Settings → Filters, where the colour is the thing being
+ * draws no dot), and in Locations → Tags & fields, where the colour is the thing being
  * edited rather than a decoration on something else.
  *
  * This used to be a `TagDot`, rendered by both chips below.

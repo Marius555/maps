@@ -60,17 +60,17 @@ export default async function UpgradePage(props: PageProps<"/upgrade">) {
    * **Somebody who already pays is not sold a second subscription.** `/pricing`
    * is static and cannot know who is looking, so its cards send a subscriber
    * here like anyone else — and a checkout for them opens a second subscription
-   * beside the first, charged separately. Their plan is moved in place from the
-   * account page instead, which is where this sends them.
+   * beside the first, charged separately. Their plan is moved in place from
+   * Settings → Billing instead, which is where this sends them.
    */
   if (billingStanding(await getSubscription(user.id)) === "switchable") {
-    redirect("/account");
+    redirect("/settings/billing");
   }
 
   /*
    * The `try` wraps only the call and returns no JSX. React renders children
    * after this function returns, so a `catch` around JSX never fires — the rule
-   * the lint config enforces and that `maps/[id]/settings/page.tsx` documents.
+   * the lint config enforces and that `maps/[id]/places/(list)/page.tsx` documents.
    */
   let url: string;
 

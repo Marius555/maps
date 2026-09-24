@@ -8,7 +8,7 @@ import { z } from "zod";
  * characters; matching it means the user sees our message rather than an
  * upstream one.
  */
-const password = z
+export const password = z
   .string()
   .min(8, "Use at least 8 characters.")
   .max(256, "Keep the password under 256 characters.");
@@ -18,8 +18,11 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Enter your password."),
 });
 
+/** The name on an account. Signup and the profile form share it. */
+export const personName = z.string().trim().min(1, "Tell us your name.").max(128);
+
 export const signupSchema = z.object({
-  name: z.string().trim().min(1, "Tell us your name.").max(128),
+  name: personName,
   email: z.email("Enter a valid email address."),
   password,
 });

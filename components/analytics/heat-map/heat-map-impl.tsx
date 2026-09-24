@@ -13,6 +13,7 @@ import {
 } from "@/lib/map/style";
 import { configureMaplibreWorker } from "@/lib/map/worker";
 import { usePrefersDark } from "@/lib/theme/use-prefers-dark";
+import { MapUnsupported } from "@/components/map/map-unsupported";
 import { useMaplibre } from "@/components/map/use-maplibre";
 import type { ShapeBounds } from "@/packages/shared/shapes";
 import { HEAT_MAX_FIT_ZOOM, type HeatPoint } from "./heat-layers";
@@ -65,7 +66,7 @@ export default function HeatMapImpl({
 
   const prefersDark = usePrefersDark();
 
-  const { map, isReady } = useMaplibre(frame, container, {
+  const { map, isReady, isUnsupported } = useMaplibre(frame, container, {
     center,
     zoom,
     bounds,
@@ -125,6 +126,8 @@ export default function HeatMapImpl({
          */
         className="h-full w-full"
       />
+
+      {isUnsupported ? <MapUnsupported /> : null}
     </div>
   );
 }

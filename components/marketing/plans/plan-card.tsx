@@ -17,7 +17,7 @@ import type { MarketingPlan, PlanCadence } from "@/lib/marketing/plans";
  * repositories' own table. Nothing here is written by hand.
  *
  * The rows themselves come from `lib/marketing/plan-rows.ts` and are drawn by
- * `PlanRowList`, because `/account` lists the identical limits beside what the
+ * `PlanRowList`, because Settings → Billing lists the identical limits beside what the
  * customer is using and the two pages must not word one limit two ways.
  */
 export function PlanCard({

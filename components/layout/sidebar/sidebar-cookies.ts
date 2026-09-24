@@ -22,7 +22,7 @@ export const SIDEBAR_COOKIE = "sidebar_collapsed";
  * Account from the user menu emptied the sidebar down to two rows and it came
  * back only when you went back into a map. A cookie rather than local state for
  * the reason `SIDEBAR_COOKIE` is one: the layout reads it on the server, so a
- * hard load of `/account` paints the group on the first frame instead of popping
+ * hard load of `/settings` paints the group on the first frame instead of popping
  * it in after hydration.
  */
 export const SIDEBAR_MAP_COOKIE = "sidebar_map";

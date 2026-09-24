@@ -126,8 +126,8 @@ needs the transform, never the catalogue. `appearance` is omitted entirely when 
 change nothing, so a map whose owner never opened the menu publishes the bytes it always did.
 
 **The appearance controls live on the canvas, and save on click.** `components/appearance/`
-holds one panel that both the editor toolbar's Palette button and the Settings tab render, so
-a new theme is added in one place. Its swatches are inline SVG mini-maps painted from each
+holds one panel, rendered by the editor toolbar's Palette button — and, until it was removed as
+a duplicate, by the Settings tab too — so a new theme is added in one place. Its swatches are inline SVG mini-maps painted from each
 style's own sampled colours run through that theme's own tint — the same function the map
 runs, so a tile cannot promise a map that does not exist, and zero requests unlike the
 competition's raster thumbnails. Every change PATCHes immediately, which is why `useUpdateMap`

@@ -22,4 +22,6 @@ export const queryKeys = {
   sheetLink: (mapId: string) => ["maps", mapId, "sheetLink"] as const,
   /** One design for the whole account — see lib/repositories/card-design.repository.ts. */
   cardDesign: ["cardDesign"] as const,
+  /** One page of the account's invoices, as the provider lists them. */
+  invoices: (page: number) => ["invoices", page] as const,
 } as const;

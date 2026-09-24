@@ -38,11 +38,13 @@ type RouteArgs<Params> = { params: Promise<Params> };
  * exactly as long as somebody keeps copying it.
  *
  * `allowUnverified` is for a route an unconfirmed account must still be able to
- * reach. Nothing passes it today: everything of that kind (signup, login, logout,
- * resending the link) is `withoutAuth` and never arrives here. It exists so that
- * when self-service account deletion lands — which someone who mistyped their
- * address needs — the answer is a flag on one route rather than a hole in the
- * gate. See `lib/auth/email-gate.ts` for what the rule actually is.
+ * reach. Most of that kind (signup, login, logout, resending the link) is
+ * `withoutAuth` and never arrives here. The ones that pass it are account
+ * deletion (someone who mistyped their address at signup can neither confirm it
+ * nor, without this, delete the account) and signing other devices out, which
+ * is a defence rather than a change to anything the account owns. A flag on
+ * each of those routes, rather than a hole in the gate. See
+ * `lib/auth/email-gate.ts` for what the rule actually is.
  */
 export function withAuth<Params = Record<string, never>>(
   handler: Handler<Params>,

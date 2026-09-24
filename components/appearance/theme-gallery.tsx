@@ -27,8 +27,8 @@ import { ThemeSwatch } from "./theme-swatch";
  *
  * The grid is `auto-fill` rather than a breakpoint ladder. The old one hardcoded
  * `lg:grid-cols-6` for six tiles and would have had to be re-tuned for sixteen;
- * this one fits whatever it is given, which matters because the same component
- * renders in a 320px popover and in a full-width settings panel.
+ * this one fits whatever it is given — a 320px popover today, and whatever width
+ * the next place to render it has.
  */
 export function ThemeGallery({
   value,

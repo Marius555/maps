@@ -17,9 +17,9 @@ import { useEffect, useState } from "react";
  * account page on the server, so the plan appears on its own the moment the
  * webhook lands, with no reload.
  *
- * **The polling is free at the provider.** `AccountPage` only fetches a portal
- * URL when there is already a `billingSubscriptionId`, which during activation
- * there is not — so each pass is Appwrite reads and nothing else. And the
+ * **The polling is free at the provider.** The Billing page only asks the
+ * provider anything when there is already a `billingSubscriptionId`, which during
+ * activation there is not — so each pass is Appwrite reads and nothing else. And the
  * component is not rendered at all once the plan is paid, so there is no "stop"
  * state to keep: the parent stopping is the stop.
  *
@@ -52,7 +52,7 @@ export function ActivationWatch({ email }: { email: string }) {
 
   return (
     <section
-      className="mt-4 rounded-xl bg-surface-secondary p-5"
+      className="mb-8 rounded-xl bg-surface-secondary p-5"
       aria-live="polite"
     >
       <div className="flex items-start gap-3">

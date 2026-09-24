@@ -6,7 +6,10 @@ import { loginSchema } from "@/lib/validation/auth.schema";
 
 export const POST = withoutAuth(async (request) => {
   const input = await parseBody(request, loginSchema);
-  const { user, session } = await authenticateUser(input);
+  const { user, session } = await authenticateUser(
+    input,
+    request.headers.get("user-agent") ?? undefined,
+  );
 
   await setSessionCookie(session);
 

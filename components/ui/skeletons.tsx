@@ -35,30 +35,54 @@ export function ListActionsSkeleton() {
  * this drew before and why every panel skeleton sat short.
  *
  * `children` is the body when the caller knows what goes in it. `rows` is the
- * fallback for the panels that are simply a stack of fields.
+ * fallback for the panels that are simply a stack of fields. `rows={0}` with no
+ * children is a header-only panel — the real one draws no body, so neither does
+ * this.
+ *
+ * `footer` mirrors SectionPanel's Save row: a rule, then one button-height strip
+ * on the right. Panels that have one lost ~70px on the swap without it.
  */
 export function SectionPanelSkeleton({
   rows = 2,
+  footer = false,
   children,
 }: {
   rows?: number;
+  footer?: boolean;
   children?: React.ReactNode;
 }) {
+  const hasBody = Boolean(children) || rows > 0;
+
   return (
     <div className="rounded-xl border border-border bg-surface">
-      <div className="space-y-2 px-5 py-4 sm:px-6">
-        <Skeleton className="h-4 w-40 rounded-lg" />
-        <Skeleton className="h-3 w-3/5 rounded-lg" />
+      {/* The real header's lines: a 20px `text-sm` title, 4px, a 16px `text-xs`
+          description. Drawn at 16px and 12px they left every panel 4px short. */}
+      <div className="space-y-1 px-5 py-4 sm:px-6">
+        <Skeleton className="h-5 w-40 rounded-lg" />
+        <Skeleton className="h-4 w-3/5 rounded-lg" />
       </div>
 
-      <Separator />
+      {hasBody ? (
+        <>
+          <Separator />
 
-      <div className="space-y-4 px-5 py-5 sm:px-6">
-        {children ??
-          Array.from({ length: rows }, (_, row) => (
-            <Skeleton key={row} className="h-10 w-full rounded-xl" />
-          ))}
-      </div>
+          <div className="space-y-4 px-5 py-5 sm:px-6">
+            {children ??
+              Array.from({ length: rows }, (_, row) => (
+                <Skeleton key={row} className="h-10 w-full rounded-xl" />
+              ))}
+          </div>
+        </>
+      ) : null}
+
+      {footer ? (
+        <>
+          <Separator />
+          <div className="flex justify-end px-5 py-4 sm:px-6">
+            <Skeleton className="h-9 w-28 rounded-3xl" />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

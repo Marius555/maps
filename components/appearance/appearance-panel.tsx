@@ -11,11 +11,10 @@ import { ThemeGallery } from "./theme-gallery";
 /**
  * Everything about how the basemap looks, in one panel.
  *
- * Rendered in two places — the editor toolbar's popover and the Settings tab —
- * which is the whole reason it takes `value` and `onChange` and owns no fetching
- * of its own. A second gallery on the settings page would be a second list to
- * add every future theme to, and the two would drift the first time someone
- * forgot.
+ * Rendered in the editor toolbar's popover, and only there. It used to be drawn
+ * on the map's Settings tab as well, which is why it takes `value` and `onChange`
+ * and owns no fetching of its own — keep it that way, so a second surface never
+ * means a second list to add every future theme to.
  *
  * The order is the order the choices matter in: the style is the decision, and
  * labels and layers are adjustments to it.

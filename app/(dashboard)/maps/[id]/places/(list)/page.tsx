@@ -26,7 +26,8 @@ export default async function PlacesPage(props: PageProps<"/maps/[id]/places">) 
   const search = await props.searchParams;
   const user = await requireUser();
 
-  // The try wraps only the fetch — see the settings page for why.
+  // The try wraps only the fetch. JSX built inside a catch's scope isn't covered
+  // by it — React renders children later, so the catch would never fire.
   let data: Awaited<ReturnType<typeof loadPlaces>>;
 
   try {

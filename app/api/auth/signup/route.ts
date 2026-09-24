@@ -12,7 +12,10 @@ import { signupServerSchema } from "@/lib/validation/auth.server.schema";
 
 export const POST = withoutAuth(async (request) => {
   const input = await parseBody(request, signupServerSchema);
-  const { user, session } = await registerUser(input);
+  const { user, session } = await registerUser(
+    input,
+    request.headers.get("user-agent") ?? undefined,
+  );
 
   await setSessionCookie(session);
 

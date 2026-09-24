@@ -3052,6 +3052,83 @@ body.is-pin-dragging * {
 }
 
 /*
+ * `.steady`: nothing moves when you touch it.
+ *
+ * The settings pages, and every dialog they open, carry this class. Inside it:
+ *
+ * - **No press scale.** HeroUI shrinks buttons, menu items, list items, close
+ *   buttons, pagination links, dialog triggers and radio controls by 2-7% while
+ *   pressed. Hard-coded, with no variable to turn it off, and
+ *   `data-reduce-motion` only removes the transition, not the shrink. HeroUI's
+ *   own `button-group.css` answers it with `transform: none`, so this does the
+ *   same. It wins by being unlayered: HeroUI's rules sit in
+ *   `@layer components`, and any unlayered rule beats every layered one,
+ *   whatever the specificity.
+ * - **`scale: none` as well as `transform: none`, in a rule of its own.** The
+ *   radio control is shrunk by Tailwind's `scale-95`, which writes the separate
+ *   `scale` property. `transform: none` leaves that untouched, and `scale-100`
+ *   would multiply with it rather than replace it. **Keep the two apart:** in one
+ *   rule, the CSS minifier folds them into `transform: scale3d(1, 1, 1)` and
+ *   drops `scale` altogether. Measured: the radio still shrank to 0.95.
+ * - **The radio's dot keeps its size when pressed.** It grows from 6px to 8px
+ *   under a press. The unselected dot is left alone, because its `scale` is the
+ *   selection animation itself.
+ * - **A pending button keeps its width.** The rule above appends a spinner
+ *   after the label, which widens the button by the ring plus the gap. A Save
+ *   button on the right of a row then pushes its own left edge out as you
+ *   press it. Here the label is kept but painted transparent, and the ring is
+ *   centred over it.
+ *   - `-webkit-text-fill-color` rather than `color`, because the ring is drawn
+ *     in `currentColor`.
+ *   - `visibility` on the children rather than `display`, so the box keeps
+ *     their space.
+ *
+ * Scoped rather than global: the editor was designed with HeroUI's press
+ * feedback, and the no-shift rule was asked for these pages. Delete `.steady`
+ * from the selectors to make it app-wide.
+ *
+ * Dialogs need the class on their own container, because they portal outside
+ * the settings root. `docs/notes/settings.md` lists this first for that reason.
+ */
+.steady :is(
+    .button,
+    .menu-item,
+    .list-box-item,
+    .close-button,
+    .toggle-button,
+    .pagination__link,
+    .dropdown__trigger,
+    .modal__trigger,
+    .alert-dialog__trigger,
+    .drawer__trigger
+  ) {
+  transform: none;
+}
+
+.steady .radio .radio__control {
+  scale: none;
+}
+
+.steady :is(.radio[data-selected], .radio:has(input:checked)) .radio__indicator:empty::before {
+  scale: 0.4286;
+}
+
+.steady .button[data-pending="true"] {
+  position: relative;
+  -webkit-text-fill-color: transparent;
+}
+
+.steady .button[data-pending="true"] > * {
+  visibility: hidden;
+}
+
+.steady .button[data-pending="true"]::after {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+/*
  * The publish preview's frame swap, crossfaded.
  *
  * That preview keeps two iframes and reveals a rebuilt document by bringing its

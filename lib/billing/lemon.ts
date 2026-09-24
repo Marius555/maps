@@ -8,8 +8,13 @@ import type {
   BillingProvider,
   Checkout,
   CheckoutRequest,
+  Invoice,
+  InvoicePage,
+  InvoiceStatus,
   PaidPlanId,
+  PaymentMethod,
   PlanChangeRequest,
+  SubscriptionDetails,
   SubscriptionState,
   SubscriptionStatus,
 } from "./types";
@@ -55,7 +60,10 @@ export function createLemonProvider(): BillingProvider {
   return {
     name: "lemonsqueezy",
     createCheckout,
-    portalUrl,
+    subscriptionDetails,
+    listInvoices,
+    cancelSubscription,
+    resumeSubscription,
     changePlan,
   };
 }
@@ -80,7 +88,7 @@ function apiKey(): string {
 
 async function send<T>(
   path: string,
-  init: { method: "GET" | "POST" | "PATCH"; body?: unknown },
+  init: { method: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown },
 ): Promise<T> {
   const key = apiKey();
 
@@ -165,15 +173,16 @@ async function createCheckout(request: CheckoutRequest): Promise<Checkout> {
         },
         product_options: {
           /*
-           * **Not `/account`, and that is a cookie decision rather than a
-           * cosmetic one.** This navigation arrives from the provider's domain,
-           * the session cookie is `sameSite: "strict"`, and browsers withhold a
-           * Strict cookie on a cross-site top-level navigation — so a return
-           * straight to `/account` reached `proxy.ts` with no cookie visible and
-           * bounced somebody who had just paid onto the login page.
+           * **Not the Billing page, and that is a cookie decision rather than
+           * a cosmetic one.** This navigation arrives from the provider's
+           * domain, the session cookie is `sameSite: "strict"`, and browsers
+           * withhold a Strict cookie on a cross-site top-level navigation — so a
+           * return straight to the dashboard (it was `/account` then) reached
+           * `proxy.ts` with no cookie visible and bounced somebody who had just
+           * paid onto the login page.
            *
            * `/checkout/done` is outside the proxy's matcher and hops to
-           * `/account` from the client, where the cookie is visible again. See
+           * `/settings/billing` from the client, where the cookie is visible again. See
            * that page, and `docs/notes/auth.md`'s SameSite section for the two
            * earlier flows this one repeats.
            */
@@ -206,23 +215,91 @@ async function createCheckout(request: CheckoutRequest): Promise<Checkout> {
   return { url };
 }
 
-async function portalUrl(billingSubscriptionId: string): Promise<string | null> {
+/**
+ * One subscription, read whole: what `toState` makes of it, plus the parts the
+ * Billing page draws and our row does not hold.
+ *
+ * **One request for all of it.** The account page used to ask for the same
+ * subscription twice per visit — once for the portal link, once to backfill the
+ * cadence — and the Billing page wants the card and the cancellation on top.
+ * They are all attributes of the one object.
+ *
+ * Null on a 404, thrown on anything else, for the reason `fetchSubscriptionState`
+ * gives.
+ */
+async function subscriptionDetails(
+  billingSubscriptionId: string,
+): Promise<SubscriptionDetails | null> {
   if (!billingSubscriptionId) return null;
 
-  try {
-    const json = await send<{
-      data?: { attributes?: { urls?: { customer_portal?: string } } };
-    }>(`/subscriptions/${billingSubscriptionId}`, { method: "GET" });
+  let json: SubscriptionResponse;
 
-    return json.data?.attributes?.urls?.customer_portal ?? null;
-  } catch {
-    /*
-     * Null, not a throw. The account page draws a "manage subscription" link from
-     * this, and a provider hiccup should cost the link, not the page that also
-     * tells somebody which plan they are on and what they have used.
-     */
-    return null;
+  try {
+    json = await send(`/subscriptions/${billingSubscriptionId}`, { method: "GET" });
+  } catch (error) {
+    if (error instanceof BillingError && error.status === 404) return null;
+
+    throw error;
   }
+
+  return toDetails(json, billingSubscriptionId);
+}
+
+/**
+ * The page size. Ten is a year of a monthly plan, and the provider's own
+ * default; the table keeps a ten-row height across pages so paging never moves
+ * what is under it.
+ */
+export const INVOICE_PAGE_SIZE = 10;
+
+async function listInvoices(billingSubscriptionId: string, page: number): Promise<InvoicePage> {
+  if (!billingSubscriptionId) return { invoices: [], page: 1, lastPage: 1 };
+
+  const query = new URLSearchParams({
+    "filter[subscription_id]": billingSubscriptionId,
+    "page[number]": String(Math.max(1, Math.floor(page))),
+    "page[size]": String(INVOICE_PAGE_SIZE),
+  });
+
+  const json = await send<InvoiceListResponse>(`/subscription-invoices?${query.toString()}`, {
+    method: "GET",
+  });
+
+  return toInvoicePage(json);
+}
+
+/**
+ * Stop the renewal. The provider keeps the subscription running to the end of
+ * what was paid for, and answers with it — `cancelled: true`, `ends_at` set —
+ * which `toState` reads as `active` until that date, exactly as the webhook's
+ * `subscription_cancelled` will a moment later.
+ */
+async function cancelSubscription(
+  billingSubscriptionId: string,
+): Promise<SubscriptionDetails | null> {
+  const json = await send<SubscriptionResponse>(`/subscriptions/${billingSubscriptionId}`, {
+    method: "DELETE",
+  });
+
+  return toDetails(json, billingSubscriptionId);
+}
+
+/** Undo a cancellation, while the period it ends at has not arrived yet. */
+async function resumeSubscription(
+  billingSubscriptionId: string,
+): Promise<SubscriptionDetails | null> {
+  const json = await send<SubscriptionResponse>(`/subscriptions/${billingSubscriptionId}`, {
+    method: "PATCH",
+    body: {
+      data: {
+        type: "subscriptions",
+        id: billingSubscriptionId,
+        attributes: { cancelled: false },
+      },
+    },
+  });
+
+  return toDetails(json, billingSubscriptionId);
 }
 
 /**
@@ -390,7 +467,112 @@ type SubscriptionAttributes = {
   variant_id?: number | string;
   renews_at?: string | null;
   ends_at?: string | null;
+  /**
+   * The rest are read by `toDetails` only, for the Billing page — never by
+   * `toState`, which decides what a plan grants and must not start depending on
+   * how somebody pays.
+   */
+  cancelled?: boolean;
+  card_brand?: string | null;
+  card_last_four?: string | null;
+  payment_processor?: string | null;
+  urls?: { customer_portal?: string | null; update_payment_method?: string | null };
 };
+
+type SubscriptionResponse = { data?: { id?: string; attributes?: SubscriptionAttributes } };
+
+/**
+ * A subscription object as the Billing page's facts. Exported for the tests;
+ * nothing else calls it directly.
+ */
+export function toDetails(
+  json: SubscriptionResponse,
+  subscriptionId: string,
+): SubscriptionDetails | null {
+  const attributes = json.data?.attributes;
+  if (!attributes) return null;
+
+  const id = String(json.data?.id ?? subscriptionId);
+
+  return {
+    state: toState(attributes, id),
+    cancelled: attributes.cancelled === true || attributes.status === "cancelled",
+    renewsAt: attributes.renews_at ?? null,
+    endsAt: attributes.ends_at ?? null,
+    payment: toPayment(attributes),
+    portalUrl: attributes.urls?.customer_portal ?? null,
+    updatePaymentUrl: attributes.urls?.update_payment_method ?? null,
+  };
+}
+
+function toPayment(attributes: SubscriptionAttributes): PaymentMethod {
+  const brand = attributes.card_brand?.trim().toLowerCase() || null;
+  const lastFour = attributes.card_last_four?.trim() || null;
+
+  if (attributes.payment_processor === "paypal") {
+    return { method: "paypal", brand: null, lastFour: null };
+  }
+
+  return { method: brand || lastFour ? "card" : null, brand, lastFour };
+}
+
+type InvoiceAttributes = {
+  billing_reason?: string;
+  status?: string;
+  total_formatted?: string;
+  created_at?: string;
+  urls?: { invoice_url?: string | null };
+};
+
+type InvoiceListResponse = {
+  data?: { id?: string | number; attributes?: InvoiceAttributes }[];
+  meta?: { page?: { currentPage?: number; lastPage?: number } };
+};
+
+const INVOICE_STATUSES: readonly InvoiceStatus[] = [
+  "pending",
+  "paid",
+  "void",
+  "refunded",
+  "partial_refund",
+];
+
+/**
+ * A page of subscription-invoices as ours. Exported for the tests.
+ *
+ * An invoice with an unrecognised status is dropped rather than shown as
+ * something it may not be. With no id it cannot be keyed or linked, so it is
+ * dropped too.
+ */
+export function toInvoicePage(json: InvoiceListResponse): InvoicePage {
+  const invoices: Invoice[] = [];
+
+  for (const entry of json.data ?? []) {
+    const attributes = entry.attributes;
+    const status = attributes?.status as InvoiceStatus | undefined;
+
+    if (!attributes || entry.id === undefined || !status || !INVOICE_STATUSES.includes(status)) {
+      continue;
+    }
+
+    const reason = attributes.billing_reason;
+
+    invoices.push({
+      id: String(entry.id),
+      createdAt: attributes.created_at ?? "",
+      reason: reason === "initial" || reason === "renewal" || reason === "updated" ? reason : "other",
+      total: attributes.total_formatted ?? "",
+      status,
+      // The provider sends none while pending; say so rather than link nowhere.
+      url: status === "pending" ? null : (attributes.urls?.invoice_url ?? null),
+    });
+  }
+
+  const lastPage = Math.max(1, json.meta?.page?.lastPage ?? 1);
+  const page = Math.min(lastPage, Math.max(1, json.meta?.page?.currentPage ?? 1));
+
+  return { invoices, page, lastPage };
+}
 
 type WebhookBody = {
   meta?: { event_name?: string; custom_data?: { user_id?: unknown } };

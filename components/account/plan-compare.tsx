@@ -4,6 +4,7 @@ import { toast } from "@heroui/react";
 import { useState } from "react";
 
 import { CadenceToggle } from "@/components/ui/cadence-toggle";
+import { SettingsSection } from "@/components/user-settings/section/settings-section";
 import type { BillingStanding } from "@/lib/billing/standing";
 import { MARKETING_PLANS, type PlanCadence } from "@/lib/marketing/plans";
 import { useChangePlan } from "@/lib/query/billing";
@@ -48,8 +49,14 @@ import { PlanColumn } from "./plan-column";
  * ours rather than the provider's.
  *
  * The cadence is state rather than a query parameter, the same choice `/pricing`
- * makes, because an account page with two URLs is a Back button that lands
+ * makes, because a settings page with two URLs is a Back button that lands
  * somewhere the reader did not leave.
+ *
+ * **A section of Settings → Billing**, drawn with the same `SettingsSection` as
+ * everything around it; it was the bottom half of the old account page.
+ * `endsOn` is the one input that page could not give it: whether the
+ * subscription is cancelled, read live from the provider, which switches every
+ * offer to "resume first" (see `planActionFor`).
  */
 export function PlanCompare({
   plan,
@@ -57,7 +64,7 @@ export function PlanCompare({
   standing,
   pending,
   renewsOn,
-  portalUrl,
+  endsOn,
 }: {
   /** The plan the columns mark as this account's — the one paid for this period. */
   plan: PlanId;
@@ -68,7 +75,8 @@ export function PlanCompare({
   pending: PendingChange | null;
   /** The next renewal, or null when none is known. */
   renewsOn: string | null;
-  portalUrl: string | null;
+  /** The last day of a cancelled subscription, or null while it renews. */
+  endsOn: string | null;
 }) {
   const [cadence, setCadence] = useState<PlanCadence>(currentCadence ?? "monthly");
   const changePlan = useChangePlan();
@@ -109,27 +117,16 @@ export function PlanCompare({
   };
 
   return (
-    <section className="mt-10">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            {next ? "Room to grow" : "Your plan"}
-          </h2>
-          <p className="mt-1 text-sm text-pretty text-muted">
-            {next
-              ? `You're on ${current.name}. ${next.name} takes you to ${describe(next)}.`
-              : "You're on the largest plan, so everything in the product is switched on."}
-          </p>
-        </div>
-
-        <CadenceToggle
-          value={cadence}
-          onChange={setCadence}
-          className="shrink-0"
-        />
-      </div>
-
-      <div className="mt-5 grid gap-4 md:grid-cols-3">
+    <SettingsSection
+      title={next ? "Plans" : "Your plan"}
+      description={
+        next
+          ? `You're on ${current.name}. ${next.name} takes you to ${describe(next)}.`
+          : "You're on the largest plan, so everything in the product is switched on."
+      }
+      action={<CadenceToggle value={cadence} onChange={setCadence} className="shrink-0" />}
+    >
+      <div className="grid gap-4 md:grid-cols-3">
         {MARKETING_PLANS.map((entry) => {
           const kind = planActionFor({
             plan: entry,
@@ -138,11 +135,8 @@ export function PlanCompare({
             currentCadence,
             standing,
             pending,
+            endsOn,
           });
-
-          // Nothing to say is an absent footer, not an empty padded one.
-          const hasAction =
-            kind !== null && !(kind === "cancel-in-portal" && !portalUrl);
 
           return (
             <PlanColumn
@@ -161,7 +155,8 @@ export function PlanCompare({
                 renewsOn,
               })}
               action={
-                hasAction ? (
+                // Nothing to say is an absent footer, not an empty padded one.
+                kind !== null ? (
                   <PlanAction
                     kind={kind}
                     plan={entry}
@@ -169,7 +164,7 @@ export function PlanCompare({
                     current={plan}
                     currentCadence={currentCadence}
                     pending={pending}
-                    portalUrl={portalUrl}
+                    endsOn={endsOn}
                     isPending={
                       changePlan.isPending && changePlan.variables?.plan === entry.id
                     }
@@ -191,7 +186,7 @@ export function PlanCompare({
         Views are unlimited on every plan, including the free one. We are priced
         by what you build, never by how many people look at it.
       </p>
-    </section>
+    </SettingsSection>
   );
 }
 

@@ -15,7 +15,7 @@ import type { PlanCadence } from "@/lib/marketing/plans";
  * not happen.
  *
  * **In `components/ui` because two pages hold one.** It started inside
- * `components/marketing/plans/plan-grid.tsx`; `/account` needs the same control
+ * `components/marketing/plans/plan-grid.tsx`; Settings → Billing needs the same control
  * over its own plan columns, and a second hand-rolled radiogroup would have been
  * two keyboard behaviours to keep in step. The cadence stays the caller's state
  * and never a query parameter — on `/pricing` that is what keeps the page static

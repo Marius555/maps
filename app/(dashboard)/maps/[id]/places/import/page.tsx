@@ -24,7 +24,7 @@ export default async function ImportPage(
   const { id } = await props.params;
   const user = await requireUser();
 
-  // The try wraps only the fetch — see the settings page for why.
+  // The try wraps only the fetch — see the Locations page for why.
   let map: AppMap;
 
   try {

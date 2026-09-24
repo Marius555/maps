@@ -5,7 +5,7 @@ import {
   LayoutTemplate,
   MapIcon,
   MapPin,
-  Settings,
+  Pencil,
   Share2,
   Trash2,
   type LucideIcon,
@@ -15,6 +15,7 @@ import { useState } from "react";
 
 import { RowMenu } from "@/components/ui/row-menu";
 import { DeleteMapDialog } from "../delete-map-dialog";
+import { RenameMapDialog } from "../rename-map-dialog";
 
 /**
  * The map's sections, with the same names and icons the sidebar gives them once
@@ -27,7 +28,6 @@ const SECTIONS: { id: string; label: string; icon: LucideIcon; path: string }[] 
   { id: "card", label: "Card", icon: LayoutTemplate, path: "/card" },
   { id: "publish", label: "Publish", icon: Share2, path: "/publish" },
   { id: "analytics", label: "Analytics", icon: ChartColumn, path: "/analytics" },
-  { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
 ];
 
 /**
@@ -39,6 +39,7 @@ const SECTIONS: { id: string; label: string; icon: LucideIcon; path: string }[] 
  */
 export function MapCardMenu({ mapId, mapName }: { mapId: string; mapName: string }) {
   const router = useRouter();
+  const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   return (
@@ -53,6 +54,12 @@ export function MapCardMenu({ mapId, mapName }: { mapId: string; mapName: string
             onAction: () => router.push(`/maps/${mapId}${section.path}`),
           })),
           {
+            id: "rename",
+            label: "Rename",
+            icon: Pencil,
+            onAction: () => setIsRenaming(true),
+          },
+          {
             id: "delete",
             label: "Delete map",
             icon: Trash2,
@@ -60,6 +67,13 @@ export function MapCardMenu({ mapId, mapName }: { mapId: string; mapName: string
             onAction: () => setIsDeleting(true),
           },
         ]}
+      />
+
+      <RenameMapDialog
+        mapId={mapId}
+        mapName={mapName}
+        isOpen={isRenaming}
+        onOpenChange={setIsRenaming}
       />
 
       <DeleteMapDialog

@@ -2,7 +2,10 @@
 
 `lib/billing/**`, `lib/repositories/{subscriptions,usage,plan-limits}.repository.ts`,
 `app/api/webhooks/billing/**`, `app/api/account/subscription/**`, `app/(marketing)/upgrade/**`,
-`app/(dashboard)/account/**`, `components/marketing/plans/**`, `components/account/**`.
+`app/(dashboard)/settings/billing/**` (and `/account`, now a redirect to it),
+`app/api/account/{invoices,subscription/resume}/**`, `components/marketing/plans/**`,
+`components/account/**`, `components/user-settings/billing/**`. The page itself is
+described in `docs/notes/settings.md`.
 
 ## Invariants
 
@@ -25,9 +28,9 @@
   the other.
 - **The checkout's `redirect_url` must point outside `proxy.ts`'s matcher.** The
   session cookie is `sameSite: "strict"` and the buyer returns from the
-  provider's domain, so a return straight to `/account` answers a completed
-  purchase with a login form. `/checkout/done` exists for this and
-  `lib/billing/lemon.test.ts` asserts it.
+  provider's domain, so a return straight to `/settings/billing` (or the old
+  `/account`) answers a completed purchase with a login form. `/checkout/done`
+  exists for this and `lib/billing/lemon.test.ts` asserts it.
 - **A 404 from the provider is a 200 from us; a 5xx is a 5xx.** Non-2xx is how
   the provider is told to redeliver, so `fetchSubscriptionState` returns null on
   a 404 — a subscription that does not exist will not exist on the retry either
@@ -50,17 +53,32 @@
   pays opens a *second* subscription, charged separately. `billingStanding`
   (`lib/billing/standing.ts`) decides once: `switchable` is moved in place by
   `PATCH /api/account/subscription`, `held` (past due, paused) is pointed at the
-  portal, and only `none` gets `/upgrade` — which itself redirects a `switchable`
-  account to `/account`, because `/pricing` is static and sends everybody there.
+  card under Payment, and only `none` gets `/upgrade` — which itself redirects a
+  `switchable` account to `/settings/billing`, because `/pricing` is static and
+  sends everybody there.
 - **Absent cadence means unknown, never monthly.** `subscriptions.cadence` is
   optional with no default; rows written before it existed have none. The account
   page backfills it from the provider once (`withKnownCadence`) and offers no
   monthly↔yearly switch while it is still unknown.
 - **Every write to `subscriptions` is the provider's own answer, read through
-  `toState`.** There are three writers now — the webhook, the change-plan route
-  (from the PATCH reply) and the account page's cadence backfill (from a GET) —
-  and `upsertSubscription` is idempotent, so they can arrive in any order. None
-  of them may write a value it inferred.
+  `toState`.** There are five writers now — the webhook, the change-plan route
+  (from the PATCH reply), the Billing page's cadence backfill (from its GET),
+  and the cancel and resume routes (from their replies) — and
+  `upsertSubscription` is idempotent, so they can arrive in any order. None of
+  them may write a value it inferred.
+- **Cancelling is in the app now; the merchant of record still does it.**
+  `DELETE /api/account/subscription` is one call to the provider's own cancel,
+  and `POST …/subscription/resume` undoes it. This reverses "cancelling stays in
+  the portal", deliberately: a customer should not have to find a button on
+  somebody else's site to stop paying us. The card and billing address are
+  still the provider's pages.
+- **`cancelled` is never stored, and is read live.** Our row keeps a cancelled
+  subscription `active` (see above), so only the provider can tell "renews" from
+  "ends". `subscriptionDetails` asks on every Billing visit. While cancelled, no
+  plan change is offered, and the PATCH route refuses one.
+- **Invoices are displayed, never kept.** Listed by the subscription id on the
+  caller's own row, each linking the provider's signed PDF. `lib/billing/types.ts`
+  says what that does and does not change about the merchant of record.
 - **`billingStanding` reads the row, not `getUserPlan`.** Under `DISABLE_ALL_PLAN`
   the latter answers "pro" for everybody; billing controls taken from it would
   offer a developer a switch away from a plan they never bought.
@@ -355,8 +373,8 @@ Now:
 - **The route writes the row from the PATCH reply** so the next render shows the
   change without waiting on `subscription_updated`, which arrives later and
   writes the same values — and leaves the kept columns alone.
-- **Cancelling stays in the portal.** Free's column says so, and only when there
-  is a portal link to point at.
+- **Cancelling stayed in the portal** at the time. It is in the app now (Cancel
+  plan, on Settings → Billing), and Free's column points at that instead.
 
 Verified against a real test-mode subscription (September 2026): Pro monthly →
 *Downgrade to Starter* moved the provider to Starter with `renews_at` unchanged and
@@ -476,18 +494,20 @@ naming because it looks exactly like success.
    `POST /api/collect` writes nothing. Flip the subscription row to `starter`;
    both resume.
 4. **Checkout**, in test mode: `/pricing` → Yearly → Start on Starter → `/upgrade`
-   → provider checkout → their test card → `/checkout/done` → `/account` showing
+   → provider checkout → their test card → `/checkout/done` → `/settings/billing` showing
    Starter. **A login form anywhere in that tail is the SameSite bug returning**
    — see `docs/notes/auth.md`.
 5. **The webhook.** Their dashboard re-sends events, or `npm run billing:replay`.
    A bad signature must 401, a good one must write `subscriptions`, and a replay
    must change nothing.
-6. **Cancellation.** Cancel in the portal: the row stays `active` with
-   `currentPeriodEnd` set and the plan is kept. Then hand-set that date to
-   yesterday — `getUserPlan` must drop to `free`.
+6. **Cancellation.** Cancel plan on Settings → Billing: the row stays `active`
+   with `currentPeriodEnd` set, the plan is kept, the Plan card says "Ends …",
+   and every plan column offers only Resume. Resume plan: "Renews …" again. Then
+   cancel once more and hand-set that date to yesterday — `getUserPlan` must drop
+   to `free`.
 7. **Switching.** Link a test-mode Pro monthly subscription to your local account
    first (the invariant about webhooks). *Downgrade to Starter*: the provider shows
    Starter with the same `renews_at` and no new invoice, the page keeps Pro marked
    with *Keep Pro*, and the notice names the date. *Keep Pro*: back to Pro, still
    no invoice. Then flip to Yearly and *Switch to yearly billing*. Then open
-   `/pricing` → *Start on Starter*: it must land on `/account`, not a checkout.
+   `/pricing` → *Start on Starter*: it must land on `/settings/billing`, not a checkout.

@@ -331,7 +331,7 @@ export function TagPicker({
                     {usable.length > 0 ? (
                       <p className="border-t border-border pt-2 text-xs text-muted">
                         Groups are the questions your tags answer. Add and rename
-                        them in Settings → Filters.
+                        them in Locations → Tags &amp; fields.
                       </p>
                     ) : null}
                   </>

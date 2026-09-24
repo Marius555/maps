@@ -3,10 +3,11 @@
 /**
  * Applies the stored theme before the first paint.
  *
- * `useTheme` from @heroui/react owns the theme at runtime, but it can only read
- * localStorage after hydration — so without this the page paints light and then
- * snaps to dark, which is worse than not having dark mode. Reads the same
- * storage key the hook writes (`heroui-theme`) and sets both the class and the
+ * `lib/theme/theme-choice.ts` owns the theme at runtime, but nothing in React can
+ * read localStorage before hydration — so without this the page paints light and
+ * then snaps to dark, which is worse than not having dark mode. Reads the same
+ * storage key that module writes (`heroui-theme`, the name HeroUI's hook used,
+ * kept so every stored choice survives) and sets both the class and the
  * attribute, because globals.css keys off `.dark` and `[data-theme="dark"]`.
  *
  * Wrapped in try/catch: localStorage throws outright in some privacy modes, and
