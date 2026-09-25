@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { DocsArticle } from "@/components/docs/docs-article";
 import { DocsCallout } from "@/components/docs/docs-callout";
@@ -367,6 +368,13 @@ export default function ImportingLocationsPage() {
           the main tag is put first so it colours the pin. Then you land back on
           your map with everything on it.
         </p>
+
+        <p>
+          Importing from a Google Sheet on the Starter or Pro plan? The Review
+          step also offers <strong>Keep in sync with the sheet</strong>, which
+          leaves the map linked so later edits in the sheet reach it too — see{" "}
+          <Link href="/docs/google-sheets-sync">Google Sheets sync</Link>.
+        </p>
       </DocsSection>
 
       <DocsSection id="fixing-later" title="Fixing locations later">
@@ -431,7 +439,7 @@ export default function ImportingLocationsPage() {
           caption="Locations allowed per map on each plan"
           head={["Plan", "Locations per map"]}
           rows={[
-            ["Free", "10"],
+            ["Free", "25"],
             ["Starter", "300"],
             ["Pro", "3,000"],
           ]}

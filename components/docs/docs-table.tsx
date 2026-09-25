@@ -1,5 +1,9 @@
 /**
- * A two-column reference table — a term and what it means.
+ * A reference table. The first cell of each row is the row's header — a term,
+ * a plan, a message — and the cells after it say what it means.
+ *
+ * Most guides use two columns; a plan comparison needs four, so the column
+ * count is whatever `head` says rather than a fixed pair.
  *
  * The scroller is the table's own wrapper, not the page. A table wider than a
  * phone that is allowed to widen the document gives the whole page a horizontal
@@ -13,8 +17,8 @@ export function DocsTable({
   rows,
 }: {
   caption: string;
-  head: [string, string];
-  rows: [React.ReactNode, React.ReactNode][];
+  head: string[];
+  rows: React.ReactNode[][];
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
@@ -36,7 +40,7 @@ export function DocsTable({
         </thead>
 
         <tbody>
-          {rows.map(([term, meaning], index) => (
+          {rows.map(([term, ...cells], index) => (
             <tr
               // The term is the row's identity — these lists are short, fixed
               // and written by hand, so there is no id to carry.
@@ -49,7 +53,14 @@ export function DocsTable({
               >
                 {term}
               </th>
-              <td className="px-4 py-3 align-top text-foreground">{meaning}</td>
+              {cells.map((cell, cellIndex) => (
+                <td
+                  key={cellIndex}
+                  className="px-4 py-3 align-top text-foreground"
+                >
+                  {cell}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>

@@ -1,6 +1,7 @@
 "use client";
 
-import { Plus, Star, X } from "lucide-react";
+import { Button, CloseButton, Description, Label } from "@heroui/react";
+import { Plus, Star } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { IconButton } from "@/components/ui/icon-button";
@@ -31,12 +32,19 @@ import {
  * The plus tile is the picker. It was a dashed square reading "None" beside a
  * separate Upload photos button — a box that looked like a control and did
  * nothing, next to the control. One thing now, in the shape of what it makes.
+ *
+ * 64px thumbnails, the logo's size, so the two sit on one line in the place
+ * form's media fold; the count sits beside the label so "how many more can I
+ * add" is answered before anyone reaches the eighth.
  */
 export function PhotoGalleryField({
   value,
+  hideHint,
   onChange,
 }: {
   value: PhotoSlot[];
+  /** Leaves the format-and-size line to the caller — see `LogoField`. */
+  hideHint?: boolean;
   onChange: (next: PhotoSlot[]) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -116,8 +124,13 @@ export function PhotoGalleryField({
   };
 
   return (
-    <div className="space-y-2">
-      <span className="block text-sm font-medium text-foreground">Photos</span>
+    <div className="flex min-w-0 flex-col gap-2">
+      <span className="flex items-baseline justify-between gap-2">
+        <Label elementType="span">Photos</Label>
+        <span className="text-xs tabular-nums text-muted">
+          {value.length} of {MAX_PHOTOS_PER_PLACE}
+        </span>
+      </span>
 
       <div className="flex flex-wrap gap-2">
         {value.map((slot, index) => (
@@ -132,13 +145,13 @@ export function PhotoGalleryField({
             <img
               src={slot.url}
               alt={`Photo ${index + 1}`}
-              width={80}
-              height={80}
-              className="size-20 rounded-lg object-cover ring-1 ring-border"
+              width={64}
+              height={64}
+              className="size-16 rounded-lg object-cover ring-1 ring-border"
             />
 
             {index === 0 ? (
-              <span className="absolute bottom-1 left-1 rounded bg-foreground/75 px-1.5 py-px text-[10px] font-medium text-background">
+              <span className="absolute inset-x-1 bottom-1 rounded bg-foreground/75 px-1 py-px text-center text-[10px] font-medium text-background">
                 Cover
               </span>
             ) : (
@@ -147,44 +160,41 @@ export function PhotoGalleryField({
                 icon={Star}
                 size="sm"
                 variant="secondary"
-                className="absolute bottom-1 left-1"
+                className="absolute bottom-1 left-1 size-5 min-w-0"
                 iconClassName="size-3"
                 onPress={() => makeCover(index)}
               />
             )}
 
-            <IconButton
-              label={`Remove photo ${index + 1}`}
-              icon={X}
-              size="sm"
-              variant="secondary"
-              className="absolute -right-1.5 -top-1.5"
-              iconClassName="size-3"
+            <CloseButton
+              type="button"
+              aria-label={`Remove photo ${index + 1}`}
+              className="absolute -right-2 -top-2 size-5 shadow-sm"
               onPress={() => remove(index)}
             />
           </div>
         ))}
 
         {/*
-          A native button, not HeroUI's, for the reason `pin-tile.tsx` gives —
-          and deliberately not a label wrapping the input either: Tailwind's
-          `sr-only` is `position: absolute`, so inside a portalled modal the
-          hidden input lays itself out against something else entirely and the
-          page jumps to it on focus. Same trap as `theme-gallery.tsx`.
+          HeroUI's Button, and deliberately not a label wrapping the input:
+          Tailwind's `sr-only` is `position: absolute`, so inside a portalled
+          modal the hidden input lays itself out against something else entirely
+          and the page jumps to it on focus. Same trap as `theme-gallery.tsx`.
 
           `type="button"` is load-bearing: this sits inside the place form, and a
           bare button in a form submits it.
         */}
         {isFull ? null : (
-          <button
+          <Button
             type="button"
-            aria-label="Add a photo"
-            title="Add a photo"
-            onClick={() => input.current?.click()}
-            className="grid size-20 cursor-pointer place-items-center rounded-lg border border-dashed border-border text-muted transition-colors hover:border-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+            variant="outline"
+            isIconOnly
+            aria-label="Add photos"
+            onPress={() => input.current?.click()}
+            className="size-16 rounded-lg border-dashed text-muted"
           >
-            <Plus aria-hidden="true" className="size-6" />
-          </button>
+            <Plus aria-hidden="true" className="size-5" />
+          </Button>
         )}
       </div>
 
@@ -202,17 +212,22 @@ export function PhotoGalleryField({
         }}
       />
 
-      <p className="text-xs text-muted">
-        {isFull
-          ? `That’s all ${MAX_PHOTOS_PER_PLACE}. Remove one to add another.`
-          : `JPG, PNG, WebP or AVIF, up to ${megabytes(MAX_PHOTO_BYTES)}MB each. ${MAX_PHOTOS_PER_PLACE} photos per location; the first is the cover. They upload when you save.`}
-      </p>
+      {isFull ? (
+        <Description>
+          That&rsquo;s all {MAX_PHOTOS_PER_PLACE}. Remove one to add another.
+        </Description>
+      ) : hideHint ? null : (
+        <Description>
+          JPG, PNG, WebP or AVIF, up to {megabytes(MAX_PHOTO_BYTES)}MB each. The
+          first is the cover. They upload when you save.
+        </Description>
+      )}
 
       {rejected ? <p className="text-xs text-danger">{rejected}</p> : null}
     </div>
   );
 }
 
-function megabytes(bytes: number): number {
+export function megabytes(bytes: number): number {
   return Math.round(bytes / 1024 / 1024);
 }

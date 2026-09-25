@@ -11,7 +11,7 @@ import { SlotShell } from "./slot-shell";
 /**
  * The week, in the popover.
  *
- * `HoursField` unchanged — it is seven rows of switches and time inputs,
+ * `HoursField` unchanged — it is seven rows of day toggles and hours fields,
  * which is exactly what the dialog shows and the one control here that would be
  * genuinely painful to have two versions of. It is the reason the popover is a
  * popover rather than something drawn inside the block: seven rows do not fit in

@@ -19,7 +19,7 @@ const COMMIT_MS = 400;
  * One pin's card overrides: painted immediately, saved once.
  *
  * **The bug this exists to fix is not a slow save, it is a wrong one.**
- * `ColorPickerField` fires its `onChange` on every pointer move, which is
+ * `ColorSwatchRow` fires its `onChange` on every pointer move, which is
  * correct — the studio holds a local draft and writes nothing until Save, so a
  * frame-rate `onChange` there costs a re-render and nothing else. This panel had
  * no draft: every frame of a drag became a `PATCH`, thirty to sixty of them in

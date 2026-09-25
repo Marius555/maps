@@ -1,7 +1,10 @@
 "use client";
 
 
-import { ColorPickerField } from "@/components/ui/color-picker-field";
+import { ColorSwatchRow } from "@/components/ui/color-swatch-row/color-swatch-row";
+import {
+  TOKEN_PRESETS,
+} from "@/components/ui/color-swatch-row/presets";
 import type { MapField, Place } from "@/lib/repositories/types";
 import {
   findBlock,
@@ -221,16 +224,13 @@ export function CardProperties({
            * would look deliberate while being wrong
            * (packages/shared/card-layout.ts).
            */}
-          <ColorPickerField
+          <ColorSwatchRow
             label="Background"
             value={layout.background ?? ""}
+            leading={{ kind: "default", name: "Theme default" }}
+            presets={TOKEN_PRESETS.surface}
             fallback="#ffffff"
-            // Label above, like every other control in this column — see
-            // `labelPlacement`. The publish designer's Colours fold keeps the
-            // label inside, because there it is five colours and nothing else.
-            labelPlacement="outside"
             onChange={(background) => onCard({ background })}
-            onClear={() => onCard({ background: undefined })}
           />
 
           {/*
@@ -270,12 +270,13 @@ export function CardProperties({
             />
           ) : null}
 
-          <ColorPickerField
+          <ColorSwatchRow
             label="Border"
             value={layout.border ?? ""}
-            labelPlacement="outside"
+            leading={{ kind: "default", name: "No border" }}
+            presets={TOKEN_PRESETS.border}
+            fallback="#e5e7eb"
             onChange={(border) => onCard({ border })}
-            onClear={() => onCard({ border: undefined })}
           />
 
           {/* Only once there is a colour for it to be a width of. A border of

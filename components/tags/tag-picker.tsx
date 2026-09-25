@@ -120,9 +120,7 @@ export function TagPicker({
 
       {/*
         The field, and it is a box rather than a control: the chips inside it
-        carry buttons of their own, and a button cannot nest in a button — the
-        same constraint `color-picker-field.tsx` solves by making its clear ×
-        a sibling of the trigger rather than a child of it.
+        carry buttons of their own, and a button cannot nest in a button.
 
         Focus is drawn on the whole box, because the box is what reads as the
         field whichever of the several controls inside it holds the keyboard.

@@ -1,3 +1,4 @@
+import type * as GeoJSON from "geojson";
 import type { Map as MapLibreMap } from "maplibre-gl";
 
 import {

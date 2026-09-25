@@ -1,34 +1,33 @@
 "use client";
 
-import { Switch } from "@heroui/react";
+import { ToggleButton } from "@heroui/react";
 import { useEffect, useRef } from "react";
 
 import type { DayHours } from "@/packages/shared/hours";
-import { TimeInput } from "./time-input";
+import { HoursRangeField } from "./hours-range-field";
 
-/** What a day gets when it is switched on with nothing filled in before. */
+/** What a day gets when it is opened with nothing filled in before. */
 const DEFAULT_DAY = { open: "09:00", close: "17:00" };
 
 /**
- * One day of the week.
+ * One day of the week: the day's name is the switch, the hours are one field.
  *
- * Closed is the absence of hours, not a third state alongside them, so the switch
- * writes `null` rather than blanking two strings — that is the shape the storage,
- * the card and the embed all agree on, and it keeps "closed" from being spelled
- * two different ways.
+ * Closed is the absence of hours, not a third state alongside them, so closing a
+ * day writes `null` rather than blanking two strings — that is the shape the
+ * storage, the card and the embed all agree on, and it keeps "closed" from being
+ * spelled two different ways.
  *
- * The cost of `null` is that switching a day off throws its times away. The last
- * open value is therefore kept in a ref, so toggling a day off to check something
- * and back on again returns what was typed rather than resetting to 09:00.
+ * The cost of `null` is that closing a day throws its times away. The last open
+ * value is therefore kept in a ref, so closing a day to check something and
+ * opening it again returns what was typed rather than resetting to 09:00.
  *
- * **One layout at every width, and it is the narrow one.** This had a five-column
- * `sm:` variant with full day names and a `to` between the boxes, which does not
- * fit: `sm:` is a *viewport* query, so it applied inside a 448px dialog on every
- * desktop and ran the row off the edge of the fold. So "Mon" rather than
- * "Monday", a small switch, an en dash for the word, and the full name kept where
- * it is actually needed — in the switch's own label and on each time field, which
- * is what a screen reader reads and what "Wednesday" was never doing visually
- * beside a box saying 09:00.
+ * **The row is the same height open or closed.** It used to be a `Switch`, a
+ * short "Closed" line, and two 32px time fields that replaced the line when the
+ * switch went on — so every day switched on grew its row and walked everything
+ * under it down the dialog. Now the toggle is the day's name itself (a HeroUI
+ * `ToggleButton`, pressed = open), and the other half is always a field-sized
+ * box: the hours when open, a dashed "Closed" placeholder of identical height
+ * when not. Toggling changes what is in the box and nothing else.
  */
 export function HoursDayRow({
   label,
@@ -51,48 +50,29 @@ export function HoursDayRow({
     if (value) lastOpen.current = value;
   }, [value]);
 
-  /*
-   * The two time fields share the row's slack, which is what the `1fr` columns
-   * are for. They were briefly `auto` with a spacer soaking up the leftover —
-   * back when a field was digits alone and stretching one only made a wide box
-   * around a narrow number. Each carries a clock now, so the width has something
-   * in it.
-   */
   return (
-    <div className="grid grid-cols-[2.5rem_auto_1fr_auto_1fr] items-center gap-x-1.5">
-      <span className="text-xs text-foreground">{shortLabel}</span>
-
-      <Switch
+    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+      {/* `h-9` beats the small size's `md:h-8` (HeroUI's rules sit in
+          `layer(components)`, Tailwind's utilities after it), so the toggle and
+          the field beside it are one height at every width. `rounded-field`
+          rather than the pill it ships with, for the same reason: it sits in a
+          column of fields, and should look like one of them. */}
+      <ToggleButton
         size="sm"
         isSelected={isOpen}
+        aria-label={`${label}: open`}
         onChange={(selected) => onChange(selected ? lastOpen.current : null)}
+        className="h-9 w-full rounded-field px-0"
       >
-        <Switch.Content>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <span className="sr-only">{`${label}: open`}</span>
-        </Switch.Content>
-      </Switch>
+        {shortLabel}
+      </ToggleButton>
 
       {value ? (
-        <>
-          <TimeInput
-            label={`${label}: opens at`}
-            value={value.open}
-            onChange={(open) => onChange({ ...value, open })}
-          />
-          <span aria-hidden="true" className="text-xs text-muted">
-            &ndash;
-          </span>
-          <TimeInput
-            label={`${label}: closes at`}
-            value={value.close}
-            onChange={(close) => onChange({ ...value, close })}
-          />
-        </>
+        <HoursRangeField label={label} value={value} onChange={onChange} />
       ) : (
-        <span className="col-span-3 text-xs text-muted">Closed</span>
+        <span className="flex h-9 items-center rounded-field border border-dashed border-border px-3 text-sm text-muted">
+          Closed
+        </span>
       )}
     </div>
   );

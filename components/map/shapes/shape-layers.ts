@@ -1,16 +1,20 @@
 "use client";
 
-import type { Map as MapLibreMap } from "maplibre-gl";
+import type * as GeoJSON from "geojson";
+import type { ExpressionSpecification, Map as MapLibreMap } from "maplibre-gl";
 
+import type { DotRun } from "@/lib/map/dot-lanes";
 import type { Shape } from "@/lib/repositories/types";
 import {
   DEFAULT_SHAPE_COLOR,
   DEFAULT_SHAPE_OPACITY,
 } from "@/lib/validation/shape.schema";
 import {
+  DASH_ARRAY_EXPRESSION,
   DOT_IMAGE_ID,
   DOT_IMAGE_SIZE,
-  DOT_TEXT_SIZE,
+  DOT_SOURCE_STROKE,
+  DOT_TEXT_SIZE_EXPRESSION,
   DOT_WIDTH_BUCKETS,
   dotImage,
   dotLayerId,
@@ -91,6 +95,17 @@ export const SHAPE_DOTTED_LINE_LAYERS = DOT_WIDTH_BUCKETS.map((width) =>
   dotLayerId(SHAPE_DOTTED_LINE_LAYER, width),
 );
 /**
+ * The dots of a stretch several dotted routes share, taking turns.
+ *
+ * Its own source, because the dots are worked out per whole zoom level and for
+ * the area on screen (packages/shared/dot-stream.ts). Re-sending them must not
+ * mean re-sending every shape on the map. A `circle` layer rather than a
+ * symbol one: these are points already, and MapLibre's symbol layout is the
+ * thing that cannot place them. See `DOT_MAX_LANES`.
+ */
+export const SHAPE_DOT_STREAM_SOURCE = "editor-shape-dot-stream";
+export const SHAPE_DOT_STREAM_LAYER = "editor-shape-dot-stream";
+/**
  * The outline of whatever is being drawn right now — dashed, and its own layer.
  *
  * `line-dasharray` *is* data-driven in maplibre-gl 6, so this could have been a
@@ -151,6 +166,7 @@ export const SHAPE_HIT_LAYERS = [
   SHAPE_LINE_LAYER,
   SHAPE_DASHED_LINE_LAYER,
   ...SHAPE_DOTTED_LINE_LAYERS,
+  SHAPE_DOT_STREAM_LAYER,
 ];
 
 type ShapeProperties = {
@@ -179,8 +195,20 @@ type ShapeProperties = {
    *
    * One tri-state string rather than a `dashed` and a `dotted` boolean: two
    * booleans have four states and only three of them mean anything.
+   *
+   * `DOT_SOURCE_STROKE` on a dotted route whose runs draw it instead — see
+   * `dotRunFeatures`. No layer matches it.
    */
-  stroke: ShapeStrokeStyle;
+  stroke: ShapeStrokeStyle | typeof DOT_SOURCE_STROKE;
+  /**
+   * This route's turn on a dashed stretch it shares, and how many routes share
+   * it. Only on the features `dotRunFeatures` makes; absent is one lane, which
+   * is every other feature.
+   */
+  lane?: number;
+  lanes?: number;
+  /** A run starting at a cut: its `text-size` — see `dotInsetSize`. */
+  inset?: number;
   /**
    * Still being drawn, and not yet a row anybody could open.
    *
@@ -244,6 +272,72 @@ export function shapeFeature(
       placed: false,
     },
   };
+}
+
+/**
+ * Dotted and dashed routes that share a road, redrawn as runs.
+ *
+ * Each merged route stops drawing itself — its feature is re-marked
+ * `DOT_SOURCE_STROKE`, which no layer matches — and each of its runs is added
+ * as a feature of its own, wearing that route's id (so a click on any dot or
+ * dash still selects the right route), colour and selection. See
+ * lib/map/dot-lanes.ts.
+ *
+ * A dotted stretch that is actually shared is left out: its dots are placed by
+ * `dotStreamFeatures` into a source of their own. Everything else here, a
+ * dashed stretch included, is an ordinary line on the layer of its marking.
+ *
+ * Returns the features unchanged when nothing is shared, so a map with no
+ * overlap draws exactly what it drew before this existed.
+ */
+export function dotRunFeatures(
+  features: GeoJSON.Feature<GeoJSON.Geometry, ShapeProperties>[],
+  runs: readonly DotRun[],
+): GeoJSON.Feature<GeoJSON.Geometry, ShapeProperties>[] {
+  const merged = new Set(
+    runs.filter((run) => run.lanes > 1).map((run) => run.id),
+  );
+  if (merged.size === 0) return features;
+
+  const byId = new globalThis.Map(
+    features
+      .filter((feature) => merged.has(feature.properties.id))
+      .map((feature) => [feature.properties.id, feature]),
+  );
+
+  return [
+    ...features.map((feature) =>
+      merged.has(feature.properties.id) && !feature.properties.draft
+        ? {
+            ...feature,
+            properties: {
+              ...feature.properties,
+              stroke: DOT_SOURCE_STROKE,
+            } as ShapeProperties,
+          }
+        : feature,
+    ),
+    ...runs.flatMap((run) => {
+      const own = byId.get(run.id);
+      if (!own || !merged.has(run.id)) return [];
+      if (run.stroke === "dotted" && run.lanes > 1) return [];
+
+      return [
+        {
+          type: "Feature" as const,
+          geometry: { type: "LineString" as const, coordinates: run.points },
+          properties: {
+            ...own.properties,
+            stroke: run.stroke,
+            width: run.width,
+            lane: run.lane,
+            lanes: run.lanes,
+            ...(run.inset ? { inset: run.inset } : {}),
+          },
+        },
+      ];
+    }),
+  ];
 }
 
 /**
@@ -394,7 +488,7 @@ function firstSymbolLayerId(map: MapLibreMap): string | undefined {
  * A multiplier and not an increment, so it means the same thing at every width:
  * at 1px an added 2px would treble a hairline, and at 12px it would be invisible.
  */
-const SELECTED_WIDTH_SCALE = 1.5;
+export const SELECTED_WIDTH_SCALE = 1.5;
 
 /**
  * One outline layer per marking, in the order they are stacked.
@@ -407,12 +501,20 @@ const OUTLINE_LAYERS: {
   id: string;
   stroke: ShapeStrokeStyle;
   cap: "round" | "butt";
-  dash: [number, number] | null;
+  dash: unknown[] | null;
 }[] = [
   { id: SHAPE_LINE_LAYER, stroke: "solid", cap: "round", dash: null },
   // Butt, because a round cap adds half a width at each end of every dash and at
   // this spacing that closes the gaps and draws a solid line with dents in it.
-  { id: SHAPE_DASHED_LINE_LAYER, stroke: "dashed", cap: "butt", dash: [2, 2] },
+  // It is also what makes a lane pattern's zero-length lead-in draw nothing.
+  // `DASH_ARRAY` for every dashed shape, a lane's turn on a shared stretch —
+  // see `dashLanePattern`.
+  {
+    id: SHAPE_DASHED_LINE_LAYER,
+    stroke: "dashed",
+    cap: "butt",
+    dash: DASH_ARRAY_EXPRESSION,
+  },
   // Dotted is not here: it is a symbol layer, added below. See the note on
   // SHAPE_DOTTED_LINE_LAYER.
 ];
@@ -493,7 +595,9 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
             ["*", ["get", "width"], SELECTED_WIDTH_SCALE],
             ["get", "width"],
           ],
-          ...(outline.dash ? { "line-dasharray": outline.dash } : {}),
+          ...(outline.dash
+            ? { "line-dasharray": outline.dash as ExpressionSpecification }
+            : {}),
         },
       },
       beforeId,
@@ -649,7 +753,8 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
           "symbol-spacing": dotSpacingFor(width),
           // Not about text: it is what stops MapLibre flooring the spacing at the
           // dot image's own pixel width. See `DOT_TEXT_SIZE`.
-          "text-size": DOT_TEXT_SIZE,
+          // A run's own where it starts at a cut; see `dotInsetSize`.
+          "text-size": DOT_TEXT_SIZE_EXPRESSION as ExpressionSpecification,
           "icon-image": DOT_IMAGE_ID,
           // The selected multiplier is the one the outline layers apply, so a
           // selected dotted shape thickens by the same proportion as every
@@ -670,6 +775,40 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
           "icon-ignore-placement": true,
         },
         paint: { "icon-color": ["get", "color"] },
+      },
+      beforeId,
+    );
+  }
+
+  /*
+   * Shared dotted stretches, above the solo dots either side of them.
+   *
+   * The same size and selection rule as the dotted layers: a dot's diameter is
+   * the stroke, and a selected route thickens by the same proportion.
+   */
+  if (!map.getSource(SHAPE_DOT_STREAM_SOURCE)) {
+    map.addSource(SHAPE_DOT_STREAM_SOURCE, { type: "geojson", data: EMPTY });
+  }
+
+  if (!map.getLayer(SHAPE_DOT_STREAM_LAYER)) {
+    map.addLayer(
+      {
+        id: SHAPE_DOT_STREAM_LAYER,
+        type: "circle",
+        source: SHAPE_DOT_STREAM_SOURCE,
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": [
+            "/",
+            [
+              "case",
+              ["get", "selected"],
+              ["*", ["get", "width"], SELECTED_WIDTH_SCALE],
+              ["get", "width"],
+            ],
+            2,
+          ],
+        },
       },
       beforeId,
     );

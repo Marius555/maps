@@ -66,6 +66,9 @@ export function PropertyChoice<T extends string>({
       <ToggleButtonGroup
         fullWidth
         size="sm"
+        // A grey fill rather than the accent, and no divider against it — see
+        // `.quiet-toggles` in app/globals.css.
+        className="quiet-toggles"
         selectionMode="single"
         disallowEmptySelection
         selectedKeys={[value]}

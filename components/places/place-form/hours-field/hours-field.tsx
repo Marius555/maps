@@ -1,6 +1,6 @@
 "use client";
 
-import { FieldError, Label } from "@heroui/react";
+import { Description, FieldError, Fieldset } from "@heroui/react";
 
 import {
   DAY_LABELS,
@@ -13,6 +13,14 @@ import { HoursDayRow } from "./hours-day-row";
 
 /**
  * Opening hours for one location: seven rows, Monday first.
+ *
+ * **Two columns when the box it sits in is wide enough** — Monday to Thursday,
+ * then Friday to Sunday — so a fully open week is four rows tall rather than
+ * seven. `grid-flow-col` fills down the first column before the second, which is
+ * what keeps the DOM, the tab order and the screen reader in Monday-to-Sunday
+ * order while the eye reads the week as two short columns. It is a *container*
+ * query: the place form's body is an `@container`, and the card's hours slot is
+ * not, so the slot stays one column without being told.
  *
  * There was a "Copy to every day" button beside the legend, on the argument that
  * most of the 40–500 locations this product is for keep the same weekday hours
@@ -41,10 +49,12 @@ export function HoursField({
   };
 
   return (
-    <fieldset className="space-y-2">
-      <Label elementType="legend">Opening hours</Label>
+    <Fieldset className="gap-2">
+      {/* Hidden: every place this is drawn already titles it — the fold says
+          "Opening hours", and so does the card slot's own header. */}
+      <Fieldset.Legend className="sr-only">Opening hours</Fieldset.Legend>
 
-      <div className="space-y-1">
+      <div className="grid gap-x-4 gap-y-2 @lg:grid-flow-col @lg:grid-cols-2 @lg:grid-rows-4">
         {DAY_LABELS.map((label, index) => (
           <HoursDayRow
             key={label}
@@ -56,12 +66,11 @@ export function HoursField({
         ))}
       </div>
 
-      <p className="text-xs text-muted">
-        Times are the location&rsquo;s own. Leave a day switched off to show it as
-        closed.
-      </p>
+      <Description>
+        Press a day to open or close it. Times are the location&rsquo;s own.
+      </Description>
 
       {error ? <FieldError>{error}</FieldError> : null}
-    </fieldset>
+    </Fieldset>
   );
 }

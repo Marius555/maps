@@ -291,6 +291,32 @@ export type SnapshotShape = {
   | { kind: "line"; points: [number, number][]; durationS?: number }
 );
 
+/**
+ * One stretch of one dotted or dashed route.
+ *
+ * Every route on a shared stretch carries **the same `points`**, and `lane` is
+ * its turn in the stream: lane k of `lanes` draws every `lanes`-th dot or dash,
+ * starting at the k-th. A dotted stretch's dots are placed by `dotStream`; a
+ * dashed one uses `dashLanePattern`. Colour comes from the shape by `id`.
+ * `width` is written only where it differs from the shape's own — the widest
+ * route on a stretch sets it, so every dot or dash there is one size.
+ *
+ * `stroke` is written only for a dashed run. Absent means dotted.
+ *
+ * `inset` is on a dotted run drawn alone that starts where its route was cut:
+ * the `text-size` that holds its first dot back from the cut (`dotInsetSize`).
+ * Absent, it starts as any line does.
+ */
+export type SnapshotDotRun = {
+  id: string;
+  points: [number, number][];
+  lane: number;
+  lanes: number;
+  stroke?: "dashed";
+  width?: number;
+  inset?: number;
+};
+
 /** Which side of the map the results panel sits on. */
 export type SnapshotPanelSide = "left" | "right";
 
@@ -669,6 +695,19 @@ export type MapSnapshot = {
    * The version stays `1` — the embed's fetch rejects anything else outright.
    */
   shapes?: SnapshotShape[];
+  /**
+   * Dotted and dashed routes that share a road, already split into runs.
+   *
+   * Present only when at least two routes of the same marking overlap, and only for the
+   * routes that do: every other shape draws from its own points exactly as it
+   * always has. A route listed here draws only through its runs — see
+   * `SnapshotDotRun`. Worked out at publish by lib/map/dot-lanes.ts, which is
+   * how the embed carries none of that geometry.
+   *
+   * Optional, on the immutability rule above: absent is every file published
+   * before it existed, and every map with no overlap now.
+   */
+  dotRuns?: SnapshotDotRun[];
   /**
    * What the owner did to the basemap itself: the theme's recolouring, the label
    * level, the layer toggles. Applied to `styleUrl`'s style document before the

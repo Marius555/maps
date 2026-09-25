@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DASH_ARRAY,
+  DASH_ARRAY_EXPRESSION,
   DOT_IMAGE_SIZE,
   DOT_MIN_SPACING_PX,
   DOT_SPACING_RATIO,
   DOT_WIDTH_BUCKETS,
+  dashLanePattern,
   dotImage,
   dotLayerId,
   dotSpacingFor,
@@ -97,5 +100,55 @@ describe("dotImage", () => {
     expect(image.data[centre + 3]).toBe(255);
     // A corner is outside the disc entirely.
     expect(image.data[3]).toBe(0);
+  });
+});
+
+describe("dashLanePattern", () => {
+  /** Where a pattern's dashes start and end along one period, in widths. */
+  const dashes = (pattern: number[]) => {
+    const out: [number, number][] = [];
+    let at = 0;
+    pattern.forEach((length, index) => {
+      if (index % 2 === 0 && length > 0) out.push([at, at + length]);
+      at += length;
+    });
+    return out;
+  };
+
+  const period = DASH_ARRAY[0] + DASH_ARRAY[1];
+
+  it("stretches the period by the number of lanes", () => {
+    for (let lanes = 2; lanes <= 3; lanes += 1) {
+      for (let lane = 0; lane < lanes; lane += 1) {
+        const total = dashLanePattern(lane, lanes).reduce((a, b) => a + b, 0);
+        expect(total).toBe(period * lanes);
+      }
+    }
+  });
+
+  it("gives each lane one dash, a whole period after the lane before", () => {
+    expect(dashes(dashLanePattern(0, 3))).toEqual([[0, 2]]);
+    expect(dashes(dashLanePattern(1, 3))).toEqual([[4, 6]]);
+    expect(dashes(dashLanePattern(2, 3))).toEqual([[8, 10]]);
+  });
+
+  it("together draws the ordinary dashed line", () => {
+    const all = [0, 1]
+      .flatMap((lane) => dashes(dashLanePattern(lane, 2)))
+      .sort((a, b) => a[0] - b[0]);
+
+    expect(all).toEqual([
+      [0, 2],
+      [4, 6],
+    ]);
+  });
+
+  it("falls through to the plain pattern for a shape that shares nothing", () => {
+    expect(DASH_ARRAY_EXPRESSION.at(-1)).toEqual(["literal", DASH_ARRAY]);
+    // Every lane of two and of three, and nothing for one lane of one.
+    const labels = DASH_ARRAY_EXPRESSION.slice(2, -1).filter(
+      (_, index) => index % 2 === 0,
+    );
+    expect(labels).toEqual(["02", "12", "03", "13", "23"]);
   });
 });

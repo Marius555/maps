@@ -16,10 +16,10 @@ import type { CustomPinIcon } from "@/packages/shared/pin-icons";
  * meant forty round trips through a form. Grouping is already how the user says
  * "these are the same kind of thing"; this is the action that reads back.
  *
- * The picker is `PinField`, unchanged from the place form. A pin is a picture,
- * and the row of pictures the user already knows from editing one location is
- * the right question here too — a second, group-flavoured picker would be a
- * second thing to keep in step with the pin studio.
+ * The picker is `PinField`, unchanged from the place form. The select of pins
+ * the user already knows from editing one location is the right question here
+ * too — a second, group-flavoured picker would be a second thing to keep in step
+ * with the pin studio.
  *
  * **The count is stated before the button, not after.** This writes to every
  * member at once and there is no undo, so how many rows are about to change is

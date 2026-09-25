@@ -36,6 +36,34 @@ rewritten; it is the record of why this area is shaped as it is.
   so all three are degraded on a phone: vertices land, the band never follows the finger.
   Known and deliberately not fixed in the pass that fixed the circle; it needs a finish
   gesture that is not a double-tap, which is a design decision rather than a port.
+- **Routes sharing a road take turns: A·B·A·B, dot by dot and dash by dash**
+  (`lib/map/dot-lanes.ts`). Each route used to place its own dots or dashes from its own
+  start, so a shared stretch drew twice as many, out of phase. Now every route on a
+  stretch is handed *the same coordinate array* (the lowest-`sortOrder` route's) and a
+  lane, dotted with dotted and dashed with dashed, never across. **A shared dotted stretch
+  is not drawn by the symbol layers.** Its dots are placed by `dotStream`
+  (packages/shared/dot-stream.ts) for `floor(zoom)` and the area around the screen, drawn
+  by a `circle` layer from a source of their own, and placed again only when a zoom
+  crosses a level or a pan leaves that area. Placing at the whole zoom level gives the
+  stream exactly the solo dots' own 2× swing between levels. A shared dashed stretch stays
+  on the dashed layer, whose `line-dasharray` is data-driven: lane k of N is the same
+  dash at N× the period, moved k periods along (`dashLanePattern`). The butt cap is what
+  makes its zero-length lead-in draw nothing. **Two symbol designs were built and failed,
+  so do not try a third.** Sliding lanes with `icon-offset` drifted into pairs
+  (AB···AB): screen pixels against anchors in tile units scaled up to 2× between integer
+  zooms. Shifting each lane's first anchor with `text-size` held for one tile and
+  collapsed at the next, because MapLibre clips a line to each tile *before* placing
+  anchors, and a line entering across a tile edge always starts half a spacing in
+  (`getAnchors`, `isLineContinued`), so every lane lands on the same anchors again. The
+  stopgap between them, splitting each dot into bands, kept the density right and read as
+  a jumble. A solo dotted run that starts at a cut still carries `inset`, a `text-size`
+  that holds its first dot ~¾ pitch back from the cut (`dotInsetSize`). The shared-ness is
+  decided once, from the later route's side, so two routes cannot disagree about where a
+  stretch ends. The editor computes it per redraw (memoised); publish bakes it into
+  `snapshot.dotRuns` (`stroke: "dashed"` only on dashed runs; absent is dotted), written
+  **only** when something overlaps. A merged route's own feature wears a stroke no layer
+  matches (`DOT_SOURCE_STROKE` / `""`); its runs and stream dots carry its id, so taps
+  still select it, and the stream layer is in both hit lists.
 
 ### Routes
 

@@ -19,6 +19,33 @@ import { SelectToolButton } from "./select-tool-button";
 import { ShapeToolsButton } from "./shapes/shape-tools-button";
 
 /**
+ * Which controls step aside for the address field on a phone, and when.
+ *
+ * The panel cannot wrap (see below), so on a narrow map an open search used to
+ * be paid for by every button in the row shrinking. Now the buttons keep their
+ * size and the least-needed ones leave instead, one at a time, until the field
+ * has about 180px — and come back the moment the search folds, because the rule
+ * is a CSS `group-has-` on `data-search-open`, the attribute the search already
+ * sets on itself. No state.
+ *
+ * Each threshold is the map-row width (the `@container` below) under which that
+ * control would leave the field short, worked from the mobile sizes: icon
+ * buttons 36px, Add and Draw 40px, 4px gaps, 10px of panel padding and border.
+ * Listed first-to-go; Add and Search never go. Whole literal strings, because
+ * Tailwind only generates classes it can read in the source. `sm` and up are
+ * untouched.
+ */
+const STEP_ASIDE = {
+  export: "max-sm:group-has-[[data-search-open]]/toolbar:@max-[559px]:hidden",
+  preview: "max-sm:group-has-[[data-search-open]]/toolbar:@max-[519px]:hidden",
+  saveView: "max-sm:group-has-[[data-search-open]]/toolbar:@max-[479px]:hidden",
+  appearance: "max-sm:group-has-[[data-search-open]]/toolbar:@max-[439px]:hidden",
+  undo: "max-sm:group-has-[[data-search-open]]/toolbar:@max-[394px]:hidden",
+  select: "max-sm:group-has-[[data-search-open]]/toolbar:@max-[354px]:hidden",
+  shapes: "max-sm:group-has-[[data-search-open]]/toolbar:@max-[314px]:hidden",
+} as const;
+
+/**
  * Map controls, in a floating panel.
  *
  * They used to be bare buttons sitting on the tiles — `tertiary` variant, which
@@ -181,7 +208,9 @@ export function MapToolbar({
      * now (use-maplibre.ts), so the reservation was a 48px hole the toolbar
      * wrapped around for no reason.
      */
-    <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-wrap items-start gap-2">
+    // `@container` is what STEP_ASIDE's thresholds measure: the map's width,
+    // less the gutters, whatever the viewport around it is doing.
+    <div className="@container pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-wrap items-start gap-2">
       {/*
        * `group/toolbar` is what the add control's label watches: the search sets
        * `data-search-open` on itself when it expands, and the label folds.
@@ -190,7 +219,10 @@ export function MapToolbar({
        * changes over 150ms, and a wrapping row answers "too wide" by breaking
        * onto a second line — a discrete jump, mid-transition, that snaps back
        * when the label finishes folding. A narrow map shrinks the field instead;
-       * that is continuous, and every button keeps its size.
+       * that is continuous, and every button keeps its size — which is why
+       * every control sits in a `shrink-0` box and the search is the only thing
+       * in the row allowed to give. On a phone that is not enough on its own,
+       * so controls step aside for the field instead: see STEP_ASIDE.
        */}
       {/* `map-chrome-panel`, not `bg-surface`: the panel is glass so the basemap
           reads through it, while its controls keep a solid ground of their own —
@@ -199,98 +231,120 @@ export function MapToolbar({
           dashboard's (`mapThemeClass` on the canvas frame), so a toolbar over a
           white basemap is white even when the dashboard is in dark mode. */}
       <div className="map-chrome-panel group/toolbar pointer-events-auto flex max-w-full min-w-0 items-center gap-1 rounded-xl border border-border p-1 shadow-sm">
-        <AddLocationButton
-          isAdding={isAdding}
-          addIcon={addIcon}
-          recentIcons={recentIcons}
-          pinIcons={pinIcons}
-          isBusy={isBusy}
-          headroom={limits?.places}
-          onPickIcon={onPickIcon}
-          onStopAdding={onStopAdding}
-          onDropPin={onDropPin}
-          onDraggingChange={onDraggingChange}
-          onOpenStudio={onOpenStudio}
-        />
+        <span className="flex shrink-0">
+          <AddLocationButton
+            isAdding={isAdding}
+            addIcon={addIcon}
+            recentIcons={recentIcons}
+            pinIcons={pinIcons}
+            isBusy={isBusy}
+            headroom={limits?.places}
+            onPickIcon={onPickIcon}
+            onStopAdding={onStopAdding}
+            onDropPin={onDropPin}
+            onDraggingChange={onDraggingChange}
+            onOpenStudio={onOpenStudio}
+          />
+        </span>
 
         {/* Directly beside the pin control, with no rule between them: adding a
             location and drawing an area are the two things you put *on* a map,
             and the rule separates those from the things you do *to* it. */}
-        <ShapeToolsButton
-          drawMode={drawMode}
-          isRouting={isRouting}
-          isBusy={isDrawingBusy}
-          headroom={limits?.shapes}
-          routesNote={routesNote}
-          onPickTool={onPickTool}
-          onPickRoute={onPickRoute}
-          onStopDrawing={onStopDrawing}
-          onImport={onImportShapes}
-        />
+        <span className={`flex shrink-0 ${STEP_ASIDE.shapes}`}>
+          <ShapeToolsButton
+            drawMode={drawMode}
+            isRouting={isRouting}
+            isBusy={isDrawingBusy}
+            headroom={limits?.shapes}
+            routesNote={routesNote}
+            onPickTool={onPickTool}
+            onPickRoute={onPickRoute}
+            onStopDrawing={onStopDrawing}
+            onImport={onImportShapes}
+          />
+        </span>
 
         {/* Third of the three tools that change what a gesture on the map means,
             so it belongs on this side of the rule with the other two. It picks
             out what is already there rather than putting something new down,
             which is why it is the one without a label. */}
-        <SelectToolButton
-          isSelecting={isSelecting}
-          onStartSelecting={onStartSelecting}
-          onStopSelecting={onStopSelecting}
-        />
+        <span className={`flex shrink-0 ${STEP_ASIDE.select}`}>
+          <SelectToolButton
+            isSelecting={isSelecting}
+            onStartSelecting={onStartSelecting}
+            onStopSelecting={onStopSelecting}
+          />
+        </span>
 
         {/* Last on this side of the rule: it takes back a change made *on* the
             map with the tools beside it — a dragged pin. Drawn disabled rather
             than hidden when there is nothing to undo, so the toolbar does not
             change width under the pointer the moment a pin is let go. */}
         {onUndoMove ? (
-          <IconButton
-            label="Undo pin move"
-            icon={Undo2}
-            placement="bottom"
-            isDisabled={!canUndoMove}
-            aria-keyshortcuts="Control+Z Meta+Z"
-            onPress={onUndoMove}
-          />
+          <span className={`flex shrink-0 ${STEP_ASIDE.undo}`}>
+            <IconButton
+              label="Undo pin move"
+              icon={Undo2}
+              placement="bottom"
+              isDisabled={!canUndoMove}
+              aria-keyshortcuts="Control+Z Meta+Z"
+              onPress={onUndoMove}
+            />
+          </span>
         ) : null}
 
-        <Separator orientation="vertical" className="h-6" />
+        {/* Leaves with Appearance: a rule with nothing after it is a stray line. */}
+        <Separator
+          orientation="vertical"
+          className={`h-6 shrink-0 ${STEP_ASIDE.appearance}`}
+        />
 
         {/* First on this side of the rule, because it is the one that changes
             what the map *is* rather than where it is pointed or who is looking. */}
-        <AppearanceButton
-          style={style}
-          appearance={appearance}
-          onChangeStyle={onChangeStyle}
-          onChangeAppearance={onChangeAppearance}
-        />
+        <span className={`flex shrink-0 ${STEP_ASIDE.appearance}`}>
+          <AppearanceButton
+            style={style}
+            appearance={appearance}
+            onChangeStyle={onChangeStyle}
+            onChangeAppearance={onChangeAppearance}
+          />
+        </span>
 
         {/* The default view is where the map opens, for the owner and for every
             visitor of the embed. Setting it by panning beats typing coordinates. */}
-        <IconButton
-          label="Save this view as default"
-          icon={Bookmark}
-          placement="bottom"
-          isPending={isSavingView}
-          onPress={onSaveView}
-        />
+        <span className={`flex shrink-0 ${STEP_ASIDE.saveView}`}>
+          <IconButton
+            label="Save this view as default"
+            icon={Bookmark}
+            placement="bottom"
+            isPending={isSavingView}
+            onPress={onSaveView}
+          />
+        </span>
 
         {/* The editor canvas has no popups or filters — those are the embed's.
             This is the only place in the editor you can see them. */}
-        <IconButton
-          label="Preview as a visitor"
-          icon={Eye}
-          placement="bottom"
-          onPress={onPreview}
-        />
+        <span className={`flex shrink-0 ${STEP_ASIDE.preview}`}>
+          <IconButton
+            label="Preview as a visitor"
+            icon={Eye}
+            placement="bottom"
+            onPress={onPreview}
+          />
+        </span>
 
         {/* After Preview, and last of the three: both of those show you the map,
             and this is the one that takes it away with you. */}
-        {exportControl ? <ExportButton {...exportControl} /> : null}
+        {exportControl ? (
+          <span className={`flex shrink-0 ${STEP_ASIDE.export}`}>
+            <ExportButton {...exportControl} />
+          </span>
+        ) : null}
 
         {/* Last, so opening the search grows the panel into empty map rather than
             shoving the other controls sideways. The rule goes on a phone, where
             the five pixels it costs are five the address field does not get. */}
-        <Separator orientation="vertical" className="h-6 max-sm:hidden" />
+        <Separator orientation="vertical" className="h-6 shrink-0 max-sm:hidden" />
 
         {search}
       </div>

@@ -2,6 +2,7 @@ import type {
   Map as MapLibreMap,
   MapOptions,
   StyleSpecification,
+  ErrorEvent,
 } from "maplibre-gl";
 
 import { blankMissingIcons } from "@/packages/shared/missing-icons";
@@ -9,6 +10,7 @@ import type { ShapeBounds } from "@/packages/shared/shapes";
 
 import type { Layout } from "./paper";
 import { zoomFor } from "./paper";
+import { visibleDeadline } from "./visible-deadline";
 
 /**
  * The map, drawn again off screen at whatever size was asked for.
@@ -244,14 +246,15 @@ function once(
   message: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
+    // Visible time only: a hidden tab draws no frames, so neither event can fire.
+    const cancelDeadline = visibleDeadline(timeoutMs, () => {
       map.off(event, done);
       map.off("error", failed);
       reject(new ExportError(message));
-    }, timeoutMs);
+    });
 
     function done() {
-      clearTimeout(timer);
+      cancelDeadline();
       map.off("error", failed);
       resolve();
     }
@@ -264,10 +267,10 @@ function once(
      * was missing. Only an error carrying no source is one the map itself could
      * not recover from.
      */
-    function failed(event: { error?: Error; sourceId?: string }) {
+    function failed(event: ErrorEvent & { sourceId?: string }) {
       if (event.sourceId) return;
 
-      clearTimeout(timer);
+      cancelDeadline();
       map.off("idle", done);
       map.off("load", done);
       reject(new ExportError(event.error?.message ?? "The map failed to render."));

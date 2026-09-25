@@ -1,8 +1,14 @@
 "use client";
 
-import { PinTile } from "@/components/map/pin-tile";
-import { CarouselTrack } from "@/components/ui/carousel";
-import { PIN_ICONS, CUSTOM_PIN_PREFIX, type CustomPinIcon } from "@/packages/shared/pin-icons";
+import { Header, Label, ListBox, Select } from "@heroui/react";
+
+import { PinPreview } from "@/components/map/pin-preview";
+import { pinLabel } from "@/components/map/pin-tile";
+import {
+  CUSTOM_PIN_PREFIX,
+  PIN_ICONS,
+  type CustomPinIcon,
+} from "@/packages/shared/pin-icons";
 
 /**
  * Which pin this location wears.
@@ -13,28 +19,20 @@ import { PIN_ICONS, CUSTOM_PIN_PREFIX, type CustomPinIcon } from "@/packages/sha
  * being survivable the moment a customer builds a pin of their own, because
  * otherwise it can only ever go on locations they add *after* making it.
  *
- * Every pin the map has, in one row, with the plain one first. No dropdown: a pin
- * is a picture, and a list of names would make the user read "Landmark" and
- * imagine it.
+ * **A select, at the height of every other field in the form.** This was a
+ * four-up carousel of 56px tiles, which made the one control nobody opens the
+ * dialog for the largest thing in it. The argument that kept it a row of
+ * pictures was that a list of *names* makes the user read "Landmark" and imagine
+ * it — so both the trigger and every row draw the pin itself beside its name,
+ * and the map directly above redraws its marker the moment one is picked.
  *
- * **Paged by arrows rather than by a scrollbar**, which is `CarouselTrack` — the
- * same control the pin studio's library and its field rows already use. A native
- * horizontal scrollbar under a row of pictures reads as a rendering accident
- * rather than as a control, and it is the one part of this dialog somebody has to
- * discover by dragging. The arrows sit *beside* the track and never over a tile:
- * on a four-up row an overlaid chevron covers a quarter of what is being looked
- * at. That, and the reserved-but-invisible slot for a row short enough not to
- * need them, are both argued in the component itself.
- *
- * `size="lg"` because the track gives every tile a quarter of the row, and a 36px
- * pin adrift in that much space reads as a mistake. `as="div"` with a `role`
- * of `group`: these are `aria-pressed` buttons, and a list of controls is not a
- * list — the same call `PinFieldRow` makes.
- *
- * The tiles do not drag here. There is a map directly above this row, and it
- * redraws its marker the moment a tile is pressed — so the picker already has
- * the feedback a drag would have carried, without the gesture.
+ * The plain pin is stored as `""`, which is not a usable React Aria key — an
+ * empty id reads as "nothing selected" — so it travels through the select as
+ * `PLAIN` and is turned back into `""` on the way out.
  */
+
+const PLAIN = "plain";
+
 export function PinField({
   value,
   pinIcons,
@@ -44,54 +42,75 @@ export function PinField({
   pinIcons: CustomPinIcon[];
   onChange: (icon: string) => void;
 }) {
+  const builtIn = [PLAIN, ...PIN_ICONS.map((icon) => icon.id)];
+  const own = pinIcons.map((pin) => `${CUSTOM_PIN_PREFIX}${pin.id}`);
+
+  const option = (key: string) => {
+    const icon = key === PLAIN ? "" : key;
+
+    return (
+      <ListBox.Item key={key} id={key} textValue={pinLabel(icon, pinIcons)}>
+        <PinOption icon={icon} pinIcons={pinIcons} />
+        <ListBox.ItemIndicator />
+      </ListBox.Item>
+    );
+  };
+
   return (
-    <div role="group" aria-label="Pin" className="flex min-w-0 flex-col gap-2">
-      <span className="text-sm font-medium">Pin</span>
+    <Select
+      fullWidth
+      value={value === "" ? PLAIN : value}
+      onChange={(key) => {
+        const next = String(key ?? PLAIN);
+        onChange(next === PLAIN ? "" : next);
+      }}
+    >
+      <Label>Pin</Label>
+      <Select.Trigger>
+        <Select.Value className="min-w-0 overflow-hidden">
+          {/* Drawn from the form's value rather than the item's children, so a
+              pin that has since been deleted from the studio still shows as
+              what the row holds instead of an empty trigger. */}
+          <PinOption icon={value} pinIcons={pinIcons} />
+        </Select.Value>
+        <Select.Indicator />
+      </Select.Trigger>
 
-      {/* The plain pin, then the map's own, then the built-ins — `count` is what
-          tells the track to re-measure when a customer adds or deletes one in the
-          studio, since it cannot derive that from `children`. */}
-      <CarouselTrack
-        label="Pin"
-        count={1 + pinIcons.length + PIN_ICONS.length}
-        columns={4}
-        as="div"
-      >
-        <PinTile
-          icon=""
-          label="Plain"
-          pinIcons={pinIcons}
-          size="lg"
-          isArmed={value === ""}
-          onPress={() => onChange("")}
-        />
+      <Select.Popover>
+        <ListBox>
+          {own.length > 0 ? (
+            <ListBox.Section>
+              <Header className={HEADER_CLASS}>Your pins</Header>
+              {own.map(option)}
+            </ListBox.Section>
+          ) : null}
 
-        {pinIcons.map((pin) => {
-          const icon = `${CUSTOM_PIN_PREFIX}${pin.id}`;
+          <ListBox.Section>
+            <Header className={HEADER_CLASS}>Built-in</Header>
+            {builtIn.map(option)}
+          </ListBox.Section>
+        </ListBox>
+      </Select.Popover>
+    </Select>
+  );
+}
 
-          return (
-            <PinTile
-              key={pin.id}
-              icon={icon}
-              pinIcons={pinIcons}
-              size="lg"
-              isArmed={value === icon}
-              onPress={() => onChange(icon)}
-            />
-          );
-        })}
+/** Same heading `InlineSelect` draws over its sections. */
+const HEADER_CLASS =
+  "px-2 pb-1 pt-2 text-xs font-semibold tracking-wide text-muted uppercase";
 
-        {PIN_ICONS.map((icon) => (
-          <PinTile
-            key={icon.id}
-            icon={icon.id}
-            pinIcons={pinIcons}
-            size="lg"
-            isArmed={value === icon.id}
-            onPress={() => onChange(icon.id)}
-          />
-        ))}
-      </CarouselTrack>
-    </div>
+/** The picture and the name, in the trigger and in every row. */
+function PinOption({
+  icon,
+  pinIcons,
+}: {
+  icon: string;
+  pinIcons: CustomPinIcon[];
+}) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <PinPreview icon={icon} pinIcons={pinIcons} size="sm" className="shrink-0" />
+      <span className="truncate">{pinLabel(icon, pinIcons)}</span>
+    </span>
   );
 }

@@ -8,7 +8,7 @@ import { SwatchPicker } from "./swatch-picker";
 /**
  * The palette, folded behind the colour it is currently set to.
  *
- * `SwatchPicker` lays its eight swatches out in a row, which is right beside a
+ * `SwatchPicker` lays its six swatches out in a row, which is right beside a
  * full-width name field and wrong inside a chip: a tag row is a name, a count
  * and a remove button, and 200px of palette on each of twenty-four of them is a
  * settings page nobody can scan. So the dot *is* the control — it shows the
@@ -51,9 +51,11 @@ export function SwatchButton({
             <SwatchPicker
               label={label}
               value={value}
-              onChange={(color) => {
+              onChange={(color, source) => {
                 onChange(color);
-                setIsOpen(false);
+                // A swatch press is an answer; a drag on the wheel is still
+                // being made, and closing would take the wheel with it.
+                if (source === "preset") setIsOpen(false);
               }}
             />
           </div>

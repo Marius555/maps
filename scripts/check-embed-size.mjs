@@ -2,12 +2,12 @@
  * Enforces the embed's size budget (CLAUDE.md §4).
  *
  * §4 sets the target at "under 250KB gzipped including MapLibre". Measured, that
- * is not reachable with MapLibre v6 — its own dist files are 273.2KB gzipped
- * before a byte of ours:
+ * is not reachable with MapLibre v6 — its own dist files are 297.4KB gzipped
+ * (6.11.2) before a byte of ours:
  *
- *     maplibre-gl.mjs          136.4KB   main thread
- *     maplibre-gl-shared.mjs   131.0KB   shared by the main thread and the worker
- *     maplibre-gl-worker.mjs     5.8KB   tile parsing
+ *     maplibre-gl.mjs          146.9KB   main thread
+ *     maplibre-gl-shared.mjs   144.6KB   shared by the main thread and the worker
+ *     maplibre-gl-worker.mjs     6.0KB   tile parsing
  *
  * MapLibre v6 ships ESM only, with no UMD, CSP or slim build to fall back to,
  * and it is minified already. The number is a floor, not slack.
@@ -141,8 +141,43 @@ const HARNESS_DIR = join(process.cwd(), "embed", "dev");
  * found its way in — is not 144 bytes of CSS selectors. **The rule is unchanged
  * for the next person: trim, or keep the addition on the dashboard side of the
  * seam.**
+ *
+ * Raised a fifth time, from 48KB to 48.1KB, and again **the owner's call with
+ * the numbers on the table**, not a conclusion reached here. What it bought:
+ * dotted routes that share a road draw one stream of split dots instead of
+ * two out-of-phase ones stacked — lib/map/dot-lanes.ts. The geometry stays on
+ * the dashboard side of the seam: publish bakes it into `snapshot.dotRuns`, and
+ * the embed only turns runs into features and registers the slice images.
+ * The raise was granted for a first version (alternating dots, ~175 bytes
+ * against 100 spare, 75 over after trimming from 288) that failed in the
+ * browser; its replacement costs ~163 bytes and still needs the raise, by 63.
+ * The rule is unchanged: trim, or keep the addition on the dashboard side.
+ *
+ * Raised a sixth time, from 48.1KB to 49.2KB (2026-09-25), and **the owner's
+ * call again**, made in advance and in as many words: "you can increase budget
+ * of size you dont need to trim that much". What it bought: routes that share a
+ * road now *take turns*, A·B·A·B, dot by dot and dash by dash, at the density
+ * one route draws alone. The split dots the fifth raise paid for are gone. They
+ * kept the density right but read as a jumble of half-dots, not as two routes.
+ *
+ * **Why this one could not stay on the dashboard side.** MapLibre's symbol
+ * layout cannot alternate dots. It clips a line to each tile before placing
+ * anchors, and a line entering across a tile edge always starts half a spacing
+ * in (`getAnchors`, `isLineContinued`), so any per-lane shift is reset at the
+ * first tile edge. The dots on a shared stretch therefore have to be placed by
+ * our own code for the zoom level on screen (packages/shared/dot-stream.ts),
+ * and placing them again when the view changes is a runtime job, in the
+ * visitor's browser. Dashes cost only a data-driven `line-dasharray`.
+ *
+ * Measured: 50,258 bytes with it, and 49,266 with the stream and the dash lanes
+ * cut out, so about 990 bytes. That is more than the 200–300 estimated, and
+ * the reason is worth knowing: **this bundle is not minified.** Vite's library
+ * mode leaves ES output unminified, so whitespace and full local names ship
+ * with every line. Turning minification on would very likely win back several
+ * KB, but it changes the whole bundle and is its own decision, not part of
+ * this one. 49.2KB leaves 123 bytes spare.
  */
-const OWN_BUDGET_BYTES = 48 * 1024;
+const OWN_BUDGET_BYTES = Math.round(49.2 * 1024);
 
 /**
  * MapLibre's own dist files, with room for a minor upgrade.
@@ -173,8 +208,17 @@ const OWN_BUDGET_BYTES = 48 * 1024;
  * still the budget to argue with, and §4's rule about not raising it to get past
  * it is still the rule. And if *this* ceiling is ever what binds, that is a §3
  * conversation about the map library, because it means MapLibre grew.
+ *
+ * **It bound once, and was raised 280 → 305KB on purpose (2026-09-24).** The
+ * upgrade from MapLibre 6.2.0 to 6.11.2 grew its own dist files from 273.2KB to
+ * 297.4KB, 24.2KB more for every visitor. It was measured against
+ * `node_modules/maplibre-gl/dist` directly, so it is MapLibre growing, not a
+ * duplicated chunk. Staying on 6.2 was offered; the owner chose the newer
+ * library. 305KB keeps the same shape of headroom as before (7.6KB, room for a
+ * point release), and the +131KB duplication regression still goes straight
+ * through it.
  */
-const VENDOR_CEILING_BYTES = 280 * 1024;
+const VENDOR_CEILING_BYTES = 305 * 1024;
 
 const isVendor = (name) => name.startsWith("maplibre-gl");
 

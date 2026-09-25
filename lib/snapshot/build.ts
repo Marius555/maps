@@ -1,4 +1,6 @@
 import { gazetteerCountries } from "@/lib/gazetteer/config";
+import { isDefaultView } from "@/lib/map/default-view";
+import { dotLanes, dotLinesOf } from "@/lib/map/dot-lanes";
 import { isValidLngLat, roundCoord } from "@/lib/map/geo";
 import { groupColorIndex } from "@/lib/map/group-colors";
 import { placeIndex, resolveGeometry } from "@/lib/map/line-endpoints";
@@ -52,6 +54,7 @@ import {
 import type {
   MapSnapshot,
   SnapshotBounds,
+  SnapshotDotRun,
   SnapshotField,
   SnapshotPinIcon,
   SnapshotPlace,
@@ -243,7 +246,13 @@ export function buildSnapshot(
       // Over the shapes as well as the pins. A map whose content is one delivery
       // radius has no places to frame, and used to open on `center` at whatever
       // zoom happened to be saved — often nowhere near the thing it is about.
-      bounds: boundsOf(usable, drawable),
+      //
+      // Only while nobody has chosen an opening view, though. The embed fits
+      // these whenever they are present, so writing them for a map whose owner
+      // pressed "Save this view as default" threw that view away on every site
+      // and in the Publish preview. Null leaves the embed on `center` — the
+      // editor's own opening rule, and `previewCamera`'s.
+      bounds: isDefaultView(map) ? boundsOf(usable, drawable) : null,
       /*
        * `categories` is not written any more, and its absence is the point.
        *
@@ -274,6 +283,8 @@ export function buildSnapshot(
       ...(drawable.length > 0
         ? { shapes: drawable.map((shape) => toSnapshotShape(shape, colors.forShape(shape))) }
         : {}),
+      // Only when two dotted or dashed routes share a road — see `dotRunsField`.
+      ...dotRunsField(drawable),
       // Same rule again, and this one carries it furthest: a map whose owner
       // never opened the appearance menu publishes the exact bytes it published
       // before any of this existed.
@@ -750,3 +761,41 @@ function boundsOf(places: Place[], shapes: Shape[]): SnapshotBounds | null {
   };
 }
 
+/**
+ * Dotted and dashed routes that share a road, as the runs the embed draws them
+ * with.
+ *
+ * Omitted when nothing overlaps, so a map with none publishes byte-identical
+ * JSON. When something does, only the routes involved are listed — they draw
+ * from their runs alone — and every other route keeps drawing from its own
+ * points. lib/map/dot-lanes.ts is the one place this is worked out, and the
+ * editor asks it the same question about the same shapes.
+ */
+function dotRunsField(shapes: Shape[]): { dotRuns?: SnapshotDotRun[] } {
+  const lines = dotLinesOf(shapes);
+  const runs = dotLanes(lines);
+  const merged = new Set(
+    runs.filter((run) => run.lanes > 1).map((run) => run.id),
+  );
+
+  if (merged.size === 0) return {};
+
+  const widths = new Map(lines.map((line) => [line.id, line.width]));
+
+  return {
+    dotRuns: runs
+      .filter((run) => merged.has(run.id))
+      .map((run) => ({
+        id: run.id,
+        // Rounded the way a shape's own points are. Deterministic, so every
+        // member of a stretch still writes identical coordinates.
+        points: run.points.map(([lng, lat]) => [roundCoord(lng), roundCoord(lat)]),
+        lane: run.lane,
+        lanes: run.lanes,
+        // Absent is dotted, which every run written before dashes shared was.
+        ...(run.stroke === "dashed" ? { stroke: "dashed" as const } : {}),
+        ...(run.inset ? { inset: run.inset } : {}),
+        ...(run.width !== widths.get(run.id) ? { width: run.width } : {}),
+      })),
+  };
+}

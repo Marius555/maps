@@ -9,7 +9,7 @@
  *
  * A fixed list rather than a free colour wheel wherever the answer is a *legend*:
  * eight colours anyone can tell apart beats eight shades of the same blue and a
- * map nobody can read. `components/ui/color-picker-field.tsx` is the other case —
+ * map nobody can read. `components/ui/color-swatch-row/` is the other case —
  * a brand colour, where a palette we chose is simply the wrong palette.
  */
 export const PALETTE_COLORS = [

@@ -30,7 +30,7 @@ import { PinFieldRow } from "./pin-field-row";
  * plain ball.
  *
  * Used four times: icon, shape, size and ring thickness. Colours go through
- * PinSwatchRow next door, which cannot use this — a swatch has to show the colour
+ * the app's swatch row, which is not this — a swatch has to show the colour
  * itself, and a pin whose ring turned white, previewed on a white dialog, shows
  * nothing.
  */

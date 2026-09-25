@@ -1,9 +1,9 @@
 "use client";
 
-import { Plus, X } from "lucide-react";
+import { Button, CloseButton, Description, Label } from "@heroui/react";
+import { Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { IconButton } from "@/components/ui/icon-button";
 import {
   ALLOWED_PHOTO_TYPES,
   MAX_LOGO_BYTES,
@@ -42,12 +42,24 @@ export type LogoDraft =
  *
  * `object-contain` on a plain ground, not `cover`: a logo cropped to a square is
  * a logo with its edges cut off, and most of them are not square.
+ *
+ * HeroUI's `Button` for both tiles and its `CloseButton` for the ×. They were
+ * native buttons, citing `pin-tile.tsx` — but that reason is the drag gesture
+ * `usePress` would swallow, and nothing here drags. 64px, the same as a photo
+ * thumbnail, so the two sit on one line in the place form's media fold.
  */
 export function LogoField({
   value,
+  hideHint,
   onChange,
 }: {
   value: LogoDraft;
+  /**
+   * Leaves the format-and-size line to the caller. The place form draws one line
+   * under the logo and the gallery together, rather than two paragraphs saying
+   * the same four formats.
+   */
+  hideHint?: boolean;
   onChange: (next: LogoDraft) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -98,64 +110,60 @@ export function LogoField({
     onChange({ kind: "new", file, url: URL.createObjectURL(file) });
   };
 
+  const pick = () => input.current?.click();
+
   return (
-    <div className="space-y-2">
-      <span className="block text-sm font-medium text-foreground">Logo</span>
+    <div className="flex flex-col gap-2">
+      <Label elementType="span">Logo</Label>
 
-      <div className="flex flex-wrap gap-2">
-        {value ? (
-          <div className="relative">
-            {/*
-              A native button wrapping the preview, so the tile *is* the replace
-              control — see the docblock. Not HeroUI's, for the reason
-              `pin-tile.tsx` gives, and `type="button"` because this sits inside
-              the place form and a bare button submits it.
-            */}
-            <button
-              type="button"
-              aria-label="Replace the logo"
-              title="Replace the logo"
-              onClick={() => input.current?.click()}
-              className="block cursor-pointer rounded-lg ring-1 ring-border transition-colors hover:ring-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
-            >
-              {/* A plain img, not next/image: half of these are object URLs,
-                  which the optimiser cannot fetch at all. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={value.url}
-                alt="Logo"
-                width={80}
-                height={80}
-                className="size-20 rounded-lg bg-surface-secondary object-contain p-1.5"
-              />
-            </button>
-
-            <IconButton
-              label="Remove the logo"
-              icon={X}
-              size="sm"
-              variant="secondary"
-              className="absolute -right-1.5 -top-1.5"
-              iconClassName="size-3"
-              onPress={() => {
-                release();
-                setRejected(null);
-                onChange(null);
-              }}
-            />
-          </div>
-        ) : (
-          <button
+      {value ? (
+        <div className="relative w-fit">
+          {/* The tile *is* the replace control — see the docblock.
+              `type="button"` because this sits inside the place form, and a
+              bare button submits it. */}
+          <Button
             type="button"
-            aria-label="Add a logo"
-            title="Add a logo"
-            onClick={() => input.current?.click()}
-            className="grid size-20 cursor-pointer place-items-center rounded-lg border border-dashed border-border text-muted transition-colors hover:border-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+            variant="outline"
+            isIconOnly
+            aria-label="Replace the logo"
+            onPress={pick}
+            className="size-16 overflow-hidden rounded-lg p-0"
           >
-            <Plus aria-hidden="true" className="size-6" />
-          </button>
-        )}
-      </div>
+            {/* A plain img, not next/image: half of these are object URLs,
+                which the optimiser cannot fetch at all. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={value.url}
+              alt="Logo"
+              width={64}
+              height={64}
+              className="size-full bg-surface-secondary object-contain p-1.5"
+            />
+          </Button>
+
+          <CloseButton
+            type="button"
+            aria-label="Remove the logo"
+            className="absolute -right-2 -top-2 size-5 shadow-sm"
+            onPress={() => {
+              release();
+              setRejected(null);
+              onChange(null);
+            }}
+          />
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          isIconOnly
+          aria-label="Add a logo"
+          onPress={pick}
+          className="size-16 rounded-lg border-dashed text-muted"
+        >
+          <Plus aria-hidden="true" className="size-5" />
+        </Button>
+      )}
 
       {/*
         Not wrapped in a label, deliberately: Tailwind's `sr-only` is
@@ -176,16 +184,19 @@ export function LogoField({
         }}
       />
 
-      <p className="text-xs text-muted">
-        JPG, PNG, WebP or AVIF, up to {kilobytes(MAX_LOGO_BYTES)}KB. Shown on the
-        card wherever its design puts a Logo block. It uploads when you save.
-      </p>
+      {hideHint ? null : (
+        <Description>
+          JPG, PNG, WebP or AVIF, up to {kilobytes(MAX_LOGO_BYTES)}KB. Shown on
+          the card wherever its design puts a Logo block. It uploads when you
+          save.
+        </Description>
+      )}
 
       {rejected ? <p className="text-xs text-danger">{rejected}</p> : null}
     </div>
   );
 }
 
-function kilobytes(bytes: number): number {
+export function kilobytes(bytes: number): number {
   return Math.round(bytes / 1024);
 }

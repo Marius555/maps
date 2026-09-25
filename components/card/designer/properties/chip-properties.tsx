@@ -1,6 +1,10 @@
 "use client";
 
-import { ColorPickerField } from "@/components/ui/color-picker-field";
+import { ColorSwatchRow } from "@/components/ui/color-swatch-row/color-swatch-row";
+import {
+  CHIP_PRESETS,
+  TOKEN_PRESETS,
+} from "@/components/ui/color-swatch-row/presets";
 import type { CardBlock } from "@/packages/shared/card-layout";
 import type { BlockPatch } from "./block-properties";
 import { PropertyNumberSelect } from "@/components/ui/properties/property-select";
@@ -33,20 +37,20 @@ export function ChipProperties({
 }) {
   return (
     <>
-      <ColorPickerField
+      <ColorSwatchRow
         label="Chip colour"
         value={block.chipBackground ?? ""}
-        // Label above, so both colours here sit on the same rhythm as the
-        // selects under them — see `labelPlacement`.
-        labelPlacement="outside"
+        leading={{ kind: "default", name: "Theme default" }}
+        presets={CHIP_PRESETS}
         // The soft neutral both renderers already draw, so the wheel opens on
         // roughly what is on screen rather than on a colour nobody has seen.
         fallback="#e9ecef"
-        onChange={(chipBackground) => onChange({ chipBackground })}
         // An empty string is the absence, and the absence is theme-aware where a
         // stored literal could not be: a pale pill picked against a light card
         // vanishes the moment a visitor's map is dark.
-        onClear={() => onChange({ chipBackground: "" })}
+        onChange={(chipBackground) =>
+          onChange({ chipBackground: chipBackground ?? "" })
+        }
       />
 
       {/*
@@ -57,17 +61,17 @@ export function ChipProperties({
        * different from the ground above and what makes it free to add: every
        * card published so far draws an unoutlined pill and keeps drawing one.
        */}
-      <ColorPickerField
+      <ColorSwatchRow
         label="Chip border"
         value={block.chipBorder ?? ""}
-        labelPlacement="outside"
+        leading={{ kind: "default", name: "No border" }}
+        presets={TOKEN_PRESETS.border}
         // A shade of the neutral ground, so the wheel opens on something that
         // looks like an outline rather than on an accent nobody would pick.
         fallback="#c8ced6"
-        onChange={(chipBorder) => onChange({ chipBorder })}
-        // Which takes the width with it — see `resizeCardBlock`. Half an
+        // Clearing takes the width with it — see `resizeCardBlock`. Half an
         // outline is not a thing a chip can draw.
-        onClear={() => onChange({ chipBorder: "" })}
+        onChange={(chipBorder) => onChange({ chipBorder: chipBorder ?? "" })}
       />
 
       {/* Only once there is a colour for it to be a width of, exactly as the

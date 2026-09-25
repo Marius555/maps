@@ -2,9 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { ColorPickerField } from "@/components/ui/color-picker-field";
+import {
+  ColorSwatchRow,
+  type LeadingSwatch,
+} from "@/components/ui/color-swatch-row/color-swatch-row";
 import { DEFAULT_EMBED_ACCENT } from "@/lib/validation/embed-settings.schema";
 import type { SnapshotColors } from "@/packages/shared/snapshot";
+import { BRIGHT_PRESETS, TOKEN_PRESETS } from "@/components/ui/color-swatch-row/presets";
 import type { EmbedDesign } from "./use-embed-design";
 
 /**
@@ -49,38 +53,29 @@ export function ColorsGroup({ settings, set }: EmbedDesign) {
   /* No heading of its own: the accordion item this sits in already names it,
      and two headings one line apart is one too many.
 
-     The labels stay *inside* these fields, which is `ColorPickerField`'s
-     default and the opposite of what the card designer asks for. This fold is
-     five colours and nothing else, so a name beside each swatch is a tidy list;
-     there the same control sits in a column of label-above fields and has to
-     match them. See `labelPlacement`. */
+     Each colour is one line of swatches — the theme's answer first, four
+     presets, then any colour behind the wheel. The first swatch is also how a
+     token goes back to unset: for the four panel tokens it *is* unset ("the
+     stylesheet decides", which follows the basemap into the dark), and for
+     the accent it clears the key, since absent already resolves to the
+     orange and storing it would add bytes to every snapshot for nothing. */
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {FIELDS.map(({ key, label, fallback }) => (
-        <ColorPickerField
+        <ColorSwatchRow
           key={key}
           label={label}
           value={colors[key] ?? ""}
+          leading={key === "accent" ? THEME_ACCENT_CLEARS : DEFAULT_SWATCH}
+          presets={key === "accent" ? BRIGHT_PRESETS : TOKEN_PRESETS[key]}
           fallback={fallback}
           onChange={(hex) => setColor(key, hex)}
-          /* Clearing is offered only where it would do something. The accent
-             resolves to `DEFAULT_EMBED_ACCENT` whether or not it is stored, so
-             on a map wearing the default the button would delete a key and
-             redraw the identical swatch — a control that visibly does nothing.
-             The other four have no default, so present *is* overridden. */
-          onClear={
-            colors[key] && colors[key] !== fallbackDefault(key)
-              ? () => setColor(key, undefined)
-              : undefined
-          }
         />
       ))}
 
       {/* Last, and under the five: it is the only colour here that is not a
           token of the panel — it is what the map itself draws a location in when
-          the location says nothing. No `onClear`, for the accent's reason one
-          fold up: it always resolves, so clearing would delete a key and redraw
-          the identical swatch. */}
+          the location says nothing. */}
       <PinColorField
         value={settings.pinColor}
         onChange={(hex) => set("pinColor", hex)}
@@ -89,6 +84,24 @@ export function ColorsGroup({ settings, set }: EmbedDesign) {
   );
 }
 
+const DEFAULT_SWATCH: LeadingSwatch = { kind: "default" };
+
+/** The accent's first swatch: the theme orange, pressed as "unset". */
+const THEME_ACCENT_CLEARS: LeadingSwatch = {
+  kind: "color",
+  color: DEFAULT_EMBED_ACCENT,
+  name: "Theme orange",
+  emit: undefined,
+};
+
+/** The pin's first swatch: the same orange, stored — `pinColor` is required. */
+const THEME_PIN: LeadingSwatch = {
+  kind: "color",
+  color: DEFAULT_EMBED_ACCENT,
+  name: "Theme orange",
+  emit: DEFAULT_EMBED_ACCENT,
+};
+
 /**
  * Default pin, on a trailing timer.
  *
@@ -96,7 +109,7 @@ export function ColorsGroup({ settings, set }: EmbedDesign) {
  * the preview writes the new value straight onto the running map and a
  * pointer-move-per-frame costs nothing. `pinColor` is not and cannot be — pins
  * are rasterised images, so the preview has to rebuild its document to recolour
- * them — and `ColorPickerField` fires `onChange` per pointer move.
+ * them — and the custom swatch's wheel fires `onChange` per pointer move.
  *
  * React Aria's `onChangeEnd` would be the exact tool and this build of
  * `react-aria-components` does not expose it on `ColorArea` or `ColorSlider`, so
@@ -119,7 +132,7 @@ function PinColorField({
   /*
    * An outside edit wins — Reset is the one that matters, and it lands here as
    * a `value` that is not what this field last emitted. Adjusting state during
-   * render rather than in an effect, which is `ColorPickerField`'s own answer to
+   * render rather than in an effect, which is `useHsbDraft`'s own answer to
    * the same question a few lines away.
    */
   if (value !== seen) {
@@ -131,11 +144,14 @@ function PinColorField({
   useEffect(() => () => clearTimeout(timer.current), []);
 
   return (
-    <ColorPickerField
+    <ColorSwatchRow
       label="Default pin"
       value={draft}
+      leading={THEME_PIN}
+      presets={BRIGHT_PRESETS}
       fallback={DEFAULT_EMBED_ACCENT}
-      onChange={(hex) => {
+      onChange={(next) => {
+        const hex = next ?? DEFAULT_EMBED_ACCENT;
         setDraft(hex);
         setSeen(hex);
         clearTimeout(timer.current);
@@ -153,16 +169,6 @@ function PinColorField({
  * under it so the preview is never behind the save.
  */
 const COMMIT_DELAY_MS = 250;
-
-/**
- * What this token resolves to when nothing is stored for it.
- *
- * `undefined` for four of the five: absent means the stylesheet decides, which
- * is what keeps an undesigned embed following its basemap into the dark.
- */
-function fallbackDefault(key: keyof SnapshotColors): string | undefined {
-  return key === "accent" ? DEFAULT_EMBED_ACCENT : undefined;
-}
 
 /**
  * The five, in the order they matter to somebody looking at the panel: the

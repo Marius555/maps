@@ -16,7 +16,7 @@ export function DocsCard({ article }: { article: DocsArticle }) {
   return (
     <Link
       href={docsHref(slug)}
-      className="flex gap-4 rounded-2xl border border-border bg-surface p-5 transition-colors duration-[var(--duration-fast)] hover:border-border-secondary hover:bg-default/40"
+      className="flex w-full gap-4 rounded-2xl border border-border bg-surface p-5 transition-colors duration-[var(--duration-fast)] hover:border-border-secondary hover:bg-default/40"
     >
       <span
         aria-hidden="true"

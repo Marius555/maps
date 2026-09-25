@@ -675,6 +675,21 @@ describe("buildSnapshot", () => {
     });
   });
 
+  it("has no bounds when the owner saved an opening view, so the embed opens there", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ defaultLat: 51.5, defaultLng: -0.12, defaultZoom: 12 }),
+      [
+        makePlace({ id: "a", lat: 54.0, lng: 25.0 }),
+        makePlace({ id: "b", lat: 55.5, lng: 26.5 }),
+      ],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.bounds).toBeNull();
+    expect(snapshot.center).toEqual({ lat: 51.5, lng: -0.12, zoom: 12 });
+  });
+
   it("has no bounds when the map has no usable places", () => {
     const { snapshot } = buildSnapshot(makeMap(), [], [], GENERATED_AT);
 
@@ -859,6 +874,99 @@ describe("buildSnapshot", () => {
       expect(snapshot.shapes?.[0]).toMatchObject({
         strokeWidth: 8,
         strokeStyle: "dotted",
+      });
+    });
+
+    describe("dotted routes sharing a road", () => {
+      // ~700m of one street, east-west, in Vilnius.
+      const street: [number, number][] = [
+        [25.27, 54.687],
+        [25.275, 54.687],
+        [25.28, 54.687],
+      ];
+      const dotted = (id: string, sortOrder: number, points = street) =>
+        makeShape({
+          id,
+          sortOrder,
+          strokeStyle: "dotted",
+          geometry: { kind: "line", points },
+        });
+
+      it("writes no dotRuns when nothing overlaps", () => {
+        const { snapshot } = buildSnapshot(
+          makeMap(),
+          [],
+          [
+            dotted("a", 0),
+            dotted("b", 1, street.map(([lng, lat]) => [lng, lat + 0.01])),
+          ],
+          GENERATED_AT,
+        );
+
+        expect(snapshot).not.toHaveProperty("dotRuns");
+      });
+
+      it("writes one shared stretch, identical for both, in two lanes", () => {
+        const { snapshot } = buildSnapshot(
+          makeMap(),
+          [],
+          [dotted("b", 1), dotted("a", 0)],
+          GENERATED_AT,
+        );
+
+        expect(snapshot.dotRuns).toHaveLength(2);
+        const [first, second] = snapshot.dotRuns!;
+        // Led by the lower sortOrder, whatever order the array arrived in.
+        expect([first.id, first.lane, first.lanes]).toEqual(["a", 0, 2]);
+        expect([second.id, second.lane, second.lanes]).toEqual(["b", 1, 2]);
+        expect(second.points).toEqual(first.points);
+        expect(first).not.toHaveProperty("width");
+        // Dotted is what absent means.
+        expect(first).not.toHaveProperty("stroke");
+        expect(first).not.toHaveProperty("inset");
+      });
+
+      it("writes dashed stretches marked as dashed", () => {
+        const dashed = (id: string, sortOrder: number) =>
+          makeShape({
+            id,
+            sortOrder,
+            strokeStyle: "dashed",
+            geometry: { kind: "line", points: street },
+          });
+
+        const { snapshot } = buildSnapshot(
+          makeMap(),
+          [],
+          [dashed("a", 0), dashed("b", 1)],
+          GENERATED_AT,
+        );
+
+        expect(
+          snapshot.dotRuns?.map((run) => [run.id, run.lane, run.lanes, run.stroke]),
+        ).toEqual([
+          ["a", 0, 2, "dashed"],
+          ["b", 1, 2, "dashed"],
+        ]);
+      });
+
+      it("does not merge a dotted route with a dashed one", () => {
+        const { snapshot } = buildSnapshot(
+          makeMap(),
+          [],
+          [
+            dotted("a", 0),
+            makeShape({
+              id: "b",
+              sortOrder: 1,
+              strokeStyle: "dashed",
+              geometry: { kind: "line", points: street },
+            }),
+          ],
+          GENERATED_AT,
+        );
+
+        expect(snapshot).not.toHaveProperty("dotRuns");
       });
     });
 

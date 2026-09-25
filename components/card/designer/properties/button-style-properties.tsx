@@ -1,6 +1,9 @@
 "use client";
 
-import { ColorPickerField } from "@/components/ui/color-picker-field";
+import { ColorSwatchRow } from "@/components/ui/color-swatch-row/color-swatch-row";
+import {
+  BRIGHT_PRESETS,
+} from "@/components/ui/color-swatch-row/presets";
 import type {
   CardBlock,
   CardButtonHover,
@@ -39,8 +42,8 @@ import {
 /**
  * What the two colour wheels below **open on**, and nothing more.
  *
- * `ColorPickerField` uses this to seed the wheel's position when the field is
- * empty; it never reaches the layout (see components/ui/color-picker-field.tsx),
+ * `ColorSwatchRow` uses this to seed the wheel's position when the field is
+ * empty; it never reaches the layout (see components/ui/color-swatch-row/),
  * which is what makes a literal safe here and nowhere else — the card must not
  * store a colour it will be drawn in a theme it has not seen (CLAUDE.md §7).
  *
@@ -105,24 +108,24 @@ export function ButtonStyleProperties({
        * likely to have picked, named something the control visibly does not do.
        * "Border colour" below keeps its name and stays unambiguous.
        */}
-      <ColorPickerField
+      <ColorSwatchRow
         label="Colour"
         value={block.buttonBackground ?? ""}
-        // Label above, so both colours sit on the rhythm of the selects under
-        // them — see `labelPlacement`.
-        labelPlacement="outside"
+        leading={{ kind: "default", name: "Pin colour" }}
+        presets={BRIGHT_PRESETS}
         // What the button is drawing right now, so the wheel opens on what is on
         // screen rather than on a colour nobody has seen: the pin's, which an
         // uncoloured button takes, and the accent only when nothing decided one.
         fallback={pinColor ?? BUTTON_PICKER_START}
-        onChange={(buttonBackground) => onChange({ buttonBackground })}
         // An empty string is the absence, and the absence is now **the pin's own
         // colour** — see `buttonStyleOf`. So clearing is not "no colour", it is
         // the one setting that makes a blue group's cards blue and a red
         // group's red, and it stays theme-aware where a stored literal could
         // not: a button coloured against a light card vanishes the moment a
         // visitor's map is dark.
-        onClear={() => onChange({ buttonBackground: "" })}
+        onChange={(buttonBackground) =>
+          onChange({ buttonBackground: buttonBackground ?? "" })
+        }
       />
 
       {/* Said where the control is, because "clear" reads as "none" everywhere
@@ -141,13 +144,15 @@ export function ButtonStyleProperties({
        * is nothing under a button's edge to fall back to, which is what makes
        * this different from the ground above.
        */}
-      <ColorPickerField
+      <ColorSwatchRow
         label="Border colour"
         value={block.buttonBorder ?? ""}
-        labelPlacement="outside"
+        leading={{ kind: "default", name: "No border" }}
+        presets={BRIGHT_PRESETS}
         fallback={BUTTON_PICKER_START}
-        onChange={(buttonBorder) => onChange({ buttonBorder })}
-        onClear={() => onChange({ buttonBorder: "" })}
+        onChange={(buttonBorder) =>
+          onChange({ buttonBorder: buttonBorder ?? "" })
+        }
       />
 
       {/*

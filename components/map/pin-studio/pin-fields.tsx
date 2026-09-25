@@ -1,10 +1,13 @@
 "use client";
 
-import { PALETTE_COLORS, PALETTE_COLOR_NAMES } from "@/lib/validation/palette";
+import { ColorSwatchRow } from "@/components/ui/color-swatch-row/color-swatch-row";
+import {
+  PALETTE_PRESETS,
+  PIN_TRIM_PRESETS,
+} from "@/components/ui/color-swatch-row/presets";
+import { DEFAULT_PALETTE_COLOR } from "@/lib/validation/palette";
 import { PIN_ICONS, type CustomPinIcon } from "@/packages/shared/pin-icons";
 import { PinDesignRow } from "./pin-design-row";
-import { PIN_TRIM_COLORS, PIN_TRIM_COLOR_NAMES } from "./pin-palette";
-import { PinSwatchRow } from "./pin-swatch-row";
 
 /**
  * Every decision that goes into a pin, one row each.
@@ -23,13 +26,16 @@ import { PinSwatchRow } from "./pin-swatch-row";
  * Every row draws the *draft*, with that row's own field swapped per option, so
  * a change anywhere shows up everywhere rather than only in the hero. The colour
  * rows are the exception and have to be, since a colour cannot preview itself as
- * a white pin on a white dialog (PinSwatchRow says why).
+ * a white pin on a white dialog, so they are the app's swatch row instead.
  *
  * `image` and `glyph` are exclusive — `pinIconSchema` refuses anything else — so
  * the icon and icon-colour rows disappear outright while a logo is in the pin
  * rather than dimming. There is no glyph to shape or colour, and a disabled
  * control that can never be enabled from where you are standing is furniture.
  */
+/** The trim rows' first swatch: no colour of its own. */
+const AUTOMATIC = { kind: "default", name: "Automatic" } as const;
+
 export function PinFields({
   draft,
   onChange,
@@ -55,12 +61,14 @@ export function PinFields({
         />
       ) : null}
 
-      <PinSwatchRow
+      <ColorSwatchRow
         label="Fill"
         value={draft.color}
-        colors={PALETTE_COLORS}
-        names={PALETTE_COLOR_NAMES}
-        onChange={(color) => onChange({ ...draft, color })}
+        presets={PALETTE_PRESETS}
+        fallback={DEFAULT_PALETTE_COLOR}
+        onChange={(color) => {
+          if (color) onChange({ ...draft, color });
+        }}
       />
 
       <PinDesignRow
@@ -93,24 +101,28 @@ export function PinFields({
       {/* Only once there is a ring to colour. At "none" this row would be a
           palette with no visible effect, which reads as a broken control. */}
       {draft.ringWidth !== "none" ? (
-        <PinSwatchRow
+        <ColorSwatchRow
           label="Ring colour"
           value={draft.ring ?? ""}
-          colors={PIN_TRIM_COLORS}
-          names={PIN_TRIM_COLOR_NAMES}
-          autoLabel="Automatic"
-          onChange={(ring) => onChange({ ...draft, ring })}
+          leading={AUTOMATIC}
+          presets={PIN_TRIM_PRESETS}
+          fallback="#ffffff"
+          // "" is automatic: white on a light map, the accent's foreground on
+          // a dark one — which no stored colour could be.
+          onChange={(ring) => onChange({ ...draft, ring: ring ?? "" })}
         />
       ) : null}
 
       {hasGlyph ? (
-        <PinSwatchRow
+        <ColorSwatchRow
           label="Icon colour"
           value={draft.iconColor ?? ""}
-          colors={PIN_TRIM_COLORS}
-          names={PIN_TRIM_COLOR_NAMES}
-          autoLabel="Automatic"
-          onChange={(iconColor) => onChange({ ...draft, iconColor })}
+          leading={AUTOMATIC}
+          presets={PIN_TRIM_PRESETS}
+          fallback="#ffffff"
+          onChange={(iconColor) =>
+            onChange({ ...draft, iconColor: iconColor ?? "" })
+          }
         />
       ) : null}
     </div>

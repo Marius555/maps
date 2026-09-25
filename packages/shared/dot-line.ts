@@ -216,3 +216,120 @@ export function dotWidthFilter(width: number): DotWidthFilter {
     width,
   ];
 }
+
+/**
+ * How many routes one shared stretch takes turns on, at most.
+ *
+ * **Two dotted routes along the same road used to draw twice the dots, out of
+ * phase**, because each placed its own dots from its own start. Now every route
+ * on the stretch is handed the *same* coordinate array (lib/map/dot-lanes.ts)
+ * and a lane, and the stretch is drawn as one stream at the ordinary density
+ * with the routes taking turns: A·B·A·B for two, A·B·C·A·B·C for three. Dots do
+ * it through `dotStream` (packages/shared/dot-stream.ts), dashes through
+ * `DASH_ARRAY_EXPRESSION` below.
+ *
+ * **A dotted stretch is not drawn by the symbol layers, and two designs that
+ * were drawn by them failed.** Both came down to where MapLibre puts a line's
+ * symbols:
+ *
+ * - Sliding lane k along the line with `icon-offset` drifted into pairs
+ *   (AB···AB) away from whole zooms. `icon-offset` is screen pixels, but the
+ *   anchors are tile units laid out at the tile's integer zoom and then scaled
+ *   up to 2× before the next one (see `DOT_SPACING_RATIO`).
+ * - Shifting lane k's first anchor with `text-size` (the `inset` trick below)
+ *   holds within one tile and fails at the next. The symbol layout clips a line
+ *   to each tile *before* placing anchors, and a line that enters across a tile
+ *   edge always puts its first anchor half a spacing in, whatever the layout
+ *   says (`getAnchors`, `isLineContinued`). So from the second tile on, every
+ *   lane lands on the same anchors.
+ *
+ * Splitting each dot into bands, one per route, was the stopgap. It kept the
+ * density right but read as a jumble of half-dots, not as two routes.
+ *
+ * Three, because a stretch of four alternating colours stops reading as routes
+ * at all. A fourth route shares lane 0 and is drawn under it.
+ */
+export const DOT_MAX_LANES = 3;
+
+/**
+ * What a route's own feature is marked with once its runs draw it.
+ *
+ * No outline or dotted layer matches it, so the route stops drawing itself and
+ * its runs draw it instead. Not "solid": a dotted route drawn solid underneath
+ * its own dots would be a solid line. The same holds for a dashed one.
+ */
+export const DOT_SOURCE_STROKE = "dotted-src";
+
+/**
+ * A dashed outline's pattern, in multiples of the line width: a dash of 2 and
+ * a gap of 2. Both renderers draw this, and it is the whole period the lane
+ * patterns below are built from.
+ */
+export const DASH_ARRAY: [number, number] = [2, 2];
+
+/**
+ * Lane `lane` of `lanes` on a dashed stretch several routes share.
+ *
+ * The same dash, at `lanes` times the period, moved `lane` whole periods along.
+ * Every lane on the stretch draws on one coordinate array, so a dash pattern,
+ * which is measured along the feature's own geometry, holds every lane in step
+ * at every zoom and across every tile edge. That is the part the dotted
+ * symbols cannot do. The lead-in is a zero-length dash, which a butt cap draws
+ * as nothing, because a pattern has to open with a dash.
+ */
+export function dashLanePattern(lane: number, lanes: number): number[] {
+  const [dash, gap] = DASH_ARRAY;
+  const period = (dash + gap) * lanes;
+
+  return lane === 0
+    ? [dash, period - dash]
+    : [0, (dash + gap) * lane, dash, period - (dash + gap) * lane - dash];
+}
+
+/**
+ * The `line-dasharray` of the dashed layer.
+ *
+ * `concat` stringifies its inputs and an absent property is the empty string,
+ * so every dashed shape that shares no road, which has no `lane`, falls
+ * through to `DASH_ARRAY` exactly as it always drew. A run is matched on
+ * lane-then-lanes: `"12"` is lane 1 of 2.
+ */
+export const DASH_ARRAY_EXPRESSION: unknown[] = (() => {
+  const match: unknown[] = ["match", ["concat", ["get", "lane"], ["get", "lanes"]]];
+
+  for (let lanes = 2; lanes <= DOT_MAX_LANES; lanes += 1) {
+    for (let lane = 0; lane < lanes; lane += 1) {
+      match.push(`${lane}${lanes}`, ["literal", dashLanePattern(lane, lanes)]);
+    }
+  }
+
+  match.push(["literal", DASH_ARRAY]);
+  return match;
+})();
+
+/**
+ * The `text-size` of a run that starts at a cut (lib/map/dot-lanes.ts), where
+ * routes meet or part — carried on the run as `inset`, and read by
+ * `DOT_TEXT_SIZE_EXPRESSION`.
+ *
+ * **Why it moves the first dot, and why that is text-size.** MapLibre puts a
+ * line's first anchor `(imageWidth / 2 + 48) × text-size / 24` pixels in —
+ * 2.7px at `DOT_TEXT_SIZE` — which beside the last dot of the run before is two
+ * dots touching, at every fork. At `0.28 × spacing` that start is three
+ * quarters of a pitch, so the gap across a cut is about a pitch, never nothing.
+ * Not a whole pitch: the start is taken modulo the spacing, and a whole one
+ * would put the dot back on the cut. It stays under the floor `DOT_TEXT_SIZE`
+ * exists for (the label is then under half a pitch; the floor needs three
+ * quarters). A line continuing from the next tile starts half a spacing in
+ * whatever this says, which is clear of the cut too.
+ */
+export function dotInsetSize(width: number): number {
+  return Math.round(0.28 * dotSpacingFor(width) * 100) / 100;
+}
+
+/** The `text-size` every dotted layer declares: a run's `inset`, else the default. */
+export const DOT_TEXT_SIZE_EXPRESSION = [
+  "coalesce",
+  ["get", "inset"],
+  DOT_TEXT_SIZE,
+];

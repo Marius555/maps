@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { DocsCard } from "@/components/docs/docs-card";
-import { DOCS_ARTICLES } from "@/lib/docs/articles";
+import { DOCS_GROUPS, articlesInGroup } from "@/lib/docs/articles";
 
 export const metadata: Metadata = {
   title: "Documentation",
@@ -19,7 +19,10 @@ export const metadata: Metadata = {
  * one — the group is what keeps that true if a later one does.
  *
  * Only guides that exist are listed. Placeholder cards for guides that don't
- * are a list of dead ends, and the sentence below says the same thing honestly.
+ * are a list of dead ends.
+ *
+ * Cards sit in a grid rather than one column, so the hub fills the width beside
+ * the rail the way the guides do instead of leaving its right half empty.
  */
 export default function DocsIndexPage() {
   return (
@@ -28,23 +31,32 @@ export default function DocsIndexPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl">
           Documentation
         </h1>
-        <p className="max-w-2xl text-pretty text-muted">
-          How to get your locations onto a map and onto your own site.
+        <p className="text-pretty text-muted">
+          How to get your locations onto a map and onto your own site. New here?
+          Start with Getting started, then read the rest in any order.
         </p>
       </header>
 
-      <ul className="max-w-2xl space-y-3">
-        {DOCS_ARTICLES.map((article) => (
-          <li key={article.slug}>
-            <DocsCard article={article} />
-          </li>
-        ))}
-      </ul>
+      <div className="space-y-10">
+        {DOCS_GROUPS.map((group) => (
+          <section key={group} aria-labelledby={`docs-group-${group}`}>
+            <h2
+              id={`docs-group-${group}`}
+              className="pb-3 text-[0.6875rem] font-medium tracking-wide text-muted uppercase"
+            >
+              {group}
+            </h2>
 
-      <p className="max-w-2xl pt-8 text-sm/6 text-muted">
-        More pages are on the way — styling pins and tags, publishing, and
-        embedding your map.
-      </p>
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {articlesInGroup(group).map((article) => (
+                <li key={article.slug} className="flex">
+                  <DocsCard article={article} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

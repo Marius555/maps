@@ -1,12 +1,14 @@
 "use client";
 
+import { Description } from "@heroui/react";
 import { useWatch, type Control } from "react-hook-form";
 
 import { FormTextArea } from "@/components/ui/form-field";
 import type { PhotoSlot } from "@/lib/photos/save-plan";
+import { MAX_LOGO_BYTES, MAX_PHOTO_BYTES } from "@/lib/validation/photo";
 import type { PlaceFormValues } from "@/lib/validation/place.schema";
-import { LogoField, type LogoDraft } from "../logo-field";
-import { PhotoGalleryField } from "../photo-gallery-field";
+import { kilobytes, LogoField, type LogoDraft } from "../logo-field";
+import { megabytes, PhotoGalleryField } from "../photo-gallery-field";
 import { FormSection } from "./form-section";
 
 /**
@@ -26,6 +28,13 @@ import { FormSection } from "./form-section";
  * this one edits the location's own row. Two controls that look alike and write
  * different tables is the confusion the merge of categories into tags was meant
  * to end, not to repeat. This section is where a location's own pictures are.
+ *
+ * **Description first, then the pictures side by side.** These were three
+ * blocks stacked in the order the fields were added, each with its own paragraph
+ * of small print naming the same four formats. The one field anybody types in
+ * leads; the logo and the gallery share a row once the fold is wide enough,
+ * since both are rows of 64px tiles; and one line under them says what either
+ * accepts.
  */
 export function MediaSection({
   logo,
@@ -46,19 +55,33 @@ export function MediaSection({
 
   return (
     <FormSection
-      title="Logo, photos and description"
+      title="Description, logo and photos"
       summary={summarise(Boolean(logo), photos.length, description)}
       hasError={hasError}
     >
-      <LogoField value={logo} onChange={onLogoChange} />
-
-      <PhotoGalleryField value={photos} onChange={onPhotosChange} />
-
       <FormTextArea
         control={control}
         name="description"
         label="Description"
+        placeholder="What should visitors know about this location?"
       />
+
+      <div className="flex flex-col gap-2">
+        <div className="grid gap-4 @lg:grid-cols-[auto_minmax(0,1fr)] @lg:gap-6">
+          <LogoField value={logo} hideHint onChange={onLogoChange} />
+          <PhotoGalleryField
+            value={photos}
+            hideHint
+            onChange={onPhotosChange}
+          />
+        </div>
+
+        <Description>
+          JPG, PNG, WebP or AVIF. Logo up to {kilobytes(MAX_LOGO_BYTES)}KB,
+          photos up to {megabytes(MAX_PHOTO_BYTES)}MB each; the first photo is
+          the cover. They upload when you save.
+        </Description>
+      </div>
     </FormSection>
   );
 }

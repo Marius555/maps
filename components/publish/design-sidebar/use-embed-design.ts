@@ -12,7 +12,7 @@ import {
 /**
  * How long a change waits before it is written.
  *
- * `ColorPickerField` fires its `onChange` on every pointer move, so a one-second
+ * `ColorSwatchRow` fires its `onChange` on every pointer move, so a one-second
  * drag across the colour area is thirty to sixty changes. Written straight
  * through, those are thirty concurrent PATCHes of one JSON blob: replies do not
  * land in the order they were sent, the last one to arrive is the one that

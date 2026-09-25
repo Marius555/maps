@@ -17,7 +17,7 @@
       "cycling": true
     }
   },
-  "attribution": "\u00a9 <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noreferrer\">OpenStreetMap</a> contributors \u00b7 tiles by <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noreferrer\">OpenFreeMap</a>",
+  "attribution": "© <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noreferrer\">OpenStreetMap</a> contributors · tiles by <a href=\"https://openfreemap.org\" target=\"_blank\" rel=\"noreferrer\">OpenFreeMap</a>",
   "center": {
     "lat": 54.687,
     "lng": 25.28,
@@ -101,12 +101,12 @@
     },
     {
       "id": "p3",
-      "name": "U\u017eupis kiosk",
+      "name": "Užupis kiosk",
       "lat": 54.6809,
       "lng": 25.2963,
-      "address": "U\u017eupio g. 3, Vilnius",
+      "address": "Užupio g. 3, Vilnius",
       "icon": "custom:logo",
-      "description": "Custom image pin \u2014 decoded from the snapshot, no request of its own.",
+      "description": "Custom image pin — decoded from the snapshot, no request of its own.",
       "tags": [
         "shops",
         "bikes"
@@ -126,9 +126,9 @@
       "name": "Naujamiestis depot",
       "lat": 54.6701,
       "lng": 25.2545,
-      "address": "Savanori\u0173 pr. 1, Vilnius",
+      "address": "Savanorių pr. 1, Vilnius",
       "icon": "custom:trade",
-      "description": "Trade counter only. Custom glyph pin \u2014 keeps its own green, not the depots blue.",
+      "description": "Trade counter only. Custom glyph pin — keeps its own green, not the depots blue.",
       "tags": [
         "depots",
         "skis",
@@ -138,7 +138,7 @@
     },
     {
       "id": "p5",
-      "name": "\u0160nipi\u0161k\u0117s depot",
+      "name": "Šnipiškės depot",
       "lat": 54.7011,
       "lng": 25.2731,
       "address": "Konstitucijos pr. 20, Vilnius",
@@ -239,6 +239,146 @@
           54.6812
         ]
       ]
+    },
+    {
+      "id": "r1",
+      "kind": "line",
+      "name": "Dotted run A",
+      "color": "#e03131",
+      "opacity": 0.2,
+      "points": [
+        [
+          25.276,
+          54.689
+        ],
+        [
+          25.2797,
+          54.6872
+        ],
+        [
+          25.283,
+          54.6868
+        ],
+        [
+          25.2862,
+          54.6864
+        ],
+        [
+          25.2895,
+          54.686
+        ],
+        [
+          25.292,
+          54.688
+        ]
+      ],
+      "strokeStyle": "dotted",
+      "strokeWidth": 5
+    },
+    {
+      "id": "r2",
+      "kind": "line",
+      "name": "Dotted run B",
+      "color": "#1971c2",
+      "opacity": 0.2,
+      "points": [
+        [
+          25.278,
+          54.684
+        ],
+        [
+          25.2797,
+          54.6872
+        ],
+        [
+          25.283,
+          54.6868
+        ],
+        [
+          25.2862,
+          54.6864
+        ],
+        [
+          25.2895,
+          54.686
+        ],
+        [
+          25.2925,
+          54.684
+        ]
+      ],
+      "strokeStyle": "dotted",
+      "strokeWidth": 5
+    },
+    {
+      "id": "r3",
+      "kind": "line",
+      "name": "Dashed run A",
+      "color": "#e03131",
+      "opacity": 0.2,
+      "points": [
+        [
+          25.276,
+          54.683
+        ],
+        [
+          25.2797,
+          54.6812
+        ],
+        [
+          25.283,
+          54.6808
+        ],
+        [
+          25.2862,
+          54.6804
+        ],
+        [
+          25.2895,
+          54.68
+        ],
+        [
+          25.292,
+          54.682
+        ]
+      ],
+      "strokeStyle": "dashed",
+      "strokeWidth": 5
+    },
+    {
+      "id": "r4",
+      "kind": "line",
+      "name": "Dashed run B",
+      "color": "#1971c2",
+      "opacity": 0.2,
+      "points": [
+        [
+          25.278,
+          54.678
+        ],
+        [
+          25.2797,
+          54.6812
+        ],
+        [
+          25.283,
+          54.6808
+        ],
+        [
+          25.2862,
+          54.6804
+        ],
+        [
+          25.2895,
+          54.68
+        ],
+        [
+          25.2925,
+          54.678
+        ]
+      ],
+      "strokeStyle": "dashed",
+      "strokeWidth": 5
     }
   ],
   "settings": {
@@ -407,5 +547,227 @@
   },
   "analytics": {
     "url": "http://localhost:3000/api/collect"
-  }
+  },
+  "dotRuns": [
+    {
+      "id": "r1",
+      "points": [
+        [
+          25.276,
+          54.689
+        ],
+        [
+          25.2797,
+          54.6872
+        ]
+      ],
+      "lane": 0,
+      "lanes": 1
+    },
+    {
+      "id": "r1",
+      "points": [
+        [
+          25.2797,
+          54.6872
+        ],
+        [
+          25.283,
+          54.6868
+        ],
+        [
+          25.2862,
+          54.6864
+        ],
+        [
+          25.2895,
+          54.686
+        ]
+      ],
+      "lane": 0,
+      "lanes": 2
+    },
+    {
+      "id": "r2",
+      "points": [
+        [
+          25.2797,
+          54.6872
+        ],
+        [
+          25.283,
+          54.6868
+        ],
+        [
+          25.2862,
+          54.6864
+        ],
+        [
+          25.2895,
+          54.686
+        ]
+      ],
+      "lane": 1,
+      "lanes": 2
+    },
+    {
+      "id": "r1",
+      "points": [
+        [
+          25.2895,
+          54.686
+        ],
+        [
+          25.292,
+          54.688
+        ]
+      ],
+      "lane": 0,
+      "lanes": 1,
+      "inset": 2.1
+    },
+    {
+      "id": "r2",
+      "points": [
+        [
+          25.278,
+          54.684
+        ],
+        [
+          25.2797,
+          54.6872
+        ]
+      ],
+      "lane": 0,
+      "lanes": 1
+    },
+    {
+      "id": "r2",
+      "points": [
+        [
+          25.2895,
+          54.686
+        ],
+        [
+          25.2925,
+          54.684
+        ]
+      ],
+      "lane": 0,
+      "lanes": 1,
+      "inset": 2.1
+    },
+    {
+      "id": "r3",
+      "points": [
+        [
+          25.276,
+          54.683
+        ],
+        [
+          25.2797,
+          54.6812
+        ]
+      ],
+      "lane": 0,
+      "lanes": 1,
+      "stroke": "dashed"
+    },
+    {
+      "id": "r3",
+      "points": [
+        [
+          25.2797,
+          54.6812
+        ],
+        [
+          25.283,
+          54.6808
+        ],
+        [
+          25.2862,
+          54.6804
+        ],
+        [
+          25.2895,
+          54.68
+        ]
+      ],
+      "lane": 0,
+      "lanes": 2,
+      "stroke": "dashed"
+    },
+    {
+      "id": "r4",
+      "points": [
+        [
+          25.2797,
+          54.6812
+        ],
+        [
+          25.283,
+          54.6808
+        ],
+        [
+          25.2862,
+          54.6804
+        ],
+        [
+          25.2895,
+          54.68
+        ]
+      ],
+      "lane": 1,
+      "lanes": 2,
+      "stroke": "dashed"
+    },
+    {
+      "id": "r3",
+      "points": [
+        [
+          25.2895,
+          54.68
+        ],
+        [
+          25.292,
+          54.682
+        ]
+      ],
+      "lane": 0,
+      "lanes": 1,
+      "stroke": "dashed"
+    },
+    {
+      "id": "r4",
+      "points": [
+        [
+          25.278,
+          54.678
+        ],
+        [
+          25.2797,
+          54.6812
+        ]
+      ],
+      "lane": 0,
+      "lanes": 1,
+      "stroke": "dashed"
+    },
+    {
+      "id": "r4",
+      "points": [
+        [
+          25.2895,
+          54.68
+        ],
+        [
+          25.2925,
+          54.678
+        ]
+      ],
+      "lane": 0,
+      "lanes": 1,
+      "stroke": "dashed"
+    }
+  ]
 }

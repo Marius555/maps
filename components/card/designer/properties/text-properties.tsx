@@ -1,6 +1,9 @@
 "use client";
 
-import { ColorPickerField } from "@/components/ui/color-picker-field";
+import { ColorSwatchRow } from "@/components/ui/color-swatch-row/color-swatch-row";
+import {
+  TOKEN_PRESETS,
+} from "@/components/ui/color-swatch-row/presets";
 import { SelectControl } from "@/components/ui/select-control";
 import { CARD_FONTS } from "@/packages/shared/card-fonts";
 import type { CardBlock } from "@/packages/shared/card-layout";
@@ -98,16 +101,15 @@ export function TextProperties({
         onChange={(fontSize) => onChange({ fontSize })}
       />
 
-      <ColorPickerField
+      <ColorSwatchRow
         label="Colour"
         value={block.color ?? ""}
-        // Label above, so it sits on the same rhythm as the Font and Size
-        // fields either side of it — see `labelPlacement`.
-        labelPlacement="outside"
-        onChange={(color) => onChange({ color })}
+        leading={{ kind: "default", name: "Theme default" }}
+        presets={TOKEN_PRESETS.foreground}
+        fallback="#111827"
         // An empty string is the absence, and the absence is theme-aware where
         // a stored literal could not be — see `CardLayout.background`.
-        onClear={() => onChange({ color: "" })}
+        onChange={(color) => onChange({ color: color ?? "" })}
       />
 
       {/* Last in the fold, and inside a `PropertyChecks` like every other

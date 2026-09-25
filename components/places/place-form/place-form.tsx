@@ -247,7 +247,7 @@ export function PlaceForm({
 
           They were `sm:` — a viewport query — which is wrong in both directions
           at once: two-column rows fired inside a 448px dialog on every desktop
-          (the bug `hours-day-row.tsx` records working around), and would not
+          (an hours row once ran off the edge of its fold that way), and would not
           fire in a wide sheet on a phone held sideways. The container is the
           thing the fields actually have to fit in, so it is the thing they ask
           about. */}

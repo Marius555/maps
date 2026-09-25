@@ -1,7 +1,10 @@
 "use client";
 
 import { CHIP_PREVIEW_COUNTS } from "@/lib/card/preview-chips";
-import { ColorPickerField } from "@/components/ui/color-picker-field";
+import { ColorSwatchRow } from "@/components/ui/color-swatch-row/color-swatch-row";
+import {
+  BRIGHT_PRESETS,
+} from "@/components/ui/color-swatch-row/presets";
 import { PropertyChoice } from "@/components/ui/properties/property-fields";
 
 /**
@@ -99,15 +102,17 @@ export function PinColorPreview({
 
   return (
     <>
-      <ColorPickerField
+      <ColorSwatchRow
         label="Pin colour"
-        value={color ?? ""}
-        labelPlacement="outside"
+        // Unset shows as the leading swatch: the sample's own colour is what
+        // the canvas draws until something else is picked.
+        value={isSet ? (color ?? "") : ""}
+        leading={{ kind: "default", name: "Sample's own" }}
+        presets={BRIGHT_PRESETS}
         // Opens on what is on screen rather than on a literal — and with no
         // sample colour to read, on the ground an uncoloured button still draws.
         fallback={sampleColor ?? PIN_PREVIEW_START}
-        onChange={(next) => onColor(next)}
-        onClear={isSet ? () => onColor(null) : undefined}
+        onChange={(next) => onColor(next ?? null)}
       />
 
       <p className="-mt-1 text-xs text-muted">
@@ -121,6 +126,6 @@ export function PinColorPreview({
 /**
  * What the wheel opens on when the sample location has no colour at all — the
  * light theme's accent, which is what both an unstyled button and an untagged
- * pin actually draw. It never reaches the layout; see `ColorPickerField`.
+ * pin actually draw. It never reaches the layout; see `ColorSwatchRow`.
  */
 const PIN_PREVIEW_START = "#f54600";

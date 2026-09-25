@@ -10,6 +10,10 @@
  * an `L 97.5%` page, which lands near 4.2:1 — fine for a caption or a count, and
  * under AA for something somebody is going to read for five minutes. Muted is
  * kept for the summary line, which is short and set larger.
+ *
+ * **No measure cap.** The body used to stop at `max-w-2xl`, which left half the
+ * column beside the nav rail empty on a laptop. It fills the column now; tables
+ * and callouts are what benefit, and they carry most of each guide.
  */
 export function DocsArticle({
   title,
@@ -26,12 +30,12 @@ export function DocsArticle({
         <h1 className="text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl">
           {title}
         </h1>
-        <p className="max-w-2xl text-pretty text-muted">{summary}</p>
+        <p className="text-pretty text-muted">{summary}</p>
       </header>
 
       <div
         className={[
-          "max-w-2xl space-y-12 text-sm/6 text-foreground",
+          "space-y-12 text-sm/6 text-foreground",
           "[&_p]:text-pretty",
           "[&_strong]:font-medium [&_strong]:text-foreground",
           "[&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-accent",

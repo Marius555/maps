@@ -3722,6 +3722,38 @@ body.is-pin-dragging * {
 }
 
 /*
+ * The segmented rows of the property panels — `PropertyChoice` and
+ * `PropertyToggles`, which the publish designer and the card designer share.
+ *
+ * HeroUI's own selected tile is an accent tint on a row of grey tiles, and its
+ * 1px divider is drawn in `currentColor` beside it — accent-coloured on the
+ * selected tile's own edge, so a tile read as having a thicker left border at
+ * some positions and not others. Asked for quieter: the row is an outline with
+ * clear tiles, the chosen one is a soft grey fill in the ordinary text colour,
+ * and no divider stands against it on either side.
+ */
+.quiet-toggles {
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+}
+
+.quiet-toggles .toggle-button {
+  --toggle-button-bg: transparent;
+  --toggle-button-bg-hover: color-mix(in oklab, var(--default) 60%, transparent);
+  --toggle-button-bg-pressed: var(--toggle-button-bg-hover);
+  --toggle-button-fg: var(--muted);
+  --toggle-button-bg-selected: var(--default);
+  --toggle-button-bg-selected-hover: var(--default);
+  --toggle-button-bg-selected-pressed: var(--default);
+  --toggle-button-fg-selected: var(--foreground);
+}
+
+.quiet-toggles .toggle-button[data-selected="true"] > .toggle-button-group__separator,
+.quiet-toggles .toggle-button[data-selected="true"] + .toggle-button > .toggle-button-group__separator {
+  opacity: 0;
+}
+
+/*
  * The tag chips (hero-filters.tsx). HeroUI draws a joined, filled segmented
  * control; on a map the chips are separate pills on the glass, and the chosen
  * one's ground is a single element that slides between them — so every chip's

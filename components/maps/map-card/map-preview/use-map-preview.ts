@@ -75,8 +75,9 @@ export function useMapPreview(map: AppMap, contentVersion: string | undefined) {
 
 /**
  * A hidden tab does not paint — `requestAnimationFrame` stops — so a map built
- * in one never reaches `idle`, and the render would time out and fail. Waiting
- * for the tab to come back costs nothing and turns that failure into a delay.
+ * in one makes no progress. Its deadline pauses too (lib/export/visible-deadline.ts,
+ * which covers a tab hidden mid-render), but there is no point holding a WebGL
+ * context and a queue slot open for it: waiting here costs nothing.
  */
 function whenVisible(): Promise<void> {
   if (document.visibilityState === "visible") return Promise.resolve();

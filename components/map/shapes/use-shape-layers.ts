@@ -7,13 +7,23 @@ import type {
 } from "maplibre-gl";
 import { useCallback, useEffect, useRef } from "react";
 
+import { dotLanes, dotLinesOf, type DotRun } from "@/lib/map/dot-lanes";
 import type { Shape } from "@/lib/repositories/types";
+import { dotViewHolds, type DotView } from "@/packages/shared/dot-stream";
 import type { ShapeGeometry, ShapeKind } from "@/packages/shared/shapes";
 import { isOnClusterBubble } from "../clusters/cluster-layers";
 import {
+  dotStreamFeatures,
+  hasDotStream,
+  mapBounds,
+  mapDotView,
+} from "./dot-stream-layer";
+import {
+  SHAPE_DOT_STREAM_SOURCE,
   SHAPE_HIT_LAYERS,
   SHAPE_SOURCE,
   addShapeLayers,
+  dotRunFeatures,
   draftFeatures,
   shapeFeature,
   type ShapeFeatures,
@@ -107,6 +117,15 @@ export function useShapeLayers({
     placed?: number;
   } | null>(null);
 
+  /**
+   * What the shared dotted stretches were last drawn from, and for which view.
+   * The stream is redrawn from these when the map moves far enough to need
+   * other dots — a new whole zoom level, or off the area they cover — without
+   * rebuilding a single shape.
+   */
+  const stream = useRef<StreamInput | null>(null);
+  const streamView = useRef<DotView | null>(null);
+
   useEffect(() => {
     onSelectRef.current = onSelect;
   });
@@ -118,23 +137,59 @@ export function useShapeLayers({
    * a `.current` read never matches what was written down.
    */
   const redraw = useCallback(() => {
-    const source = map.current?.getSource(SHAPE_SOURCE) as
+    const instance = map.current;
+    const source = instance?.getSource(SHAPE_SOURCE) as
       | GeoJSONSource
       | undefined;
+    if (!instance || !source) return;
 
-    source?.setData(
-      buildFeatures(
-        shapesRef.current,
-        selectedRef.current,
-        selectedManyRef.current,
-        colorForRef.current,
-        draftColorForRef.current,
-        previews.current,
-        drawing.current,
-      ),
+    const built = buildFeatures(
+      shapesRef.current,
+      selectedRef.current,
+      selectedManyRef.current,
+      colorForRef.current,
+      draftColorForRef.current,
+      previews.current,
+      drawing.current,
     );
+
+    source.setData(built.collection);
+
+    // Nothing shared now and nothing shared last time: the stream source is
+    // already empty, and a map with no overlap does no work here at all.
+    if (!hasDotStream(built.stream.runs) && !stream.current) return;
+
+    stream.current = hasDotStream(built.stream.runs) ? built.stream : null;
+    streamView.current = mapDotView(instance);
+    drawStream(instance, stream.current, streamView.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /*
+   * The shared dots are placed for one whole zoom level and one area, so a
+   * zoom across a level, or a pan off the area, needs them placed again.
+   * `move` fires every frame; the check is two projections and is false for
+   * nearly all of them.
+   */
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !isReady) return;
+
+    const follow = () => {
+      if (!stream.current) return;
+      if (dotViewHolds(streamView.current, mapBounds(instance), instance.getZoom())) {
+        return;
+      }
+
+      streamView.current = mapDotView(instance);
+      drawStream(instance, stream.current, streamView.current);
+    };
+
+    instance.on("move", follow);
+    return () => {
+      instance.off("move", follow);
+    };
+  }, [map, isReady]);
 
   /*
    * Source and layers, added once — and again if a style swap ever takes them.
@@ -314,8 +369,30 @@ export function useShapeLayers({
 
 export type ShapePreview = ReturnType<typeof useShapeLayers>;
 
+/** What the shared dotted stretches are drawn from. */
+type StreamInput = {
+  runs: DotRun[];
+  owners: globalThis.Map<string, { color: string; selected: boolean }>;
+};
+
+function drawStream(
+  map: MapLibreMap,
+  input: StreamInput | null,
+  view: DotView,
+): void {
+  const source = map.getSource(SHAPE_DOT_STREAM_SOURCE) as
+    | GeoJSONSource
+    | undefined;
+
+  source?.setData(
+    dotStreamFeatures(input?.runs ?? [], input?.owners ?? new globalThis.Map(), view),
+  );
+}
+
 /**
- * Saved shapes, plus whatever is being dragged or drawn, as one collection.
+ * Saved shapes, plus whatever is being dragged or drawn, as one collection —
+ * and what the shared dotted stretches are drawn from, which is a source of
+ * its own.
  *
  * Module scope rather than a closure inside the hook: it reads nothing but its
  * arguments, and keeping it out here is what lets `redraw` be a `useCallback`
@@ -329,17 +406,30 @@ function buildFeatures(
   draftColorFor: ((geometry: ShapeGeometry) => string) | undefined,
   previews: globalThis.Map<string, ShapeGeometry>,
   drawing: { geometry: ShapeGeometry; placed?: number } | null,
-): ShapeFeatures {
-  const features = shapes.map((shape) =>
+): { collection: ShapeFeatures; stream: StreamInput } {
+  const drawn = shapes.map((shape) => ({
+    ...shape,
+    geometry: previews.get(shape.id) ?? shape.geometry,
+  }));
+
+  const own = drawn.map((shape) =>
     shapeFeature(
       shape,
-      previews.get(shape.id) ?? shape.geometry,
+      shape.geometry,
       // One selected shape or a whole marquee's worth look the same on the map.
       // The difference between them is which card opens, not which outline
       // thickens — so the paint expression in shape-layers.ts needs no change.
       shape.id === selectedId || (selectedIds?.has(shape.id) ?? false),
       colorFor?.(shape),
     ),
+  );
+  const runs = lanesFor(drawn);
+  const features = dotRunFeatures(own, runs);
+  const owners = new globalThis.Map(
+    own.map(({ properties }) => [
+      properties.id,
+      { color: properties.color, selected: properties.selected },
+    ]),
   );
 
   if (drawing) {
@@ -352,5 +442,39 @@ function buildFeatures(
     );
   }
 
-  return { type: "FeatureCollection", features };
+  return {
+    collection: { type: "FeatureCollection", features },
+    stream: { runs, owners },
+  };
+}
+
+/**
+ * Where dotted or dashed routes share a road — see lib/map/dot-lanes.ts.
+ *
+ * Remembered against the last answer, because `redraw` runs on every pointer
+ * sample of a drag and a selection change touches no geometry at all. The key
+ * is each line's own points array, which a drag replaces and nothing else
+ * does, plus its marking and width.
+ */
+let lastLanes: { key: unknown[]; runs: DotRun[] } | null = null;
+
+function lanesFor(shapes: Shape[]): DotRun[] {
+  const lines = dotLinesOf(shapes);
+  const key = lines.flatMap((line) => [
+    line.id,
+    line.stroke,
+    line.points,
+    line.width,
+  ]);
+
+  if (
+    lastLanes &&
+    lastLanes.key.length === key.length &&
+    lastLanes.key.every((value, at) => value === key[at])
+  ) {
+    return lastLanes.runs;
+  }
+
+  lastLanes = { key, runs: dotLanes(lines) };
+  return lastLanes.runs;
 }

@@ -1,8 +1,10 @@
+import type * as GeoJSON from "geojson";
 import {
   LngLatBounds,
   Map as MapLibreMap,
   NavigationControl,
   Popup,
+  type ExpressionSpecification,
   type GeoJSONSource,
   type LngLatLike,
   type MapGeoJSONFeature,
@@ -34,20 +36,29 @@ import {
 } from "@/packages/shared/card-layout";
 import type {
   MapSnapshot,
+  SnapshotDotRun,
   SnapshotPlace,
   SnapshotShape,
   SnapshotTagGroup,
 } from "@/packages/shared/snapshot";
 import {
+  DASH_ARRAY_EXPRESSION,
   DOT_IMAGE_ID,
   DOT_IMAGE_SIZE,
-  DOT_TEXT_SIZE,
+  DOT_TEXT_SIZE_EXPRESSION,
   DOT_WIDTH_BUCKETS,
   dotImage,
   dotLayerId,
   dotSpacingFor,
   dotWidthFilter,
 } from "@/packages/shared/dot-line";
+import {
+  dotStream,
+  dotView,
+  dotViewHolds,
+  type DotBounds,
+  type DotView,
+} from "@/packages/shared/dot-stream";
 import { cardFlipsTheme } from "@/packages/shared/card-ground";
 import {
   CLUSTER_BUBBLE_RADIUS,
@@ -116,12 +127,22 @@ const SHAPE_DOTTED_LINE_LAYERS = DOT_WIDTH_BUCKETS.map((width) =>
 );
 
 /**
+ * Where dotted routes share a road: their dots, taking turns, placed by
+ * packages/shared/dot-stream.ts rather than by MapLibre. The editor's
+ * `SHAPE_DOT_STREAM_LAYER` says why.
+ */
+const SHAPE_DOT_STREAM_SOURCE_ID = "shape-dot-stream";
+const SHAPE_DOT_STREAM_LAYER = "shape-dot-stream";
+
+/**
  * One line layer per marking, matching the editor's own table.
  *
- * A layer each rather than a data-driven `line-dasharray`, for the reason
+ * A layer each rather than one data-driven `line-dasharray`, for the reason
  * components/map/shapes/shape-layers.ts spells out: a `case` puts every feature
  * in the layer through the SDF shader, solid ones included, and the editor draws
- * the same shape beside this bundle in its preview panel.
+ * the same shape beside this bundle in its preview panel. Within the dashed
+ * layer the pattern *is* data-driven, which is how routes sharing a road take
+ * turns with their dashes (`dashLanePattern`).
  *
  * Dashes are multiples of the line width, so the pattern scales with a shape's
  * own thickness. Dotted is not in this table — it is a symbol layer, added
@@ -131,10 +152,15 @@ const OUTLINE_LAYERS: {
   id: string;
   stroke: ShapeStrokeStyle;
   cap: "round" | "butt";
-  dash: [number, number] | null;
+  dash: unknown[] | null;
 }[] = [
   { id: SHAPE_LINE_LAYER, stroke: "solid", cap: "round", dash: null },
-  { id: SHAPE_DASHED_LINE_LAYER, stroke: "dashed", cap: "butt", dash: [2, 2] },
+  {
+    id: SHAPE_DASHED_LINE_LAYER,
+    stroke: "dashed",
+    cap: "butt",
+    dash: DASH_ARRAY_EXPRESSION,
+  },
 ];
 
 const FIT_PADDING = 48;
@@ -552,7 +578,7 @@ export function createMap(
      * with no shapes adds nothing at all, which is also every snapshot published
      * before shapes existed.
      */
-    addShapeLayers(map, snapshot.shapes ?? []);
+    addShapeLayers(map, snapshot.shapes ?? [], snapshot.dotRuns ?? []);
 
     map.addSource(SOURCE_ID, {
       type: "geojson",
@@ -1179,29 +1205,58 @@ function addLayers(map: MapLibreMap, snapshot: MapSnapshot): void {
  * layers and no listeners. That is every snapshot published before this field
  * existed, and they must be unaffected.
  */
-function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
+function addShapeLayers(
+  map: MapLibreMap,
+  shapes: SnapshotShape[],
+  dotRuns: SnapshotDotRun[],
+): void {
   if (shapes.length === 0) return;
+
+  // Flat scalars only — MapLibre serialises features to its worker, and a
+  // nested object does not survive the trip. Same reason a whole place is
+  // stringified into one property below.
+  const shapeProperties = (shape: SnapshotShape) => ({
+    id: shape.id,
+    color: shape.color,
+    opacity: shape.opacity,
+    // Both absent on every snapshot published before these existed, which is
+    // what makes those maps draw exactly as they always have.
+    width: strokeWidthOf(shape.kind === "line", shape.strokeWidth),
+    // A route drawn by its runs, below, wears a stroke no layer matches.
+    stroke: dotRuns.some((run) => run.id === shape.id)
+      ? ""
+      : (shape.strokeStyle ?? "solid"),
+  });
 
   map.addSource(SHAPE_SOURCE_ID, {
     type: "geojson",
     data: {
       type: "FeatureCollection",
-      features: shapes.map((shape) => ({
-        type: "Feature",
-        geometry: shapeOutline(shape),
-        // Flat scalars only — MapLibre serialises features to its worker, and a
-        // nested object does not survive the trip. Same reason a whole place is
-        // stringified into one property below.
-        properties: {
-          id: shape.id,
-          color: shape.color,
-          opacity: shape.opacity,
-          // Both absent on every snapshot published before these existed, which
-          // is what makes those maps draw exactly as they always have.
-          width: strokeWidthOf(shape.kind === "line", shape.strokeWidth),
-          stroke: shape.strokeStyle ?? "solid",
-        },
-      })),
+      features: [
+        ...shapes.map((shape) => ({
+          type: "Feature" as const,
+          geometry: shapeOutline(shape),
+          properties: shapeProperties(shape),
+        })),
+        /*
+         * A dotted or dashed route sharing a road draws through its runs
+         * instead — worked out at publish (lib/map/dot-lanes.ts). Each run wears
+         * the route's id, so a tap on any of its dots still opens the right
+         * route. A shared dotted stretch is not here: its dots are placed by
+         * `addDotStream`.
+         */
+        ...dotRuns
+          .filter((run) => run.stroke || run.lanes < 2)
+          .map(({ points, ...run }) => ({
+            type: "Feature" as const,
+            geometry: { type: "LineString" as const, coordinates: points },
+            properties: {
+              ...shapeProperties(shapes.find((shape) => shape.id === run.id)!),
+              ...run,
+              stroke: run.stroke ?? "dotted",
+            },
+          })),
+      ],
     },
   });
 
@@ -1238,7 +1293,9 @@ function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
         // an area's edge, so it defaults heavier, and with no fill behind it a
         // hairline is also a thing a visitor cannot reliably tap.
         "line-width": ["get", "width"],
-        ...(outline.dash ? { "line-dasharray": outline.dash } : {}),
+        ...(outline.dash
+          ? { "line-dasharray": outline.dash as ExpressionSpecification }
+          : {}),
       },
     });
   }
@@ -1266,17 +1323,14 @@ function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
       id: dotLayerId(SHAPE_DOTTED_LINE_LAYER, width),
       type: "symbol",
       source: SHAPE_SOURCE_ID,
-      filter: [
-        "all",
-        ["==", ["get", "stroke"], "dotted"],
-        dotWidthFilter(width),
-      ],
+      filter: ["all", ["==", ["get", "stroke"], "dotted"], dotWidthFilter(width)],
       layout: {
         "symbol-placement": "line",
         "symbol-spacing": dotSpacingFor(width),
         // Not about text: it is what stops MapLibre flooring the spacing at the
         // dot image's own pixel width. See `DOT_TEXT_SIZE`.
-        "text-size": DOT_TEXT_SIZE,
+        // A run's own where it starts at a cut. See `dotInsetSize`.
+        "text-size": DOT_TEXT_SIZE_EXPRESSION as ExpressionSpecification,
         "icon-image": DOT_IMAGE_ID,
         // A constant, not an expression: this layer draws one width and knows
         // which. The editor's copy keeps the expression because a selected shape
@@ -1292,6 +1346,88 @@ function addShapeLayers(map: MapLibreMap, shapes: SnapshotShape[]): void {
     });
   }
 
+  addDotStream(
+    map,
+    dotRuns.filter((run) => !run.stroke && run.lanes > 1),
+    shapes,
+  );
+}
+
+/**
+ * Dotted routes sharing a road, taking turns dot by dot.
+ *
+ * The dots are placed for the map's whole zoom level and the area around the
+ * screen (packages/shared/dot-stream.ts), and placed again only when a zoom
+ * crosses a level or a pan leaves that area. The source and layer exist on
+ * every map with shapes, because the tap test names the layer; a map with no
+ * shared stretch leaves the source empty and listens to nothing.
+ */
+function addDotStream(
+  map: MapLibreMap,
+  runs: SnapshotDotRun[],
+  shapes: SnapshotShape[],
+): void {
+  let view: DotView | null = null;
+
+  const bounds = (): DotBounds => {
+    const box = map.getBounds();
+    return [box.getWest(), box.getSouth(), box.getEast(), box.getNorth()];
+  };
+
+  const features = (): GeoJSON.FeatureCollection => {
+    view = dotView(bounds(), map.getZoom());
+    const { level, box } = view;
+
+    return {
+      type: "FeatureCollection",
+      features: runs.map((run) => {
+        const shape = shapes.find((candidate) => candidate.id === run.id)!;
+        const width = run.width ?? strokeWidthOf(true, shape.strokeWidth);
+
+        return {
+          type: "Feature",
+          geometry: {
+            type: "MultiPoint",
+            coordinates: dotStream(
+              run.points,
+              width,
+              run.lane,
+              run.lanes,
+              level,
+              box,
+            ),
+          },
+          properties: { id: run.id, color: shape.color, width },
+        };
+      }),
+    };
+  };
+
+  map.addSource(SHAPE_DOT_STREAM_SOURCE_ID, {
+    type: "geojson",
+    data: runs.length ? features() : { type: "FeatureCollection", features: [] },
+  });
+
+  map.addLayer({
+    id: SHAPE_DOT_STREAM_LAYER,
+    type: "circle",
+    source: SHAPE_DOT_STREAM_SOURCE_ID,
+    paint: {
+      "circle-color": ["get", "color"],
+      // A dot's diameter is the stroke, as on the dotted layers.
+      "circle-radius": ["/", ["get", "width"], 2],
+    },
+  });
+
+  if (runs.length === 0) return;
+
+  map.on("move", () => {
+    if (dotViewHolds(view, bounds(), map.getZoom())) return;
+
+    (map.getSource(SHAPE_DOT_STREAM_SOURCE_ID) as GeoJSONSource).setData(
+      features(),
+    );
+  });
 }
 
 /**
@@ -1392,6 +1528,7 @@ function wireShapeInteractions(
       [
         ...OUTLINE_LAYERS.map((outline) => outline.id),
         ...SHAPE_DOTTED_LINE_LAYERS,
+        SHAPE_DOT_STREAM_LAYER,
       ],
       boxAround(point),
     );

@@ -187,7 +187,7 @@ export function PlaceCard({
   /**
    * What this location's card is drawing *before* any of it has been saved.
    *
-   * The panel's controls fire per pointer-move — `ColorPickerField` emits a
+   * The panel's controls fire per pointer-move — `ColorSwatchRow` emits a
    * colour a frame, which is right in the studio, where nothing leaves the page
    * until Save. Here every one of them used to be a `PATCH`, so a one-second
    * drag put sixty of them in flight, they came back out of order, and the last
