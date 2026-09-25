@@ -337,8 +337,6 @@ export type MapSummary = {
    * report a busy map as untouched for weeks.
    */
   lastEditedAt: string;
-  /** Changes whenever anything a preview draws could have — see lib/map-preview/version.ts. */
-  contentVersion: string;
 };
 
 /* ------------------------------------------------------------------ *

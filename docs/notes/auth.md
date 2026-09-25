@@ -100,8 +100,8 @@ emails.
   sign-out reaches a guard at all: a soft replace consumes one history entry and
   leaves the rest of the dashboard live in the client router cache, and bfcache
   would hand back the whole document without asking anyone. `"cache"` and not
-  `"storage"`, which would take the theme, the sidebar width and the map-preview
-  store with it.
+  `"storage"`, which would take the theme, the sidebar width and the import
+  wizard's IndexedDB store with it.
 
 ## The SameSite trap
 
@@ -226,6 +226,10 @@ fetches `/api/maps/{id}/preview`, `withAuth` runs `requireUser()`, and
 it, keeps the last good picture up and says so on the console. **It was the only
 thing in the whole page that talked to a server**, which is why it was the only
 thing that noticed nobody was signed in.
+
+(That route is gone since: the maps list now shows a static picture of each map's
+*theme*, so the page makes no request of ours and has no canary left. A
+regression here would be silent — test Back after sign-out by hand.)
 
 That is the shape of the bug. This app has three guards and every one of them is
 on the request path — `proxy.ts` reads a cookie off a request, the dashboard

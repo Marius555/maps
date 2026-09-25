@@ -6,12 +6,8 @@ import { admin } from "@/lib/appwrite/admin";
 import { TABLES } from "@/lib/appwrite/config";
 import { toRepositoryError } from "@/lib/appwrite/errors";
 import { env } from "@/lib/env";
-import {
-  contentVersion,
-  latestOf,
-  type TableActivity,
-} from "@/lib/map-preview/version";
 import type { RepoContext } from "./context";
+import { latestOf, type TableActivity } from "./map-activity";
 import { listMaps } from "./maps.repository";
 import type { AppMap, MapSummary } from "./types";
 
@@ -48,12 +44,6 @@ export async function listMapSummaries(
             placeCount: places.count,
             shapeCount: shapes.count,
             lastEditedAt: latestOf(map.updatedAt, places.last, shapes.last, groups.last),
-            contentVersion: contentVersion({
-              mapUpdatedAt: map.updatedAt,
-              places,
-              shapes,
-              groups,
-            }),
           },
         };
       }),

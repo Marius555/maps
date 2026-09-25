@@ -4,12 +4,11 @@ import { useEffect } from "react";
 
 import { PlaceCountBadge } from "@/components/places/place-count-badge";
 import { PageTitle } from "@/components/ui/page-title";
-import { prunePreviews } from "@/lib/map-preview/cache";
 import { useMaps } from "@/lib/query/maps";
 import type { AppMap, MapSummary } from "@/lib/repositories/types";
 import { CreateMapDialog } from "./create-map-dialog";
 import { MapCard } from "./map-card/map-card";
-import { MAP_GRID_CLASS } from "./map-grid";
+import { MAP_LIST_CLASS } from "./map-row-layout";
 import { MapListEmpty } from "./map-list-empty";
 
 /**
@@ -30,13 +29,19 @@ export function MapList({
   const { data: maps = [] } = useMaps(initialMaps);
 
   /*
-   * Previews of deleted maps would otherwise sit in the browser's store forever.
-   * Keyed on the ids themselves, so it runs again after a delete.
+   * The pictures on this page used to be rendered in the browser and kept in
+   * IndexedDB; they are static files now (lib/map/theme-images.ts). Drops the old
+   * stores from browsers that still have them. Safe to delete once every owner
+   * has been here since.
    */
-  const mapIds = maps.map((map) => map.id).join(",");
   useEffect(() => {
-    void prunePreviews(new Set(mapIds ? mapIds.split(",") : []));
-  }, [mapIds]);
+    try {
+      indexedDB.deleteDatabase("map-previews");
+      indexedDB.deleteDatabase("theme-previews");
+    } catch {
+      // No IndexedDB (a private window, blocked site data): nothing to clean.
+    }
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -59,7 +64,7 @@ export function MapList({
       {maps.length === 0 ? (
         <MapListEmpty />
       ) : (
-        <ul className={MAP_GRID_CLASS}>
+        <ul className={MAP_LIST_CLASS}>
           {maps.map((map) => (
             <li key={map.id} className="min-w-0">
               <MapCard map={map} summary={summaries[map.id]} />

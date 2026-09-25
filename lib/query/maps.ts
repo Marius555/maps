@@ -36,10 +36,18 @@ export function useCreateMap() {
         })
       ).map,
     onSuccess: (map) => {
-      queryClient.setQueryData<AppMap[]>(queryKeys.maps.list(), (maps = []) => [
-        map,
-        ...maps,
-      ]);
+      /*
+       * Patch the maps list only if it is cached. Every updater of that key
+       * returns `undefined` when there is no list, which TanStack treats as "leave
+       * it alone". Defaulting to `[]` instead *created* the list as empty: open
+       * the editor straight from a link, change the theme, go to the maps page,
+       * and it drew "no maps" — `useMaps` ignores the server's `initialData`
+       * once a cache entry exists — until the 30s staleTime ran out.
+       */
+      queryClient.setQueryData<AppMap[]>(
+        queryKeys.maps.list(),
+        (maps) => maps && [map, ...maps],
+      );
       queryClient.setQueryData(queryKeys.maps.detail(map.id), map);
     },
   });
@@ -65,8 +73,8 @@ export function useUpdateMap(mapId: string) {
 
   const write = (map: AppMap) => {
     queryClient.setQueryData(detailKey, map);
-    queryClient.setQueryData<AppMap[]>(queryKeys.maps.list(), (maps = []) =>
-      maps.map((existing) => (existing.id === map.id ? map : existing)),
+    queryClient.setQueryData<AppMap[]>(queryKeys.maps.list(), (maps) =>
+      maps?.map((existing) => (existing.id === map.id ? map : existing)),
     );
   };
 
@@ -121,8 +129,8 @@ export function useDeleteMap() {
     mutationFn: (mapId: string) =>
       apiFetch<void>(`/api/maps/${mapId}`, { method: "DELETE" }),
     onSuccess: (_result, mapId) => {
-      queryClient.setQueryData<AppMap[]>(queryKeys.maps.list(), (maps = []) =>
-        maps.filter((map) => map.id !== mapId),
+      queryClient.setQueryData<AppMap[]>(queryKeys.maps.list(), (maps) =>
+        maps?.filter((map) => map.id !== mapId),
       );
       queryClient.removeQueries({ queryKey: queryKeys.maps.detail(mapId) });
       queryClient.removeQueries({ queryKey: queryKeys.places.all(mapId) });

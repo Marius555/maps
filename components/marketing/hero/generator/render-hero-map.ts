@@ -11,7 +11,7 @@ import { HERO_APPEARANCE, HERO_CAMERA, HERO_SIZE } from "@/lib/marketing/hero-ma
 import { loadMapStyle } from "@/packages/shared/load-style";
 
 /*
- * Module scope, as render-preview.ts does it: this page has no live map to have
+ * Module scope, as every off-screen renderer does it: this page has no live map to have
  * set the worker URL, and without it every tile fetch silently does nothing.
  */
 registerPmtilesProtocol();

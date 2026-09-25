@@ -16,7 +16,7 @@ export const POST = withoutAuth(async () => {
   // restore the dashboard document on Back with no request at all, and the
   // document navigation in `UserMenu` buys nothing. `cache` and not `storage`:
   // `storage` would also wipe localStorage (theme, sidebar width) and the
-  // `map-previews` IndexedDB store.
+  // import wizard's IndexedDB store.
   response.headers.set("Clear-Site-Data", '"cache"');
 
   return response;

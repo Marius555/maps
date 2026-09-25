@@ -105,9 +105,10 @@ export type OffscreenSize = {
  * The lifecycle every throwaway map shares: build it off screen, wait for the
  * style, decorate, wait for the tiles, copy the pixels out, tear it down.
  *
- * The export is one caller; the maps list's previews (lib/map-preview) are the
- * other, and they frame a box of locations rather than copying a live camera —
- * which is the only reason the camera is a parameter rather than an `ExportView`.
+ * The export is one caller; the development-only image generators (the landing
+ * hero, the maps list's theme pictures) are the others, and they look at a fixed
+ * place rather than copying a live camera — which is the only reason the camera
+ * is a parameter rather than an `ExportView`.
  */
 export async function renderOffscreenMap(
   style: string | StyleSpecification,
@@ -144,8 +145,8 @@ export async function renderOffscreenMap(
    * Same specifier, same module instance — so `config.WORKER_URL` is already in
    * place here when a caller has set it. The export's caller has: nothing can
    * reach it without a live map, and a live map means map-canvas-impl.tsx has
-   * run. The maps list has no live map, so lib/map-preview/render-preview.ts sets
-   * it itself. Without it every tile fetch silently does nothing and the image
+   * run. The image generators have no live map, so each sets it itself
+   * (render-hero-map.ts, render-theme-image.ts). Without it every tile fetch silently does nothing and the image
    * comes back as an empty background (lib/map/worker.ts).
    */
   const { Map: MapLibreMapClass } = await import("maplibre-gl");
@@ -196,12 +197,25 @@ export async function renderOffscreenMap(
     const instance = map;
     await once(instance, "load", LOAD_TIMEOUT_MS, "The map didn't load in time.");
     await decorate(instance);
-    await once(
+
+    /*
+     * Listen first, then ask for one more frame.
+     *
+     * `idle` fires once per render that ends fully loaded, and it can come in the
+     * very frame that fired `load`: a style with no symbol layers (labels set to
+     * "None") has no placement pass to keep the map busy, so it is finished
+     * before this line runs, never renders again, and a listener attached now
+     * waits out the deadline for an event that already happened. The extra frame
+     * fires `idle` again if everything is in, and is one wasted paint if not.
+     */
+    const idle = once(
       instance,
       "idle",
       IDLE_TIMEOUT_MS,
       "The map is still loading tiles. Try again in a moment.",
     );
+    instance.triggerRepaint();
+    await idle;
 
     /*
      * Copied, not returned.

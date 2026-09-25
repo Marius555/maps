@@ -1,61 +1,57 @@
-"use client";
-
-import { useState } from "react";
-
-import { ThemeSwatch } from "@/components/appearance/theme-swatch";
-import type { AppMap } from "@/lib/repositories/types";
-import { useMapPreview } from "./use-map-preview";
+import { MAP_PANE_CLASS } from "@/components/maps/map-row-layout";
+import type { MapStyleKey } from "@/lib/map/style";
+import {
+  themeImagesFor,
+  themeImageSrc,
+  themeImageSrcSet,
+} from "@/lib/map/theme-images";
 
 /**
- * The map itself, at the top of its card.
+ * The map's theme, on the left of its row: a picture of the basemap it is drawn
+ * on, with nothing of the map's own on it and no text.
  *
- * A fixed 16:10 box, so nothing around it moves whatever is inside. Underneath
- * is the basemap picker's own swatch for this style — instant, zero requests, and
- * already the right colours — and over it the real rendered map once there is
- * one (use-map-preview.ts). The swatch's viewBox is 64×40, the same 16:10, so it
- * fills the box without stretching.
+ * The pictures are static files rendered once in development
+ * (lib/map/theme-images.ts), so this asks no tile host for anything. While one
+ * loads the pane is its plain surface colour. There is deliberately no drawn
+ * fallback: the swatch that used to sit here is a 64×40 drawing and read as a
+ * zoomed-in street once stretched across the pane. A missing picture is caught
+ * by lib/map/theme-images.test.ts instead, before it ships.
  *
- * `alt=""`: the card's title already names the map, and a screen reader reading
- * "map of Stockists" before "Stockists" says it twice.
+ * Auto has two pictures and CSS picks one off the dashboard's `.dark` class, so
+ * the right one is there at first paint with no script involved.
+ *
+ * `alt=""`: the card's title and its "Basemap" line already say what this is.
  */
 export function MapPreview({
-  map,
-  contentVersion,
+  style,
   children,
 }: {
-  map: AppMap;
-  contentVersion: string | undefined;
-  /** Drawn over the map — the status chip. */
+  style: MapStyleKey;
+  /** Drawn over the picture — the status chip. */
   children?: React.ReactNode;
 }) {
-  const src = useMapPreview(map, contentVersion);
-  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const images = themeImagesFor(style);
 
   return (
-    <div className="relative aspect-[16/10] w-full overflow-hidden border-b border-border bg-surface-secondary">
-      <div aria-hidden="true" className="absolute inset-0">
-        <ThemeSwatch style={map.style} />
-      </div>
-
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element -- a local object URL; next/image cannot optimise a blob.
-        <img
-          src={src}
-          alt=""
-          draggable={false}
-          onLoad={() => setLoadedSrc(src)}
-          /*
-           * Faded in once, when the first picture arrives, to say the placeholder
-           * became the real thing. A replacement for a stale picture swaps
-           * instantly — it is the same map, one edit newer.
-           */
-          className={`absolute inset-0 size-full select-none object-cover transition-opacity duration-300 motion-reduce:transition-none ${
-            loadedSrc ? "opacity-100" : "opacity-0"
-          }`}
-        />
-      ) : null}
+    <div className={MAP_PANE_CLASS}>
+      <ThemeImage name={images.light} className={images.dark ? "dark:hidden" : undefined} />
+      {images.dark ? <ThemeImage name={images.dark} className="hidden dark:block" /> : null}
 
       {children}
     </div>
+  );
+}
+
+function ThemeImage({ name, className = "" }: { name: string; className?: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- a small static webp with its own srcset; next/image adds nothing here.
+    <img
+      src={themeImageSrc(name, 1)}
+      srcSet={themeImageSrcSet(name)}
+      alt=""
+      draggable={false}
+      decoding="async"
+      className={`absolute inset-0 size-full select-none object-cover ${className}`}
+    />
   );
 }
