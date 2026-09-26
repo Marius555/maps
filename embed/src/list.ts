@@ -6,6 +6,7 @@ import { distanceKm, formatDistance, type Located } from "./geo";
 import { colorOf, colorsOf, pinsOf } from "./map";
 import { directionsLink } from "./directions";
 import type { Fix } from "./search";
+import { t } from "./i18n";
 
 /**
  * The results panel beside the map.
@@ -90,7 +91,7 @@ export function createList(
 
   const root = el("div", "lm-list");
   const items = el("ul", "lm-list__items");
-  items.setAttribute("aria-label", "Locations");
+  items.setAttribute("aria-label", t("locations"));
 
   const footer = el("p", "lm-list__footer");
 
@@ -111,7 +112,7 @@ export function createList(
       // The toolbar's status line says this too, but it can be scrolled well
       // out of view on a phone — and an empty box with no explanation reads as
       // the widget having broken rather than the filter having worked.
-      items.append(el("li", "lm-list__empty", "No locations match."));
+      items.append(el("li", "lm-list__empty", t("noMatch")));
       footer.textContent = "";
       return;
     }
@@ -277,7 +278,7 @@ export function createList(
     if (showActions) {
       const actions = el("div", "lm-list__actions");
       actions.append(
-        directionsLink("lm-list__link", "Directions", place, getMe()),
+        directionsLink("lm-list__link", t("directions"), place, getMe()),
       );
 
       // Tapping a number to call it is the second thing anyone does with a store

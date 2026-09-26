@@ -109,7 +109,7 @@ export function PagesTable({ rows }: { rows: PageRow[] }) {
       rows={rows}
       rowKey={(row) => `${row.host}${row.path}`}
       initialSort="count"
-      limit={10}
+      visibleRows={8}
     />
   );
 }
@@ -160,7 +160,7 @@ function ShareTable({
       rows={rows}
       rowKey={(row) => row.key || "none"}
       initialSort="count"
-      limit={10}
+      visibleRows={8}
     />
   );
 }

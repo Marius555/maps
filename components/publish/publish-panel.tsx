@@ -41,6 +41,8 @@ export function PublishPanel({
   initialShapes,
   initialGroups,
   initialCardDesign,
+  badge,
+  turnOnAnalytics = false,
 }: {
   initialMap: AppMap;
   initialPlaces: Place[];
@@ -51,6 +53,10 @@ export function PublishPanel({
   /** Loaded server-side so the preview never builds a document twice — see
       `EmbedPreview`'s `cardDesign`. */
   initialCardDesign?: Record<string, unknown>;
+  /** The "Made with" badge this owner's plan publishes, or none. */
+  badge?: { brand: string; url: string };
+  /** Arrived from the Analytics tab's "Turn it on" — see `useTurnOnAnalytics`. */
+  turnOnAnalytics?: boolean;
 }) {
   const { data: map = initialMap } = useMap(initialMap.id, initialMap);
   const { data: places = initialPlaces } = usePlaces(initialMap.id, initialPlaces);
@@ -131,6 +137,7 @@ export function PublishPanel({
               groups={groups}
               settings={design.settings}
               cardDesign={initialCardDesign}
+              badge={badge}
               frame={false}
               maxWidth={width ?? undefined}
               className="h-full w-full"
@@ -149,6 +156,7 @@ export function PublishPanel({
           design={design}
           device={device}
           onDeviceChange={setDevice}
+          turnOnAnalytics={turnOnAnalytics}
         />
       </div>
     </>

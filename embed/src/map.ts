@@ -52,6 +52,7 @@ import {
   dotSpacingFor,
   dotWidthFilter,
 } from "@/packages/shared/dot-line";
+import { link } from "./dom";
 import {
   dotStream,
   dotView,
@@ -379,6 +380,18 @@ export function createMap(
     new NavigationControl({ showCompass: false }),
     snapshot.settings.controlsCorner ?? "top-right",
   );
+
+  /*
+   * "Made with …" on a map whose owner's plan shows it (`MapSnapshot.badge`).
+   * A control rather than an element over the canvas, so MapLibre stacks it
+   * above the attribution in the same corner instead of the two overlapping.
+   * Absent on every map published before it existed, and on every paid one.
+   */
+  const badge = snapshot.badge;
+  if (badge) {
+    const node = link("maplibregl-ctrl lm-badge", badge.text, badge.url);
+    map.addControl({ onAdd: () => node, onRemove: () => node.remove() }, "bottom-right");
+  }
 
   // No AttributionControl is added here on purpose: the `attributionControl`
   // map option above already creates one. Adding a second renders the credit

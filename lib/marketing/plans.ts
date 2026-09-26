@@ -65,6 +65,8 @@ export type MarketingPlan = {
   routes: boolean;
   sheetSync: boolean;
   analytics: boolean;
+  /** Publishes without the "Made with" badge. */
+  noBadge: boolean;
   /** The one line that is different about this plan, said in the plan's terms. */
   highlight: string;
 };
@@ -83,6 +85,7 @@ export const MARKETING_PLANS: MarketingPlan[] = [
     routes: false,
     sheetSync: false,
     analytics: false,
+    noBadge: false,
     highlight: "No card, no trial clock.",
   },
   {
@@ -101,6 +104,7 @@ export const MARKETING_PLANS: MarketingPlan[] = [
     routes: true,
     sheetSync: true,
     analytics: true,
+    noBadge: true,
     highlight: "Keep a map in step with a Google Sheet.",
   },
   {
@@ -119,6 +123,7 @@ export const MARKETING_PLANS: MarketingPlan[] = [
     routes: true,
     sheetSync: true,
     analytics: true,
+    noBadge: true,
     highlight: "Three thousand locations on one map.",
   },
 ];

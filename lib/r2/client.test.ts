@@ -18,16 +18,20 @@ import { encodeKey, r2Bucket } from "./client";
 
 const ORIGINAL = { ...env };
 const requests: Request[] = [];
+/** What `fetch` was literally handed, before it was made into a `Request`. */
+const calls: { input: unknown; init: RequestInit | undefined }[] = [];
 let replies: Response[] = [];
 
 beforeEach(() => {
   Object.assign(env, ORIGINAL);
   requests.length = 0;
+  calls.length = 0;
   replies = [];
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (request: Request) => {
-      requests.push(request);
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ input, init });
+      requests.push(new Request(input, init));
       return replies.shift() ?? new Response(null, { status: 200 });
     }),
   );
@@ -60,6 +64,21 @@ describe("put", () => {
     expect(request.headers.get("cache-control")).toBe("public, max-age=60");
     expect(request.headers.get("authorization")).toMatch(/^AWS4-HMAC-SHA256 /);
     expect(await request.text()).toBe('{"a":1}');
+  });
+
+  it("hands fetch the body as a string, never inside a Request", async () => {
+    // Next's patched fetch rebuilds a Request input from its body *stream*,
+    // which is sent chunked with no Content-Length — and R2 answers every such
+    // PUT with 411 MissingContentLength. A URL plus a string body keeps the
+    // length known whichever fetch is installed.
+    await r2Bucket("snapshots").put("map-1/live.json", '{"a":1}', {
+      contentType: "application/json",
+      cacheControl: "public, max-age=60",
+    });
+
+    const [call] = calls;
+    expect(call.input).not.toBeInstanceOf(Request);
+    expect(call.init?.body).toBe('{"a":1}');
   });
 });
 

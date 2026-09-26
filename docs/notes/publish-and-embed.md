@@ -5,6 +5,26 @@ rewritten; it is the record of why this area is shaped as it is.
 
 ## Invariants
 
+- **The embed is served from `cdn.pinglide.com`, not the dashboard.** `map.js`, MapLibre's
+  three files and the gazetteer live in the snapshots bucket under `embed/` and `gazetteer/`
+  (`npm run deploy:cdn`, and `postbuild` with `UPLOAD_EMBED_ON_BUILD=true`). A pasted
+  script URL is permanent, and served from Appwrite Sites it would be metered bandwidth in
+  the visitor path. Files are uploaded with explicit JavaScript/JSON content types — a module
+  script served as anything else refuses to run — and `map.js` goes up **last**, because it
+  imports `./maplibre-gl.mjs` by relative URL. R2's ETags are weak (`W/"…"`); compare the
+  hash inside them.
+- **What the map says is `lang` + `strings` on the snapshot, and absent is English.**
+  `packages/shared/embed-strings.ts` is the English table; the presets are dashboard-only
+  (`lib/embed/languages`), and publish writes only the words that differ from English. The
+  embed keeps them in module state (`embed/src/i18n.ts`), so **two maps on one page share
+  one language** — whichever rendered last. Day names come from `Intl`, not a table.
+- **`data-tags` on the snippet narrows one pasted copy**, by tag id, and re-frames the view
+  only when the snapshot has `bounds`. Nothing matching shows the whole map. It lives in the
+  snippet rather than the map so two pages can show two slices without a republish.
+- **The badge is `snapshot.badge`, decided by the owner's plan at publish** — including the
+  nightly sheet sync's republish, which is why `publishMap` reads the plan off `map.userId`.
+  The preview gets the same answer from the publish page. A plan change reaches a live map
+  on its next publish only.
 - **`maps.settings` is one JSON blob with exactly one writer** (`useEmbedDesign`).
   `updateMap` serialises it whole, so two forms writing it is a lost update.
   `readEmbedSettings` resolves one fully-populated object feeding both the controls and
@@ -645,6 +665,11 @@ rewritten; it is the record of why this area is shaped as it is.
   `Vary: Origin` and the edge honours it, so each customer domain warms its own copy —
   measured: a new Origin is a MISS, the same Origin again a HIT. At most one R2 read per
   domain per minute per edge location, which is nothing.
+- **`lib/r2/client.ts` signs with aws4fetch and sends with a plain `fetch(url, init)` —
+  never `client.fetch`.** Inside a Next route `fetch` is Next's patched one, and it rebuilds
+  any `Request` input from `request.body`, a stream: the PUT goes out chunked with no
+  `Content-Length` and R2 answers `411 MissingContentLength`. The scripts never hit it
+  because plain Node's fetch keeps the string. `client.test.ts` guards the call shape.
 - **Test an embed change from a foreign origin, never only through the preview.** The
   preview's `srcdoc` frame inherits the dashboard's origin and so passes every CORS check a
   customer's page would fail; that is how the Appwrite 403 went unnoticed for a whole phase.
@@ -998,3 +1023,33 @@ after the change: the floating glass panel, the docked toolbar, the results rows
 with their outlined pill links, the circle and polygon shapes and the scrollbar all
 draw exactly as before. Worth re-checking the narrow-width drawer specifically if
 anything in that area moves again.
+
+
+## The CDN, languages, the badge and host-page events (2026-09-26)
+
+Four things landed together after a rival comparison, and they share one reason for being
+cheap: minification. The bundle had never been minified — Vite's library mode keeps ES
+output readable on purpose, for consumers who re-bundle it, and nobody re-bundles this
+file. `output.minify` took ours from 49.1KB to 45.6KB; all four features together brought it
+back to 46.3KB, so the budget did not move.
+
+**Hosting.** Until now the snippet pointed at the dashboard. That was fine for development
+and wrong for production twice over: every visitor to every customer's site fetched ~345KB
+from Appwrite Sites, and the URL in a pasted snippet can never be changed. The bucket that
+already serves snapshots has the custom domain, the CORS rule and the cache rule, so the
+embed moved in beside them. `map.js` is cached for five minutes with a day of
+stale-while-revalidate, since that TTL is how long a deploy takes to reach customers; the
+MapLibre files for a day; gazetteer shards for a week.
+
+**Languages.** The owner picks one of five presets and may reword any phrase in a dialog
+(not the sidebar — two text fields were removed from that column once already). Both are
+stored in `settings`; publish resolves them. The alternative — auto-detecting each visitor's
+language — would have shipped every table to every visitor.
+
+**The badge** is a MapLibre control in the bottom-right corner, so MapLibre stacks it above
+the attribution instead of the two colliding. It is a link to brand.json's `website` with
+`?ref=embed`, and its text is translated with the map.
+
+**Host-page events.** Every `track()` call also dispatches `pinglide` on `document` with
+`{ type, map, ...data }`, whether or not our own measurement is on — it is a DOM event, not
+a request. It is what lets an owner forward map activity to their own analytics.

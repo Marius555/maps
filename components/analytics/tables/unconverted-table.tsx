@@ -77,7 +77,7 @@ export function UnconvertedTable({
       rows={rows}
       rowKey={(row) => row.id}
       initialSort="open"
-      limit={10}
+      visibleRows={8}
     />
   );
 }

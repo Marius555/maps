@@ -362,6 +362,8 @@ export type MapSessionRow = Models.Row & {
   device?: string | null;
   events?: string | null;
   eventCount?: number | null;
+  visitor?: string | null;
+  returning?: boolean | null;
 };
 
 /**
@@ -382,7 +384,12 @@ export type MapSession = {
   city: string | null;
   lat: number | null;
   lng: number | null;
-  /** Stored whole; `maskIp` is what the dashboard draws. */
+  /**
+   * Truncated before it is stored (`truncateIp`) — the full address is only
+   * ever held for the moment the visitor key is computed. Rows written before
+   * that change still carry it whole, which is why `maskIp` is still what the
+   * dashboard draws.
+   */
   ip: string | null;
   /** The customer's own page — which site, and which page of it. */
   host: string;
@@ -391,6 +398,13 @@ export type MapSession = {
   referrer: string;
   device: DeviceKind;
   events: SessionEvent[];
+  /**
+   * The anonymous monthly visitor key (`visitorKey`), or null for a session
+   * recorded before visitor counting existed or one that arrived with no IP.
+   */
+  visitor: string | null;
+  /** This visitor had already been seen on this map earlier the same month. */
+  returning: boolean;
 };
 
 /**

@@ -100,6 +100,7 @@ export function EmbedPreview({
   maxWidth,
   settings,
   cardDesign,
+  badge,
 }: {
   map: AppMap;
   places: Place[];
@@ -125,6 +126,11 @@ export function EmbedPreview({
    * for exactly that reason; absent is still correct, just a beat slower.
    */
   cardDesign?: Record<string, unknown>;
+  /**
+   * The badge a publish would add for this owner's plan. Omitted by every
+   * caller that does not know the plan, which draws no badge.
+   */
+  badge?: { brand: string; url: string };
   /**
    * Whether to draw the rounded border around the frame.
    *
@@ -263,8 +269,9 @@ export function EmbedPreview({
         shapes,
         effectiveCardLayout(design),
         groups,
+        badge,
       ),
-    [map, settings, places, shapes, design, groups],
+    [map, settings, places, shapes, design, groups, badge],
   );
 
   /*

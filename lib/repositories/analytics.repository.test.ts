@@ -55,7 +55,8 @@ function input(overrides: Partial<RecordSessionInput> = {}): RecordSessionInput 
     city: "Vilnius",
     lat: 54.68,
     lng: 25.27,
-    ip: "81.7.144.23",
+    visitor: "0123456789abcdef",
+    ip: "81.7.144.0",
     host: "shop.example.com",
     path: "/find-us",
     referrer: "",
@@ -79,6 +80,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   createRow.mockResolvedValue({});
   updateRow.mockResolvedValue({});
+  listRows.mockResolvedValue({ rows: [], total: 0 });
 });
 
 describe("recordSession", () => {
@@ -189,5 +191,58 @@ describe("recordSession", () => {
 
     await expect(recordSession(input())).rejects.toThrow();
     expect(updateRow).not.toHaveBeenCalled();
+  });
+});
+
+describe("recordSession — returning visitors", () => {
+  it("marks a visitor seen earlier this month as returning", async () => {
+    listRows.mockResolvedValueOnce({ rows: [{ $id: "earlier" }], total: 1 });
+
+    await recordSession(input());
+
+    expect(lastCall(createRow).data).toMatchObject({
+      visitor: "0123456789abcdef",
+      returning: true,
+    });
+  });
+
+  it("marks a first visit as new", async () => {
+    await recordSession(input());
+
+    expect(lastCall(createRow).data.returning).toBe(false);
+  });
+
+  it("only looks back to the first of the session's own month", async () => {
+    // The key rotates on the 1st, so an earlier month could not match anyway —
+    // but the bound is what lets the index stop early.
+    await recordSession(input());
+
+    const queries = (listRows.mock.calls.at(-1)?.[0] as { queries: string[] })
+      .queries.join(" ");
+
+    expect(queries).toContain("2026-09-01");
+    expect(queries).toContain("0123456789abcdef");
+    expect(queries).toContain(MAP_ID);
+  });
+
+  it("does not look anything up for a session with no visitor key", async () => {
+    await recordSession(input({ visitor: null }));
+
+    expect(listRows).not.toHaveBeenCalled();
+    expect(lastCall(createRow).data).toMatchObject({
+      visitor: null,
+      returning: false,
+    });
+  });
+
+  it("records the visit as new when the lookup fails", async () => {
+    // Losing a returning flag is a rounding error; losing the visit is not.
+    listRows.mockRejectedValueOnce(
+      new AppwriteException("Service unavailable", 503, "general_unknown"),
+    );
+
+    await recordSession(input());
+
+    expect(lastCall(createRow).data.returning).toBe(false);
   });
 });

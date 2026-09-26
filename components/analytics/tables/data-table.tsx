@@ -46,14 +46,34 @@ export type DataTableProps<T> = {
   /** Column id to sort by on first render. Descending, because these are counts. */
   initialSort?: string;
   /**
-   * How many rows to draw.
+   * How many rows show before the table scrolls inside itself.
    *
-   * A cap rather than pagination: these tables answer "which are the busiest",
-   * and the tail of a three-hundred-row list is not a page anybody turns to. The
-   * footer says how many were left out rather than hiding the fact.
+   * Every row is drawn — the tail is one flick away rather than cut off — but
+   * the table stops growing at this height, so a busy map's hundred searches
+   * cannot push every section below them a screen further down the page. The
+   * header stays pinned while the rows scroll under it.
    */
-  limit?: number;
+  visibleRows?: number;
 };
+
+/**
+ * Rows drawn at most, whatever the table holds.
+ *
+ * A DOM bound, not a reading limit: the stored bags are already capped
+ * (lib/analytics/fold.ts) and the visitors table reads one page, so this only
+ * binds on a location table for a very large map. The footer says so when it
+ * does.
+ */
+const MAX_ROWS = 200;
+
+/*
+ * The scroller's height, from the row count. Measured on the real table: a
+ * header of 36px and body rows of 45px (a two-line location row is taller, and
+ * simply shows a little less). Fixed rather than measured at runtime, because a
+ * height that settles after paint moves every section below it.
+ */
+const HEADER_PX = 36;
+const ROW_PX = 45;
 
 export function DataTable<T>({
   label,
@@ -61,7 +81,7 @@ export function DataTable<T>({
   rows,
   rowKey,
   initialSort,
-  limit = 20,
+  visibleRows = 10,
 }: DataTableProps<T>) {
   const [sort, setSort] = useState<{ column: string; direction: "ascending" | "descending" }>(
     { column: initialSort ?? columns[0].id, direction: "descending" },
@@ -86,14 +106,18 @@ export function DataTable<T>({
     return sort.direction === "descending" ? ordered.reverse() : ordered;
   }, [rows, columns, sort]);
 
-  const shown = sorted.slice(0, limit);
+  const shown = sorted.slice(0, MAX_ROWS);
   const hidden = sorted.length - shown.length;
 
   return (
     <Table>
-      {/* Its own scroller, so a long location name can never push the page
-          sideways — the same rule place-table.tsx follows. */}
-      <Table.ScrollContainer>
+      {/* Its own scroller, both ways: a long location name can never push the
+          page sideways — the same rule place-table.tsx follows — and a long
+          table stops at `visibleRows` instead of pushing it down. */}
+      <Table.ScrollContainer
+        className="overflow-y-auto overscroll-y-contain"
+        style={{ maxHeight: HEADER_PX + visibleRows * ROW_PX }}
+      >
         <Table.Content
           aria-label={label}
           sortDescriptor={sort}
@@ -127,7 +151,9 @@ export function DataTable<T>({
                 id={column.id}
                 isRowHeader={column.isRowHeader}
                 allowsSorting={column.sortable !== false && !!column.sortValue}
-                className={cellClass(column, true)}
+                // Pinned while the rows scroll. The header's background is on
+                // its cells in HeroUI's table, which is what lets them be sticky.
+                className={`sticky top-0 z-10 ${cellClass(column, true)}`}
               >
                 {({ sortDirection }) => (
                   <Table.SortableColumnHeader sortDirection={sortDirection}>
@@ -154,10 +180,9 @@ export function DataTable<T>({
 
       {hidden > 0 ? (
         /*
-          "Showing 25 of 100" rather than "the busiest 25", because the sort is
-          the reader's to change: this same footer sits under the ranked tables
-          and under Recent visitors, which is ordered by time and has no busiest.
-          A count is true whichever column the table is sorted by.
+          "Showing 200 of 340" rather than "the busiest 200", because the sort is
+          the reader's to change. A count is true whichever column the table is
+          sorted by.
         */
         <p className="px-1 pt-2 text-xs text-muted">
           Showing {shown.length} of {sorted.length}.

@@ -9,6 +9,7 @@ import {
   mergeFolds,
   totalsToFold,
 } from "./fold";
+import { estimate } from "./hll";
 
 /**
  * The counting. Everything the Analytics page shows is a merged fold, so a bug
@@ -37,6 +38,8 @@ function session(overrides: Partial<MapSession> = {}): MapSession {
     referrer: "https://www.google.com/search?q=shops",
     device: "mobile",
     events: [event("view")],
+    visitor: "0123456789abcdef",
+    returning: false,
     ...overrides,
   };
 }
@@ -338,5 +341,62 @@ describe("places picked from the search box", () => {
     expect(fold.picks).toEqual({});
     expect(fold.interactions).toBe(1);
     expect(fold.events.pick).toBe(1);
+  });
+});
+
+describe("visitors", () => {
+  function foldOf(...sessions: MapSession[]) {
+    const fold = emptyFold();
+    for (const one of sessions) foldSession(fold, one);
+    return fold;
+  }
+
+  it("counts one person on two days as one visitor for the pair", () => {
+    // The reason the fold carries a sketch rather than a number: daily unique
+    // visitors do not add up.
+    const days = foldByDay([
+      session({ day: "2026-09-07" }),
+      session({ day: "2026-09-08", returning: true }),
+    ]);
+
+    const total = mergeFolds(days.values());
+
+    expect(total.sessions).toBe(2);
+    expect(estimate(total.visitors)).toBe(1);
+    expect(estimate(total.returning)).toBe(1);
+  });
+
+  it("counts different keys as different visitors", () => {
+    const fold = foldOf(
+      session({ visitor: "0123456789abcdef" }),
+      session({ visitor: "fedcba9876543210" }),
+    );
+
+    expect(estimate(fold.visitors)).toBe(2);
+    expect(estimate(fold.returning)).toBe(0);
+  });
+
+  it("counts a session with no key as unkeyed, not as a visitor", () => {
+    const fold = foldOf(session({ visitor: null }));
+
+    expect(fold.unkeyed).toBe(1);
+    expect(estimate(fold.visitors)).toBe(0);
+  });
+
+  it("reads a day rolled up before visitor counting as wholly unkeyed", () => {
+    // Absent means the old behaviour: that day's visits had no key, so none of
+    // them are in the visitor figures and the page must say so.
+    const back = totalsToFold({}, { sessions: 12, views: 12, interactions: 0 });
+
+    expect(back.unkeyed).toBe(12);
+    expect(estimate(back.visitors)).toBe(0);
+  });
+
+  it("leaves empty sketches out of the stored row", () => {
+    const totals = foldToTotals(foldOf(session({ visitor: null })));
+
+    expect(totals).not.toHaveProperty("visitors");
+    expect(totals).not.toHaveProperty("returning");
+    expect(totals.unkeyed).toBe(1);
   });
 });

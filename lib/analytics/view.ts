@@ -1,6 +1,7 @@
 import type { DeviceKind, MapSession } from "@/lib/repositories/types";
 import type { DayFold, PlaceCounts } from "./fold";
 import { mergeFolds } from "./fold";
+import { estimate } from "./hll";
 import { countryCentroid } from "./collect/country-centroids";
 
 /**
@@ -92,6 +93,12 @@ export type AnalyticsView = {
    * shop, searched for one, and then did the thing the map exists for.
    */
   totals: {
+    /**
+     * Distinct people, estimated from the visitor sketches (./hll.ts). Counted
+     * within calendar months — the key rotates on the 1st — so somebody who
+     * visits in September and October is one visitor in each.
+     */
+    visitors: Delta;
     sessions: Delta;
     opens: Delta;
     searches: Delta;
@@ -117,6 +124,14 @@ export type AnalyticsView = {
   picks: LabelledCount[];
   /** Sessions where the map loaded and nothing else happened. */
   bounce: Rate;
+  /** Visitors who had already visited earlier that month, over all visitors. */
+  returning: Rate;
+  /**
+   * Some visits in the range carry no visitor key — recorded before visitor
+   * counting, or with no IP — so the visitor figures cover less than the visit
+   * figures do.
+   */
+  visitorsPartial: boolean;
   /** Sessions that searched and then opened something, over sessions that searched. */
   searchConversion: Rate;
   /** Event type → count, busiest first. The "which controls get pressed" table. */
@@ -156,6 +171,7 @@ export function buildView(input: BuildViewInput): AnalyticsView {
   return {
     hasData: total.sessions > 0,
     totals: {
+      visitors: delta(estimate(total.visitors), estimate(previous.visitors)),
       sessions: delta(total.sessions, previous.sessions),
       opens: delta(total.events.open ?? 0, previous.events.open ?? 0),
       searches: delta(total.events.search ?? 0, previous.events.search ?? 0),
@@ -180,6 +196,8 @@ export function buildView(input: BuildViewInput): AnalyticsView {
     searches: searchRows(total),
     picks: sortedCounts(total.picks),
     bounce: rate(total.bounced, total.sessions),
+    returning: returningRate(total),
+    visitorsPartial: total.unkeyed > 0,
     searchConversion: rate(total.searchConverted, total.searchSessions),
     interactions: sortedCounts(total.events).filter(
       // Views are the denominator, not an interaction — they are already the
@@ -266,6 +284,19 @@ function unconvertedRows(rows: PlaceRow[]): PlaceRow[] {
 
 function rate(count: number, of: number): Rate {
   return { count, of, share: of > 0 ? count / of : null };
+}
+
+/**
+ * Returning visitors over all visitors.
+ *
+ * Both halves are estimates, so the numerator is clamped to the denominator: two
+ * independent 3% errors can otherwise produce "105% came back" on a map whose
+ * every visitor returned, which is a number nobody should have to explain.
+ */
+function returningRate(fold: DayFold): Rate {
+  const visitors = estimate(fold.visitors);
+
+  return rate(Math.min(estimate(fold.returning), visitors), visitors);
 }
 
 function searchRows(fold: DayFold): SearchRow[] {

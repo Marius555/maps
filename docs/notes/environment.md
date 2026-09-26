@@ -106,6 +106,12 @@ this is why each one exists.
   beside it — it already treats every uncertain answer as a yes, so there is nothing for an
   off-switch to rescue. `docs/notes/auth.md` has the reasoning for both.
 
+- Optional, server-only: `ANALYTICS_SALT` — what the anonymous monthly visitor key is salted
+  with (`lib/analytics/collect/visitor-key.ts`). Unset, the salt is derived from
+  `APPWRITE_API_KEY`, so visitor counting works with no configuration. Without *a* secret the
+  key would be a bare hash of an IP address, which is small enough to reverse. Changing it
+  mid-month makes every visitor read as new until the 1st. `docs/notes/analytics.md`.
+
 - Optional, server-only: `CRON_SECRET` and `SHEET_SYNC_STEP_MS` — Google Sheets sync
   (`docs/notes/sheet-sync.md`). **`CRON_SECRET` gates the daily sync's route, and unset means
   that route refuses everyone**, not that it is open: an unauthenticated trigger would let a
@@ -116,7 +122,8 @@ this is why each one exists.
   raising the site's timeout to 30s. Sync now works with neither set; the daily sync needs the
   secret. `APP_URL` matters here too: a daily republish has no request to take an origin from.
 
-- Optional, browser-safe: `NEXT_PUBLIC_EMBED_SCRIPT_URL`. Set it to the CDN origin in production. Unset, the embed snippet points at the dashboard's own origin, which is what makes development and self-hosting work with no config.
+- Optional, browser-safe: `NEXT_PUBLIC_EMBED_SCRIPT_URL` (`https://cdn.pinglide.com/embed/map.js`) and `NEXT_PUBLIC_GAZETTEER_URL` (`https://cdn.pinglide.com/gazetteer`). Unset, the snippet and the gazetteer point at the dashboard's own origin, which is what makes development and self-hosting work with no config — and in production is a mistake with a deadline: every visitor would download ~345KB from Appwrite Sites (metered, and in the visitor path §2 forbids), and the script URL in a pasted snippet can never be changed. `npm run deploy:cdn` (`scripts/upload-cdn.mjs`) uploads both into the snapshots bucket under `embed/` and `gazetteer/`, skipping any file whose R2 ETag already matches its MD5.
+- Build-time, optional: `UPLOAD_EMBED_ON_BUILD`. Set to `true` **on the Appwrite Site only**, and `postbuild` uploads the freshly built embed to the CDN on every deploy, so `map.js` can never lag the dashboard. It needs the R2 variables at build time too. Unset (every local build), the hook prints one line and does nothing. The gazetteer is gitignored, so the host never has it — upload it by hand with `npm run deploy:cdn` after `npm run build:gazetteer`.
 
 `STORAGE_ID` never reaches the browser: photo URLs are composed on the server in `lib/storage/photo-url.ts` and handed to clients as `place.photoUrl`. If you need a bucket id in a component, that's the signal you're building it in the wrong layer.
 

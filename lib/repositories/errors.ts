@@ -111,7 +111,7 @@ export class PlanLimitError extends RepositoryError {
  * remedy rather than two, and its own code lets the client offer an upgrade
  * where a limit would have pointed at a list.
  */
-export type GatedFeature = "routes" | "sheetSync" | "analytics";
+export type GatedFeature = "routes" | "sheetSync" | "analytics" | "noBadge";
 
 const FEATURES: Record<GatedFeature, { noun: string; verb: string }> = {
   routes: { noun: "Routes", verb: "draw them" },
@@ -120,6 +120,7 @@ const FEATURES: Record<GatedFeature, { noun: string; verb: string }> = {
     verb: "keep this map in sync with a sheet",
   },
   analytics: { noun: "Analytics", verb: "see what visitors do" },
+  noBadge: { noun: "Maps without the badge", verb: "publish without it" },
 };
 
 export class PlanFeatureError extends RepositoryError {

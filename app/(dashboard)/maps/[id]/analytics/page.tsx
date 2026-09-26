@@ -100,14 +100,15 @@ export default async function MapAnalyticsPage(
     <Container size="centered">
       <PageTitle>Analytics</PageTitle>
 
-      <div className="flex flex-wrap items-end justify-between gap-3 pb-4">
-        <p className="text-sm text-muted">
-          What visitors did on {map.name}
-        </p>
-        {/* Hidden rather than disabled when the tab is locked: a range picker
-            over nothing is a control that does nothing, which reads as broken. */}
-        {analytics ? <RangePicker mapId={map.id} range={range} /> : null}
-      </div>
+      {/* Only once something is being measured. Hidden rather than disabled
+          on a locked, unpublished or switched-off map: a period picker over
+          nothing is a control that does nothing, which reads as broken. It
+          stays for "no visits yet", where the period is part of the answer. */}
+      {analytics && map.publishedAt && isMeasuring ? (
+        <div className="flex justify-end pb-4">
+          <RangePicker mapId={map.id} range={range} />
+        </div>
+      ) : null}
 
       {!analytics ? (
         <PlanRequiredEmpty note={planFeatureNote("analytics", plan)} />
@@ -145,10 +146,21 @@ function Report({
       ) : null}
 
       {/*
-        Five headline numbers. Tiles rather than a table, which is the one place
+        Six headline numbers. Tiles rather than a table, which is the one place
         this page departs from the Locations list's argument — see stat-tile.tsx.
+        Visitors leads because it is the one number that is about people rather
+        than page loads; Visits beside it is what makes the difference legible.
       */}
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <StatTile
+          label="Visitors"
+          delta={view.totals.visitors}
+          footnote={
+            view.visitorsPartial
+              ? "Only visits since visitor counting began"
+              : undefined
+          }
+        />
         <StatTile label="Visits" delta={view.totals.sessions} />
         <StatTile label="Locations opened" delta={view.totals.opens} />
         <StatTile label="Searches" delta={view.totals.searches} />
@@ -167,7 +179,7 @@ function Report({
         title="How well it is working"
         hint="Whether the map is doing its job, rather than how much it was used"
       >
-        <div className="grid gap-3 sm:grid-cols-2 lg:max-w-2xl">
+        <div className="grid gap-3 sm:grid-cols-3 lg:max-w-4xl">
           <RateTile
             label="Loaded and left"
             rate={view.bounce}
@@ -180,6 +192,12 @@ function Report({
             rate={view.searchConversion}
             unit="visits that searched"
             hint="A location was opened after searching"
+          />
+          <RateTile
+            label="Came back"
+            rate={view.returning}
+            unit="visitors"
+            hint="Had already visited earlier the same month"
           />
         </div>
       </Section>

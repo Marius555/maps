@@ -7,6 +7,7 @@ import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
 import { findArticle } from "@/lib/docs/articles";
+import { BRAND } from "@/lib/brand";
 
 const ARTICLE = findArticle("plans-and-billing");
 
@@ -43,6 +44,7 @@ export default function PlansAndBillingPage() {
             ["Routes with drive times", "—", "Included", "Included"],
             ["Google Sheets sync", "—", "Included", "Included"],
             ["Visitor analytics", "—", "Included", "Included"],
+            [`“Made with ${BRAND.name}” badge`, "Shown", "Removed", "Removed"],
           ]}
         />
 
@@ -50,6 +52,12 @@ export default function PlansAndBillingPage() {
           Paying yearly gets you two months free. Views are unlimited on every
           plan, the free one included — nobody is counting how often your map is
           opened, and nothing is charged for it.
+        </p>
+
+        <p>
+          A map on the free plan carries a small <strong>Made with {BRAND.name}</strong>{" "}
+          link in its corner. On Starter and Pro it goes away the next time you
+          publish.
         </p>
       </DocsSection>
 

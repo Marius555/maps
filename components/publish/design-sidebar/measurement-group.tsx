@@ -45,7 +45,9 @@ export function MeasurementGroup({ settings, set }: EmbedDesign) {
           <>
             Your map will record what visitors search for, which locations they
             open, and which buttons they press — along with their country,
-            device, IP address and the page your map is on. No cookies, and
+            device, a shortened IP address and the page your map is on. Unique
+            and returning visitors are counted with an anonymous code that
+            changes every month and differs on every map. No cookies, and
             nothing follows anyone between sites. Starts on your next publish;
             switching it back off stops collection straight away.
           </>

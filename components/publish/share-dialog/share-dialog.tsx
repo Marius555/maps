@@ -65,6 +65,7 @@ export function ShareDialog({
                     <EmbedSnippet
                       snapshotUrl={map.snapshotUrl}
                       isMeasuring={isMeasuring}
+                      tagGroups={map.tagGroups}
                     />
                   </section>
 

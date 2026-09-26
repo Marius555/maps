@@ -16,6 +16,12 @@ export type EmbedConfig = {
   /** Optional CSS selector for an existing element to render into. */
   target: string | null;
   /**
+   * `data-tags="id,id"`: show only locations wearing one of these tags. Ids, not
+   * labels, because the snippet generator writes them and a label can be renamed
+   * under a snippet already pasted on somebody's page.
+   */
+  tags: string[] | null;
+  /**
    * Build the map immediately instead of waiting for it to be scrolled near.
    *
    * Opt-in, because deferring is the better default: a map three screens down a
@@ -38,6 +44,7 @@ export function readConfig(script: HTMLScriptElement): EmbedConfig | null {
     snapshotUrl,
     height: readHeight(script.dataset.height),
     target: script.dataset.target?.trim() || null,
+    tags: script.dataset.tags?.split(",").map((id) => id.trim()).filter(Boolean) || null,
     // Bare `data-eager` is the common way to write it, so presence is enough —
     // but `data-eager="false"` has to mean what it says.
     eager:

@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isBot } from "@/lib/analytics/collect/bots";
 import { deviceOf } from "@/lib/analytics/collect/device";
 import { readVisitorGeo } from "@/lib/analytics/collect/geo-headers";
+import { truncateIp } from "@/lib/analytics/collect/truncate-ip";
+import { visitorKey } from "@/lib/analytics/collect/visitor-key";
 import { toErrorResponse } from "@/lib/api/route";
 import {
   readCollectGate,
@@ -156,6 +158,7 @@ async function store(
   payload: CollectInput,
 ): Promise<void> {
   const geo = readVisitorGeo(request.headers);
+  const userAgent = request.headers.get("user-agent");
 
   await recordSession({
     mapId: payload.m,
@@ -168,11 +171,19 @@ async function store(
     city: geo.city,
     lat: geo.lat,
     lng: geo.lng,
-    ip: geo.ip,
+    // The full address is used for the visitor key and nothing else; only
+    // the network is stored. See lib/analytics/collect/visitor-key.ts.
+    visitor: visitorKey({
+      mapId: payload.m,
+      ip: geo.ip,
+      userAgent,
+      now: new Date(),
+    }),
+    ip: truncateIp(geo.ip),
     host: payload.h,
     path: payload.p,
     referrer: payload.r,
-    device: deviceOf(request.headers.get("user-agent")),
+    device: deviceOf(userAgent),
     events: payload.e,
   });
 }

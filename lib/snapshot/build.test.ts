@@ -9,6 +9,14 @@ import { buildSnapshot } from "./build";
 
 const GENERATED_AT = "2026-08-08T10:00:00.000Z";
 
+// The stored design minus what publish resolves into fields of their own: the
+// language and the owner's words become `lang` and `strings`, never `settings`.
+const PUBLISHED_SETTINGS = Object.fromEntries(
+  Object.entries(DEFAULT_EMBED_SETTINGS).filter(
+    ([key]) => key !== "language" && key !== "strings",
+  ),
+);
+
 function makeMap(overrides: Partial<AppMap> = {}): AppMap {
   return {
     id: "map-1",
@@ -87,6 +95,50 @@ function makeShape(overrides: Partial<Shape> = {}): Shape {
 }
 
 describe("buildSnapshot", () => {
+  describe("words", () => {
+    it("publishes no language, words or badge for an English map by default", () => {
+      const { snapshot } = buildSnapshot(makeMap(), [], [], GENERATED_AT);
+
+      expect(snapshot).not.toHaveProperty("lang");
+      expect(snapshot).not.toHaveProperty("strings");
+      expect(snapshot).not.toHaveProperty("badge");
+      expect(snapshot.settings).not.toHaveProperty("language");
+      expect(snapshot.settings).not.toHaveProperty("strings");
+    });
+
+    it("publishes the preset and the owner's edits for another language", () => {
+      const map = makeMap({
+        settings: { language: "lt", strings: { nearest: "Artimiausia parduotuvė" } },
+      });
+      const { snapshot } = buildSnapshot(map, [], [], GENERATED_AT);
+
+      expect(snapshot.lang).toBe("lt");
+      expect(snapshot.strings?.nearest).toBe("Artimiausia parduotuvė");
+      expect(snapshot.strings?.directions).toBe("Maršrutas");
+    });
+
+    it("writes only the edited phrase on an English map", () => {
+      const map = makeMap({ settings: { strings: { nearest: "Find a stockist" } } });
+      const { snapshot } = buildSnapshot(map, [], [], GENERATED_AT);
+
+      expect(snapshot).not.toHaveProperty("lang");
+      expect(snapshot.strings).toEqual({ nearest: "Find a stockist" });
+    });
+
+    it("writes the badge in the map's language when the caller asks for it", () => {
+      const map = makeMap({ settings: { language: "de" } });
+      const { snapshot } = buildSnapshot(
+        map, [], [], GENERATED_AT, undefined, null, undefined, undefined,
+        { brand: "Pinglide", url: "https://pinglide.com/?ref=embed" },
+      );
+
+      expect(snapshot.badge).toEqual({
+        text: "Erstellt mit Pinglide",
+        url: "https://pinglide.com/?ref=embed",
+      });
+    });
+  });
+
   it("carries the map's identity, centre and attribution", () => {
     const { snapshot } = buildSnapshot(makeMap(), [makePlace()], [], GENERATED_AT);
 
@@ -360,7 +412,7 @@ describe("buildSnapshot", () => {
     // is here to prove the resolver runs and publishes a complete answer, not
     // to restate the design — pinning the numbers would make every change to a
     // default a change to a test that never disagreed with the code.
-    expect(snapshot.settings).toEqual(DEFAULT_EMBED_SETTINGS);
+    expect(snapshot.settings).toEqual(PUBLISHED_SETTINGS);
     // `filters` is retired: published snapshots still carry it and the type
     // still names it, but nothing writes one any more.
     expect(snapshot.settings.filters).toBeUndefined();
@@ -712,7 +764,7 @@ describe("buildSnapshot", () => {
   it("publishes the default design for a map nobody has designed", () => {
     const { snapshot } = buildSnapshot(makeMap(), [], [], GENERATED_AT);
 
-    expect(snapshot.settings).toEqual(DEFAULT_EMBED_SETTINGS);
+    expect(snapshot.settings).toEqual(PUBLISHED_SETTINGS);
   });
 
   it("honours stored settings and ignores values of the wrong type", () => {

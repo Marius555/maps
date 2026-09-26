@@ -59,7 +59,7 @@ export function InteractionsTable({ rows }: { rows: LabelledCount[] }) {
       rows={rows}
       rowKey={(row) => row.key}
       initialSort="count"
-      limit={30}
+      visibleRows={10}
     />
   );
 }

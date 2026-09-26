@@ -15,6 +15,11 @@ and the five blockers this file raised are answered below rather than removed.
 
 ### Collection
 
+- **Every tracked event is also a `pinglide` DOM event on `document`**, with
+  `{ type, map, ...data }`, whether or not measurement is on. It is not a request and
+  nothing leaves the page, so it needs no switch; it is how an owner forwards map
+  activity to their own analytics. `type` and `map` are written after the data, so an
+  event's own fields cannot overwrite them. `embed/src/track.test.ts` guards both.
 - **One beacon per session, not one per event.** Every interaction is queued in
   memory and flushed once, on `pagehide`. This is the entire cost argument (see
   *The §2 override* below); a change that makes the embed send per-event breaks
@@ -64,6 +69,35 @@ and the five blockers this file raised are answered below rather than removed.
   the two it is; the Publish page's "Open test page" button is how an owner gets
   there. Anyone debugging "analytics says on but there are no sessions" should be
   sent to that page before anywhere else.
+
+### Visitors, without a cookie
+
+- **Unique and returning visitors come from a server-side key, not the
+  browser.** `visitorKey` (`lib/analytics/collect/visitor-key.ts`) is a salted
+  SHA-256 of the calendar month, the map id, the IP and the user agent, cut to 16
+  hex. The embed is unchanged and still stores nothing — the "no cookie and no
+  storage" invariant above holds. **The map id is part of the hash and must stay
+  there**: without it one person has one key on every customer's site.
+- **The key rotates on the 1st, UTC**, which was the owner's choice between a
+  day (most private, no cross-day "returning") and a month. A range spanning
+  months counts a person once per month. Longer is a longer-lived identifier;
+  do not lengthen it without the same conversation.
+- **The full IP is never stored.** It is read for the key, then `truncateIp`
+  keeps only the network. Rows from before this change hold full addresses and
+  age out with retention; `maskIp` renders both forms the same.
+- **"Returning" is decided at write time**, by one indexed read
+  (`seenThisMonth`, index `idx_mapsessions_map_visitor`) before the row is
+  created. A rollup can estimate how many distinct keys there were but cannot
+  answer "seen before" for one of them. A failed read records the visit as new.
+- **Visitor counts are HyperLogLog sketches** (`lib/analytics/hll.ts`, 1,024
+  slots, ~3% error, near exact below a few thousand), two per day — all keys and
+  returning keys. They merge by slot maximum, which is a union, so a person on
+  two days is one visitor for the pair. Empty sketches are omitted from
+  `mapDaily.totals`.
+- **Absent means unkeyed.** A rollup with no `unkeyed` field predates visitor
+  counting and reads as *all* its sessions unkeyed; the Visitors tile then says
+  it only covers visits since counting began, rather than presenting a partial
+  figure as the whole. Same rule as §0's "absent means the old behaviour".
 
 ### The collector
 
@@ -136,7 +170,8 @@ but the row does not, because the row is keyed on the session (see the second
 invariant above).
 On Appwrite Pro ($25/mo, 3.5M executions and 750K writes included, then $2 per
 million executions and $1 per million writes) that is roughly **$3 per million
-map sessions**. §2's benchmark — the thing the whole flat-price model exists to
+map sessions**. Visitor counting adds one indexed read per beacon (the returning
+check) and no write, which moves that figure by cents rather than dollars. §2's benchmark — the thing the whole flat-price model exists to
 beat — is Google at **$7 per thousand**. The model survives by three orders of
 magnitude.
 

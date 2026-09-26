@@ -22,6 +22,7 @@ import type {
   Shape,
 } from "@/lib/repositories/types";
 import { tagGroupsInUse, wornTagIds } from "@/lib/tags/tag-usage";
+import { resolveEmbedWords } from "@/lib/embed/languages";
 import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { isDefaultCardLayout } from "@/lib/validation/card-layout.schema";
 import { readMapAppearance } from "@/lib/validation/map-appearance.schema";
@@ -152,6 +153,14 @@ export function buildSnapshot(
    * published before — including every test that does not care.
    */
   groups?: readonly Group[],
+  /**
+   * "Made with …", for an owner whose plan shows it — or omitted for none.
+   *
+   * The caller decides, because the plan is a repository question and this
+   * function stays pure. The text is resolved here, in the map's own language,
+   * so the badge speaks the same language as the map it sits on.
+   */
+  badge?: { brand: string; url: string },
 ): BuildSnapshotResult {
   const usable: Place[] = [];
   const skipped: Place[] = [];
@@ -227,7 +236,10 @@ export function buildSnapshot(
 
   // Resolved once: the snapshot writes it, and the analytics field below asks it
   // whether the owner switched measurement on.
-  const settings = readEmbedSettings(map.settings);
+  const { language, strings, ...settings } = readEmbedSettings(map.settings);
+  // What the map says, resolved against its preset and cut to what differs
+  // from English — see `resolveEmbedWords`.
+  const words = resolveEmbedWords(language, strings, badge?.brand ?? "");
 
   return {
     snapshot: {
@@ -299,6 +311,9 @@ export function buildSnapshot(
       ...(settings.analytics && collectUrl
         ? { analytics: { url: collectUrl } }
         : {}),
+      ...(words.lang ? { lang: words.lang } : {}),
+      ...(words.strings ? { strings: words.strings } : {}),
+      ...(badge ? { badge: { text: words.badge, url: badge.url } } : {}),
       allowedDomains: map.allowedDomains,
     },
     skipped,

@@ -116,6 +116,14 @@ export const env = {
    */
   lemonWebhookSecret: process.env.LEMON_WEBHOOK_SECRET ?? "",
   /**
+   * What the anonymous monthly visitor key is salted with
+   * (lib/analytics/collect/visitor-key.ts). Optional: unset, the key is salted
+   * from `APPWRITE_API_KEY` instead, which is equally secret and always set, so
+   * development and self-hosting count visitors with no configuration. Changing
+   * it mid-month makes every visitor read as new until the month turns.
+   */
+  analyticsSalt: process.env.ANALYTICS_SALT ?? "",
+  /**
    * One variant id per plan and cadence, as the provider's dashboard shows them.
    *
    * Configuration rather than code because they are different numbers in test and

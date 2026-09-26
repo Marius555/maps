@@ -142,6 +142,7 @@ npm run test         # vitest run
 npm run build:embed  # vite build → public/embed, copy MapLibre runtime, check size
 npm run setup:appwrite  # create missing tables/columns/indexes from scripts/appwrite-schema.mjs
 npm run setup:r2        # snapshot bucket: custom domain, CORS, zone cache + header rules
+npm run deploy:cdn      # embed + gazetteer -> cdn.pinglide.com (skips unchanged files)
 npm run setup:lemon     # find the plan variants, write their ids to .env, configure the webhook
 npm run setup:lemon -- --verify  # check .env's ids against the store; non-zero if they disagree
 npm run billing:replay -- <event> --email you@example.com  # signed webhook at a running server
@@ -229,6 +230,8 @@ one exists: `docs/notes/environment.md`.
   while it is unset; the same value goes on the `sheet-sync-daily` function) and
   `SHEET_SYNC_STEP_MS` (lookup time per sync step, default 5000 — raise only with the site
   timeout).
+- Server-only, optional: `ANALYTICS_SALT` — salts the anonymous monthly visitor key behind
+  unique and returning visitors; unset, derived from `APPWRITE_API_KEY`.
 - Browser-safe, optional: `NEXT_PUBLIC_COLLECT_URL` — where a published map posts what its
   visitors did. Unset means the dashboard's own origin, which is what makes development and
   self-hosting work with no config. **Absolute, always**: the embed runs on a customer's
@@ -237,7 +240,13 @@ one exists: `docs/notes/environment.md`.
 - Browser-safe, optional: `NEXT_PUBLIC_TILES_URL` (**unset means OpenFreeMap and is the
   current state**; it moves `STYLE_URLS` and the attribution together, and
   `npm run migrate:style-host` moves maps already published) and
-  `NEXT_PUBLIC_EMBED_SCRIPT_URL` (unset, the snippet points at the dashboard's own origin).
+  `NEXT_PUBLIC_EMBED_SCRIPT_URL` / `NEXT_PUBLIC_GAZETTEER_URL` (unset, the snippet and the
+  gazetteer point at the dashboard's own origin). **Set both to `cdn.pinglide.com` before the
+  first customer pastes a snippet** — unset, every visitor downloads ~345KB from Appwrite
+  Sites, which is metered bandwidth in the visitor path (§2), and a pasted URL is permanent.
+  `npm run deploy:cdn` puts the files there; `UPLOAD_EMBED_ON_BUILD=true` on the site makes
+  `postbuild` upload the embed on every deploy. The gazetteer is gitignored, so it is only
+  ever uploaded by hand.
 - Server-only, **required to sell anything**: `LEMON_API_KEY` (falling back to
   `LEMON_TEST_API_KEY`, because the provider decides test mode from the key itself and
   renaming a variable on the day of the first real payment is the worst possible timing),
@@ -301,9 +310,9 @@ Area-specific invariants live at the head of each file in the table below.
   it `retired` so it stops being offered and keeps being read.
 - **One writer per JSON blob column.** `updateMap` serialises `settings` whole, so two
   forms writing it is a lost update. `useEmbedDesign` is the only writer.
-- **The embed's own-code budget is 49.2KB and it currently sits at 49.08KB — 123 bytes
-  spare.** That is the binding number, and anything new has to be paid for by removing
-  something. The **total** used to be the gate at 2 bytes; it is reported now and not
+- **The embed's own-code budget is 49.2KB and it currently sits at 46.3KB**, minified
+  since 2026-09-26. That is the binding number, and anything new has to be paid for by
+  removing something. The **total** used to be the gate at 2 bytes; it is reported now and not
   enforced, because its stated job was catching MapLibre ballooning and it had become a
   cap on our own code by arithmetic accident. MapLibre has its own 305KB ceiling
   instead. Run `npm run build:embed` after any change under `/embed` or
@@ -440,9 +449,9 @@ The embed must **never** import React, HeroUI, Motion, TanStack Query, Zustand, 
 
 Target: **under 250KB gzipped including MapLibre.** If a change pushes it over, flag it.
 
-**Measured, that target is unreachable with MapLibre v6** — its own dist files are 297.4KB gzipped at 6.11.2 (`maplibre-gl.mjs` 146.9 + `maplibre-gl-shared.mjs` 144.6 + the worker 6.0), minified already, with no slim build. Actual total is **345.3KB**, of which ours is 47.9KB. `npm run build:embed` enforces a **49.2KB budget on our code** and a **305KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 47.5KB.
+**Measured, that target is unreachable with MapLibre v6** — its own dist files are 297.4KB gzipped at 6.11.2 (`maplibre-gl.mjs` 146.9 + `maplibre-gl-shared.mjs` 144.6 + the worker 6.0), minified already, with no slim build. Actual total is **343.8KB**, of which ours is 46.3KB (minified). `npm run build:embed` enforces a **49.2KB budget on our code** and a **305KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 46.3KB.
 
-The own-code budget has been raised six times — 42 → 46 → 47 → 48 → 48.1 → 49.2KB — and each raise is argued in `scripts/check-embed-size.mjs` rather than merely recorded. It **must not be raised to get past a binding budget**: a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam — the bottom-sheet drawer was built that way, clawed from 285 bytes over to 18 under without touching the number. The fourth raise is the counter-example and is labelled as one: carrying *both* narrow-screen drawers cost 162 bytes, four trims paid back 18 of them, and the remaining 144 was the owner's call taken with the numbers on the table rather than a conclusion the file reached. The fifth (split dots where dotted routes share a road) was the same kind of call: granted at 75 bytes over for a first design that failed, and its replacement costs ~163 bytes, 63 over the old 48KB. The sixth (routes sharing a road take turns, dot by dot and dash by dash) was granted by the owner in advance and cost ~990 bytes: MapLibre cannot alternate symbol dots across tile edges, so the embed places them itself. The bundle is **not minified** (Vite library mode leaves ES output alone), which is why it cost that much. Turning minification on is a separate decision still to take.
+The own-code budget has been raised six times — 42 → 46 → 47 → 48 → 48.1 → 49.2KB — and each raise is argued in `scripts/check-embed-size.mjs` rather than merely recorded. It **must not be raised to get past a binding budget**: a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam — the bottom-sheet drawer was built that way, clawed from 285 bytes over to 18 under without touching the number. The fourth raise is the counter-example and is labelled as one: carrying *both* narrow-screen drawers cost 162 bytes, four trims paid back 18 of them, and the remaining 144 was the owner's call taken with the numbers on the table rather than a conclusion the file reached. The fifth (split dots where dotted routes share a road) was the same kind of call: granted at 75 bytes over for a first design that failed, and its replacement costs ~163 bytes, 63 over the old 48KB. The sixth (routes sharing a road take turns, dot by dot and dash by dash) was granted by the owner in advance and cost ~990 bytes: MapLibre cannot alternate symbol dots across tile edges, so the embed places them itself. The bundle was **not minified** then (Vite library mode leaves ES output alone), which is why it cost that much. Minification was switched on afterwards (2026-09-26, `output.minify` in `embed/vite.config.mts`) and took ours from 49.1KB to 45.6KB; the embed's language table, badge and page events were paid for out of that without a seventh raise.
 
 **The 320KB ceiling on the total is gone, and the distinction matters.** It was down to 2 bytes, which meant every embed change failed the gate — including ones that made our own code smaller — while the message told you to check whether MapLibre was still external. Its own docblock said what it was for, and it was never a cap on our code: "to catch MapLibre itself ballooning on an upgrade or a second copy of a chunk sneaking back in". So it is pointed at that instead, as `VENDOR_CEILING_BYTES`, with the +131KB duplication regression going straight through it. It was 280KB, then raised to **305KB** when MapLibre 6.2 → 6.11 grew its own files by 24.2KB — the owner's call, taken with staying on 6.2 on the table. **That is re-aiming a gate that was measuring the wrong thing, not raising one that was in the way**, and the difference is the whole argument; if MapLibre ever trips it, that *is* the §3 conversation about the map library. Reasoning in `scripts/check-embed-size.mjs` and `docs/notes/publish-and-embed.md`.
 

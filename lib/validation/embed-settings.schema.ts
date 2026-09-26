@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+import {
+  DEFAULT_EMBED_LANGUAGE,
+  EMBED_LANGUAGE_IDS,
+} from "@/lib/embed/languages";
+import {
+  EMBED_STRING_KEYS,
+  type EmbedStringKey,
+  type EmbedStrings,
+} from "@/packages/shared/embed-strings";
 import type { SnapshotColors } from "@/packages/shared/snapshot";
 import { hexColorSchema } from "./common";
 
@@ -69,6 +78,9 @@ const percentSchema = z.number().int().min(0).max(100);
  * the one token worth spending that trade on.
  */
 export const DEFAULT_EMBED_ACCENT = "#f54600";
+
+/** Long enough for the location-off sentence in German, short enough to fit. */
+export const EMBED_WORD_MAX = 120;
 
 export const embedColorsSchema = z.object({
   surface: hexColorSchema.optional(),
@@ -193,9 +205,43 @@ export const embedSettingsSchema = z.object({
    * `pinImageId(icon, color)`, so only a rebuild recolours them.
    */
   pinColor: hexColorSchema,
+
+  /*
+   * What the map says to its visitors: one preset language, and the owner's own
+   * words for any phrase in it. Publish resolves the two into the snapshot's
+   * `lang` and `strings` (lib/embed/languages), writing only what differs from
+   * English — so a map left in English publishes the bytes it always did.
+   *
+   * The wording lives behind a dialog, not in the sidebar. Two text boxes were
+   * removed from this column once because a full-width field per phrase is a
+   * wall in a 20rem panel (see `colors` above); twenty-odd would be worse.
+   */
+  language: z.enum(EMBED_LANGUAGE_IDS),
+  strings: z.partialRecord(
+    z.enum(EMBED_STRING_KEYS as [EmbedStringKey, ...EmbedStringKey[]]),
+    z
+      .string()
+      .trim()
+      .max(EMBED_WORD_MAX, `Keep each phrase under ${EMBED_WORD_MAX} characters.`),
+  ),
 });
 
 export type EmbedSettings = z.output<typeof embedSettingsSchema>;
+
+/**
+ * The wording dialog's form: every phrase present, as the visitor would read it.
+ * Blank is allowed and means "the language's own word" (`wordingOverrides`).
+ */
+export const embedWordingFormSchema = z.object(
+  Object.fromEntries(
+    EMBED_STRING_KEYS.map((key) => [
+      key,
+      z.string().max(EMBED_WORD_MAX, `Keep it under ${EMBED_WORD_MAX} characters.`),
+    ]),
+  ) as Record<EmbedStringKey, z.ZodString>,
+);
+
+export type EmbedWordingForm = z.output<typeof embedWordingFormSchema>;
 
 export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   clustering: true,
@@ -282,6 +328,10 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   // drew the flat grey instead and the Publish tab showed a different map from
   // the one next door. Publishing the colour is what closes that.
   pinColor: DEFAULT_EMBED_ACCENT,
+
+  // English with nothing reworded publishes neither `lang` nor `strings`.
+  language: DEFAULT_EMBED_LANGUAGE,
+  strings: {},
 };
 
 /**
@@ -336,7 +386,31 @@ export function readEmbedSettings(
 
     colors: readColors(settings.colors),
     pinColor: readHex(settings.pinColor, d.pinColor),
+
+    language: readChoice(settings.language, EMBED_LANGUAGE_IDS, d.language),
+    strings: readWords(settings.strings),
   };
+}
+
+/**
+ * The owner's own words, keeping only known phrases that are non-empty text.
+ * They are painted into a stranger's page, but as text nodes and attributes the
+ * embed sets through the DOM, never as markup — so this bounds their length and
+ * does not need to escape them.
+ */
+function readWords(value: unknown): EmbedStrings {
+  const words: EmbedStrings = {};
+  if (!value || typeof value !== "object") return words;
+
+  for (const key of EMBED_STRING_KEYS) {
+    const word = (value as Record<string, unknown>)[key];
+
+    if (typeof word === "string" && word.trim()) {
+      words[key] = word.trim().slice(0, EMBED_WORD_MAX);
+    }
+  }
+
+  return words;
 }
 
 function readFlag(value: unknown, fallback: boolean): boolean {

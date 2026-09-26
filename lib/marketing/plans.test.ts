@@ -52,6 +52,7 @@ describe("marketing plans", () => {
       routes: plan.routes,
       sheetSync: plan.sheetSync,
       analytics: plan.analytics,
+      noBadge: plan.noBadge,
     }).toEqual(PLAN_FEATURES[plan.id]);
   });
 

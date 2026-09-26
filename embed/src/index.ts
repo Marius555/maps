@@ -38,6 +38,7 @@ import {
 import embedCss from "./styles.css?inline";
 import { createTracker, trackLinks, type Track } from "./track";
 import "./worker";
+import { setStrings, t } from "./i18n";
 
 /**
  * Entry point.
@@ -107,8 +108,40 @@ async function mount(script: HTMLScriptElement): Promise<void> {
     return;
   }
 
+  if (config.tags?.length) onlyTagged(snapshot, config.tags);
+
   injectStyles();
   await render(container, snapshot);
+}
+
+/**
+ * One map, several pages: a snippet carrying `data-tags` shows only the
+ * locations wearing one of those tags, and frames them rather than the whole map.
+ *
+ * Nothing matching means the full map — an owner who deleted the tag under a
+ * pasted snippet gets their map back, not an empty box on their site. The frame
+ * is only redrawn when the snapshot has one: a null `bounds` is an opening view
+ * the owner chose, and that choice stands.
+ */
+function onlyTagged(snapshot: MapSnapshot, tags: string[]): void {
+  const kept = snapshot.places.filter((place) =>
+    place.tags?.some((tag) => tags.includes(tag)),
+  );
+  if (kept.length === 0) return;
+
+  snapshot.places = kept;
+
+  if (snapshot.bounds) {
+    const lngs = kept.map((place) => place.lng);
+    const lats = kept.map((place) => place.lat);
+
+    snapshot.bounds = {
+      west: Math.min(...lngs),
+      south: Math.min(...lats),
+      east: Math.max(...lngs),
+      north: Math.max(...lats),
+    };
+  }
 }
 
 /**
@@ -183,9 +216,11 @@ async function render(
    * map is measured.
    */
   const track = createTracker(snapshot);
+  setStrings(snapshot);
 
   const root = el("div", isDark ? "lm-root lm-root--dark" : "lm-root");
   root.style.height = "100%";
+  if (snapshot.lang) root.lang = snapshot.lang;
   applyChrome(root, snapshot);
 
   const layout = el("div", "lm-layout");
@@ -550,14 +585,14 @@ function installDrawer(
     sheet ? "lm-grip" : "lm-button lm-button--icon",
     // The strip says the word; the hamburger is a glyph and carries the same
     // word as its label below.
-    sheet ? "Locations" : "",
+    sheet ? t("locations") : "",
   );
 
   if (!sheet) {
     // The same name the strip carries, which is one control named once rather
     // than two names for one job — and `aria-expanded` is what says which state
     // it is in, on either axis.
-    trigger.ariaLabel = "Locations";
+    trigger.ariaLabel = t("locations");
     trigger.append(icon(["M4 6h16", "M4 12h16", "M4 18h16"]));
   }
 
@@ -826,7 +861,7 @@ function createStatus(): StatusHandle {
   // reader the same moment it reaches the map.
   element.setAttribute("role", "status");
   element.setAttribute("aria-live", "polite");
-  element.title = "Dismiss";
+  element.title = t("dismiss");
 
   const LINGER_MS = 6_000;
   let timer = 0;
@@ -965,7 +1000,7 @@ function wireControls({
     if (places.length === 0) {
       // Sticky: this describes the map as it stands, not something that just
       // finished, so it stays until the filter that caused it changes.
-      showStatus("No locations match.", true);
+      showStatus(t("noMatch"), true);
       return;
     }
 
@@ -1051,7 +1086,7 @@ function wireControls({
 
   async function goToNearest(): Promise<void> {
     // Sticky: it is replaced by its own outcome, which may be ten seconds away.
-    showStatus("Finding your location…", true);
+    showStatus(t("locating"), true);
 
     try {
       const position = await currentPosition();
@@ -1077,7 +1112,7 @@ function wireControls({
       const closest = nearestPlace(position, visible());
 
       if (!closest) {
-        showStatus("No locations match.", true);
+        showStatus(t("noMatch"), true);
         return;
       }
 
@@ -1102,7 +1137,9 @@ function wireControls({
        * old sitting over someone's map until they searched for something.
        */
       showStatus(
-        `${closest.name} — ${formatDistance(distanceKm(position, closest))} away`,
+        t("nearestFound")
+          .replace("{place}", closest.name)
+          .replace("{distance}", formatDistance(distanceKm(position, closest))),
       );
     } catch (error) {
       /*
@@ -1120,12 +1157,12 @@ function wireControls({
 
       showStatus(
         reason === "denied"
-          ? "Location is off for this site. Turn it on in your browser, then try again."
+          ? t("locationOff")
           : reason === "timeout"
-            ? "Couldn't find you in time. Try again."
+            ? t("locationTimeout")
             : reason === "unsupported"
-              ? "This browser can't share a location."
-              : "Couldn't get your location.",
+              ? t("locationUnsupported")
+              : t("locationFailed"),
       );
     }
   }

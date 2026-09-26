@@ -2,8 +2,11 @@
 
 import { Button, toast } from "@heroui/react";
 import { Copy } from "lucide-react";
+import { useState } from "react";
 
 import { embedScriptUrl, embedSnippet } from "@/lib/embed/snippet";
+import type { MapTagGroup } from "@/lib/repositories/types";
+import { SnippetTagFilter } from "./snippet-tag-filter";
 import { TestPageLink } from "./share-dialog/test-page-link";
 import { useOrigin } from "./use-origin";
 
@@ -19,14 +22,22 @@ import { useOrigin } from "./use-origin";
 export function EmbedSnippet({
   snapshotUrl,
   isMeasuring,
+  tagGroups,
 }: {
   snapshotUrl: string;
   isMeasuring: boolean;
+  tagGroups: MapTagGroup[];
 }) {
   const origin = useOrigin();
+  // Local, not saved: the choice belongs to the copy being pasted, not the map.
+  const [tags, setTags] = useState<ReadonlySet<string>>(new Set());
 
   const snippet = origin
-    ? embedSnippet({ scriptUrl: embedScriptUrl(origin), snapshotUrl })
+    ? embedSnippet({
+        scriptUrl: embedScriptUrl(origin),
+        snapshotUrl,
+        tags: [...tags],
+      })
     : null;
 
   const onCopy = async () => {
@@ -56,6 +67,8 @@ export function EmbedSnippet({
         Paste this into your page where the map should appear. It keeps working
         after you publish again — you only paste it once.
       </p>
+
+      <SnippetTagFilter groups={tagGroups} selected={tags} onChange={setTags} />
 
       <pre className="overflow-x-auto rounded-xl bg-surface-secondary p-3 text-xs text-foreground">
         <code className="whitespace-pre">

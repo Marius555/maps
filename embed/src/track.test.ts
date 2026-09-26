@@ -330,3 +330,32 @@ describe("trackLinks", () => {
     });
   });
 });
+
+describe("page events", () => {
+  function listen(): Record<string, unknown>[] {
+    const seen: Record<string, unknown>[] = [];
+    document.addEventListener("pinglide", (event) => {
+      seen.push((event as CustomEvent<Record<string, unknown>>).detail);
+    });
+    return seen;
+  }
+
+  it("tells the host page about every event, even with measurement off", () => {
+    const seen = listen();
+    const track = createTracker(snapshot());
+
+    track("directions", { id: "p1" });
+    window.dispatchEvent(new Event("pagehide"));
+
+    expect(seen.at(-1)).toEqual({ type: "directions", id: "p1", map: "map123" });
+    // A DOM event is not a request: an unmeasured map still sends nothing.
+    expect(sent).toHaveLength(0);
+  });
+
+  it("does not let an event's data overwrite its type or map", () => {
+    const seen = listen();
+    createTracker(snapshot())("pin", { type: "x", map: "y" });
+
+    expect(seen.at(-1)).toMatchObject({ type: "pin", map: "map123" });
+  });
+});

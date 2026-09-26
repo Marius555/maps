@@ -1,4 +1,11 @@
-import { ChartColumn, Lock, Radio, Rocket } from "lucide-react";
+import {
+  ArrowRight,
+  ChartColumn,
+  Lock,
+  Power,
+  Radio,
+  Rocket,
+} from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/ui/empty-state";
@@ -75,13 +82,16 @@ export function MeasurementOffEmpty({ mapId }: { mapId: string }) {
     <EmptyState
       icon={Radio}
       title="Measurement is off"
-      description="Your map is live, but it isn't reporting anything. Switch on visitor analytics in the Publish designer and publish again to start seeing what people search for and which locations they open."
+      description="Your map is live, but it isn't reporting anything. Turn on visitor analytics, then publish to start seeing what people search for and which locations they open."
+      surface={false}
       action={
         <Link
-          href={`/maps/${mapId}/publish`}
-          className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-foreground"
+          href={`/maps/${mapId}/publish?analytics=on`}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-foreground"
         >
+          <Power aria-hidden="true" className="size-4" />
           Turn it on
+          <ArrowRight aria-hidden="true" className="size-4" />
         </Link>
       }
     />

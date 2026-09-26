@@ -30,6 +30,8 @@ function session(overrides: Partial<MapSession> = {}): MapSession {
     referrer: "",
     device: "desktop",
     events: [event("view")],
+    visitor: null,
+    returning: false,
     ...overrides,
   };
 }
@@ -369,5 +371,47 @@ describe("places picked from the search box", () => {
       { key: "Kaunas", count: 2 },
       { key: "Klaipėda", count: 1 },
     ]);
+  });
+});
+
+describe("visitors", () => {
+  const A = "0123456789abcdef";
+  const B = "fedcba9876543210";
+
+  it("counts people separately from visits", () => {
+    const result = view(
+      foldOf(
+        session({ visitor: A }),
+        session({ visitor: A, returning: true }),
+        session({ visitor: B }),
+      ),
+    );
+
+    expect(result.totals.sessions.value).toBe(3);
+    expect(result.totals.visitors.value).toBe(2);
+    expect(result.visitorsPartial).toBe(false);
+  });
+
+  it("reports the share of visitors who came back", () => {
+    const result = view(
+      foldOf(
+        session({ visitor: A }),
+        session({ visitor: A, returning: true }),
+        session({ visitor: B }),
+      ),
+    );
+
+    expect(result.returning).toEqual({ count: 1, of: 2, share: 0.5 });
+  });
+
+  it("has no returning share on a range with no counted visitors", () => {
+    expect(view(foldOf(session())).returning.share).toBeNull();
+  });
+
+  it("says so when some visits carry no visitor key", () => {
+    const result = view(foldOf(session({ visitor: A }), session({ visitor: null })));
+
+    expect(result.visitorsPartial).toBe(true);
+    expect(result.totals.visitors.value).toBe(1);
   });
 });

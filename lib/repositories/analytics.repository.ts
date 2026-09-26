@@ -79,6 +79,12 @@ export type RecordSessionInput = {
   city: string | null;
   lat: number | null;
   lng: number | null;
+  /**
+   * The anonymous monthly visitor key (lib/analytics/collect/visitor-key.ts),
+   * or null when the request carried no IP to derive one from.
+   */
+  visitor: string | null;
+  /** Already truncated by the caller — the full address is never stored. */
   ip: string | null;
   host: string;
   path: string;
@@ -292,6 +298,17 @@ function sessionRowId(mapId: string, sessionId: string): string {
 export async function recordSession(input: RecordSessionInput): Promise<void> {
   const rowId = sessionRowId(input.mapId, input.sessionId);
   const startedAt = input.startedAt.toISOString();
+  const day = startedAt.slice(0, 10);
+
+  /*
+   * Asked before the create rather than after a conflict, and asked of every
+   * beacon that may be new — a later flush of a known session pays for this read
+   * too, which is the price of not reading the session row first. It is one
+   * indexed read with a one-row limit, against a write that was already here.
+   */
+  const returning = input.visitor
+    ? await seenThisMonth(input.mapId, input.visitor, day)
+    : false;
 
   try {
     await admin.tablesDB.createRow<MapSessionRow>({
@@ -301,7 +318,7 @@ export async function recordSession(input: RecordSessionInput): Promise<void> {
       data: {
         mapId: input.mapId,
         startedAt,
-        day: startedAt.slice(0, 10),
+        day,
         country: input.country,
         city: input.city,
         lat: input.lat,
@@ -316,6 +333,8 @@ export async function recordSession(input: RecordSessionInput): Promise<void> {
         device: input.device,
         events: JSON.stringify(input.events),
         eventCount: input.events.length,
+        visitor: input.visitor,
+        returning,
       },
     });
   } catch (error) {
@@ -329,6 +348,45 @@ export async function recordSession(input: RecordSessionInput): Promise<void> {
   // counts against the ceiling — an append is the same visit.
   const cached = gates.get(input.mapId);
   if (cached?.gate) cached.gate.used += 1;
+}
+
+/**
+ * Has this visitor already got a session on this map this month?
+ *
+ * The visitor key itself changes on the 1st (visitor-key.ts), so "this month"
+ * is both the window the owner chose and the only one the key can answer for.
+ * The month is taken from the session's own day, which the key was minted in.
+ *
+ * Asked before this session's row exists, so a true answer is always an
+ * *earlier* session. Two first visits racing each other can both read as new;
+ * that needs one person to open the map twice inside one round trip, and
+ * locking around it would cost every session a write.
+ *
+ * A failed read answers new rather than failing the write: losing a
+ * "returning" flag is a rounding error, losing the visit is not.
+ */
+async function seenThisMonth(
+  mapId: string,
+  visitor: string,
+  day: string,
+): Promise<boolean> {
+  try {
+    const result = await admin.tablesDB.listRows<MapSessionRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.mapSessions,
+      queries: [
+        Query.equal("mapId", mapId),
+        Query.equal("visitor", visitor),
+        Query.greaterThanEqual("day", `${day.slice(0, 7)}-01`),
+        Query.select(["$id"]),
+        Query.limit(1),
+      ],
+    });
+
+    return result.rows.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /**

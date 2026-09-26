@@ -1,7 +1,6 @@
 import {
-  DAY_LABELS,
-  DAY_LABELS_SHORT,
   dayIndex,
+  dayLabels,
   formatDay,
   isEmptyHours,
   isOpenNow,
@@ -46,6 +45,7 @@ import type {
 import { pinColorOfChips, type TagChip } from "@/packages/shared/tags";
 
 import { button, el, icon, link } from "./dom";
+import { lang, t } from "./i18n";
 
 /**
  * The card shown when a visitor clicks a pin.
@@ -846,7 +846,7 @@ function buildGallery(photos: string[]): HTMLElement {
 
   const step = (delta: number, side: string, path: string) => {
     const control = button("lm-popup__step lm-popup__step--" + side, "");
-    const name = delta < 0 ? "Previous photo" : "Next photo";
+    const name = delta < 0 ? t("previousPhoto") : t("nextPhoto");
 
     control.setAttribute("aria-label", name);
     control.title = name;
@@ -909,7 +909,7 @@ function buildMore(context: BlockContext): HTMLElement | null {
   if (inner.childElementCount === 0) return null;
 
   const root = el("details", "lm-popup__more");
-  const summary = el("summary", "lm-popup__more-summary", "More details");
+  const summary = el("summary", "lm-popup__more-summary", t("moreDetails"));
   summary.append(icon(["m6 9 6 6 6-6"]));
 
   root.append(summary, inner);
@@ -1024,20 +1024,20 @@ function buildHours(
   const state = el(
     "span",
     open ? "lm-popup__hours-state lm-popup__hours-state--open" : "lm-popup__hours-state",
-    open ? "Open now" : "Closed now",
+    open ? t("openNow") : t("closedNow"),
   );
 
   const today = dayIndex();
-  summary.append(state, el("span", "lm-popup__hours-today", formatDay(hours[today])));
+  summary.append(state, el("span", "lm-popup__hours-today", formatDay(hours[today], t("closed"))));
   summary.append(icon(["m6 9 6 6 6-6"]));
   root.append(summary);
 
   const list = el("dl", "lm-popup__hours-list");
-  const labels = block?.hoursLongDays ? DAY_LABELS : DAY_LABELS_SHORT;
+  const labels = dayLabels(!!block?.hoursLongDays, lang);
 
   for (let day = 0; day < hours.length; day += 1) {
     const term = el("dt", "lm-popup__hours-day", labels[day]);
-    const value = el("dd", "lm-popup__hours-time", formatDay(hours[day]));
+    const value = el("dd", "lm-popup__hours-time", formatDay(hours[day], t("closed")));
 
     if (day === today) {
       term.classList.add("lm-popup__hours-day--today");
@@ -1121,7 +1121,10 @@ function buildButton(
    */
   pinColor: string | undefined,
 ): HTMLElement | null {
-  const target = buttonTargetOf(block, place, fields, me);
+  const target = buttonTargetOf(block, place, fields, me, {
+    directions: t("directions"),
+    website: t("website"),
+  });
   if (!target) return null;
 
   /*
@@ -1285,7 +1288,7 @@ function buildActions(
       actionRow(
         link("lm-popup__link", "", `mailto:${place.email}`),
         MAIL_ICON,
-        "Email",
+        t("email"),
       ),
     );
   }
@@ -1304,7 +1307,7 @@ function buildActions(
       actionRow(
         directionsLink("lm-popup__link", "", place, me),
         NAVIGATION_ICON,
-        "Directions",
+        t("directions"),
       ),
     );
   }

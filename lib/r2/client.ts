@@ -35,6 +35,7 @@ export type PutHeaders = {
  * Three attempts, not aws4fetch's default of eleven. Its backoff doubles from
  * 50ms, so the default can spend ~25s retrying — and Appwrite Sites cuts every
  * request off at 30s (CLAUDE.md §12). A publish should fail and say so instead.
+ * The loop itself is in `send`, which signs with aws4fetch but sends itself.
  */
 const RETRIES = 2;
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -44,21 +45,53 @@ export function r2Bucket(bucket: string): R2Bucket {
     ...credentials(),
     service: "s3",
     region: "auto",
-    retries: RETRIES,
   });
   const base = `https://${env.r2AccountId}.r2.cloudflarestorage.com/${bucket}`;
 
+  /*
+   * Signed by aws4fetch, sent by us — never `client.fetch`.
+   *
+   * `client.fetch` hands `fetch` a pre-built `Request`, and inside a Next route
+   * `fetch` is Next's patched one, which rebuilds any `Request` input from
+   * `request.body`. That getter is a ReadableStream, so the rebuilt request has
+   * a stream body, goes out chunked with no `Content-Length`, and R2 refuses
+   * every such PUT with `411 MissingContentLength`. Scripts never saw it because
+   * plain Node's fetch keeps the string. Passing the string itself in a plain
+   * init keeps its length known whichever `fetch` answers.
+   *
+   * That means aws4fetch's retry loop is not used either, so the retry is here:
+   * the same budget, on the same answers (a network failure, a 5xx, a 429).
+   */
   async function send(
     method: string,
     url: string,
     label: string,
-    init: RequestInit = {},
+    init: { body?: string; headers?: Record<string, string> } = {},
   ): Promise<Response> {
-    const response = await client.fetch(url, {
-      ...init,
-      method,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
+    let response: Response | undefined;
+
+    for (let attempt = 0; attempt <= RETRIES; attempt += 1) {
+      if (attempt > 0) await delay(50 * 2 ** attempt);
+
+      const signed = await client.sign(url, { method, ...init });
+
+      try {
+        response = await fetch(signed.url, {
+          method,
+          headers: signed.headers,
+          body: init.body,
+          cache: "no-store",
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+      } catch (error) {
+        if (attempt === RETRIES) throw error;
+        continue;
+      }
+
+      if (response.status < 500 && response.status !== 429) break;
+    }
+
+    if (!response) throw new Error(`R2 ${method} ${label} failed: no response`);
 
     if (!response.ok) {
       const code = errorCode(await response.text());
@@ -107,6 +140,10 @@ export function r2Bucket(bucket: string): R2Bucket {
       await send("DELETE", `${base}/${encodeKey(key)}`, key);
     },
   };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function credentials(): { accessKeyId: string; secretAccessKey: string } {

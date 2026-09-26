@@ -30,7 +30,13 @@ export function publicUrl(key) {
   return `${snapshotPublicUrl()}/${key}`;
 }
 
-export function snapshotBucket() {
+/**
+ * The bucket itself, for anything the scripts put on the CDN host: snapshots
+ * (below) and the embed's own files (scripts/upload-cdn.mjs). One bucket, one
+ * custom domain, one CORS rule — map ids are Appwrite ids, so `embed/` and
+ * `gazetteer/` can never collide with a `{mapId}/` prefix.
+ */
+export function r2Bucket() {
   const client = new AwsClient({
     accessKeyId: process.env.R2_ACCESS_KEY_ID,
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
@@ -41,19 +47,44 @@ export function snapshotBucket() {
   const bucket = process.env.R2_SNAPSHOT_BUCKET || "snapshots";
   const base = `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucket}`;
 
-  async function put(key, body, cacheControl) {
-    const response = await client.fetch(`${base}/${key}`, {
-      method: "PUT",
-      body,
-      headers: { "content-type": CONTENT_TYPE, "cache-control": cacheControl },
-      signal: AbortSignal.timeout(30_000),
-    });
+  return {
+    async put(key, body, { contentType, cacheControl }) {
+      const response = await client.fetch(`${base}/${key}`, {
+        method: "PUT",
+        body,
+        headers: { "content-type": contentType, "cache-control": cacheControl },
+        signal: AbortSignal.timeout(30_000),
+      });
 
-    if (!response.ok) {
-      const code = (await response.text()).match(/<Code>([^<]*)<\/Code>/)?.[1];
-      throw new Error(`R2 PUT ${key} failed: HTTP ${response.status}${code ? ` ${code}` : ""}`);
-    }
-  }
+      if (!response.ok) {
+        const code = (await response.text()).match(/<Code>([^<]*)<\/Code>/)?.[1];
+        throw new Error(`R2 PUT ${key} failed: HTTP ${response.status}${code ? ` ${code}` : ""}`);
+      }
+    },
+
+    /**
+     * The object's ETag, unquoted, or null when there is no such object. For a
+     * single-part PUT R2's ETag is the body's MD5, which is what lets an upload
+     * skip a file that has not changed.
+     */
+    async etag(key) {
+      const response = await client.fetch(`${base}/${key}`, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(30_000),
+      });
+
+      if (response.status === 404) return null;
+      if (!response.ok) throw new Error(`R2 HEAD ${key} failed: HTTP ${response.status}`);
+
+      // R2 marks the ETag weak (`W/"…"`) on compressible types, which is most of
+      // what the embed ships; the hash inside is still the body's MD5.
+      return (response.headers.get("etag") ?? "").replace(/^W\//, "").replace(/"/g, "") || null;
+    },
+  };
+}
+
+export function snapshotBucket() {
+  const bucket = r2Bucket();
 
   return {
     /**
@@ -62,8 +93,14 @@ export function snapshotBucket() {
      * previous live object is untouched. The live overwrite is atomic.
      */
     async writeSnapshot(mapId, body, stamp) {
-      await put(archiveKey(mapId, stamp), body, ARCHIVE_CACHE);
-      await put(liveKey(mapId), body, LIVE_CACHE);
+      await bucket.put(archiveKey(mapId, stamp), body, {
+        contentType: CONTENT_TYPE,
+        cacheControl: ARCHIVE_CACHE,
+      });
+      await bucket.put(liveKey(mapId), body, {
+        contentType: CONTENT_TYPE,
+        cacheControl: LIVE_CACHE,
+      });
     },
   };
 }

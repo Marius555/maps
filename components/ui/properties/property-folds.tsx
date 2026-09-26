@@ -37,11 +37,18 @@ import { revealFoldIn } from "@/lib/ui/reveal-fold";
 export function PropertyFolds({
   children,
   className,
+  initialOpenId,
 }: {
   children: ReactNode;
   className?: string;
+  /**
+   * The one fold to start open, for a page reached to change one thing — the
+   * Analytics tab's "Turn it on" lands on the Visitor analytics fold. Every
+   * other arrival still starts with everything shut.
+   */
+  initialOpenId?: string;
 }) {
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialOpenId ?? null);
   const root = useRef<HTMLDivElement>(null);
 
   /*

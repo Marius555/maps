@@ -17,8 +17,10 @@ import { DeviceToggle } from "../preview-device/device-toggle";
 import type { DeviceId } from "../preview-device/devices";
 import { ShareDialog } from "../share-dialog/share-dialog";
 import { ColorsGroup } from "./colors-group";
+import { LanguageGroup } from "./language-group";
 import { MapControlsGroup } from "./map-controls-group";
 import { MeasurementGroup } from "./measurement-group";
+import { useTurnOnAnalytics } from "./use-turn-on-analytics";
 import { MobileGroup } from "./mobile-group";
 import { PanelGroup } from "./panel-group";
 import { PanelSurfaceGroup } from "./panel-surface-group";
@@ -67,6 +69,7 @@ export function DesignSidebar({
   design,
   device,
   onDeviceChange,
+  turnOnAnalytics = false,
 }: {
   map: AppMap;
   places: Place[];
@@ -76,12 +79,17 @@ export function DesignSidebar({
       — see `PublishPanel`. */
   device: DeviceId;
   onDeviceChange: (value: DeviceId) => void;
+  /** Open on the Visitor analytics fold with the switch on — see `useTurnOnAnalytics`. */
+  turnOnAnalytics?: boolean;
 }) {
   const isEmpty = places.length === 0 && shapes.length === 0;
 
   // Shut to start with, which only means anything below `lg`: the map is what
-  // this page is for, and the controls are one tap from it.
-  const [isOpen, setIsOpen] = useState(false);
+  // this page is for, and the controls are one tap from it. Open when the
+  // owner came here to switch analytics on — the switch is the point then.
+  const [isOpen, setIsOpen] = useState(turnOnAnalytics);
+
+  useTurnOnAnalytics(turnOnAnalytics, design);
 
   return (
     <BottomSheet
@@ -182,7 +190,9 @@ export function DesignSidebar({
           five open folds in a 20rem column is the wall again. `PropertyFolds`
           is the one answer every panel in the app now gives.
         */}
-        <PropertyFolds>
+        <PropertyFolds
+          initialOpenId={turnOnAnalytics ? "measurement" : undefined}
+        >
           <PropertyFold id="panel" title="Results panel">
             <PanelGroup {...design} />
           </PropertyFold>
@@ -226,6 +236,10 @@ export function DesignSidebar({
 
           <PropertyFold id="colors" title="Colours">
             <ColorsGroup {...design} />
+          </PropertyFold>
+
+          <PropertyFold id="language" title="Language">
+            <LanguageGroup {...design} />
           </PropertyFold>
 
           {/* Last, because it is the only group that is not about how the map

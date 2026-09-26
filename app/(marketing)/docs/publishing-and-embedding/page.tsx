@@ -7,6 +7,7 @@ import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
 import { findArticle } from "@/lib/docs/articles";
+import { BRAND } from "@/lib/brand";
 
 const ARTICLE = findArticle("publishing-and-embedding");
 
@@ -83,6 +84,10 @@ export default function PublishingAndEmbeddingPage() {
             [
               "Colours",
               "Panel, Text, Secondary text, Lines and Accent, and the Default pin colour for locations nothing else colours.",
+            ],
+            [
+              "Language",
+              "The language your visitors read the map in — English, Lietuvių, Deutsch, Français or Español — and Edit wording, to change any phrase in your own words.",
             ],
             [
               "Visitor analytics",
@@ -189,13 +194,48 @@ export default function PublishingAndEmbeddingPage() {
               <code key="e">data-eager</code>,
               "Loads the map straight away. Without it, the map loads as a visitor scrolls near it, which keeps your page fast.",
             ],
+            [
+              <code key="g">data-tags</code>,
+              "Shows only locations with these tags. Pick them under Show only in the embed code window rather than typing them — the code uses each tag’s id.",
+            ],
           ]}
         />
+
+        <p>
+          To open the map on one location, link to your page with{" "}
+          <code>?place=</code> and the location’s id at the end of the address.
+        </p>
 
         <p>
           <strong>Open test page</strong> shows the map you last published on a
           page of its own, the way a visitor sees it. Use it to check a publish
           before looking at your site.
+        </p>
+      </DocsSection>
+
+      <DocsSection id="your-analytics" title="Sending map activity to your own analytics">
+        <p>
+          Everything a visitor does on the map — opening a location, pressing
+          Directions, searching, using Nearest to me — is announced on your page
+          as a <code>pinglide</code> event. This works on every plan, whether or
+          not Visitor analytics is switched on, and nothing is sent anywhere
+          unless you send it. To pass them on to Google Analytics, add this
+          below the embed code:
+        </p>
+
+        <pre className="overflow-x-auto rounded-xl bg-surface-secondary p-3 text-xs">
+          <code>{`<script>
+  document.addEventListener("pinglide", function (event) {
+    gtag("event", "map_" + event.detail.type, event.detail);
+  });
+</script>`}</code>
+        </pre>
+
+        <p>
+          <code>event.detail.type</code> says what happened —{" "}
+          <code>open</code>, <code>directions</code>, <code>search</code>,{" "}
+          <code>nearest</code> and so on — and <code>event.detail.map</code> says
+          which map, for a page with more than one.
         </p>
       </DocsSection>
 
@@ -267,7 +307,9 @@ export default function PublishingAndEmbeddingPage() {
 
         <p>
           Every published map is credited to OpenStreetMap and the map provider
-          in a corner. That credit is required and can’t be switched off.
+          in a corner. That credit is required and can’t be switched off. Maps
+          on the free plan also show a small <strong>Made with {BRAND.name}</strong>{" "}
+          link; see <Link href="/docs/plans-and-billing">Plans and billing</Link>.
         </p>
       </DocsSection>
 

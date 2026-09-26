@@ -534,7 +534,9 @@ export const TABLES = [
       float("lat"),
       float("lng"),
       // 45 is the longest possible IPv6 text form (an IPv4-mapped address).
-      // Stored whole; lib/analytics/collect/mask-ip.ts masks it at render.
+      // Truncated before it is written (lib/analytics/collect/truncate-ip.ts):
+      // the last IPv4 octet, everything past the IPv6 routing prefix. Rows from
+      // before that change hold it whole, so mask-ip.ts still masks at render.
       varchar("ip", 45),
       // Which page of the customer's own site the map is on. `host` answers
       // "is someone else embedding this", `path` answers "which of my pages
@@ -545,8 +547,26 @@ export const TABLES = [
       enumeration("device", DEVICE_KINDS),
       text("events"),
       integer("eventCount", { min: 0, xdefault: 0 }),
+      // The anonymous visitor key: a salted hash of the IP and user agent,
+      // scoped to this map and this calendar month, so it cannot follow anyone
+      // across maps or past the 1st (lib/analytics/collect/visitor-key.ts).
+      // Nothing is stored on the visitor's device. Absent on rows written
+      // before visitor counting, which the dashboard counts as visits only.
+      varchar("visitor", 16),
+      // The key had a session on this map earlier the same month. Decided at
+      // write time, because a rollup can only estimate distinct keys, not
+      // answer "seen before" for one of them.
+      boolean("returning", { xdefault: false }),
     ],
     indexes: [
+      {
+        // What `seenThisMonth` asks on every new session: one map, one key,
+        // since the 1st.
+        key: "idx_mapsessions_map_visitor",
+        type: "key",
+        columns: ["mapId", "visitor", "day"],
+        orders: ["asc", "asc", "asc"],
+      },
       {
         key: "idx_mapsessions_map_time",
         type: "key",

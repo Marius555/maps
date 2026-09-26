@@ -176,6 +176,12 @@ const HARNESS_DIR = join(process.cwd(), "embed", "dev");
  * with every line. Turning minification on would very likely win back several
  * KB, but it changes the whole bundle and is its own decision, not part of
  * this one. 49.2KB leaves 123 bytes spare.
+ *
+ * **Then minification was switched on, and the budget did not move** (the
+ * owner's call, 2026-09-26). `output.minify` in embed/vite.config.mts took ours
+ * from 49.1KB to 45.6KB, and the embed's language table, the "Made with" badge
+ * and the host-page events were paid for out of that: 46.3KB after all three.
+ * The room is headroom now, not an allowance — the rule above is unchanged.
  */
 const OWN_BUDGET_BYTES = Math.round(49.2 * 1024);
 

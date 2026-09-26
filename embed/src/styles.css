@@ -2804,3 +2804,19 @@
 .lm-search__option--on {
   background: color-mix(in oklab, var(--lm-foreground) 8%, transparent);
 }
+
+/* "Made with …" on a free plan's map, stacked above the attribution. */
+.lm-root .lm-badge {
+  margin: 0 10px 6px 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--lm-surface);
+  box-shadow: 0 0 0 1px var(--lm-border);
+  color: var(--lm-muted);
+  font-size: 11px;
+  line-height: 18px;
+  text-decoration: none;
+}
+.lm-root .lm-badge:hover {
+  color: var(--lm-foreground);
+}

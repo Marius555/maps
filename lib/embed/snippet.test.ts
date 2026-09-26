@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { embedTestPageUrl } from "./snippet";
+import { embedSnippet, embedTestPageUrl } from "./snippet";
 
 /**
  * The harness reads its snapshot URL with this regex rather than
@@ -56,5 +56,21 @@ describe("embedTestPageUrl", () => {
     // `snapshot=` to the end of the string as the URL.
     expect(url.indexOf("snapshot=")).toBeGreaterThan(-1);
     expect(url.slice(url.indexOf("snapshot=")).includes("&")).toBe(false);
+  });
+});
+
+describe("embedSnippet tags", () => {
+  const base = {
+    scriptUrl: "https://cdn.pinglide.com/embed/map.js",
+    snapshotUrl: "https://cdn.pinglide.com/abc/live.json",
+  };
+
+  it("writes no attribute for the whole map", () => {
+    expect(embedSnippet(base)).not.toContain("data-tags");
+    expect(embedSnippet({ ...base, tags: [] })).not.toContain("data-tags");
+  });
+
+  it("writes the chosen tag ids, comma separated", () => {
+    expect(embedSnippet({ ...base, tags: ["t1", "t2"] })).toContain('data-tags="t1,t2"');
   });
 });

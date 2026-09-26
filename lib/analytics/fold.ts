@@ -1,4 +1,13 @@
 import type { MapSession, SessionEvent } from "@/lib/repositories/types";
+import {
+  addKey,
+  emptySketch,
+  isEmptySketch,
+  mergeSketch,
+  sketchFromString,
+  sketchToString,
+  type Sketch,
+} from "./hll";
 
 /**
  * One day's visitor activity, counted.
@@ -93,6 +102,23 @@ export type DayFold = {
   pages: Record<string, number>;
   /** Rounded `lng,lat` → sessions, for the origin heatmap. */
   origins: Record<string, number>;
+  /**
+   * Every visitor key seen, as a HyperLogLog sketch (./hll.ts).
+   *
+   * A sketch rather than a count because unique visitors do not add: somebody
+   * who came on two days is one visitor for the pair. Sketches merge by union,
+   * so the range total is still right.
+   */
+  visitors: Sketch;
+  /** The keys of sessions recorded as returning — see `recordSession`. */
+  returning: Sketch;
+  /**
+   * Sessions with no visitor key: recorded before visitor counting existed, or
+   * arriving with no IP to derive one from. They are visits the visitor
+   * figures cannot see, and the page says so rather than presenting a partial
+   * count as the whole.
+   */
+  unkeyed: number;
 };
 
 /**
@@ -140,6 +166,9 @@ export function emptyFold(): DayFold {
     referrers: {},
     pages: {},
     origins: {},
+    visitors: emptySketch(),
+    returning: emptySketch(),
+    unkeyed: 0,
   };
 }
 
@@ -171,6 +200,13 @@ function hostOf(referrer: string): string {
 /** Count one session into a fold. Mutates, because it runs per row of a page. */
 export function foldSession(fold: DayFold, session: MapSession): void {
   fold.sessions += 1;
+
+  if (session.visitor) {
+    addKey(fold.visitors, session.visitor);
+    if (session.returning) addKey(fold.returning, session.visitor);
+  } else {
+    fold.unkeyed += 1;
+  }
 
   if (session.country) bump(fold.countries, session.country);
   bump(fold.devices, session.device);
@@ -321,6 +357,10 @@ export function mergeFolds(folds: Iterable<DayFold>): DayFold {
     total.bounced += fold.bounced;
     total.searchSessions += fold.searchSessions;
     total.searchConverted += fold.searchConverted;
+    total.unkeyed += fold.unkeyed;
+
+    mergeSketch(total.visitors, fold.visitors);
+    mergeSketch(total.returning, fold.returning);
 
     mergeCounts(total.events, fold.events);
     mergeCounts(total.picks, fold.picks);
@@ -397,6 +437,17 @@ export function foldToTotals(fold: DayFold): Record<string, unknown> {
     bounced: fold.bounced,
     searchSessions: fold.searchSessions,
     searchConverted: fold.searchConverted,
+    // Always written, zero included: its absence is how `totalsToFold` tells a
+    // day rolled up before visitor counting from one where every visit had a key.
+    unkeyed: fold.unkeyed,
+    // Empty sketches are left out — 1.4KB of zeroes says nothing — and read
+    // back as empty, which is the same thing.
+    ...(isEmptySketch(fold.visitors)
+      ? {}
+      : { visitors: sketchToString(fold.visitors) }),
+    ...(isEmptySketch(fold.returning)
+      ? {}
+      : { returning: sketchToString(fold.returning) }),
     events: topCounts(fold.events, CAPS.events),
     places: topPlaces(fold.places, CAPS.places),
     searches: topSearches(fold.searches, CAPS.searches),
@@ -437,6 +488,19 @@ export function totalsToFold(
   fold.bounced = readCount(totals.bounced);
   fold.searchSessions = readCount(totals.searchSessions);
   fold.searchConverted = readCount(totals.searchConverted);
+
+  /*
+   * A day rolled up before visitor counting has no `unkeyed` at all, and every
+   * one of its sessions is a visit nobody keyed — so absent reads as all of
+   * them, not as zero. Reading it as zero would present that day's visitors as
+   * counted, and there were none.
+   */
+  fold.unkeyed =
+    typeof totals.unkeyed === "number" && Number.isFinite(totals.unkeyed)
+      ? totals.unkeyed
+      : counters.sessions;
+  fold.visitors = sketchFromString(totals.visitors);
+  fold.returning = sketchFromString(totals.returning);
 
   fold.events = readCounts(totals.events);
   fold.picks = readCounts(totals.picks);

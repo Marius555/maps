@@ -7,6 +7,7 @@ import {
 
 import { button, el, icon } from "./dom";
 import type { Gazetteer, GazetteerHit } from "./gazetteer";
+import { t } from "./i18n";
 
 /**
  * What the text filter reads, and how the query is prepared.
@@ -90,13 +91,13 @@ export function createSearchField({
 }: SearchFieldOptions): HTMLElement {
   const wrapper = el("div", "lm-search");
 
-  const label = el("label", "lm-visually-hidden", "Search locations");
+  const label = el("label", "lm-visually-hidden", t("searchLabel"));
   label.htmlFor = "lm-search-input";
 
   const input = el("input", "lm-search__input");
   input.id = "lm-search-input";
   input.type = "search";
-  input.placeholder = "Search locations or a postcode";
+  input.placeholder = t("searchPlaceholder");
   input.autocomplete = "off";
   input.setAttribute("role", "combobox");
   input.setAttribute("aria-expanded", "false");
@@ -342,7 +343,7 @@ export function createNearestButton(
  * button that clears the origin is a control that lies about what it does.
  */
 export function setNearestOn(control: HTMLButtonElement, on: boolean): void {
-  const label = on ? "Stop measuring from here" : "Nearest to me";
+  const label = on ? t("nearestStop") : t("nearest");
 
   control.classList.toggle("lm-button--on", on);
   control.setAttribute("aria-pressed", String(on));

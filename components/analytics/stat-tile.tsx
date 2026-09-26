@@ -25,11 +25,17 @@ export function StatTile({
   label,
   delta,
   hint,
+  footnote,
 }: {
   label: string;
   delta: Delta;
   /** What the number counts, when the label alone would not say. */
   hint?: string;
+  /**
+   * A caveat that holds whatever the delta says — drawn always, unlike `hint`,
+   * which only fills the space where a comparison would have been.
+   */
+  footnote?: string;
 }) {
   return (
     <div className="rounded-xl border border-border bg-surface px-3.5 py-3">
@@ -40,6 +46,8 @@ export function StatTile({
       </p>
 
       <ChangeLine delta={delta} hint={hint} />
+
+      {footnote ? <p className="mt-1 text-xs text-muted">{footnote}</p> : null}
     </div>
   );
 }
@@ -67,7 +75,7 @@ function ChangeLine({ delta, hint }: { delta: Delta; hint?: string }) {
   /*
    * Two lines, and the break is deliberate rather than left to wrapping.
    *
-   * Five tiles across `lg` leaves each about 180px, which is not enough for
+   * Six tiles across `lg` leaves each about 150px, which is not enough for
    * "↗ +203% vs previous period" — so it wrapped after "vs previous" and left
    * "period" alone on a second line. Breaking it on purpose puts the figure on
    * one line and what it is measured against on the next.

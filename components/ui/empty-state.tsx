@@ -15,6 +15,7 @@ export function EmptyState({
   description,
   action,
   size = "md",
+  surface = true,
 }: {
   icon?: LucideIcon;
   title: string;
@@ -22,12 +23,19 @@ export function EmptyState({
   action?: React.ReactNode;
   /** `sm` for panels and sidebars, `md` for a whole page. */
   size?: "sm" | "md";
+  /**
+   * Draw the quiet panel behind it. Off where the page around it is already
+   * the surface and a second grey block reads as a disabled field.
+   */
+  surface?: boolean;
 }) {
   const isSmall = size === "sm";
 
   return (
     <div
-      className={`flex flex-col items-center rounded-xl bg-surface-secondary text-center ${
+      className={`flex flex-col items-center rounded-xl text-center ${
+        surface ? "bg-surface-secondary" : ""
+      } ${
         isSmall ? "gap-2 px-4 py-8" : "gap-3 px-6 py-14"
       }`}
     >

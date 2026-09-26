@@ -5,6 +5,7 @@ import { TABLES } from "@/lib/appwrite/config";
 import { toRepositoryError } from "@/lib/appwrite/errors";
 import { env } from "@/lib/env";
 import { collectUrl } from "@/lib/analytics/collect-url";
+import { publishBadge } from "@/lib/embed/badge";
 import { gazetteerBase } from "@/lib/gazetteer/config";
 import { buildSnapshot } from "@/lib/snapshot/build";
 import { uploadSnapshot } from "@/lib/snapshot/storage";
@@ -14,6 +15,7 @@ import type { RepoContext } from "./context";
 import { listAllGroups } from "./groups.repository";
 import { toAppMap } from "./mappers";
 import { getMap } from "./maps.repository";
+import { getUserPlan, planAllows } from "./plan-limits";
 import { listAllPlaces } from "./places.repository";
 import { listAllShapes } from "./shapes.repository";
 import type { AppMap, MapRow } from "./types";
@@ -73,6 +75,9 @@ export async function publishMap(
     listAllGroups(ctx, mapId),
     getCardDesign(ctx),
   ]);
+  // By the map's owner rather than the caller, because the nightly sheet sync
+  // republishes with no session — and the badge is the owner's plan's answer.
+  const plan = await getUserPlan(map.userId);
 
   const generatedAt = new Date().toISOString();
   const { snapshot, skipped } = buildSnapshot(
@@ -84,6 +89,7 @@ export async function publishMap(
     effectiveCardLayout(cardDesign),
     collectUrl(origin),
     groups,
+    planAllows(plan, "noBadge") ? undefined : publishBadge(),
   );
 
   // Storage before the row. If the upload fails the map stays exactly as it was,

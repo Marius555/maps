@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 
 import { PublishPanel } from "@/components/publish/publish-panel";
 import { requireUser } from "@/lib/auth/current-user";
+import { publishBadge } from "@/lib/embed/badge";
 import { getCardDesign } from "@/lib/repositories/card-design.repository";
 import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
 import { listAllGroups } from "@/lib/repositories/groups.repository";
 import { loadMap } from "@/lib/repositories/load-map";
 import { listAllPlaces } from "@/lib/repositories/places.repository";
+import { getUserPlan, planAllows } from "@/lib/repositories/plan-limits";
 import { listAllShapes } from "@/lib/repositories/shapes.repository";
 
 export const metadata: Metadata = { title: "Publish" };
@@ -17,6 +19,7 @@ export default async function MapPublishPage(
   props: PageProps<"/maps/[id]/publish">,
 ) {
   const { id } = await props.params;
+  const search = await props.searchParams;
   const user = await requireUser();
 
   // The try wraps only the fetch. JSX built inside a catch's scope isn't covered
@@ -46,6 +49,10 @@ export default async function MapPublishPage(
       initialShapes={data.shapes}
       initialGroups={data.groups}
       initialCardDesign={data.cardDesign}
+      badge={data.badge}
+      // Set by the Analytics tab's "Turn it on" — the sidebar opens on the
+      // switch and flips it, through the designer's own writer.
+      turnOnAnalytics={search.analytics === "on"}
     />
   );
 }
@@ -65,13 +72,17 @@ async function loadPublishData(userId: string, mapId: string) {
   // pin or a route is painted (lib/map/group-colors.ts). Fetched here rather
   // than from the browser so the preview never draws the ungrouped colours once
   // and then rebuilds — the same argument the card design makes above.
-  const [map, places, shapes, groups, cardDesign] = await Promise.all([
+  const [map, places, shapes, groups, cardDesign, plan] = await Promise.all([
     loadMap(userId, mapId),
     listAllPlaces(repoContext(userId), mapId),
     listAllShapes(repoContext(userId), mapId),
     listAllGroups(repoContext(userId), mapId),
     getCardDesign(repoContext(userId)),
+    getUserPlan(userId),
   ]);
+  // The badge a publish would add, so the preview draws it before a visitor
+  // sees it — the same question publish.repository.ts asks.
+  const badge = planAllows(plan, "noBadge") ? undefined : publishBadge();
 
-  return { map, places, shapes, groups, cardDesign };
+  return { map, places, shapes, groups, cardDesign, badge };
 }

@@ -300,6 +300,8 @@ export function toMapSession(row: MapSessionRow): MapSession {
     referrer: row.referrer ?? "",
     device: toDeviceKind(row.device),
     events: toSessionEvents(row.events),
+    visitor: row.visitor || null,
+    returning: row.returning === true,
   };
 }
 

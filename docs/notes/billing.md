@@ -167,9 +167,10 @@ nobody is yet paying. So the prices stayed and three things changed instead:
 3. **Free went from 10 locations to 25.** Ten is not a map anybody falls in love
    with, and 25 costs 25 lookups once.
 
-Not done, and deliberately: the "made with" badge (promised in three places,
-implemented nowhere — it would also have to fit inside the embed's 517 spare
-bytes), and `SESSION_LIMITS.retentionDays`, which is still dead data the legal
+The "made with" badge was not done then, and is now (2026-09-26): free maps carry
+it, `PLAN_FEATURES.noBadge` removes it on Starter and Pro, and the pricing cards
+say so in the Views row. It fit because the embed was minified first — see
+docs/notes/publish-and-embed.md. Still not done: `SESSION_LIMITS.retentionDays`, which is still dead data the legal
 documents already promise.
 
 ---

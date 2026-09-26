@@ -51,6 +51,7 @@ export function embedSnippet({
   height = DEFAULT_EMBED_HEIGHT,
   target,
   eager = false,
+  tags = [],
 }: {
   scriptUrl: string;
   snapshotUrl: string;
@@ -59,6 +60,11 @@ export function embedSnippet({
   target?: string;
   /** Skip lazy loading. Only the in-dashboard preview needs this. */
   eager?: boolean;
+  /**
+   * Tag ids this copy of the map is narrowed to. Empty is the whole map, and
+   * writes no attribute — the snippet every customer already pasted.
+   */
+  tags?: readonly string[];
 }): string {
   // type="module" is required, not stylistic: MapLibre v6 ships ESM only, so the
   // bundle is a module. Modules are deferred by default, hence no `async`.
@@ -67,6 +73,7 @@ export function embedSnippet({
     ` data-snapshot="${escapeAttribute(snapshotUrl)}"` +
     (target ? ` data-target="${escapeAttribute(target)}"` : "") +
     (eager ? " data-eager" : "") +
+    (tags.length > 0 ? ` data-tags="${escapeAttribute(tags.join(","))}"` : "") +
     ` data-height="${height}"></script>`
   );
 }

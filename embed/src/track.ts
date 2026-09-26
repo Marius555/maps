@@ -34,8 +34,6 @@ import type { MapSnapshot } from "@/packages/shared/snapshot";
 
 export type Track = (type: string, data?: Record<string, string | number>) => void;
 
-/** Cheaper than checking for a tracker at every call site. */
-const NOOP: Track = () => {};
 
 /**
  * Caps, all of them deliberate.
@@ -63,9 +61,23 @@ const IDLE_MS = 30_000;
 export function createTracker(snapshot: MapSnapshot): Track {
   const config = snapshot.analytics;
 
+  /*
+   * Every event is also told to the customer's own page, as a `pinglide` event
+   * on `document` with the map's id in it — so an owner can forward it to their
+   * own analytics with one listener (docs: Publishing and embedding). It is a
+   * DOM event, not a request: nothing leaves the page, so it needs no switch and
+   * no consent of ours, and it is how a map with measurement off still reports
+   * to the one party who owns the visitor.
+   */
+  const emit: Track = (type, data) => {
+    document.dispatchEvent(
+      new CustomEvent("pinglide", { detail: { ...data, type, map: snapshot.mapId } }),
+    );
+  };
+
   // No endpoint, or a browser without the one API this is allowed to use. Either
-  // way the answer is the same: measure nothing.
-  if (!config || typeof navigator.sendBeacon !== "function") return NOOP;
+  // way the answer is the same: measure nothing of our own.
+  if (!config || typeof navigator.sendBeacon !== "function") return emit;
 
   const started = Date.now();
   // Enough to separate two visitors in the same second; deliberately not enough
@@ -121,6 +133,7 @@ export function createTracker(snapshot: MapSnapshot): Track {
   });
 
   return (type, data) => {
+    emit(type, data);
     if (queue.length >= MAX_EVENTS) return;
 
     // `o` is milliseconds since the map booted. It is what lets the dashboard

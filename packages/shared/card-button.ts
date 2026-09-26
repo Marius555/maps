@@ -15,6 +15,7 @@
  * `CardBlock.buttonSource`.
  */
 
+import { EMBED_STRINGS } from "./embed-strings";
 import {
   directionsUrl,
   type DirectionsOrigin,
@@ -49,10 +50,13 @@ export type CardButtonTarget = {
  * What the Links row calls the location's own website, and what a button set to
  * that source falls back to. One string so the two rows cannot disagree.
  */
-export const WEBSITE_LABEL = "Website";
+export const WEBSITE_LABEL: string = EMBED_STRINGS.website;
 
 /** What a directions button says when nobody has renamed it. */
-export const DIRECTIONS_LABEL = "Directions";
+export const DIRECTIONS_LABEL: string = EMBED_STRINGS.directions;
+
+/** The two fallback labels, in whatever language the map is published in. */
+export type CardButtonWords = { directions: string; website: string };
 
 /**
  * Where this button goes for this location — or nothing, and nothing is the
@@ -78,13 +82,21 @@ export function buttonTargetOf(
    * visitor to locate and passes nothing.
    */
   from?: DirectionsOrigin | null,
+  /**
+   * The embed's translated fallbacks. Absent is English, which is all the
+   * dashboard's studio ever draws — a label the owner typed wins either way.
+   */
+  words?: CardButtonWords,
 ): CardButtonTarget | null {
+  const directions = words?.directions ?? DIRECTIONS_LABEL;
+  const website = words?.website ?? WEBSITE_LABEL;
+
   // Absent is directions — see `CardBlock.buttonAction` for why that is the way
   // round it is.
   if (block.buttonAction !== "link") {
     return {
       href: directionsUrl(place, from),
-      label: block.buttonLabel ?? DIRECTIONS_LABEL,
+      label: block.buttonLabel ?? directions,
     };
   }
 
@@ -98,7 +110,7 @@ export function buttonTargetOf(
   if (block.buttonHref) {
     const href = safeHref(block.buttonHref);
 
-    return href ? { href, label: block.buttonLabel ?? WEBSITE_LABEL } : null;
+    return href ? { href, label: block.buttonLabel ?? website } : null;
   }
 
   // Absent is the location's own website, which is why this is a `find` over
@@ -106,7 +118,7 @@ export function buttonTargetOf(
   if (!block.buttonSource) {
     const href = safeHref(place.url);
 
-    return href ? { href, label: block.buttonLabel ?? WEBSITE_LABEL } : null;
+    return href ? { href, label: block.buttonLabel ?? website } : null;
   }
 
   const field = fields.find((candidate) => candidate.id === block.buttonSource);

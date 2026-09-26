@@ -109,11 +109,16 @@ export const LOOKUP_LIMITS = {
  * `loadCollectGate`, so a free map stops being written to as well as stops being
  * shown; a map that was free therefore records nothing, and upgrading starts its
  * history that day rather than backfilling one.
+ *
+ * `noBadge` is the other pricing line: a free map carries a small "Made with"
+ * link, which is how a stranger's visitor finds us, and paying removes it. Read
+ * at publish (publish.repository.ts) — so a plan change reaches a live map on its
+ * next publish, never by itself, which is §7's rule for everything in a snapshot.
  */
 export const PLAN_FEATURES = {
-  free: { routes: false, sheetSync: false, analytics: false },
-  starter: { routes: true, sheetSync: true, analytics: true },
-  pro: { routes: true, sheetSync: true, analytics: true },
+  free: { routes: false, sheetSync: false, analytics: false, noBadge: false },
+  starter: { routes: true, sheetSync: true, analytics: true, noBadge: true },
+  pro: { routes: true, sheetSync: true, analytics: true, noBadge: true },
 } as const satisfies Record<PlanId, Record<GatedFeature, boolean>>;
 
 /**

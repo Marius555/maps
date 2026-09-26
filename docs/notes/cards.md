@@ -9,6 +9,13 @@ building the same card from the same functions in `packages/shared/`.
 
 ## Invariants
 
+- **The card's fixed words are translated in the embed only.** "Directions", "Email",
+  "Website", "More details", "Open now", "Closed" and the day names come from the map's
+  language (`embed/src/i18n.ts`; `buttonTargetOf`'s `words`, `formatDay`'s `closed`,
+  `dayLabels`' `lang`). The studio in `components/card/**` draws the English defaults,
+  because the card design is per account and a language is per map. The Publish preview
+  is the real bundle, so it shows the chosen language. A label the owner typed wins in
+  both.
 ### The two renderers
 
 - **The twin renderers must agree.** A bug here does not look like a bug — it looks like a

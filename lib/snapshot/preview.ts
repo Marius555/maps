@@ -50,6 +50,11 @@ export function buildPreviewSnapshot(
    * `lib/snapshot/build.ts`.
    */
   groups?: readonly Group[],
+  /**
+   * The badge a real publish would add for this owner's plan, so the preview
+   * shows it too. Resolved on the publish page, which knows the plan.
+   */
+  badge?: { brand: string; url: string },
 ): MapSnapshot {
   const origin = globalThis.location?.origin ?? "";
   const { snapshot } = buildSnapshot(
@@ -64,6 +69,7 @@ export function buildPreviewSnapshot(
     // own clicks on their own map as a visitor's.
     undefined,
     groups,
+    badge,
   );
 
   return { ...snapshot, allowedDomains: [] };

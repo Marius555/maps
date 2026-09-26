@@ -11,13 +11,14 @@ import { DataTable, type DataColumn } from "./data-table";
 /**
  * The most recent visitors, one row each.
  *
- * **The IP address is masked here and stored whole.** Two different jobs: the
- * stored value is evidence, available to an owner chasing abuse on their own
- * map, and the drawn value answers "is this the same visitor as the row above",
- * which is the only thing a table of recent visits is ever used for and which
- * the masked form answers just as well. The rule itself lives in
- * lib/analytics/collect/mask-ip.ts so that the decision is in one place rather
- * than in whichever component last needed it.
+ * **The IP address is masked here, and truncated before it is stored.** New rows
+ * keep only the network (lib/analytics/collect/truncate-ip.ts); rows from
+ * before that change hold the full address, and masking both at render means
+ * the column reads the same either way. The rule lives in
+ * lib/analytics/collect/mask-ip.ts so the decision is in one place rather than
+ * in whichever component last needed it. "Visitor" answers the question the
+ * masked address used to be squinted at for — is this somebody who has been
+ * here before — directly.
  *
  * This is the one table on the page that reads raw session rows rather than a
  * rollup, so it only ever shows what has not yet aged out of the retention
@@ -49,6 +50,22 @@ export function VisitorsTable({ rows }: { rows: MapSession[] }) {
           {row.country ? labelCountry(row.country) : <span className="text-muted">Unknown</span>}
         </span>
       ),
+    },
+    {
+      id: "visitor",
+      label: "Visitor",
+      secondary: true,
+      sortValue: (row) => (row.visitor ? (row.returning ? 2 : 1) : 0),
+      render: (row) =>
+        // A row from before visitor counting, or with no address to key on,
+        // is neither new nor returning — it is unknown, and says so.
+        row.visitor ? (
+          <span className={row.returning ? "text-foreground" : "text-muted"}>
+            {row.returning ? "Returning" : "New"}
+          </span>
+        ) : (
+          <span className="text-muted">—</span>
+        ),
     },
     {
       id: "ip",
@@ -91,7 +108,7 @@ export function VisitorsTable({ rows }: { rows: MapSession[] }) {
       rows={rows}
       rowKey={(row) => row.id}
       initialSort="when"
-      limit={25}
+      visibleRows={10}
     />
   );
 }

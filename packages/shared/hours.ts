@@ -105,9 +105,41 @@ export function serialiseHours(hours: OpeningHours | null): string | null {
   return isEmptyHours(hours) ? null : JSON.stringify(hours);
 }
 
-/** "09:00–17:30", or "Closed". An en dash, not a hyphen — it is a range. */
-export function formatDay(day: DayHours): string {
-  return day ? `${day.open}–${day.close}` : "Closed";
+/**
+ * "09:00–17:30", or "Closed". An en dash, not a hyphen — it is a range.
+ * `closed` is the embed's translated word; absent is the English it always said.
+ */
+export function formatDay(day: DayHours, closed = "Closed"): string {
+  return day ? `${day.open}–${day.close}` : closed;
+}
+
+/**
+ * The week's names, Monday first, in `lang` — or the English tables above when
+ * there is no language, which is every map published before languages existed.
+ *
+ * From `Intl` rather than a table per language, so the embed ships no
+ * dictionary: the browser already knows what Tuesday is called in Lithuanian.
+ * 1 January 2024 was a Monday, and the dates are formatted in UTC so a visitor's
+ * own time zone cannot shift one onto its neighbour. The first letter is raised
+ * because several languages write weekdays in lower case, and these are labels.
+ */
+export function dayLabels(long: boolean, lang?: string): readonly string[] {
+  if (!lang) return long ? DAY_LABELS : DAY_LABELS_SHORT;
+
+  try {
+    const format = new Intl.DateTimeFormat(lang, {
+      weekday: long ? "long" : "short",
+      timeZone: "UTC",
+    });
+
+    return DAY_LABELS.map((_, day) => {
+      const name = format.format(Date.UTC(2024, 0, 1 + day));
+      return name.charAt(0).toLocaleUpperCase(lang) + name.slice(1);
+    });
+  } catch {
+    // An unknown tag throws a RangeError. English beats no labels at all.
+    return long ? DAY_LABELS : DAY_LABELS_SHORT;
+  }
 }
 
 /** Minutes since midnight, or -1 for a time this module would have rejected. */

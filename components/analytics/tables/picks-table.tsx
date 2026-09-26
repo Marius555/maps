@@ -55,7 +55,7 @@ export function PicksTable({ rows }: { rows: LabelledCount[] }) {
       rows={rows}
       rowKey={(row) => row.key}
       initialSort="count"
-      limit={15}
+      visibleRows={8}
     />
   );
 }

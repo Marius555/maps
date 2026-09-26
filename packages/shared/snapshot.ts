@@ -17,6 +17,7 @@
  */
 
 import type { CardBlock, CardLayout } from "./card-layout";
+import type { EmbedStrings } from "./embed-strings";
 import type { OpeningHours } from "./hours";
 import type { MapAppearance } from "./map-appearance";
 import type { PinRingWidth, PinShape, PinSize } from "./pin-icons";
@@ -771,10 +772,39 @@ export type MapSnapshot = {
    */
   analytics?: SnapshotAnalytics;
   /**
+   * The language the owner chose, as a BCP 47 tag. Read for the day names in
+   * opening hours (`Intl`, so no dictionary ships) and set as the root's `lang`
+   * so a screen reader pronounces the words below in the right voice.
+   *
+   * Absent is English, which is what every map published before this said.
+   */
+  lang?: string;
+  /**
+   * Only the words that differ from `EMBED_STRINGS` — the owner's language
+   * preset with their own edits laid over it, resolved at publish. Absent, or a
+   * missing key, is the English the embed always drew (§7).
+   */
+  strings?: EmbedStrings;
+  /**
+   * "Made with Pinglide", on maps whose owner's plan shows it. Text and link are
+   * resolved at publish — the text in the map's language, the link from
+   * brand.json — so the embed names no product of its own.
+   *
+   * Absent means no badge, which is every map published before it existed; a
+   * plan change reaches a live map on its next publish, never by itself.
+   */
+  badge?: SnapshotBadge;
+  /**
    * Hostnames allowed to embed this map. Empty means "anywhere".
    * Anti-abuse, not security — anyone can copy the snapshot URL (§7).
    */
   allowedDomains: string[];
+};
+
+export type SnapshotBadge = {
+  text: string;
+  /** Absolute. */
+  url: string;
 };
 
 /** Where the embed posts what it saw. See `MapSnapshot.analytics`. */

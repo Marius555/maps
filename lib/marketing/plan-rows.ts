@@ -60,8 +60,18 @@ export function planRows(plan: MarketingPlan): PlanRow[] {
     /*
      * The row that is the whole argument, and it is identical on every plan on
      * purpose — CLAUDE.md §2 is the reason there is no per-view price to print.
+     *
+     * The badge rides in this row's note rather than a row of its own: every
+     * section of the landing page is held to one screen (docs/notes/marketing.md),
+     * and it is the same promise with a condition attached.
      */
-    { id: "views", kind: "feature", label: "Views", on: true, note: "Unlimited" },
+    {
+      id: "views",
+      kind: "feature",
+      label: "Views",
+      on: true,
+      note: plan.noBadge ? "Unlimited, no badge" : "Unlimited, with our badge",
+    },
     /*
      * Stated, because it is the one limit here a customer can reach without doing
      * anything they would call "adding" something. A ceiling nobody was told about
