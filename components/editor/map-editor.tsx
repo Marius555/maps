@@ -20,6 +20,7 @@ import { BulkTagMenu } from "@/components/tags/bulk-tag-menu";
 import { PlaceEditDialog } from "@/components/places/place-form/place-edit-dialog";
 import { PreviewDialog } from "@/components/preview/preview-dialog";
 import { ImportShapesDialog } from "@/components/shapes/import/import-shapes-dialog";
+import { ClusterIconDialog } from "@/components/map/clusters/cluster-icon/cluster-icon-dialog";
 import type { GeocodeCandidate } from "@/lib/geocoding/types";
 import { isDefaultView } from "@/lib/map/default-view";
 import { mapThemeClass } from "@/lib/map/style";
@@ -275,6 +276,7 @@ export function MapEditor({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [isImportingShapes, setIsImportingShapes] = useState(false);
+  const [isEditingClusterIcon, setIsEditingClusterIcon] = useState(false);
 
   const isAdding = mode === "add";
   const drawMode = drawKindOf(mode);
@@ -1394,6 +1396,7 @@ export function MapEditor({
           onPickRoute={startRouting}
           onStopDrawing={() => setMode("browse")}
           onImportShapes={() => setIsImportingShapes(true)}
+          onEditClusterIcon={() => setIsEditingClusterIcon(true)}
           onStartSelecting={startSelecting}
           onStopSelecting={() => setMode("browse")}
           canUndoMove={canUndoMove}
@@ -1485,6 +1488,7 @@ export function MapEditor({
           colorFor={colorFor}
           pinIcons={map.pinIcons}
           clustering={clustering}
+          clusterIcon={map.clusterIcon}
           /* Only here. The three small maps built on this same canvas — the pin
              field, the import review, the heatmap — take the two zoom buttons
              and nothing else. */
@@ -1637,6 +1641,13 @@ export function MapEditor({
         shapes={shapes}
         limit={shapeLimit}
         onClose={() => setIsImportingShapes(false)}
+      />
+
+      <ClusterIconDialog
+        map={map}
+        isClustering={clustering}
+        isOpen={isEditingClusterIcon}
+        onClose={() => setIsEditingClusterIcon(false)}
       />
 
       <PreviewDialog

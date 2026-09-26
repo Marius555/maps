@@ -2780,6 +2780,41 @@ body.is-pin-dragging * {
   height: 100%;
 }
 
+/*
+ * A pin inside a HeroUI toggle button — the pin builder's icon and shape rows.
+ *
+ * `.toggle-button svg` sizes every SVG in the button to 16px with a negative
+ * margin, which is right for a Lucide glyph and shrinks a pin to a dot. The
+ * pin's own box already says how big it is, so the SVG fills that and nothing
+ * else. Unlayered, so it beats HeroUI's `@layer components` rule.
+ */
+.toggle-button .pin-preview > .pin-svg {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+/*
+ * Every colour swatch gets a hairline.
+ *
+ * HeroUI's picker swatch has none, so white, a near-white and the checkerboard
+ * "Automatic" swatch were each a gap in the row on a white dialog. The picked one
+ * was worse: HeroUI draws its ring in the swatch's own colour, so a picked white
+ * was a white ring on white. `--foreground` at low strength is a dark line in the
+ * light theme and a light one in the dark theme, and on a saturated swatch it
+ * barely registers. Unlayered, so it beats HeroUI's `@layer components`.
+ * `CustomSwatch` wears the same classes and gets the same line.
+ */
+.color-swatch-picker__swatch {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+.color-swatch-picker__item[data-selected="true"] {
+  box-shadow:
+    var(--field-shadow),
+    0 0 0 1px color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
 .pin-preview > .pin-svg {
   display: block;
   width: 100%;

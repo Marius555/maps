@@ -289,7 +289,7 @@ export default function ManagingLocationsPage() {
               <strong>Add field</strong>. Give it a name, a{" "}
               <strong>Type</strong> — Text, Link, Phone or Email — and choose{" "}
               <strong>Show as</strong>: a <strong>Detail row</strong> or a{" "}
-              <strong>Button</strong>. Press <strong>Save fields</strong>.
+              <strong>Button</strong>. Press <strong>Save changes</strong>.
             </p>
           </DocsStep>
 

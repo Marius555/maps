@@ -82,7 +82,7 @@ export default function TagsPinsAndGroupsPage() {
 
           <DocsStep title="Save">
             <p>
-              Press <strong>Save filters</strong>.
+              Press <strong>Save changes</strong>.
             </p>
           </DocsStep>
         </DocsSteps>

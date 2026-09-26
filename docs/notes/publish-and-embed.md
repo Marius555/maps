@@ -25,6 +25,15 @@ rewritten; it is the record of why this area is shaped as it is.
   nightly sheet sync's republish, which is why `publishMap` reads the plan off `map.userId`.
   The preview gets the same answer from the publish page. A plan change reaches a live map
   on its next publish only.
+- **A cluster icon is drawn only by `showClusterIcon` in `packages/shared/clusters.ts`**, and
+  both renderers build their bubble and count from `clusterLayers` in the same file. With an
+  icon, the bubble stays as a *transparent* layer, because it is what clicks and the pointer
+  cursor bind to; the icon and a count badge go in under the count. `snapshot.clusterIcon`
+  absent is the grey bubble, as every file published before it draws. The icon layer is added
+  only once its image is registered (an upload decodes asynchronously), and the editor
+  re-applies it on `styledata` when the image is missing, because `setStyle` drops images
+  that `carry-style.ts` does not carry. `maps.clusterIcon` has one writer: the cluster icon
+  dialog.
 - **`maps.settings` is one JSON blob with exactly one writer** (`useEmbedDesign`).
   `updateMap` serialises it whole, so two forms writing it is a lost update.
   `readEmbedSettings` resolves one fully-populated object feeding both the controls and

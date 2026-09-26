@@ -43,6 +43,27 @@ rewritten; it is the record of why this area is shaped as it is.
 - Carried across a style swap by `STACK_ON_TOP` metadata, which `carryRuntimeLayers`
   appends to the **end** of the list rather than under the labels, so a theme change and
   the `styledata` rebuild stack the bubbles the same way.
+- **The pin studio and the cluster icon dialog share one layout for a set of pins**:
+  `CarouselSection` (`components/ui/carousel-section.tsx`), a HeroUI `Surface` panel with
+  a one-line `CarouselTrack` of `PinTile`s at `lg`. Change one and the other follows.
+- **The pin builder is two columns on a desktop** (760px dialog; the library stays 520px):
+  `PinStage` (the pin alone) sticky on the left, `PinFields` scrolling on the right with
+  Name as its first field, `PinActions` pinned in the footer. On a phone the stage moves
+  into the sheet's header, `compact`.
+  `PinFields` is keyed by the draft's id so its Icon/Image tab and stashed image reset per
+  pin. Shape, size and ring are HeroUI `ToggleButtonGroup`s (`PinOptionGroup`); they
+  replaced 3-up carousels of pin thumbnails that made three-way choices look like
+  galleries. A pin drawn *inside* a toggle button needs the `.toggle-button .pin-preview`
+  rule in `globals.css`, or HeroUI's `.toggle-button svg` shrinks it to 16px.
+- **A light fill writes Ink as the icon colour** when the icon is on Automatic
+  (`isLight` in `pin-fields.tsx`, OKLab L > 0.8). Automatic is white in the embed, so a
+  white pin drew a white glyph — no icon. Fixed in the builder by writing a value, not in
+  `pinCssVars`/`pin-raster`, because changing what an absent `iconColor` means would
+  repaint pins on live maps.
+- **Every colour swatch carries a hairline** (`.color-swatch-picker__swatch` in
+  `globals.css`); HeroUI's has none, so white swatches vanished on a white dialog.
+- **Upload lives beside the thing it changes**: in the builder it is the Image tab of the
+  pin's head; in the cluster dialog it is the footer's left end, level with Done.
 
 ### Tags
 
@@ -57,6 +78,11 @@ rewritten; it is the record of why this area is shaped as it is.
   `SnapshotPlace.category`, `colorOf`'s fallthrough in `embed/src/map.ts`, one chip in
   `list.ts`, the retired `category` block in `popup.ts`, and the legacy branch in
   `packages/shared/search-text.ts`. `embed/dev/dev-legacy.html` is what guards it.
+- **Tags & fields saves only the columns that changed** (`use-vocabulary-draft.ts`). One
+  Save covers both tabs, but `tagGroups` has other writers — `tag-quick-add.tsx` and the
+  import wizard — so sending an untouched `tagGroups` would revert a tag added since the
+  dialog opened. The draft lives in a component mounted only while the dialog is open, so
+  Cancel is discard.
 - **Dangling tag ids are the normal state**, not an error — nothing sweeps a deleted tag
   off the places wearing it. `placeTagsSchema` deliberately does not validate against the
   map's list, `buildSnapshot` narrows them away, and the drawing helpers drop them.

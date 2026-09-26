@@ -4,6 +4,7 @@ import {
   MAX_PIN_ICONS,
   MAX_PIN_IMAGE_BYTES,
   base64Bytes,
+  clusterIconSchema,
   pinIconSchema,
   pinIconsSchema,
 } from "./pin-icon.schema";
@@ -109,5 +110,36 @@ describe("base64Bytes", () => {
     expect(base64Bytes("data:image/png;base64,AAAA")).toBe(3);
     expect(base64Bytes("data:image/png;base64,AAA=")).toBe(2);
     expect(base64Bytes("data:image/png;base64,AA==")).toBe(1);
+  });
+});
+
+describe("clusterIconSchema", () => {
+  it("accepts the bubble, a built-in pin and a custom one", () => {
+    for (const value of ["", "store", "custom:ab12cd34"]) {
+      expect(clusterIconSchema.safeParse(value).success).toBe(true);
+    }
+  });
+
+  it("accepts an uploaded image under the pin cap", () => {
+    expect(clusterIconSchema.safeParse(image(MAX_PIN_IMAGE_BYTES - 64)).success).toBe(
+      true,
+    );
+  });
+
+  it("refuses an image over the pin cap, with the pin's own sentence", () => {
+    const result = clusterIconSchema.safeParse(image(MAX_PIN_IMAGE_BYTES + 64));
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].message).toMatch(/too detailed/);
+  });
+
+  it("refuses an image the normaliser could not have produced", () => {
+    expect(clusterIconSchema.safeParse("data:image/svg+xml;base64,AAAA").success).toBe(
+      false,
+    );
+  });
+
+  it("refuses a pin id longer than any pin id is", () => {
+    expect(clusterIconSchema.safeParse("x".repeat(65)).success).toBe(false);
   });
 });

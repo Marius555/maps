@@ -753,6 +753,18 @@ export type MapSnapshot = {
    * always did, and the embed must keep drawing the card it always drew.
    */
   cardLayout?: CardLayout;
+  /**
+   * What a cluster of nearby pins is drawn as: a pin id (a built-in or
+   * `custom:<id>`, found in `pinIcons`) or an uploaded image as a data URI. The
+   * embed draws it through `showClusterIcon` (./clusters.ts) with the count in a
+   * badge at its top-right.
+   *
+   * Optional, on the immutability rule the fields above follow: **absent is the
+   * grey numbered bubble**, which is what every file published before this
+   * existed draws. Also absent when clustering is off, or when the pin it named
+   * has since been deleted.
+   */
+  clusterIcon?: string;
   settings: SnapshotSettings;
   /**
    * Where to report what visitors do, when the owner has asked us to.

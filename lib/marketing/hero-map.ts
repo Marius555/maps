@@ -97,48 +97,33 @@ export const HERO_PIN_ICONS: readonly CustomPinIcon[] = [
 
 /**
  * A coffee chain's London shops, each at a real street address — so no pin
- * lands in the Thames. Scattered on purpose: the city centre is left sparse
- * enough that the basemap under it still reads.
+ * lands in the Thames. Twenty, not the thirty-eight it once had: at that
+ * density the picture read as a scatter of dots rather than as a map, and
+ * "Nearest to me" had nowhere to go — every point on the city was a few
+ * hundred metres from a pin. Chelsea and the river south of it are left empty
+ * on purpose; that is where the visitor stands (`HERO_YOU_ARE_HERE`).
  */
 export const HERO_PINS: readonly HeroPin[] = [
   { name: "Shoreditch", lng: -0.0827, lat: 51.52787, kind: "flagship", street: "Shoreditch High Street" },
   { name: "Soho", lng: -0.13354, lat: 51.51006, kind: "cafe", street: "Old Compton Street" },
-  { name: "Clerkenwell", lng: -0.10163, lat: 51.52099, kind: "cafe", street: "Exmouth Market" },
   { name: "Borough", lng: -0.08749, lat: 51.50413, kind: "cafe", street: "Borough High Street" },
   { name: "Bermondsey", lng: -0.05886, lat: 51.49901, kind: "pickup", street: "Bermondsey Street" },
   { name: "Peckham", lng: -0.07325, lat: 51.47032, kind: "cafe", street: "Rye Lane" },
   { name: "Brixton", lng: -0.12033, lat: 51.46063, kind: "cafe", street: "Atlantic Road" },
   { name: "Clapham", lng: -0.13812, lat: 51.46232, kind: "flagship", street: "Clapham High Street" },
-  { name: "Battersea", lng: -0.16083, lat: 51.47377, kind: "cafe", street: "Battersea Park Road" },
-  { name: "Chelsea", lng: -0.1638, lat: 51.48957, kind: "pickup", street: "King's Road" },
-  { name: "South Kensington", lng: -0.17905, lat: 51.49143, kind: "cafe", street: "Old Brompton Road" },
   { name: "Notting Hill", lng: -0.20001, lat: 51.51296, kind: "cafe", street: "Portobello Road" },
-  { name: "Paddington", lng: -0.17603, lat: 51.51753, kind: "cafe", street: "Praed Street" },
-  { name: "Fitzrovia", lng: -0.13888, lat: 51.52342, kind: "pickup", street: "Charlotte Street" },
   { name: "Bloomsbury", lng: -0.12613, lat: 51.52247, kind: "flagship", street: "Lamb's Conduit Street" },
   { name: "Islington", lng: -0.09766, lat: 51.53658, kind: "cafe", street: "Upper Street" },
-  { name: "Dalston", lng: -0.0785, lat: 51.54808, kind: "cafe", street: "Kingsland High Street" },
   { name: "Hackney", lng: -0.05331, lat: 51.54545, kind: "pickup", street: "Mare Street" },
-  { name: "Bethnal Green", lng: -0.06044, lat: 51.52829, kind: "cafe", street: "Roman Road" },
   { name: "Canary Wharf", lng: -0.02001, lat: 51.50209, kind: "cafe", street: "Canada Square" },
   { name: "Greenwich", lng: -0.00852, lat: 51.47964, kind: "flagship", street: "Greenwich Church Street" },
   { name: "Deptford", lng: -0.02739, lat: 51.47896, kind: "pickup", street: "Deptford High Street" },
   { name: "Camden", lng: -0.138, lat: 51.535, kind: "cafe", street: "Camden High Street" },
-  { name: "Kentish Town", lng: -0.14118, lat: 51.5473, kind: "cafe", street: "Kentish Town Road" },
-  { name: "Highbury", lng: -0.09606, lat: 51.55136, kind: "cafe", street: "Highbury Park" },
   { name: "Stoke Newington", lng: -0.07878, lat: 51.56588, kind: "cafe", street: "Church Street" },
   { name: "Hampstead", lng: -0.17485, lat: 51.55779, kind: "pickup", street: "Hampstead High Street" },
   { name: "Shepherds Bush", lng: -0.23072, lat: 51.50434, kind: "flagship", street: "Uxbridge Road" },
   { name: "Hammersmith", lng: -0.22899, lat: 51.4896, kind: "cafe", street: "King Street" },
-  { name: "Fulham", lng: -0.19222, lat: 51.47961, kind: "cafe", street: "Fulham Road" },
   { name: "Putney", lng: -0.21833, lat: 51.46485, kind: "pickup", street: "Putney High Street" },
-  { name: "Wandsworth", lng: -0.19449, lat: 51.46036, kind: "cafe", street: "Garratt Lane" },
-  { name: "Balham", lng: -0.14679, lat: 51.44276, kind: "cafe", street: "Balham High Road" },
-  { name: "Dulwich", lng: -0.08876, lat: 51.44715, kind: "cafe", street: "Lordship Lane" },
-  { name: "Lewisham", lng: -0.0118, lat: 51.46277, kind: "cafe", street: "Lewisham High Street" },
-  { name: "Stratford", lng: 0.0003, lat: 51.54062, kind: "cafe", street: "The Broadway" },
-  { name: "Southbank", lng: -0.11927, lat: 51.50427, kind: "pickup", street: "Upper Ground" },
-  { name: "Victoria", lng: -0.1391, lat: 51.49314, kind: "cafe", street: "Wilton Road" },
 ];
 
 /**
@@ -216,7 +201,7 @@ export function matchesFilter(pin: HeroPin, filter: HeroFilter): boolean {
  */
 export const HERO_TOUR: readonly string[] = [
   "Shoreditch",
-  "Victoria",
+  "Clapham",
   "Bermondsey",
   "Soho",
   "Borough",
@@ -224,12 +209,23 @@ export const HERO_TOUR: readonly string[] = [
 ];
 
 /**
- * Where "Nearest to me" says the visitor is: Kennington, south of the river and
- * clear of every pin. A fixed point, never the browser's geolocation — this is a
+ * Where "Nearest to me" says the visitor is: Royal Hospital Road in Chelsea,
+ * the emptiest spot on the picture a phone's crop still shows.
+ *
+ * Chosen by walking a grid over the middle 39–61% of the picture's width and
+ * keeping the point furthest from its nearest pin, then moved onto a real
+ * street. That band is narrower than `HERO_TOUR`'s, and measured rather than
+ * assumed: a 390px phone frames 335×764 of a 1528px-wide stage, the middle 22%.
+ * The first pick, on King's Road at 39%, drew its whole route off the left
+ * edge of a phone. So whichever chip is on, the nearest pin is a few
+ * kilometres off and the route is long enough to read — from Kennington it was
+ * 2.1 km, a stub under its own pin. Move a pin and this may no longer be the
+ * gap; hero-map.test.ts holds the distance it has to keep.
+ * A fixed point, never the browser's geolocation — this is a
  * picture of the feature, and asking a stranger for their position to decorate a
  * landing page is exactly the kind of prompt people learn to refuse.
  */
-export const HERO_YOU_ARE_HERE: Located = { lng: -0.1115, lat: 51.4886 };
+export const HERO_YOU_ARE_HERE: Located = { lng: -0.1575, lat: 51.4872 };
 
 export type FrameSize = { width: number; height: number };
 export type FramePoint = { x: number; y: number };

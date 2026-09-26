@@ -62,11 +62,12 @@ import {
 } from "@/packages/shared/dot-stream";
 import { cardFlipsTheme } from "@/packages/shared/card-ground";
 import {
-  CLUSTER_BUBBLE_RADIUS,
   CLUSTER_COLOR,
-  CLUSTER_FONT,
   CLUSTER_MAX_ZOOM,
   CLUSTER_RADIUS,
+  clusterIconPin,
+  clusterLayers,
+  showClusterIcon,
 } from "@/packages/shared/clusters";
 import { pinColorOfTags, tagChipsOf } from "@/packages/shared/tags";
 
@@ -1136,33 +1137,12 @@ function setAnchor(popup: Popup, anchor: PositionAnchor): void {
 
 function addLayers(map: MapLibreMap, snapshot: MapSnapshot): void {
   if (snapshot.settings.clustering) {
-    map.addLayer({
-      id: CLUSTER_LAYER,
-      type: "circle",
-      source: SOURCE_ID,
-      filter: ["has", "point_count"],
-      paint: {
-        // Shared with the editor's own bubbles — see packages/shared/clusters.ts.
-        "circle-color": CLUSTER_COLOR,
-        "circle-opacity": 0.9,
-        "circle-stroke-width": 2,
-        "circle-stroke-color": "#ffffff",
-        "circle-radius": CLUSTER_BUBBLE_RADIUS,
-      },
-    });
+    // Shared with the editor's own bubbles — see packages/shared/clusters.ts.
+    for (const layer of clusterLayers(SOURCE_ID, CLUSTER_LAYER, CLUSTER_COUNT_LAYER)) {
+      map.addLayer(layer);
+    }
 
-    map.addLayer({
-      id: CLUSTER_COUNT_LAYER,
-      type: "symbol",
-      source: SOURCE_ID,
-      filter: ["has", "point_count"],
-      layout: {
-        "text-field": ["get", "point_count_abbreviated"],
-        "text-font": [CLUSTER_FONT],
-        "text-size": 12,
-      },
-      paint: { "text-color": "#ffffff" },
-    });
+    addClusterIcon(map, snapshot);
   }
 
   map.addLayer({
@@ -1203,6 +1183,29 @@ function addLayers(map: MapLibreMap, snapshot: MapSnapshot): void {
       "icon-ignore-placement": true,
     },
   });
+}
+
+/**
+ * The owner's cluster icon over the bubbles, when the snapshot names one.
+ *
+ * Absent is the grey bubble, which is every snapshot published before this
+ * existed, and the bubble is also what shows until the icon's image exists: a
+ * glyph pin draws at once, an uploaded image after its decode. The layers are
+ * `showClusterIcon`'s, the function the editor calls too, so the two maps agree.
+ */
+function addClusterIcon(map: MapLibreMap, snapshot: MapSnapshot): void {
+  const pin = clusterIconPin(snapshot.clusterIcon, pinsOf(snapshot));
+  if (!pin) return;
+
+  const id = pinImageId(pin.icon, CLUSTER_COLOR);
+  const pairs = [{ icon: pin.icon, color: CLUSTER_COLOR }];
+  const show = () =>
+    showClusterIcon(map, SOURCE_ID, CLUSTER_LAYER, CLUSTER_COUNT_LAYER, id);
+
+  // `hasImage` first: a location wearing the same pin in the same grey has
+  // already registered it, and a second registration reports nothing.
+  if (map.hasImage(id) || registerPinImages(map, pairs, pin.pins).has(id)) show();
+  else void registerPinImageBitmaps(map, pairs, pin.pins).then((added) => added.has(id) && show());
 }
 
 /**

@@ -88,6 +88,24 @@ describe("HERO_TOUR", () => {
   });
 });
 
+describe("HERO_YOU_ARE_HERE", () => {
+  /*
+   * The dot stands in the emptiest part of the map so the route it draws is long
+   * enough to read. From Kennington, with 38 pins, the nearest was 1.9 km off and
+   * the route a stub under its own pin; this is the floor that keeps it long.
+   */
+  // A 390px phone shows the middle 22% of the picture's width: 39–61%.
+  it("stands a few kilometres from every pin, inside a phone's crop", () => {
+    const { x, y } = projectPin(HERO_YOU_ARE_HERE);
+
+    expect(x).toBeGreaterThan(40);
+    expect(x).toBeLessThan(60);
+    expect(y).toBeGreaterThan(18);
+    expect(y).toBeLessThan(82);
+    expect(nearestPin(HERO_YOU_ARE_HERE, HERO_PINS)!.km).toBeGreaterThan(2.8);
+  });
+});
+
 describe("stageBox", () => {
   it("fills a frame of the picture's own shape exactly", () => {
     expect(stageBox({ width: 1200, height: 600 })).toEqual({
@@ -190,9 +208,9 @@ describe("nearestPin", () => {
   it("finds the closest pin and its great-circle distance", () => {
     const found = nearestPin(HERO_YOU_ARE_HERE, HERO_PINS);
 
-    expect(found?.pin.name).toBe("Southbank");
-    expect(found?.km).toBeGreaterThan(1.5);
-    expect(found?.km).toBeLessThan(2.2);
+    expect(found?.pin.name).toBe("Soho");
+    expect(found?.km).toBeGreaterThan(2.9);
+    expect(found?.km).toBeLessThan(3.2);
   });
 
   it("answers nothing for no pins, rather than inventing one", () => {

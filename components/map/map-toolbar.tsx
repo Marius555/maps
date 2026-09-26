@@ -99,6 +99,7 @@ export function MapToolbar({
   onPickRoute,
   onStopDrawing,
   onImportShapes,
+  onEditClusterIcon,
   onStartSelecting,
   onStopSelecting,
   canUndoMove = false,
@@ -163,6 +164,8 @@ export function MapToolbar({
   onStopDrawing: () => void;
   /** Opens the GeoJSON importer, from inside the Draw menu. */
   onImportShapes?: () => void;
+  /** Opens the cluster icon dialog, from inside the Draw menu. */
+  onEditClusterIcon?: () => void;
   onStartSelecting: () => void;
   onStopSelecting: () => void;
   /**
@@ -261,6 +264,7 @@ export function MapToolbar({
             onPickRoute={onPickRoute}
             onStopDrawing={onStopDrawing}
             onImport={onImportShapes}
+            onEditClusterIcon={onEditClusterIcon}
           />
         </span>
 

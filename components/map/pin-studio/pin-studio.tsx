@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Drawer, Modal } from "@heroui/react";
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -15,8 +15,8 @@ import { MAX_PIN_ICONS, pinIconsSchema } from "@/lib/validation/pin-icon.schema"
 import { CUSTOM_PIN_PREFIX, type CustomPinIcon } from "@/packages/shared/pin-icons";
 import { PinActions } from "./pin-actions";
 import { PinFields } from "./pin-fields";
-import { PinHero } from "./pin-hero";
 import { PinLibrary } from "./pin-library";
+import { PinStage } from "./pin-stage";
 
 /**
  * The pin studio: pick a pin, or make one.
@@ -37,11 +37,12 @@ import { PinLibrary } from "./pin-library";
  * hands back. A second dialog stacked on the first would be two backdrops and a
  * back button nobody expects on a phone.
  *
- * The builder is not one component but three, because the dialog has three slots
- * and the pieces have to sit in different ones: PinHero in the header, PinFields
- * in the body, PinActions in the footer. Only the middle one scrolls — see the
- * note on `Modal.Container` below for why that arrangement is the point rather
- * than an accident of composition.
+ * The builder is three components: PinStage (the pin), PinFields (its name and
+ * every control) and PinActions (the footer). On a desktop the dialog widens
+ * and the stage and the fields sit side by side, the stage sticky so it holds
+ * still while the fields scroll. On a phone the stage goes in the sheet's header
+ * and the fields in its body. Either way the footer is pinned — see the note on
+ * `Modal.Container` below.
  *
  * Every press in the library lands in the builder — see PinLibrary for why — so
  * the builder is where a pin gets used as well as made. Saving arms add mode with
@@ -156,11 +157,13 @@ export function PinStudio({
    * you are making has to be visible while you scroll the rows that change it,
    * and so does the button that finishes.
    */
-  const hero = draft ? <PinHero draft={draft} onChange={setDraft} /> : null;
+  // Keyed by the draft's id so the fields' own state (the Icon/Image tab, the
+  // stashed image) starts fresh for every pin rather than carrying over.
+  const fields = draft ? (
+    <PinFields key={draft.id} draft={draft} onChange={setDraft} />
+  ) : null;
 
-  const content = draft ? (
-    <PinFields draft={draft} onChange={setDraft} />
-  ) : (
+  const library = (
     <PinLibrary
       pinIcons={pinIcons}
       usageByPin={usageByPin}
@@ -171,8 +174,11 @@ export function PinStudio({
 
   // Both failures reach the user from the footer, because both come from a
   // control in it — or, for a refused delete, from a title bar that is pinned to
-  // the same frame. The library has no footer and cannot raise either: nothing in
-  // it writes.
+  // the same frame.
+  //
+  // The library's footer is "New pin", as the primary button: making a pin is
+  // the reason to be here, and bottom-right is where every other dialog keeps the
+  // action that moves you forward.
   const footer = draft ? (
     <PinActions
       draft={draft}
@@ -183,50 +189,11 @@ export function PinStudio({
           {updateMap.error ? <ErrorMessage error={updateMap.error} /> : null}
         </>
       }
-      onChange={setDraft}
       onSave={save}
       onCancel={() => setDraft(null)}
     />
-  ) : null;
-
-  const heading = draft ? (isEditing ? "Edit pin" : "New pin") : "Pins";
-
-  /**
-   * The title row's own control, which is a different one in each of the three
-   * states this sheet has.
-   *
-   * Making a pin is the reason to be in the library, so it sits in the title row
-   * rather than buried in a section header — and only there, since the builder it
-   * opens is already on screen saying "New pin" at the top.
-   *
-   * Deleting one is the same kind of thing: an action on what the sheet is
-   * showing, not a way to finish the form under it. It is up here and well away
-   * from Save, which it shared a row with before.
-   *
-   * Both sit directly *after* the heading rather than at the far end of the row.
-   * They are actions on the thing the heading names — "Pins, and here is how you
-   * make another" — and a control flung to the opposite edge reads as belonging
-   * to the dialog's chrome, next to the close button, rather than to its subject.
-   *
-   * Red on the glyph rather than a `danger` variant: that variant is a solid red
-   * fill, which is a lot of weight for a title bar, and HeroUI's variants set
-   * `--button-fg` from unlayered CSS that a Tailwind text colour on the button
-   * would lose to. On the icon it beats inheritance and needs no override.
-   */
-  const action = draft ? (
-    isEditing ? (
-      <IconButton
-        label={deleteLabel(usageByPin.get(draft.id) ?? 0)}
-        icon={Trash2}
-        variant="ghost"
-        iconClassName="size-4 text-danger"
-        onPress={remove}
-      />
-    ) : null
   ) : (
     <Button
-      size="sm"
-      variant="secondary"
       isDisabled={pinIcons.length >= MAX_PIN_ICONS}
       onPress={() => setDraft(blankPin(pinIcons))}
     >
@@ -235,42 +202,79 @@ export function PinStudio({
     </Button>
   );
 
+  const heading = draft ? (isEditing ? "Edit pin" : "New pin") : "Pins";
+
+  /**
+   * The title row's controls, which only the builder has: a way back to the
+   * library before the heading, and — for a pin that already exists — delete
+   * after it. Delete is an action on the thing the heading names, so it sits
+   * beside the heading rather than beside Save, where a mis-click costs a pin.
+   *
+   * Red on the glyph rather than a `danger` variant: that variant is a solid red
+   * fill, which is a lot of weight for a title bar, and HeroUI's variants set
+   * `--button-fg` from unlayered CSS that a Tailwind text colour on the button
+   * would lose to. On the icon it beats inheritance and needs no override.
+   */
+  const back = draft ? (
+    <IconButton
+      label="Back to pins"
+      icon={ChevronLeft}
+      variant="ghost"
+      onPress={() => setDraft(null)}
+    />
+  ) : null;
+
+  const action =
+    draft && isEditing ? (
+      <IconButton
+        label={deleteLabel(usageByPin.get(draft.id) ?? 0)}
+        icon={Trash2}
+        variant="ghost"
+        iconClassName="size-4 text-danger"
+        onPress={remove}
+      />
+    ) : null;
+
   if (isWide) {
     return (
       <Modal.Backdrop isOpen={isOpen} onOpenChange={(open) => !open && close()}>
         {/* `scroll="inside"` caps the dialog at the viewport and scrolls the body
-            within it — seven rows of options are taller than a laptop screen.
-            HeroUI's own modifier rather than an `overflow-y-auto` utility, which
-            would lose to `.modal__body`'s unlayered `overflow: visible`.
-
-            It is also what pins the hero and the footer: header, body and footer
-            are siblings in a `flex-col` dialog held at `max-h-full`, so only the
-            body — the one with `flex-1` — takes the overflow. Putting all three
-            inside the body instead, which is where they used to be, is what made
-            the pin you are designing scroll off the top of the screen. */}
+            within it. HeroUI's own modifier rather than an `overflow-y-auto`
+            utility, which would lose to `.modal__body`'s unlayered
+            `overflow: visible`. It is also what pins the footer: header, body
+            and footer are siblings in a `flex-col` dialog held at `max-h-full`,
+            so only the body — the one with `flex-1` — takes the overflow. */}
         <Modal.Container scroll="inside">
-          <Modal.Dialog className="sm:max-w-[520px]">
+          {/* Wider for the builder, which is two columns; the library is one. */}
+          <Modal.Dialog className={draft ? "sm:max-w-[760px]" : "sm:max-w-[520px]"}>
             <Modal.CloseTrigger />
-            {/* `.modal__header` is an unlayered `flex-col`, which is exactly the
-                stack this wants — title row, then the pin under it — so the rows
-                are children of it rather than of a wrapper. The `pe-10` is on the
-                title row alone and not on the header: it keeps the action clear of
-                the close trigger, which is positioned over that row rather than
-                laid out in it, and on the header it would drag the centred hero
-                20px to the left. */}
-            <Modal.Header className={hero ? "border-b border-border pb-4" : undefined}>
-              <div className="flex items-center gap-2 pe-10">
+            {/* The `pe-10` keeps the title row's controls clear of the close
+                trigger, which is positioned over that row rather than laid out
+                in it. */}
+            <Modal.Header>
+              <div className="flex items-center gap-1 pe-10">
+                {back}
                 <Modal.Heading>{heading}</Modal.Heading>
                 {action}
               </div>
-              {hero}
             </Modal.Header>
 
-            <Modal.Body>{content}</Modal.Body>
+            <Modal.Body>
+              {draft ? (
+                <div className="grid grid-cols-[220px_minmax(0,1fr)] gap-6">
+                  {/* Sticky inside the scrolling body, so the pin stays in view
+                      while the controls beside it scroll. */}
+                  <div className="sticky top-0 self-start">
+                    <PinStage draft={draft} />
+                  </div>
+                  {fields}
+                </div>
+              ) : (
+                library
+              )}
+            </Modal.Body>
 
-            {footer ? (
-              <Modal.Footer className="border-t border-border pt-4">{footer}</Modal.Footer>
-            ) : null}
+            <Modal.Footer className="border-t border-border pt-4">{footer}</Modal.Footer>
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
@@ -288,20 +292,21 @@ export function PinStudio({
               that start inside the body, so without this there is nothing on the
               sheet you can actually pull. */}
           <Drawer.Handle />
-          <Drawer.Header className={hero ? "border-b border-border pb-4" : undefined}>
-            <div className="flex items-center gap-2">
+          {/* The stage is in the header here, not the body, so the pin stays on
+              screen while the fields under it scroll. */}
+          <Drawer.Header className={draft ? "border-b border-border pb-4" : undefined}>
+            <div className="flex items-center gap-1">
+              {back}
               <Drawer.Heading className="text-sm font-semibold">{heading}</Drawer.Heading>
               {action}
             </div>
-            {hero}
+            {draft ? <PinStage draft={draft} compact /> : null}
           </Drawer.Header>
 
           {/* `.drawer__body` already ships `min-h-0 flex-1` and the scrolling. */}
-          <Drawer.Body>{content}</Drawer.Body>
+          <Drawer.Body>{draft ? fields : library}</Drawer.Body>
 
-          {footer ? (
-            <Drawer.Footer className="border-t border-border pt-4">{footer}</Drawer.Footer>
-          ) : null}
+          <Drawer.Footer className="border-t border-border pt-4">{footer}</Drawer.Footer>
         </Drawer.Dialog>
       </Drawer.Content>
     </Drawer.Backdrop>

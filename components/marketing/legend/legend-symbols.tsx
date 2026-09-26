@@ -10,9 +10,10 @@
  * Every colour is a theme token, so the key crossfades with the page.
  */
 
-const STROKE = { fill: "none", strokeWidth: 1.6, strokeLinecap: "round" } as const;
+export const STROKE = { fill: "none", strokeWidth: 1.6, strokeLinecap: "round" } as const;
 
-function Frame({ children }: { children: React.ReactNode }) {
+/** The 32-unit box every symbol is drawn in — exported for the sections that list their points the way the key does. */
+export function SymbolFrame({ children }: { children: React.ReactNode }) {
   return (
     <svg
       aria-hidden="true"
@@ -27,21 +28,21 @@ function Frame({ children }: { children: React.ReactNode }) {
 
 export function SearchSymbol() {
   return (
-    <Frame>
+    <SymbolFrame>
       <circle cx="14" cy="14" r="7.5" stroke="var(--muted)" {...STROKE} />
       <path d="M19.5 19.5L26 26" stroke="var(--accent)" {...STROKE} strokeWidth="2" />
       <path d="M10 12.5h8M10 16h5" stroke="var(--muted)" {...STROKE} opacity="0.7" />
-    </Frame>
+    </SymbolFrame>
   );
 }
 
 export function NearestSymbol() {
   return (
-    <Frame>
+    <SymbolFrame>
       <circle cx="16" cy="16" r="9" stroke="var(--muted)" {...STROKE} />
       <path d="M16 3v5M16 24v5M3 16h5M24 16h5" stroke="var(--muted)" {...STROKE} />
       <circle cx="16" cy="16" r="3.5" fill="var(--accent)" />
-    </Frame>
+    </SymbolFrame>
   );
 }
 
@@ -56,28 +57,28 @@ export function NearestSymbol() {
  */
 export function ClusterSymbol() {
   return (
-    <Frame>
+    <SymbolFrame>
       <circle cx="21" cy="9" r="5" fill="var(--muted)" stroke="var(--background)" strokeWidth="2" />
       <circle cx="10" cy="11" r="4" fill="var(--muted)" stroke="var(--background)" strokeWidth="2" />
       <circle cx="16" cy="21" r="9" fill="var(--accent)" stroke="var(--background)" strokeWidth="2" />
-    </Frame>
+    </SymbolFrame>
   );
 }
 
 export function CardSymbol() {
   return (
-    <Frame>
+    <SymbolFrame>
       <rect x="9" y="4" width="21" height="24" rx="4" stroke="var(--muted)" {...STROKE} />
       <rect x="12" y="7" width="15" height="7" rx="2" fill="var(--muted)" opacity="0.35" />
       <path d="M12 18.5h11M12 22h7" stroke="var(--muted)" {...STROKE} />
       <circle cx="5" cy="16" r="3.5" fill="var(--accent)" stroke="var(--surface)" strokeWidth="1.5" />
-    </Frame>
+    </SymbolFrame>
   );
 }
 
 export function PanelSymbol() {
   return (
-    <Frame>
+    <SymbolFrame>
       <rect x="2" y="6" width="28" height="20" rx="3.5" stroke="var(--muted)" {...STROKE} />
       {/* `fillOpacity`, never a whole-element `opacity`: the latter dims the
           stroke with the fill, and a 16%-of-accent wash is invisible on the
@@ -86,24 +87,24 @@ export function PanelSymbol() {
       <path d="M20.5 12.5h4.5M20.5 16h4.5M20.5 19.5h3" stroke="var(--accent)" {...STROKE} />
       <circle cx="9" cy="14" r="2.5" fill="var(--muted)" opacity="0.8" />
       <circle cx="13" cy="20" r="2" fill="var(--muted)" opacity="0.5" />
-    </Frame>
+    </SymbolFrame>
   );
 }
 
 export function FilterSymbol() {
   return (
-    <Frame>
+    <SymbolFrame>
       <rect x="2" y="7" width="15" height="8" rx="4" fill="var(--accent)" opacity="0.2" />
       <rect x="2" y="7" width="15" height="8" rx="4" stroke="var(--accent)" {...STROKE} />
       <rect x="10" y="18" width="20" height="8" rx="4" stroke="var(--muted)" {...STROKE} />
       <rect x="20" y="5" width="10" height="8" rx="4" stroke="var(--muted)" {...STROKE} />
-    </Frame>
+    </SymbolFrame>
   );
 }
 
 export function AreaSymbol() {
   return (
-    <Frame>
+    <SymbolFrame>
       {/* The ring has to stay solid while the fill stays faint, so the two
           opacities are separate. A single `opacity` on the element dimmed the
           dashes into the ground and left a smudge where a drawn area should
@@ -125,6 +126,6 @@ export function AreaSymbol() {
         strokeWidth="2"
       />
       <circle cx="29" cy="7" r="2.5" fill="var(--accent)" />
-    </Frame>
+    </SymbolFrame>
   );
 }

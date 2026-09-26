@@ -30,6 +30,7 @@ export type MapRow = Models.Row & {
   pinIcons?: string | null;
   settings?: string | null;
   appearance?: string | null;
+  clusterIcon?: string | null;
   allowedDomains?: string[] | null;
   publishedAt?: string | null;
   snapshotUrl?: string | null;
@@ -144,6 +145,12 @@ export type AppMap = {
   pinIcons: CustomPinIcon[];
   settings: Record<string, unknown>;
   appearance: Record<string, unknown>;
+  /**
+   * What a cluster is drawn as: "" for the grey bubble, a pin id, or an
+   * uploaded `data:image/…` URI — see `clusterIconSchema`. A `custom:` id whose
+   * pin was deleted reads as "" everywhere it is drawn.
+   */
+  clusterIcon: string;
   allowedDomains: string[];
   publishedAt: string | null;
   snapshotUrl: string | null;

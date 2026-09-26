@@ -39,6 +39,7 @@ import { tagChipsOf } from "@/packages/shared/tags";
 import { useAddModeGhost } from "./add-location/use-add-mode-ghost";
 import { withoutClusterLayers } from "./clusters/cluster-layers";
 import { usePlaceClusters } from "./clusters/use-place-clusters";
+import { useClusterIcon } from "./clusters/use-cluster-icon";
 import { PlaceCard } from "./place-card/place-card";
 import { SelectBox, type SelectBoxHandle } from "./select-box/select-box";
 import { useSelectBox } from "./select-box/use-select-box";
@@ -55,6 +56,8 @@ import { usePlaceMarkers } from "./use-place-markers";
  * it is panned.
  */
 const NO_STOPS: ReadonlyMap<string, number> = new globalThis.Map<string, number>();
+/** A stable empty list, so the cluster icon effect does not re-run on every render. */
+const NO_PINS: CustomPinIcon[] = [];
 
 // Module scope: runs once per page load however many canvases mount, which is
 // what CLAUDE.md §7 asks for. Doing it in a root provider instead would drag
@@ -219,6 +222,11 @@ export type MapCanvasProps = {
    * dragged, and a bubble is exactly what hides it.
    */
   clustering?: boolean;
+  /**
+   * What a cluster is drawn as — `AppMap.clusterIcon`. Absent or "" is the grey
+   * bubble, which is what every canvas but the editor's wants.
+   */
+  clusterIcon?: string;
   /** `null` clears the selection — a click on the basemap, closing the card. */
   onSelectPlace: (placeId: string | null) => void;
   /** Adds an Edit action to the card. Omit and the card is read-only. */
@@ -299,6 +307,7 @@ export default function MapCanvasImpl({
   colorFor,
   pinIcons,
   clustering,
+  clusterIcon = "",
   shapes,
   selection,
   showCompass,
@@ -556,6 +565,15 @@ export default function MapCanvasImpl({
     isSuspended: isDrawing,
     isBrowsing: !isAdding && !isDrawing && !selection?.isSelecting,
     onVisibleChange: setVisibleIds,
+  });
+
+  // The owner's cluster icon over those bubbles, as the published map draws it.
+  useClusterIcon({
+    map,
+    isReady,
+    isEnabled: Boolean(clustering),
+    clusterIcon,
+    pinIcons: pinIcons ?? NO_PINS,
   });
 
   // Latest handlers and mode without re-binding the map listener on every render.

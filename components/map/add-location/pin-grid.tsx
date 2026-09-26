@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, MoreHorizontal, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useId } from "react";
 
 import { PinTile, type DragProps } from "@/components/map/pin-tile";
@@ -18,7 +18,7 @@ import type { CustomPinIcon } from "@/packages/shared/pin-icons";
  * pixel apart, two popovers, two drag hooks and three copies of the same dashed
  * cell, to split a question nobody was asking in two halves. One grid answers both:
  * the pins this map keeps using are ordered onto page one (lib/map/pin-pages.ts),
- * and the rest are behind More.
+ * and the rest are behind Next.
  *
  * Two ways to use a tile, matching the control it hangs off: drag it onto the map
  * and the pin lands where you let go, or press it and add mode arms with that icon
@@ -27,9 +27,10 @@ import type { CustomPinIcon } from "@/packages/shared/pin-icons";
  *
  * Paging rather than scrolling. A scroll container inside a popover over a map is
  * a wheel event with three plausible owners, and on a trackpad the map wins about
- * half the time. More and Back are two presses that cannot be misread.
+ * half the time. Back and Next are two presses that cannot be misread.
  *
- * The last cell is always New, and none of the three navigation cells is a drag
+ * New is on every page, just before Next (or last, on the final page). None of
+ * the three navigation cells is a drag
  * source: there is nothing to drag out of "make a new pin" or "show me the rest",
  * and a tile that started a drag which could not end in a marker would be a gesture
  * that silently does nothing. They share one shape, so a cell that is not a pin
@@ -41,7 +42,7 @@ import type { CustomPinIcon } from "@/packages/shared/pin-icons";
  * for it.
  *
  * At the plan's location limit every *pin* goes grey and stops responding, while
- * Back, More and New stay live. The split is on what a cell does: a pin drops a
+ * Back, Next and New stay live. The split is on what a cell does: a pin drops a
  * location and there is no room for one, but paging through the library and
  * designing a pin in the studio both cost nothing and are the things somebody at
  * the limit is most likely to be doing while they decide what to delete. A pin
@@ -120,22 +121,24 @@ export function PinGrid({
         />
       ))}
 
-      {hasMore ? (
-        <NavCell
-          label="More"
-          icon={MoreHorizontal}
-          onPress={() => onPageChange(current + 1)}
-        />
-      ) : null}
-
-      {/* Last cell on every page, so the way to make a pin is never the thing you
-          have to page back to find. */}
+      {/* On every page, so the way to make a pin is never the thing you have to
+          page back to find. */}
       <NavCell
         label="New"
         title="Make a new pin"
         icon={Plus}
         onPress={onOpenStudio}
       />
+
+      {/* Last, opposite Back in the first cell. Back and Next are the two ends
+          of the grid, so the way forward sits where the eye finishes a page. */}
+      {hasMore ? (
+        <NavCell
+          label="Next"
+          icon={ChevronRight}
+          onPress={() => onPageChange(current + 1)}
+        />
+      ) : null}
 
       {/* Spans the row it sits on rather than living in a wrapper, so the grid
           stays the one thing laying this menu out. */}

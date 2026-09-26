@@ -40,6 +40,7 @@ import {
   isPlainAppearance,
   type MapAppearance,
 } from "@/packages/shared/map-appearance";
+import { clusterIconPin } from "@/packages/shared/clusters";
 import { isEmptyHours } from "@/packages/shared/hours";
 import {
   CUSTOM_PIN_PREFIX,
@@ -172,7 +173,8 @@ export function buildSnapshot(
     (isValidLngLat(place.lng, place.lat) ? usable : skipped).push(place);
   }
 
-  const pinIcons = usedPinIcons(map, usable);
+  const clusterIcon = publishedClusterIcon(map);
+  const pinIcons = usedPinIcons(map, usable, clusterIcon);
 
   /*
    * What a group decided, for the pins and the shapes it decided it for.
@@ -301,6 +303,9 @@ export function buildSnapshot(
       // never opened the appearance menu publishes the exact bytes it published
       // before any of this existed.
       ...appearanceField(map),
+      // Absent is the grey bubble, which is every map published before this
+      // existed and every map whose owner never chose an icon.
+      ...(clusterIcon ? { clusterIcon } : {}),
       ...cardLayoutField(publishedLayout),
       ...gazetteerField(gazetteerBase, usable),
       settings: settings,
@@ -451,16 +456,36 @@ function gazetteerField(
 }
 
 /**
+ * The cluster icon to publish, or "" for the grey bubble.
+ *
+ * "" when clustering is off, because a map that never clusters has no use for
+ * the bytes, which for an uploaded image are kilobytes on every visitor's
+ * download. Also "" for a pin that no longer resolves, such as a custom pin
+ * deleted in the studio after it was chosen. Nothing sweeps that id off the map,
+ * and the editor already draws it as the bubble, so publishing the bubble is
+ * what keeps the two in agreement.
+ */
+function publishedClusterIcon(map: AppMap): string {
+  if (!readEmbedSettings(map.settings).clustering) return "";
+
+  return clusterIconPin(map.clusterIcon, map.pinIcons) ? map.clusterIcon : "";
+}
+
+/**
  * The map's own pins, narrowed to the ones a published place actually wears.
  *
  * The same filter the tag vocabulary gets, and for a sharper reason: an unused
  * tag is a dead chip in the filter row, but an unused custom pin is a whole logo
  * — a few kilobytes of base64 — downloaded by every visitor to draw nothing.
  */
-function usedPinIcons(map: AppMap, places: Place[]): SnapshotPinIcon[] {
+function usedPinIcons(
+  map: AppMap,
+  places: Place[],
+  clusterIcon: string,
+): SnapshotPinIcon[] {
+  // The cluster icon wears a pin too, and the embed resolves it from this list.
   const worn = new Set(
-    places
-      .map((place) => place.icon)
+    [...places.map((place) => place.icon), clusterIcon]
       .filter((icon) => icon.startsWith(CUSTOM_PIN_PREFIX))
       .map((icon) => icon.slice(CUSTOM_PIN_PREFIX.length)),
   );

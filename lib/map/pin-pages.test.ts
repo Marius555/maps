@@ -67,7 +67,7 @@ describe("allPinIcons", () => {
 });
 
 describe("pinPages", () => {
-  it("keeps everything on one page when it fits, spending no slot on More", () => {
+  it("keeps everything on one page when it fits, spending no slot on Next", () => {
     expect(pinPages(icons(PIN_MENU_PIN_CELLS))).toEqual([
       icons(PIN_MENU_PIN_CELLS),
     ]);
@@ -76,9 +76,9 @@ describe("pinPages", () => {
   /*
    * The case the whole function exists for. One pin too many and the last pin cell
    * stops being a pin, so page one holds six rather than seven — the eighth cannot
-   * simply push the seventh off, it has to take More's slot into account.
+   * simply push the seventh off, it has to take Next's slot into account.
    */
-  it("gives up a slot to More as soon as one page is not enough", () => {
+  it("gives up a slot to Next as soon as one page is not enough", () => {
     const pages = pinPages(icons(PIN_MENU_PIN_CELLS + 1));
 
     expect(pages).toHaveLength(2);
@@ -87,11 +87,11 @@ describe("pinPages", () => {
   });
 
   /*
-   * A middle page pays twice — Back in its first cell, More in its last — on top of
+   * A middle page pays twice — Back in its first cell, Next in its last — on top of
    * the cell New takes on all three. Fifteen is the real ceiling: one plain pin,
    * MAX_PIN_ICONS custom, six built-in.
    */
-  it("pages a full map three deep, because a middle page pays for Back and More", () => {
+  it("pages a full map three deep, because a middle page pays for Back and Next", () => {
     const all = allPinIcons(customPins(MAX_PIN_ICONS));
     expect(all).toHaveLength(15);
 

@@ -33,6 +33,7 @@ function makeMap(overrides: Partial<AppMap> = {}): AppMap {
     pinIcons: [],
     settings: {},
     appearance: {},
+    clusterIcon: "",
     allowedDomains: [],
     publishedAt: null,
     snapshotUrl: null,
@@ -1555,6 +1556,89 @@ describe("buildSnapshot gazetteer", () => {
     );
 
     expect(snapshot.gazetteer?.base).toBe("https://cdn.example.com/gazetteer");
+  });
+});
+
+describe("buildSnapshot cluster icon", () => {
+  const logoPin = {
+    id: "ab12cd34",
+    label: "Logo",
+    color: "#1c7ed6",
+    glyph: "",
+    image: "data:image/png;base64,iVBORw0KGgo=",
+  };
+
+  it("is omitted when the owner never chose one", () => {
+    // Absent is the grey bubble, and what every file published before this
+    // existed carries.
+    const { snapshot } = buildSnapshot(makeMap(), [makePlace()], [], GENERATED_AT);
+
+    expect(snapshot).not.toHaveProperty("clusterIcon");
+  });
+
+  it("publishes a built-in pin", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ clusterIcon: "store" }),
+      [makePlace()],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.clusterIcon).toBe("store");
+  });
+
+  it("publishes an uploaded image as it was stored", () => {
+    const image = "data:image/png;base64,iVBORw0KGgo=";
+    const { snapshot } = buildSnapshot(
+      makeMap({ clusterIcon: image }),
+      [makePlace()],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.clusterIcon).toBe(image);
+  });
+
+  it("keeps a custom pin that only the cluster wears", () => {
+    // `pinIcons` is narrowed to the pins places wear; without this the embed
+    // would be handed an id it has nothing to resolve against.
+    const { snapshot } = buildSnapshot(
+      makeMap({ clusterIcon: "custom:ab12cd34", pinIcons: [logoPin] }),
+      [makePlace()],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot.clusterIcon).toBe("custom:ab12cd34");
+    expect(snapshot.pinIcons?.map((pin) => pin.id)).toEqual(["ab12cd34"]);
+  });
+
+  it("is omitted when clustering is off", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({
+        clusterIcon: "custom:ab12cd34",
+        pinIcons: [logoPin],
+        settings: { clustering: false },
+      }),
+      [makePlace()],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot).not.toHaveProperty("clusterIcon");
+    // And its pin with it: nothing else wears it.
+    expect(snapshot).not.toHaveProperty("pinIcons");
+  });
+
+  it("is omitted when the pin it names has been deleted", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({ clusterIcon: "custom:gone" }),
+      [makePlace()],
+      [],
+      GENERATED_AT,
+    );
+
+    expect(snapshot).not.toHaveProperty("clusterIcon");
   });
 });
 

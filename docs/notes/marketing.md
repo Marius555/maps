@@ -50,6 +50,19 @@
   `ssr: false`; `BillTable` is what the server sends.
 - **No competitor is named, and every figure is a published list price or is
   written down as an assumption.** `lib/marketing/compare.ts` holds the sources.
+- **Google is named, and only as a vendor.** The Sources section says nothing
+  from Google loads with a published map. That is the owner's call, and it does
+  not break the rule above: Google is the map platform this product avoids, not
+  a store-locator rival. **The claim is scoped to the visitor's map** — the
+  dashboard has Google sign-in and Sheets import, and a card's directions link
+  can open Google Maps when pressed. Widen the wording and it stops being true.
+- **The Circulation copy says views are never *billed*, not never *counted*.**
+  Analytics, when an owner switches it on, does count sessions.
+- **"You are here" sits in the emptiest part of the hero map, inside a phone's
+  crop.** A 390px phone shows only the middle 22% of the picture's width
+  (39–61%), which is narrower than the 32–68% band `HERO_TOUR` is tested
+  against. Move a pin and the gap may move too: re-run the grid search described
+  at `HERO_YOU_ARE_HERE`, then regenerate `/dev/hero-routes`.
 
 ---
 
@@ -187,6 +200,37 @@ off, every time. The hero is `calc(100svh - var(--mk-header))`, so header plus
 hero *is* screen one, and the document's own top is where it starts.
 
 ---
+
+## Sources and Circulation: two sections added September 2026
+
+Two screens between Sequence and Scale, both built on `SplitBody`
+(`components/marketing/split/`): a drawing in a 3:2 `mk-panel` beside a
+list of points, set the way the key sets its entries. Each drawing is a
+`useArtLoop` sequence. It uses single targets or keyframe lists that start
+at the resting value, so the server's frame is the loop's last frame.
+
+- **Sources** (`no-google/`): the requests a published map makes: `map.js`,
+  the snapshot, OpenFreeMap tiles. Each one draws out and is ticked, and
+  `maps.googleapis.com` is struck through.
+- **Circulation** (`unlimited-views/`): the mechanism, placed right before the
+  calculator. Two lanes: a metered API whose bill grows with each visitor, and
+  a CDN file read by twice as many visitors whose bill does not move. The bar
+  is an SVG `width` attribute animated by Motion, which works: seen emptying
+  mid-loop in the browser.
+
+Measured at 1536×695: content 546 (Sources) and 539 (Circulation), plus the
+96px of section padding, so 642 and 635, both inside the 688 budget.
+**Not re-swept at 1024 / 1100 / 1280.** Do that before trusting them at every
+width. At 375px both stack with no horizontal scroll.
+
+The hero map went from 38 pins to 20 at the same time, and "you are here" moved
+from Kennington (2.1 km to Southbank, a stub under its own pin) to Royal
+Hospital Road in Chelsea. The first pick, King's Road at 39% across, drew its
+whole route off a phone's left edge, which is where the 39–61% band above
+comes from. From Chelsea, the routes are 3.9 km to Soho (All, Cafés), 5.6 km
+to Clapham (Roasteries) and 5.9 km to Putney (Pickup points). Putney is
+outside a phone's crop, so that one filter's route runs off-screen on a
+phone.
 
 ## The hero and the map are two screens
 

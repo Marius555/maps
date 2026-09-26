@@ -29,7 +29,7 @@ export const PIN_MENU_ROWS = 2;
 export const PIN_MENU_CELLS = PIN_MENU_COLUMNS * PIN_MENU_ROWS;
 
 /**
- * What is left for pins once "New" has had the last cell.
+ * What is left for pins once "New" has had its cell.
  *
  * It takes that cell on *every* page, not just the first: the studio is how a pin
  * gets made, and a menu that hid the way in whenever you paged would make "make a
@@ -71,14 +71,14 @@ export function allPinIcons(
  * `PIN_MENU_PIN_CELLS` and not `PIN_MENU_CELLS`. Two more slots are not always
  * available and not always spent, which is the only subtlety here. Every page after
  * the first gives its first cell to Back. Every page except the last gives its last
- * pin cell to More. A middle page therefore holds two fewer pins than it has cells,
+ * pin cell to Next. A middle page therefore holds two fewer pins than it has cells,
  * and the first and last hold one fewer — or, if everything fits at once, none
  * fewer and no navigation at all.
  *
  * Whether a page is the last one is not known until you have tried to fill it,
  * hence the fill-then-check rather than an arithmetic `Math.ceil`: take the whole
  * remainder if it fits in what is free, otherwise take one less than free and
- * leave the cell for More.
+ * leave the cell for Next.
  *
  * It looks like it only ever needs two pages, and today it nearly does — but the
  * ceiling is one plain pin, eight custom (`MAX_PIN_ICONS`) and six built-in, which

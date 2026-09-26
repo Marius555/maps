@@ -5,6 +5,16 @@ rewritten; it is the record of why this area is shaped as it is.
 
 ## Invariants
 
+### App shell
+
+- **`<main>` in `app-shell.tsx` is `relative`, and must stay so.** It is the dashboard's
+  only scroller, and an `overflow` box clips absolutely positioned descendants only when it
+  is also their containing block. Without `relative`, every `sr-only` span belonged to the
+  initial containing block and sat at its static position, so a long Locations list (one
+  `sr-only` "Missing" label per row) made the *document* 2,500px tall in a 640px window.
+  That drew two scrollbars and scrolled the sidebar away. The shell's `overflow-hidden`
+  did not help: it clips only descendants it contains, and it is not positioned either.
+
 ### Editor layout
 
 - **Exactly one element in the editor has a real height**, and everything below depends on

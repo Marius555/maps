@@ -310,7 +310,7 @@ Area-specific invariants live at the head of each file in the table below.
   it `retired` so it stops being offered and keeps being read.
 - **One writer per JSON blob column.** `updateMap` serialises `settings` whole, so two
   forms writing it is a lost update. `useEmbedDesign` is the only writer.
-- **The embed's own-code budget is 49.2KB and it currently sits at 46.3KB**, minified
+- **The embed's own-code budget is 49.2KB and it currently sits at 46.7KB**, minified
   since 2026-09-26. That is the binding number, and anything new has to be paid for by
   removing something. The **total** used to be the gate at 2 bytes; it is reported now and not
   enforced, because its stated job was catching MapLibre ballooning and it had become a
@@ -449,7 +449,7 @@ The embed must **never** import React, HeroUI, Motion, TanStack Query, Zustand, 
 
 Target: **under 250KB gzipped including MapLibre.** If a change pushes it over, flag it.
 
-**Measured, that target is unreachable with MapLibre v6** — its own dist files are 297.4KB gzipped at 6.11.2 (`maplibre-gl.mjs` 146.9 + `maplibre-gl-shared.mjs` 144.6 + the worker 6.0), minified already, with no slim build. Actual total is **343.8KB**, of which ours is 46.3KB (minified). `npm run build:embed` enforces a **49.2KB budget on our code** and a **305KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 46.3KB.
+**Measured, that target is unreachable with MapLibre v6** — its own dist files are 297.4KB gzipped at 6.11.2 (`maplibre-gl.mjs` 146.9 + `maplibre-gl-shared.mjs` 144.6 + the worker 6.0), minified already, with no slim build. Actual total is **344.1KB**, of which ours is 46.7KB (minified). `npm run build:embed` enforces a **49.2KB budget on our code** and a **305KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 46.7KB.
 
 The own-code budget has been raised six times — 42 → 46 → 47 → 48 → 48.1 → 49.2KB — and each raise is argued in `scripts/check-embed-size.mjs` rather than merely recorded. It **must not be raised to get past a binding budget**: a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam — the bottom-sheet drawer was built that way, clawed from 285 bytes over to 18 under without touching the number. The fourth raise is the counter-example and is labelled as one: carrying *both* narrow-screen drawers cost 162 bytes, four trims paid back 18 of them, and the remaining 144 was the owner's call taken with the numbers on the table rather than a conclusion the file reached. The fifth (split dots where dotted routes share a road) was the same kind of call: granted at 75 bytes over for a first design that failed, and its replacement costs ~163 bytes, 63 over the old 48KB. The sixth (routes sharing a road take turns, dot by dot and dash by dash) was granted by the owner in advance and cost ~990 bytes: MapLibre cannot alternate symbol dots across tile edges, so the embed places them itself. The bundle was **not minified** then (Vite library mode leaves ES output alone), which is why it cost that much. Minification was switched on afterwards (2026-09-26, `output.minify` in `embed/vite.config.mts`) and took ours from 49.1KB to 45.6KB; the embed's language table, badge and page events were paid for out of that without a seventh raise.
 
@@ -505,9 +505,13 @@ It started type-only and now holds a little runtime too, because the editor and 
 Use plain `lat` / `lng` doubles, **not** spatial Point columns. Spatial types exist in Appwrite now, but "find nearest" runs client-side against the published snapshot, so a spatial index buys nothing and constrains self-hosting (geo-queries need MariaDB; MongoDB-backed self-hosted Appwrite doesn't support them).
 
 ### `maps`
-`userId` · `name` · `slug` (unique) · `style` · `defaultLat` · `defaultLng` · `defaultZoom` · `tagGroups` (JSON) · `fields` (JSON) · `pinIcons` (JSON) · `settings` (JSON) · `appearance` (JSON) · `allowedDomains` (string[]) · `publishedAt` · `snapshotUrl` · ~~`categories`~~ (JSON, retired)
+`userId` · `name` · `slug` (unique) · `style` · `defaultLat` · `defaultLng` · `defaultZoom` · `tagGroups` (JSON) · `fields` (JSON) · `pinIcons` (JSON) · `settings` (JSON) · `appearance` (JSON) · `clusterIcon` · `allowedDomains` (string[]) · `publishedAt` · `snapshotUrl` · ~~`categories`~~ (JSON, retired)
 
 `settings` is the whole map designer: which of the embed's optional controls exist, the results panel's side, placement, width, transparency, blur and corners, what a results row draws, which of MapLibre's own controls are on the map and in which corner, and the embed's five colour tokens. Every field beyond the original booleans is optional in `SnapshotSettings` and absent means what the embed did before it existed — see §0. One writer only (`useEmbedDesign`), because the column is one JSON blob written whole.
+
+`clusterIcon` is what nearby pins merge into when zoomed out: `""` for the grey numbered
+bubble, a pin id, or an uploaded image as a data URI. Its own column so it has one writer,
+the Draw menu's cluster icon dialog; it reaches the snapshot as optional `clusterIcon`.
 
 `tagGroups` is the map's whole filter vocabulary: `[{id, label, tags: [{id, label, color}]}]`. It absorbed `categories`, which is left in place holding nothing — see §0. Do not drop a column with data in it.
 

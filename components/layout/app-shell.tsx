@@ -28,6 +28,15 @@ import { SidebarMobile } from "./sidebar/sidebar-mobile";
  * scrollbar gutter on a document that no longer scrolls; the gutter moves onto
  * `<main>`, which is now the element whose scrollbar comes and goes.
  *
+ * **`relative` on `<main>` is what keeps the frame one viewport tall.** An
+ * `overflow` box clips absolutely positioned descendants only when it is also
+ * their containing block. Without it, every `sr-only` span (Tailwind makes them
+ * `position: absolute`) belonged to the initial containing block, sat at its
+ * static position down a long list, and made the *document* scroll. That put a
+ * second scrollbar beside `<main>`'s and carried the sidebar off the top of the
+ * screen. The Locations table has an `sr-only` "Missing" label on every row, so a
+ * long map there showed it first.
+ *
  * `min-h-0` on the body column is load-bearing: the map editor is a flex child
  * that needs to fill the remaining height, and without it a flex parent sizes to
  * its content and the map collapses.
@@ -70,7 +79,7 @@ export function AppShell({
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <MobileHeader plan={plan} />
             <VerifyEmailBanner />
-            <main className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]">
+            <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]">
               {children}
             </main>
           </div>

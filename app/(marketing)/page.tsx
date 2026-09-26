@@ -5,8 +5,10 @@ import { FlatCost } from "@/components/marketing/cost/flat-cost";
 import { Hero } from "@/components/marketing/hero/hero";
 import { MapShowcase } from "@/components/marketing/hero/map-showcase";
 import { Legend } from "@/components/marketing/legend/legend";
+import { NoGoogle } from "@/components/marketing/no-google/no-google";
 import { SnapScroll } from "@/components/marketing/snap-scroll";
 import { Steps } from "@/components/marketing/steps/steps";
+import { UnlimitedViews } from "@/components/marketing/unlimited-views/unlimited-views";
 import { PRODUCT_NAME } from "@/lib/config";
 
 const DESCRIPTION =
@@ -27,11 +29,14 @@ export const metadata: Metadata = {
 /**
  * The landing page.
  *
- * Read by its section labels alone it says: *key*, *sequence*, *scale*,
- * *survey* — which is how a map sheet is labelled, and is the page's whole
- * structure. The hero is the thesis and everything under it is detail, in the
- * order somebody buying this actually asks: what do my visitors get, how much
- * work is it, what does it cost, and what else could I buy instead.
+ * Read by its section labels alone it says: *key*, *sequence*, *sources*,
+ * *circulation*, *scale*, *survey* — which is how a map sheet is labelled, and
+ * is the page's whole structure. The hero is the thesis and everything under
+ * it is detail, in the order somebody buying this actually asks: what do my
+ * visitors get, how much work is it, what does it run on, why is it
+ * unlimited, what does it cost, and what else could I buy instead.
+ * Circulation sits directly above the calculator on purpose: the mechanism,
+ * then what it does to a bill.
  *
  * No testimonials and no logo cloud. There are no customers yet, and the one
  * thing that would make a page like this worthless is inventing either. The
@@ -44,7 +49,7 @@ export const metadata: Metadata = {
  * this shell and are ordinary documents. Each section holds a viewport
  * (`screen` on `Section`) and each one is a snap point.
  *
- * **Six children, not five: the map has a screen of its own.** It used to sit
+ * **Eight children: the map has a screen of its own.** It used to sit
  * inside the hero, sharing one screen with the headline, the lede and the
  * buttons — and the words won, leaving the map on its 15rem floor. The hero is
  * the claim and `MapShowcase` is the evidence, and each gets a screen. Every
@@ -70,6 +75,8 @@ export default function LandingPage() {
       <MapShowcase />
       <Legend />
       <Steps />
+      <NoGoogle />
+      <UnlimitedViews />
       <FlatCost />
       <Compare />
 

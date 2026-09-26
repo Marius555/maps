@@ -53,6 +53,46 @@ export function base64Bytes(dataUri: string): number {
   return Math.floor((encoded.length * 3) / 4) - padding;
 }
 
+/**
+ * An uploaded pin image, or "" for none. Its own schema because a group's icon
+ * (group.schema.ts) takes the same upload, through the same normaliser, and has
+ * to be held to the same format and size.
+ */
+export const pinImageSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => value === "" || DATA_URI.test(value),
+    "That image couldn't be read. Upload a PNG, JPG, WebP or SVG.",
+  )
+  .refine(
+    (value) => value === "" || base64Bytes(value) <= MAX_PIN_IMAGE_BYTES,
+    "That image is too detailed for a pin. Try a flat-colour version of your logo.",
+  );
+
+/**
+ * What a map's clusters are drawn as: "" for the grey bubble, a pin id (a
+ * built-in or `custom:<id>`), or an uploaded image held to the pin rules above.
+ * One string rather than two fields, because the two are exclusive and the
+ * `data:` prefix already says which one this is.
+ */
+export const clusterIconSchema = z
+  .string()
+  .trim()
+  .superRefine((value, ctx) => {
+    if (value.startsWith("data:")) {
+      const image = pinImageSchema.safeParse(value);
+      if (!image.success) {
+        ctx.addIssue({ code: "custom", message: image.error.issues[0].message });
+      }
+      return;
+    }
+
+    if (value.length > 64) {
+      ctx.addIssue({ code: "custom", message: "That is not a pin." });
+    }
+  });
+
 export const pinIconSchema = z
   .object({
     /** Stable across renames and recolours — places reference this, not the label. */
@@ -80,18 +120,7 @@ export const pinIconSchema = z
     iconColor: z.union([hexColorSchema, z.literal("")]).default(""),
     size: z.enum(["sm", "md", "lg"]).default("md"),
     shape: z.enum(["circle", "square", "diamond"]).default("circle"),
-    image: z
-      .string()
-      .trim()
-      .default("")
-      .refine(
-        (value) => value === "" || DATA_URI.test(value),
-        "That image couldn't be read. Upload a PNG, JPG, WebP or SVG.",
-      )
-      .refine(
-        (value) => value === "" || base64Bytes(value) <= MAX_PIN_IMAGE_BYTES,
-        "That image is too detailed for a pin. Try a flat-colour version of your logo.",
-      ),
+    image: pinImageSchema.default(""),
   })
   .refine(
     (icon) => Boolean(icon.glyph) !== Boolean(icon.image),

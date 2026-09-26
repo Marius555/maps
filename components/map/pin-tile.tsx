@@ -37,6 +37,7 @@ export function PinTile({
   icon,
   pinIcons,
   label,
+  fallbackColor,
   size = "md",
   isArmed,
   isDisabled,
@@ -49,6 +50,8 @@ export function PinTile({
   pinIcons: CustomPinIcon[];
   /** Overrides the pin's own name. Only the plain pin has none of its own. */
   label?: string;
+  /** Fills a pin that has no colour of its own — the cluster picker's grey. */
+  fallbackColor?: string;
   /**
    * `lg` where the tile is the thing being chosen rather than one entry in a
    * list — the studio's carousels give each tile a quarter of the dialog, and a
@@ -102,7 +105,13 @@ export function PinTile({
           wear, and a 40% pin on a dark surface is one you cannot see rather
           than one you are told not to press — the argument the unroutable
           marker settles in app/globals.css. */}
-      <PinPreview icon={icon} pinIcons={pinIcons} size={size} isMuted={isDisabled} />
+      <PinPreview
+        icon={icon}
+        pinIcons={pinIcons}
+        fallbackColor={fallbackColor}
+        size={size}
+        isMuted={isDisabled}
+      />
       {/* The name does not fade with the pin, and it used to. `text-muted/60`
           was readable while a disabled tile was transparent; now that the tile
           carries the hover fill the label sits on a *lighter* ground than

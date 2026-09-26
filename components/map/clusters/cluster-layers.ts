@@ -11,11 +11,9 @@ import type {
 import { STACK_ON_TOP } from "@/lib/map/carry-style";
 import type { Place } from "@/lib/repositories/types";
 import {
-  CLUSTER_BUBBLE_RADIUS,
-  CLUSTER_COLOR,
-  CLUSTER_FONT,
   CLUSTER_MAX_ZOOM,
   CLUSTER_RADIUS,
+  clusterLayers,
 } from "@/packages/shared/clusters";
 
 /**
@@ -36,7 +34,17 @@ export const CLUSTER_SOURCE = "editor-place-clusters";
 export const CLUSTER_LAYER = "editor-cluster-bubbles";
 export const CLUSTER_COUNT_LAYER = "editor-cluster-counts";
 
-const CLUSTER_LAYERS = [CLUSTER_LAYER, CLUSTER_COUNT_LAYER];
+/** Added only while the map has a cluster icon — see use-cluster-icon.ts. */
+export const CLUSTER_ICON_LAYER = `${CLUSTER_LAYER}-icon`;
+const CLUSTER_BADGE_LAYER = `${CLUSTER_LAYER}-badge`;
+
+// Icon and badge first, so removal takes them before the layers they sit among.
+const CLUSTER_LAYERS = [
+  CLUSTER_ICON_LAYER,
+  CLUSTER_BADGE_LAYER,
+  CLUSTER_LAYER,
+  CLUSTER_COUNT_LAYER,
+];
 
 /** A point per location, carrying only its id — all the bubbles need to count. */
 export type ClusterFeatures = GeoJSON.FeatureCollection<
@@ -73,37 +81,9 @@ export function addClusterLayers(map: MapLibreMap, data: ClusterFeatures): void 
     });
   }
 
-  if (!map.getLayer(CLUSTER_LAYER)) {
-    map.addLayer({
-      id: CLUSTER_LAYER,
-      type: "circle",
-      source: CLUSTER_SOURCE,
-      filter: ["has", "point_count"],
-      metadata: STACK_ON_TOP,
-      paint: {
-        "circle-color": CLUSTER_COLOR,
-        "circle-opacity": 0.9,
-        "circle-stroke-width": 2,
-        "circle-stroke-color": "#ffffff",
-        "circle-radius": CLUSTER_BUBBLE_RADIUS,
-      },
-    });
-  }
-
-  if (!map.getLayer(CLUSTER_COUNT_LAYER)) {
-    map.addLayer({
-      id: CLUSTER_COUNT_LAYER,
-      type: "symbol",
-      source: CLUSTER_SOURCE,
-      filter: ["has", "point_count"],
-      metadata: STACK_ON_TOP,
-      layout: {
-        "text-field": ["get", "point_count_abbreviated"],
-        "text-font": [CLUSTER_FONT],
-        "text-size": 12,
-      },
-      paint: { "text-color": "#ffffff" },
-    });
+  // The bubble and its count, from the one definition the embed also reads.
+  for (const layer of clusterLayers(CLUSTER_SOURCE, CLUSTER_LAYER, CLUSTER_COUNT_LAYER)) {
+    if (!map.getLayer(layer.id)) map.addLayer({ ...layer, metadata: STACK_ON_TOP });
   }
 }
 

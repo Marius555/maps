@@ -111,6 +111,7 @@ export function toAppMap(row: MapRow): AppMap {
     pinIcons: parseJson<CustomPinIcon[]>(row.pinIcons, []),
     settings: parseJson<Record<string, unknown>>(row.settings, {}),
     appearance: parseJson<Record<string, unknown>>(row.appearance, {}),
+    clusterIcon: row.clusterIcon ?? "",
     allowedDomains: row.allowedDomains ?? [],
     publishedAt: row.publishedAt ?? null,
     snapshotUrl: row.snapshotUrl ?? null,

@@ -97,6 +97,12 @@ export const TABLES = [
       // `settings`, because `settings` belongs to the Publish tab and is written
       // whole — two forms writing one blob is a lost update.
       text("appearance"),
+      // What a cluster of nearby pins is drawn as when zoomed out: "" (or
+      // absent) for the grey numbered bubble, a pin id (built-in or
+      // `custom:<id>`), or an uploaded logo as a data URI held to the pin
+      // image cap. Its own column for the reason `appearance` has one — its one
+      // writer is the cluster icon dialog, and neither blob above is its.
+      text("clusterIcon"),
       /*
        * The map's whole filter vocabulary: groups of tags a location can wear.
        * `[{ id, label, tags: [{ id, label, color }] }]`.

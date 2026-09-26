@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Popover, Separator } from "@heroui/react";
-import { Circle, Pentagon, Route, Shapes, Slash, Upload } from "lucide-react";
+import { Boxes, Circle, Pentagon, Route, Shapes, Slash, Upload } from "lucide-react";
 import { useId, useState } from "react";
 
 import { PlanLimitNote } from "@/components/map/plan-limit-note";
@@ -52,6 +52,7 @@ export function ShapeToolsButton({
   onPickRoute,
   onStopDrawing,
   onImport,
+  onEditClusterIcon,
 }: {
   /** The armed tool, or null in browse mode. */
   drawMode: ShapeKind | null;
@@ -79,6 +80,11 @@ export function ShapeToolsButton({
   onStopDrawing: () => void;
   /** Opens the GeoJSON import dialog. Omitted where there is nowhere to put it. */
   onImport?: () => void;
+  /**
+   * Opens the cluster icon dialog — what nearby pins merge into when zoomed out.
+   * Omitted where there is no map of the owner's to style.
+   */
+  onEditClusterIcon?: () => void;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isDrawing = drawMode !== null || Boolean(isRouting);
@@ -212,6 +218,24 @@ export function ShapeToolsButton({
                   onPress={() => {
                     setIsMenuOpen(false);
                     onImport();
+                  }}
+                />
+              </>
+            ) : null}
+
+            {/* Opens a dialog too, so it sits under the rule with Import. Never
+                greyed by the shape limit: it changes how clusters look and
+                makes nothing the plan counts. */}
+            {onEditClusterIcon ? (
+              <>
+                {onImport ? null : <Separator className="my-1" />}
+                <ToolItem
+                  icon={Boxes}
+                  label="Cluster icon"
+                  hint="What grouped pins look like zoomed out"
+                  onPress={() => {
+                    setIsMenuOpen(false);
+                    onEditClusterIcon();
                   }}
                 />
               </>

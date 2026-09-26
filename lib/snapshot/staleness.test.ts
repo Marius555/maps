@@ -23,6 +23,7 @@ function makeMap(overrides: Partial<AppMap> = {}): AppMap {
     pinIcons: [],
     settings: {},
     appearance: {},
+    clusterIcon: "",
     allowedDomains: [],
     publishedAt: PUBLISHED_AT,
     snapshotUrl: "https://cdn.example.com/live.json",
