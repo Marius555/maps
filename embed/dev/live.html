@@ -175,6 +175,15 @@
       const fromQuery = raw ? safeDecode(raw[1]) : null;
       if (fromQuery) input.value = fromQuery;
 
+      /*
+       * The snippet's `data-tags`, as the dialog's tag chips chose it. Read only
+       * from the part *before* `snapshot=`, which is where `embedTestPageUrl`
+       * puts it — anything after belongs to the snapshot URL.
+       */
+      const head = raw ? location.search.slice(0, raw.index) : location.search;
+      const tagMatch = head.match(/[?&]tags=([^&]*)/);
+      const tags = tagMatch ? safeDecode(tagMatch[1]) : "";
+
       function safeDecode(value) {
         try {
           return decodeURIComponent(value);
@@ -313,7 +322,9 @@
         design.textContent = "";
         // The URL alone, not "Loading …": it stays on screen under the map once
         // the map is there, and a permanent "Loading" reads as a stuck page.
-        status.textContent = snapshotUrl;
+        status.textContent = tags
+          ? `${snapshotUrl} — only locations with the tags chosen for this snippet`
+          : snapshotUrl;
 
         void reportMeasurement(snapshotUrl);
 
@@ -331,6 +342,7 @@
         script.dataset.snapshot = snapshotUrl;
         script.dataset.eager = "";
         script.dataset.height = "520";
+        if (tags) script.dataset.tags = tags;
         status.after(script);
       }
 

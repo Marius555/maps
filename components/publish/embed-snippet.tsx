@@ -5,7 +5,7 @@ import { Copy } from "lucide-react";
 import { useState } from "react";
 
 import { embedScriptUrl, embedSnippet } from "@/lib/embed/snippet";
-import type { MapTagGroup } from "@/lib/repositories/types";
+import type { MapTagGroup, Place } from "@/lib/repositories/types";
 import { SnippetTagFilter } from "./snippet-tag-filter";
 import { TestPageLink } from "./share-dialog/test-page-link";
 import { useOrigin } from "./use-origin";
@@ -23,10 +23,12 @@ export function EmbedSnippet({
   snapshotUrl,
   isMeasuring,
   tagGroups,
+  places,
 }: {
   snapshotUrl: string;
   isMeasuring: boolean;
   tagGroups: MapTagGroup[];
+  places: Place[];
 }) {
   const origin = useOrigin();
   // Local, not saved: the choice belongs to the copy being pasted, not the map.
@@ -68,7 +70,12 @@ export function EmbedSnippet({
         after you publish again — you only paste it once.
       </p>
 
-      <SnippetTagFilter groups={tagGroups} selected={tags} onChange={setTags} />
+      <SnippetTagFilter
+        groups={tagGroups}
+        places={places}
+        selected={tags}
+        onChange={setTags}
+      />
 
       <pre className="overflow-x-auto rounded-xl bg-surface-secondary p-3 text-xs text-foreground">
         <code className="whitespace-pre">
@@ -89,7 +96,11 @@ export function EmbedSnippet({
           Copy embed code
         </Button>
 
-        <TestPageLink snapshotUrl={snapshotUrl} isMeasuring={isMeasuring} />
+        <TestPageLink
+          snapshotUrl={snapshotUrl}
+          tags={[...tags]}
+          isMeasuring={isMeasuring}
+        />
       </div>
     </div>
   );

@@ -3,8 +3,8 @@
 import { Button, Modal, Separator } from "@heroui/react";
 import { Share2 } from "lucide-react";
 
-import type { AppMap } from "@/lib/repositories/types";
-import { AllowedDomainsForm } from "../allowed-domains-form";
+import type { AppMap, Place } from "@/lib/repositories/types";
+import { AllowedDomainsFold } from "../allowed-domains/allowed-domains-fold";
 import { EmbedSnippet } from "../embed-snippet";
 
 /**
@@ -19,13 +19,20 @@ import { EmbedSnippet } from "../embed-snippet";
  * three characters wide.
  *
  * A dialog gives them the width they always needed and gives the column back to
- * the design. Neither form changed; only its container was ever the problem.
+ * the design.
+ *
+ * The domains have since become a fold of their own, entered one at a time
+ * (`allowed-domains/`), and the tag chips offer only tags somebody wears and
+ * say how many locations the choice shows.
  */
 export function ShareDialog({
   map,
+  places,
   isMeasuring,
 }: {
   map: AppMap;
+  /** For the tag chips: which tags anybody wears, and how many each shows. */
+  places: Place[];
   /**
    * The measurement switch as the sidebar's draft has it — for the wording of the
    * test page's warning, and nothing else. What is actually being recorded lives
@@ -66,6 +73,7 @@ export function ShareDialog({
                       snapshotUrl={map.snapshotUrl}
                       isMeasuring={isMeasuring}
                       tagGroups={map.tagGroups}
+                      places={places}
                     />
                   </section>
 
@@ -78,14 +86,9 @@ export function ShareDialog({
                 </p>
               )}
 
-              <section className="space-y-2">
-                <h3 className="text-sm font-semibold text-foreground">
-                  Allowed domains
-                </h3>
-                {/* Keyed on the map so switching maps re-seeds the form rather
-                    than showing the previous one's saved list. */}
-                <AllowedDomainsForm key={map.id} map={map} />
-              </section>
+              {/* Keyed on the map so switching maps re-seeds the list rather
+                  than showing the previous one's saved domains. */}
+              <AllowedDomainsFold key={map.id} map={map} />
             </Modal.Body>
           </Modal.Dialog>
         </Modal.Container>

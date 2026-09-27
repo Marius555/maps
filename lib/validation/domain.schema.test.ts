@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   allowedDomainsSchema,
   isDomainAllowed,
+  MAX_ALLOWED_DOMAINS,
   normalizeDomain,
+  parseDomainEntries,
 } from "./domain.schema";
 
 describe("normalizeDomain", () => {
@@ -75,5 +77,50 @@ describe("isDomainAllowed", () => {
 
   it("compares case-insensitively", () => {
     expect(isDomainAllowed("WWW.Example.COM", ["example.com"])).toBe(true);
+  });
+});
+
+describe("parseDomainEntries", () => {
+  it("adds one pasted URL as its bare hostname", () => {
+    expect(parseDomainEntries("https://www.Example.com/shop?x=1", [])).toEqual({
+      added: ["www.example.com"],
+      rejected: [],
+    });
+  });
+
+  it("refuses an empty entry with a reason", () => {
+    const result = parseDomainEntries("   ", []);
+
+    expect(result.added).toEqual([]);
+    expect(result.rejected).toHaveLength(1);
+  });
+
+  it("refuses something that is not a domain", () => {
+    const result = parseDomainEntries("not_a_domain!", []);
+
+    expect(result.added).toEqual([]);
+    expect(result.rejected[0].entry).toBe("not_a_domain!");
+  });
+
+  it("refuses a domain already on the list, after normalising it", () => {
+    const result = parseDomainEntries("https://example.com/", ["example.com"]);
+
+    expect(result.added).toEqual([]);
+    expect(result.rejected[0].reason).toContain("already allowed");
+  });
+
+  it("keeps the good entries of a pasted list and reports the bad ones", () => {
+    const result = parseDomainEntries("a.com, b_c, d.com\ne.com a.com", []);
+
+    expect(result.added).toEqual(["a.com", "d.com", "e.com"]);
+    expect(result.rejected.map((r) => r.entry)).toEqual(["b_c", "a.com"]);
+  });
+
+  it("stops at the ceiling", () => {
+    const existing = Array.from({ length: MAX_ALLOWED_DOMAINS - 1 }, (_, i) => `d${i}.com`);
+    const result = parseDomainEntries("x.com y.com", existing);
+
+    expect(result.added).toEqual(["x.com"]);
+    expect(result.rejected[0].reason).toContain(`${MAX_ALLOWED_DOMAINS}`);
   });
 });

@@ -40,9 +40,19 @@ export function embedScriptUrl(origin: string): string {
  * Appwrite-hosted snapshot URL carrying its own `?project=` survives being pasted
  * in unencoded. A param appended after this one is swallowed into the snapshot
  * URL, and the failure lands three layers away as a 401 from storage.
+ *
+ * `tags` is the snippet's `data-tags` choice, carried so the test page shows the
+ * same narrowed map the copied snippet will. Without it the page always drew
+ * every location, which read as the tag choice doing nothing. Empty writes no
+ * param, and it goes *before* `snapshot=` for the reason above.
  */
-export function embedTestPageUrl(origin: string, snapshotUrl: string): string {
-  return `${origin}${EMBED_TEST_PAGE_PATH}?snapshot=${encodeURIComponent(snapshotUrl)}`;
+export function embedTestPageUrl(
+  origin: string,
+  snapshotUrl: string,
+  tags: readonly string[] = [],
+): string {
+  const tagParam = tags.length > 0 ? `tags=${encodeURIComponent(tags.join(","))}&` : "";
+  return `${origin}${EMBED_TEST_PAGE_PATH}?${tagParam}snapshot=${encodeURIComponent(snapshotUrl)}`;
 }
 
 export function embedSnippet({

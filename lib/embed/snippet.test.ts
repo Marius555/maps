@@ -57,6 +57,20 @@ describe("embedTestPageUrl", () => {
     expect(url.indexOf("snapshot=")).toBeGreaterThan(-1);
     expect(url.slice(url.indexOf("snapshot=")).includes("&")).toBe(false);
   });
+
+  it("carries the snippet's tags ahead of the snapshot", () => {
+    const snapshotUrl = "https://cdn.pinglide.com/a/live.json";
+    const url = embedTestPageUrl(origin, snapshotUrl, ["t1", "t2"]);
+
+    expect(new URL(url).searchParams.get("tags")).toBe("t1,t2");
+    expect(readSnapshotParam(url)).toBe(snapshotUrl);
+  });
+
+  it("writes no tags param for the whole map", () => {
+    expect(embedTestPageUrl(origin, "https://cdn.pinglide.com/a/live.json", [])).not.toContain(
+      "tags=",
+    );
+  });
 });
 
 describe("embedSnippet tags", () => {

@@ -25,9 +25,12 @@ import { useOrigin } from "../use-origin";
  */
 export function TestPageLink({
   snapshotUrl,
+  tags,
   isMeasuring,
 }: {
   snapshotUrl: string;
+  /** The snippet's tag choice, so the test page narrows the same way. */
+  tags: readonly string[];
   /**
    * Measurement as the owner has it set *now*, used for the warning's wording
    * and nothing else. Whether anything is actually recorded depends on the live
@@ -44,7 +47,7 @@ export function TestPageLink({
       <LinkButton
         variant="secondary"
         size="sm"
-        href={origin ? embedTestPageUrl(origin, snapshotUrl) : "#"}
+        href={origin ? embedTestPageUrl(origin, snapshotUrl, tags) : "#"}
         target="_blank"
         rel="noopener noreferrer"
         aria-disabled={origin ? undefined : true}

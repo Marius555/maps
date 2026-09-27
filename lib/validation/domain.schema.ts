@@ -55,6 +55,51 @@ export const allowedDomainsSchema = z
   .transform((domains) => [...new Set(domains)]);
 
 /**
+ * What one press of "Add" does to the list: the domains to append, and the
+ * entries it refused, each with the reason.
+ *
+ * One at a time is the normal case, but a list pasted into the one-line field
+ * still works — split on commas and whitespace, since a list copied out of a
+ * spreadsheet arrives comma-separated more often than not. Each entry is judged
+ * on its own, so one typo does not throw away the nine good ones beside it.
+ */
+export type DomainEntryResult = {
+  added: string[];
+  rejected: { entry: string; reason: string }[];
+};
+
+export function parseDomainEntries(
+  value: string,
+  existing: readonly string[],
+): DomainEntryResult {
+  const entries = value.split(/[\s,]+/).filter(Boolean);
+  const taken = new Set(existing);
+  const added: string[] = [];
+  const rejected: DomainEntryResult["rejected"] = [];
+
+  if (entries.length === 0) {
+    return { added, rejected: [{ entry: "", reason: "Enter a domain, like example.com." }] };
+  }
+
+  for (const entry of entries) {
+    const parsed = domainSchema.safeParse(entry);
+
+    if (!parsed.success) {
+      rejected.push({ entry, reason: parsed.error.issues[0]?.message ?? "Invalid domain." });
+    } else if (taken.has(parsed.data)) {
+      rejected.push({ entry, reason: `${parsed.data} is already allowed.` });
+    } else if (taken.size >= MAX_ALLOWED_DOMAINS) {
+      rejected.push({ entry, reason: `You can allow up to ${MAX_ALLOWED_DOMAINS} domains.` });
+    } else {
+      taken.add(parsed.data);
+      added.push(parsed.data);
+    }
+  }
+
+  return { added, rejected };
+}
+
+/**
  * Does `hostname` satisfy the allowlist?
  *
  * Shared with the embed by copy rather than by import — the embed must not pull
