@@ -7,28 +7,30 @@ import {
   NotPublishedEmpty,
   PlanRequiredEmpty,
 } from "@/components/analytics/analytics-empty";
-import { DailyChart } from "@/components/analytics/daily-chart";
+import { DetailsTabs } from "@/components/analytics/dashboard/details-tabs";
+import { KpiStrip } from "@/components/analytics/dashboard/kpi-strip";
+import { PairRow } from "@/components/analytics/dashboard/pair-row";
+import { SectionCard } from "@/components/analytics/dashboard/section-card";
 import { HeatMap } from "@/components/analytics/heat-map/heat-map";
-import { RangePicker } from "@/components/analytics/range-picker";
-import { RateTile } from "@/components/analytics/rate-tile";
-import { RANGE_LABELS } from "@/components/analytics/sections";
-import { StatTile } from "@/components/analytics/stat-tile";
+import { BreakdownGrid } from "@/components/analytics/panels/breakdown-grid";
+import { detailTabs } from "@/components/analytics/panels/detail-tabs";
 import {
-  CountriesTable,
-  DevicesTable,
-  PagesTable,
-  ReferrersTable,
-} from "@/components/analytics/tables/audience-tables";
-import { InteractionsTable } from "@/components/analytics/tables/interactions-table";
-import { PicksTable } from "@/components/analytics/tables/picks-table";
-import { SearchesTable } from "@/components/analytics/tables/searches-table";
-import { TopLocationsTable } from "@/components/analytics/tables/top-locations-table";
-import { UnconvertedTable } from "@/components/analytics/tables/unconverted-table";
-import { VisitorsTable } from "@/components/analytics/tables/visitors-table";
+  EngagementCard,
+  engagementSeries,
+} from "@/components/analytics/panels/engagement-card";
+import { hasOutcomes, OutcomesCard } from "@/components/analytics/panels/outcomes-card";
+import { RatesCard, ratesOf } from "@/components/analytics/panels/rates-card";
+import { TrafficCard } from "@/components/analytics/panels/traffic-card";
+import { RangePicker } from "@/components/analytics/range-picker";
+import {
+  RANGE_LABELS,
+  readDetailTab,
+  type DetailTab,
+} from "@/components/analytics/sections";
 import { Container } from "@/components/ui/container";
 import { PageTitle } from "@/components/ui/page-title";
 import { loadAnalytics, type AnalyticsData } from "@/lib/analytics/load";
-import { readRange } from "@/lib/analytics/range";
+import { readRange, type AnalyticsRange } from "@/lib/analytics/range";
 import { requireUser } from "@/lib/auth/current-user";
 import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError, planFeatureNote } from "@/lib/repositories/errors";
@@ -58,6 +60,13 @@ export const metadata: Metadata = { title: "Analytics" };
  * ninety-day range is three reads rather than a quarter of a year of rows. The
  * folding is in `lib/analytics/**` and is pure; this file resolves, loads and
  * arranges, and holds no arithmetic of its own.
+ *
+ * **The layout is a dashboard, and only the tables are tabbed**: four
+ * headline cards, the traffic chart beside the rates, the heat map, what
+ * visitors did by day beside what it led to, a packed row of breakdowns, and
+ * then the tables in one tabbed card. Every card is drawn only when it has
+ * something in it, and its neighbour takes the room — `PairRow` and
+ * `BreakdownGrid` hold that rule, `detail-tabs.tsx` holds it for the tables.
  */
 export default async function MapAnalyticsPage(
   props: PageProps<"/maps/[id]/analytics">,
@@ -65,6 +74,7 @@ export default async function MapAnalyticsPage(
   const { id } = await props.params;
   const search = await props.searchParams;
   const range = readRange(search.range);
+  const tab = readDetailTab(search.tab);
 
   const user = await requireUser();
 
@@ -97,7 +107,10 @@ export default async function MapAnalyticsPage(
   const { map, analytics, isMeasuring } = data;
 
   return (
-    <Container size="centered">
+    // Wider than the other tabs' `centered`: a two- and three-column dashboard
+    // needs the room, and capped so a 2,560px screen does not stretch a chart
+    // into a flat line. `loading.tsx` uses the same width.
+    <Container className="mx-auto max-w-7xl">
       <PageTitle>Analytics</PageTitle>
 
       {/* Only once something is being measured. Hidden rather than disabled
@@ -105,7 +118,7 @@ export default async function MapAnalyticsPage(
           nothing is a control that does nothing, which reads as broken. It
           stays for "no visits yet", where the period is part of the answer. */}
       {analytics && map.publishedAt && isMeasuring ? (
-        <div className="flex justify-end pb-4">
+        <div className="pb-5">
           <RangePicker mapId={map.id} range={range} />
         </div>
       ) : null}
@@ -119,7 +132,7 @@ export default async function MapAnalyticsPage(
       ) : !analytics.view.hasData ? (
         <NoVisitsYetEmpty range={RANGE_LABELS[range]} />
       ) : (
-        <Report map={map} data={analytics} range={RANGE_LABELS[range]} />
+        <Report map={map} data={analytics} range={range} tab={tab} />
       )}
     </Container>
   );
@@ -129,15 +142,19 @@ function Report({
   map,
   data,
   range,
+  tab,
 }: {
   map: AppMap;
   data: AnalyticsData;
-  range: string;
+  range: AnalyticsRange;
+  tab: DetailTab | null;
 }) {
   const { view } = data;
+  const rangeLabel = RANGE_LABELS[range];
+  const hasEngagement = engagementSeries(view).length > 0;
 
   return (
-    <div className="space-y-10 pb-16">
+    <div className="space-y-4 pb-16">
       {data.truncated ? (
         <p className="rounded-lg bg-surface-secondary px-3 py-2 text-xs text-muted">
           This map has more traffic than one page of figures covers. What follows
@@ -145,73 +162,27 @@ function Report({
         </p>
       ) : null}
 
-      {/*
-        Six headline numbers. Tiles rather than a table, which is the one place
-        this page departs from the Locations list's argument — see stat-tile.tsx.
-        Visitors leads because it is the one number that is about people rather
-        than page loads; Visits beside it is what makes the difference legible.
-      */}
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile
-          label="Visitors"
-          delta={view.totals.visitors}
-          footnote={
-            view.visitorsPartial
-              ? "Only visits since visitor counting began"
-              : undefined
-          }
-        />
-        <StatTile label="Visits" delta={view.totals.sessions} />
-        <StatTile label="Locations opened" delta={view.totals.opens} />
-        <StatTile label="Searches" delta={view.totals.searches} />
-        <StatTile label="Directions" delta={view.totals.directions} />
-        <StatTile label="Calls" delta={view.totals.calls} />
-      </section>
+      <KpiStrip view={view} range={range} />
 
-      {/*
-        Two rates, kept apart from the five tiles above rather than made a sixth
-        and seventh. Those are quantities; these are proportions, and a row that
-        mixes "1,284" with "38%" invites reading the second as a count of
-        something. They are also the two figures on this page about the map's own
-        performance rather than about the locations on it.
-      */}
-      <Section
-        title="How well it is working"
-        hint="Whether the map is doing its job, rather than how much it was used"
-      >
-        <div className="grid gap-3 sm:grid-cols-3 lg:max-w-4xl">
-          <RateTile
-            label="Loaded and left"
-            rate={view.bounce}
-            unit="visits"
-            tone="warn"
-            hint="Nothing clicked, searched or opened"
+      <PairRow
+        main={
+          <TrafficCard
+            daily={view.daily}
+            totals={{
+              sessions: view.totals.sessions.value,
+              visitors: view.totals.visitors.value,
+              opens: view.totals.opens.value,
+              searches: view.totals.searches.value,
+            }}
+            range={rangeLabel}
           />
-          <RateTile
-            label="Searches that led somewhere"
-            rate={view.searchConversion}
-            unit="visits that searched"
-            hint="A location was opened after searching"
-          />
-          <RateTile
-            label="Came back"
-            rate={view.returning}
-            unit="visitors"
-            hint="Had already visited earlier the same month"
-          />
-        </div>
-      </Section>
+        }
+        side={ratesOf(view).length > 0 ? <RatesCard view={view} /> : null}
+      />
 
-      <Section title="Visits over time" hint={range}>
-        <DailyChart
-          data={view.daily.map((day) => ({
-            day: day.day,
-            sessions: day.sessions,
-          }))}
-        />
-      </Section>
-
-      <Section title="Where the attention is">
+      {/* Always drawn, whichever table is open below: the heat map is the
+          page's one picture of *where*, and it has its own empty state. */}
+      <SectionCard title="Where the attention is">
         <HeatMap
           origins={view.origins}
           interactions={view.interactionPoints}
@@ -220,110 +191,18 @@ function Report({
           style={map.style}
           appearance={map.appearance}
         />
-      </Section>
+      </SectionCard>
 
-      <Section
-        title="Locations they opened"
-        hint="Which of your locations people actually looked at"
-      >
-        <TopLocationsTable mapId={map.id} rows={view.places} />
-      </Section>
-
-      {view.unconverted.length > 0 ? (
-        <Section
-          title="Opened, then nothing"
-          hint="People looked at these and didn't call, get directions, or visit the site — usually a missing phone number, hours that read as closed, or an address that looks wrong"
-        >
-          <UnconvertedTable mapId={map.id} rows={view.unconverted} />
-        </Section>
+      {hasEngagement ? (
+        <PairRow
+          main={<EngagementCard view={view} range={rangeLabel} />}
+          side={hasOutcomes(view) ? <OutcomesCard view={view} /> : null}
+        />
       ) : null}
 
-      {view.searches.length > 0 ? (
-        <Section
-          title="What they searched for"
-          hint="A search that found nothing is a place your customers expect you to be"
-        >
-          <SearchesTable rows={view.searches} />
-        </Section>
-      ) : null}
+      <BreakdownGrid view={view} />
 
-      {view.picks.length > 0 ? (
-        <Section
-          title="Places they went to instead"
-          hint="Picked from the search box because no location matched — where people want you to be"
-        >
-          <PicksTable rows={view.picks} />
-        </Section>
-      ) : null}
-
-      <Section title="What they did">
-        <InteractionsTable rows={view.interactions} />
-      </Section>
-
-      <Section title="Who they are">
-        <div className="grid gap-6 lg:grid-cols-3">
-          <Panel title="Countries">
-            <CountriesTable rows={view.countries} />
-          </Panel>
-          <Panel title="Devices">
-            <DevicesTable rows={view.devices} />
-          </Panel>
-          <Panel title="Came from">
-            <ReferrersTable rows={view.referrers} direct={view.direct} />
-          </Panel>
-        </div>
-      </Section>
-
-      {view.pages.length > 0 ? (
-        <Section
-          title="Where your map is embedded"
-          hint="The pages of your own site it is working on"
-        >
-          <PagesTable rows={view.pages} />
-        </Section>
-      ) : null}
-
-      {view.recent.length > 0 ? (
-        <Section
-          title="Recent visitors"
-          hint="Kept for a limited time, so this shows less far back than the figures above"
-        >
-          <VisitorsTable rows={view.recent} />
-        </Section>
-      ) : null}
-    </div>
-  );
-}
-
-function Section({
-  title,
-  hint,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="space-y-3">
-      <div>
-        <h2 className="text-sm font-semibold tracking-tight text-foreground">
-          {title}
-        </h2>
-        {hint ? <p className="text-xs text-muted">{hint}</p> : null}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-muted">
-        {title}
-      </h3>
-      {children}
+      <DetailsTabs initial={tab} tabs={detailTabs(map.id, view)} />
     </div>
   );
 }
@@ -372,14 +251,20 @@ async function load(
     };
   }
 
-  const [map, places] = await Promise.all([
-    // Primitives, not the context: `loadMap` memoises on argument identity and
-    // an object would miss the cache the layout already warmed.
-    loadMap(userId, mapId),
-    listAllPlaces(ctx, mapId),
-  ]);
+  /*
+   * All three at once. `loadAnalytics` takes the locations as a promise and
+   * only awaits them to build the view, so its own reads no longer wait out a
+   * paged read of every location first. The promise is in this `Promise.all`
+   * too, which is what keeps a failed read from becoming an unhandled rejection.
+   */
+  const placesRead = listAllPlaces(ctx, mapId);
 
-  const analytics = await loadAnalytics(ctx, mapId, range, places, new Date());
+  const [map, places, analytics] = await Promise.all([
+    // Primitives, not the context: `loadMap` memoises on argument identity.
+    loadMap(userId, mapId),
+    placesRead,
+    loadAnalytics(ctx, mapId, range, placesRead, new Date()),
+  ]);
 
   return {
     map,

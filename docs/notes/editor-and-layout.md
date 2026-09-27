@@ -14,6 +14,19 @@ rewritten; it is the record of why this area is shaped as it is.
   `sr-only` "Missing" label per row) made the *document* 2,500px tall in a 640px window.
   That drew two scrollbars and scrolled the sidebar away. The shell's `overflow-hidden`
   did not help: it clips only descendants it contains, and it is not positioned either.
+- **`<main>` is rendered by `PageMain` (`components/layout/page-transition/`), and the
+  page transition is an opacity fade on `<main>` itself — never on a wrapper, never a
+  transform.** A wrapper would have to reproduce `relative`, the flex column the editor
+  fills and the scroller, and a transform makes the element the containing block of every
+  `position: fixed` descendant while it plays. Settings sections count as one page to the
+  shell (`shellRouteKey`); only `SettingsPane` fades between them, so the nav just pressed
+  stays still. Skipped under reduced motion. Reasoning under "Page transitions and the
+  router cache" in Notes.
+- **Visited pages are replayed from the client router cache for 30 seconds**
+  (`staleTimes.dynamic` in `next.config.ts`), so server-rendered props can be stale on
+  arrival. Every successful mutation flags this and the next navigation calls
+  `router.refresh()` (`lib/query/server-render-staleness.ts`). A write that bypasses
+  TanStack Query's `useMutation` bypasses that too, and must refresh on its own.
 
 ### Editor layout
 
@@ -465,6 +478,31 @@ rewritten; it is the record of why this area is shaped as it is.
   full Pro-sized import spends the whole allowance (CLAUDE.md §12).
 
 ## Notes
+
+**Page transitions and the router cache (2026-09-27).** Moving between dashboard pages felt
+slow, and most of it was waiting, not rendering:
+- Every route is dynamic, and Next's default router cache for dynamic pages is 0s, so
+  Back and flipping between a map's tabs went back to Appwrite every time.
+  `staleTimes.dynamic: 30` fixes the revisit.
+- The cost is stale server-only props, fixed centrally in `server-render-staleness.ts`
+  rather than per hook.
+
+The fade is motion's imperative `animate`, fired from a layout effect keyed on the
+pathname. It is not `template.tsx`. A template remounts its subtree on every navigation,
+which throws away client state and replays the `loading.tsx` skeleton even when the page
+is cached. It is not React's `<ViewTransition>` either: the project animates with motion,
+and a view transition snapshots the whole viewport, MapLibre canvas included.
+
+With a `loading.tsx`, the pathname changes when the skeleton commits, so the fade plays on
+the skeleton and the page then replaces it in place. That only reads as one motion because
+every skeleton matches its page.
+
+Two things to know if you measure it:
+- `animate` defers creating the WAAPI animation to motion's next frame. That still lands
+  before the first paint, because animation-frame callbacks run ahead of paint.
+- A hidden or occluded window never runs that frame. There the animation appears late,
+  and finished ones pile up on `<main>` (the browser removes them in the rendering step it
+  is skipping). Measure in a visible window.
 
 **Import reads four formats and detects columns from the data, not just the headers.** `lib/import/` (was `lib/csv/` — the folder now parses XLSX and XML too). Every source adapter in `sources/` returns the same `SourceTable`: a raw grid plus a flag for whether it already knows its header row. XML sets that flag because it *builds* its header row — it finds the repeating record element and flattens each one into dotted columns (`address.street`) — while CSV and XLSX leave it to `detect/header-row.ts`, which walks down from row 0 and takes the first row that could plausibly be one. That walk is deliberately not a "score every row and take the best": scoring made the *second* row of an ordinary file beat the first whenever the first had partial type-contrast and the second had none, which is a bug you cannot diagnose from the symptom (every column named after your first location). The XLSX reader is ours — an .xlsx is a ZIP of XML, `fflate` was already in the tree via pmtiles, and the alternatives ship either unpatched advisories or a CDN-only tarball (§3).
 

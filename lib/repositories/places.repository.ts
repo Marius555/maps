@@ -55,6 +55,23 @@ export async function listPlaces(
   // Ownership of the map is what authorises everything about its places.
   await getMap(ctx, mapId);
 
+  return readPlacesPage(mapId, options, true);
+}
+
+/**
+ * One page of rows, **with no ownership check** — the caller has made it.
+ *
+ * Split out so `listAllPlaces` checks the map once rather than before every
+ * page: a 300-location map was three map reads and three counts in series,
+ * ahead of the rows themselves, on every navigation that drew it. `total` asks
+ * Appwrite to count the whole table; the loop throws that number away, so it
+ * does not ask.
+ */
+async function readPlacesPage(
+  mapId: string,
+  options: ListOptions,
+  total: boolean,
+): Promise<Page<Place>> {
   const limit = Math.min(options.limit ?? MAX_PAGE_SIZE, MAX_PAGE_SIZE);
   const queries = [Query.equal("mapId", mapId), ORDER, Query.limit(limit)];
   if (options.cursor) queries.push(Query.cursorAfter(options.cursor));
@@ -64,7 +81,7 @@ export async function listPlaces(
       databaseId: env.databaseId,
       tableId: TABLES.places,
       queries,
-      total: true,
+      total,
     });
 
     const items = result.rows.map(toPlace);
@@ -89,14 +106,17 @@ export async function listAllPlaces(
   ctx: RepoContext,
   mapId: string,
 ): Promise<Place[]> {
+  await getMap(ctx, mapId);
+
   const all: Place[] = [];
   let cursor: string | null = null;
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    const result: Page<Place> = await listPlaces(ctx, mapId, {
-      cursor,
-      limit: MAX_PAGE_SIZE,
-    });
+    const result: Page<Place> = await readPlacesPage(
+      mapId,
+      { cursor, limit: MAX_PAGE_SIZE },
+      false,
+    );
 
     all.push(...result.items);
     if (!result.nextCursor) return all;

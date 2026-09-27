@@ -3,6 +3,7 @@
 import { MutationCache, QueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "./fetcher";
+import { markServerRenderStale } from "./server-render-staleness";
 import { toastEmailUnverified } from "./verify-email-toast";
 
 /**
@@ -21,10 +22,17 @@ export function makeQueryClient(): QueryClient {
      *
      * A mutation's own `onError` still runs — this is in addition to it, not
      * instead of it — so inline error rendering is unaffected.
+     *
+     * `onSuccess` is the other cross-cutting rule: a write may have changed a
+     * page the client router is holding, so the next navigation refreshes it.
+     * See `server-render-staleness.ts`.
      */
     mutationCache: new MutationCache({
       onError: (error) => {
         toastEmailUnverified(error);
+      },
+      onSuccess: () => {
+        markServerRenderStale();
       },
     }),
     defaultOptions: {

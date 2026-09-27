@@ -1,3 +1,4 @@
+import { SettingsPane } from "@/components/layout/page-transition/settings-pane";
 import { SettingsNav } from "@/components/user-settings/shell/settings-nav";
 import { Container } from "@/components/ui/container";
 import { PageTitle } from "@/components/ui/page-title";
@@ -33,7 +34,7 @@ export default function SettingsLayout({ children }: LayoutProps<"/settings">) {
 
       <div className="flex flex-col gap-6 md:flex-row md:gap-10">
         <SettingsNav />
-        <div className="min-w-0 max-w-6xl flex-1">{children}</div>
+        <SettingsPane>{children}</SettingsPane>
       </div>
     </Container>
   );

@@ -48,6 +48,18 @@ export async function listShapes(
   // Ownership of the map is what authorises everything about its shapes.
   await getMap(ctx, mapId);
 
+  return readShapesPage(mapId, options, true);
+}
+
+/**
+ * One page of rows with no ownership check, so `listAllShapes` checks the map
+ * once rather than before every page — see `readPlacesPage`.
+ */
+async function readShapesPage(
+  mapId: string,
+  options: ListOptions,
+  total: boolean,
+): Promise<Page<Shape>> {
   const limit = Math.min(options.limit ?? MAX_PAGE_SIZE, MAX_PAGE_SIZE);
   const queries = [Query.equal("mapId", mapId), ORDER, Query.limit(limit)];
   if (options.cursor) queries.push(Query.cursorAfter(options.cursor));
@@ -57,7 +69,7 @@ export async function listShapes(
       databaseId: env.databaseId,
       tableId: TABLES.shapes,
       queries,
-      total: true,
+      total,
     });
 
     return {
@@ -78,14 +90,17 @@ export async function listAllShapes(
   ctx: RepoContext,
   mapId: string,
 ): Promise<Shape[]> {
+  await getMap(ctx, mapId);
+
   const all: Shape[] = [];
   let cursor: string | null = null;
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    const result: Page<Shape> = await listShapes(ctx, mapId, {
-      cursor,
-      limit: MAX_PAGE_SIZE,
-    });
+    const result: Page<Shape> = await readShapesPage(
+      mapId,
+      { cursor, limit: MAX_PAGE_SIZE },
+      false,
+    );
 
     all.push(...result.items);
     if (!result.nextCursor) return all;

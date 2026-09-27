@@ -99,6 +99,104 @@ export const RANGE_LABELS = {
 } as const;
 
 /**
+ * What a trend chip is measured against, said under every headline figure.
+ * "+12%" against nothing stated is a number people invent a meaning for.
+ */
+export const COMPARED_WITH = {
+  "7d": "vs the 7 days before",
+  "30d": "vs the 30 days before",
+  "90d": "vs the 90 days before",
+} as const;
+
+/**
+ * The four headline figures: what each is called and, under the name, what it
+ * counts. The line is there for Visitors and Visits above all — two words a
+ * letter apart that measure different things, and nobody should have to guess
+ * which is people and which is page loads.
+ */
+export const METRIC_COPY = {
+  visitors: {
+    label: "Visitors",
+    description: "Different people, each counted once",
+  },
+  sessions: {
+    label: "Visits",
+    description: "Times your map was opened — one visitor can visit often",
+  },
+  opens: {
+    label: "Locations opened",
+    description: "Location cards visitors opened",
+  },
+  actions: {
+    label: "Directions & calls",
+    description: "Visitors who set off for or rang a location",
+  },
+} as const;
+
+/**
+ * The tables at the foot of the page, as tabs, in order.
+ *
+ * Only the tables are tabbed — the figures and charts above are always on
+ * screen. A tab is drawn only when its table has rows (`detail-tabs.ts`): a
+ * tab that opens on nothing is an empty table one click further away.
+ */
+export const DETAIL_TABS = {
+  locations: "Locations",
+  unconverted: "Opened, then nothing",
+  searches: "Searches",
+  picks: "Places instead",
+  pages: "Embedded on",
+  visitors: "Recent visitors",
+} as const;
+
+export type DetailTab = keyof typeof DETAIL_TABS;
+
+/** `?tab=` as the page reads it: anything unknown is no preference. */
+export function readDetailTab(value: unknown): DetailTab | null {
+  return typeof value === "string" && value in DETAIL_TABS
+    ? (value as DetailTab)
+    : null;
+}
+
+/** What each table answers, said once above it. */
+export const DETAIL_HINTS: Record<DetailTab, string> = {
+  locations: "Every location visitors opened, busiest first — sort by any column",
+  unconverted:
+    "Opened, but no directions, call or website visit followed — usually a missing phone number, hours that read as closed, or an address that looks wrong",
+  searches: "A search that found nothing is a place your customers expect you to be",
+  picks: "Towns picked from the search box because no location matched",
+  pages: "The pages of your own site the map is working on",
+  visitors:
+    "Kept for a limited time, so this reaches less far back than the figures above",
+};
+
+/** The outcomes donut, in the ring order its colours were validated in. */
+export const OUTCOME_LABELS = {
+  directions: "Directions",
+  calls: "Calls",
+  site: "Website visits",
+  email: "Emails",
+} as const;
+
+/** The engagement chart's stack, bottom to top. */
+export const ENGAGEMENT_SERIES = {
+  opens: "Locations opened",
+  searches: "Searches",
+  directions: "Directions",
+  calls: "Calls",
+} as const;
+
+/** The traffic chart's series switch, in the order the buttons sit. */
+export const TRAFFIC_SERIES = {
+  sessions: { label: "Visits", noun: ["visit", "visits"] },
+  visitors: { label: "Visitors", noun: ["visitor", "visitors"] },
+  opens: { label: "Opens", noun: ["location opened", "locations opened"] },
+  searches: { label: "Searches", noun: ["search", "searches"] },
+} as const;
+
+export type TrafficSeries = keyof typeof TRAFFIC_SERIES;
+
+/**
  * Where a session came from, when nothing said.
  *
  * "Direct" is the industry word and it is wrong for a store locator: most of

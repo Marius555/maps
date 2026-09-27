@@ -155,6 +155,21 @@ and the five blockers this file raised are answered below rather than removed.
   constructor adds `.maplibregl-map` and its stylesheet sets `position: relative`
   on that class, at the same specificity as Tailwind's `absolute` and injected
   after it.
+- **Nothing empty is drawn, and a table with no rows is not a tab.** Only the
+  tables are tabbed (`panels/detail-tabs.tsx`); every chart card is drawn when
+  it has data and its neighbour takes the room when it does not (`PairRow`,
+  `BreakdownGrid`) — never a hand-computed `col-span` per card.
+- **Colour follows the metric, on every chart.** `METRIC_COLOR` in
+  `charts/chart-colors.ts`, tokens `--an-*` in `globals.css` — the recorded
+  exception to the accent-only palette rule. A new chart takes a metric's
+  existing colour; it never assigns hues by rank. Re-run the dataviz validator
+  if a token moves.
+- **A sparkline's margin is at least its stroke width.** A zero day draws on
+  the plot's floor; at `bottom: 0` that is the SVG edge and half the stroke is
+  cut, so a flat stretch reads as a hairline beside full-weight curves.
+- **Charts are client-only and never size themselves.** `charts/lazy.tsx` loads
+  recharts with `ssr: false`; the box around each chart is sized by the server
+  render so nothing moves when it arrives.
 - **Only three fields of a location cross to the client** — id, name and
   coordinates — for the table's names and the interaction heatmap's points.
 
@@ -240,18 +255,75 @@ answers, and logs once per process which family it was. **Read that log after th
 first deploy and write the answer here**; it is undocumented upstream and is not
 worth asserting from a plan.
 
-**Tiles here, tables everywhere below them** — and the deleted content stats
-argued the opposite, at length, so the exception is worth stating. That argument
-was about *comparison*: which tag nothing is wearing, which column of the card is
-empty, questions answered by running the eye down a column. The five headline
-figures are not a set to compare; they are five quantities in five units, and
-putting "Map loads: 1,284" beside "Searches: 31" in one column invites a
-comparison that means nothing. Everything below them is still a table.
+**A dashboard, rebuilt 2026-09-27 at the owner's request.** The page had grown
+into twelve stacked sections — six bare number tiles, a hand-drawn column chart
+stretched across the full width, and eight tables, several drawn even when empty.
+It is now four headline cards with sparklines above five tabs (Overview,
+Locations, Search, Audience, Activity), with charts drawn by recharts. The
+layout rules that came out of it:
 
-**Five tiles, five different questions.** The first draft counted map loads *and*
-visits, which are the same number on every map with one embed per page — one tile
-saying the other's number. They are now the funnel a store locator actually has:
-somebody arrived, opened a shop, searched for one, asked for directions, called.
+- **Nothing empty is drawn.** A card whose data is empty is left out and its
+  neighbour takes the row; a tab all of whose cards are left out is not a tab.
+  `components/analytics/panels/visible-tabs.ts` holds the tab half of that rule,
+  and each panel applies the same tests to its cards — keep the two in step, or a
+  tab opens on nothing.
+- **Four headline figures, not six.** Searches moved to the Search tab beside what
+  they found; directions and calls are one card ("Directions & calls",
+  `totals.actions`) with the split written under it.
+- **Every headline figure has a per-day series** (`DailyRow`) for its sparkline.
+  `visitors` per day is each day's sketch estimated alone, so the days do *not*
+  sum to the range's Visitors figure — the traffic card's header therefore reads
+  the period total from `totals`, never a sum of the days.
+- **The zero leads the Search tab** as its own figure (`searchesUnmatched`), for
+  the reason in the note above.
+- **Recharts is loaded client-only** through `charts/lazy.tsx` (`ssr: false`, the
+  landing page's shape), and **the caller's box owns every chart's height**, so
+  nothing moves when the chunk arrives. Constants a server card needs to size a
+  chart (`BAR_ROW_PX`) live in the plain `chart-colors.ts`, not beside the chart:
+  a constant read through a client reference is not the constant.
+- **Colours are `--an-series-*`** in `globals.css`: the accent, then three
+  neutral steps, validated in both modes (measurements beside the tokens). A donut
+  never shows more than four slices — the rest fold into "Other" — and always sits
+  beside a list naming every slice with its share. A single slice draws no donut.
+- **The tab lives in `?tab=`**, written with `history.replaceState` (every panel is
+  already rendered; switching is not a request). The range switch carries it over.
+- **Tables stayed where the question is "which one"** — locations, searches,
+  picks, pages, recent visitors — inside cards. Proportions became charts.
+- **The heat map only mounts when the Locations tab is opened**, because React
+  Aria renders the selected panel alone.
+
+**Revised the same day, again at the owner's request**, and several of the
+rules above were reversed:
+
+- **Tabs are for the tables only.** The page-wide tabs hid the heat map a click
+  away and gave "Opened, then nothing" a card that took two fifths of a row
+  beside a table. The figures, charts and heat map are always on screen now;
+  the six tables (locations, opened then nothing, searches, places instead,
+  embedded on, recent visitors) share one tabbed card, each tab carrying its
+  row count. `?tab=` now names a table, and is omitted for the first.
+- **The heat map is always mounted** — its own full-width card under the
+  traffic row, with its own empty state. MapLibre therefore loads with the page.
+- **Every metric has its own colour** (`--an-visitors`, `--an-visits`, …): four
+  headline cards and every chart in the one accent read as one thing drawn
+  over and over. The headline row doubles as the legend.
+- **More chart forms**: a stacked-column chart of what visitors did per day,
+  a donut of what an opened card led to (`view.outcomes`), and countries back
+  as a donut beside devices. Donuts of generic slices stop at three named
+  slices plus a grey "Other" (three hues validate all-pairs); metric donuts
+  keep every slice, in their fixed validated order.
+- **Visits and Visitors each say what they count**, in a line under the name
+  (`METRIC_COPY` in `sections.ts`).
+- **The period is a select again** — the segmented control was reverted.
+- **The breakdown row picks its column count from how many cards it has**, not
+  `auto-fit`: four cards in three auto-fit tracks wrap three-and-one and leave a
+  hole, which is the complaint this revision answered.
+- The warning rule down a card's left edge is gone; the tab's count chip is the
+  signal now.
+
+**A count column opens on its biggest value.** React Aria starts every
+newly-sorted column ascending, which is right for names and wrong for numbers:
+pressing "Directions" on a table of busiest locations should not answer with the
+five nobody asked directions to.
 
 **The heat ramp was retuned when this stopped being a coverage map.** The
 original (4px radius at zoom 0, 14px at zoom 5) was right for its first job:
@@ -260,22 +332,6 @@ answer. Visitor origins live two or three zoom levels further out — a country
 each — and at that scale 14px is a pinprick you have to hunt for. Measured against
 seeded data: six European cities read as six specks at the opening frame, and as
 six readable blobs after.
-
-**A count column opens on its biggest value.** React Aria starts every
-newly-sorted column ascending, which is right for names and wrong for numbers:
-pressing "Directions" on a table of busiest locations should not answer with the
-five nobody asked directions to.
-
-**The chart is flex-boxed divs, not an SVG.** An SVG needs a viewBox, a viewBox
-needs a width, and a fluid one therefore needs a ResizeObserver and a re-render
-per resize — for a chart whose only geometry is how tall each column is.
-Percentage heights in a flex row are fluid for free. Text is the case where SVG
-earns it, and there is exactly one label.
-
-**The chart's accessible name is one sentence, and the table under it is
-separate.** Pointing `aria-labelledby` at the whole `figcaption` read the table
-out as part of the name — the table announced twice, once as a label and once as
-itself.
 
 **Three empty states, not one.** Never published, published with measurement off,
 and on-and-waiting are three different situations with three different fixes, and

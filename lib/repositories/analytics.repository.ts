@@ -507,6 +507,8 @@ export async function listSessions(
         databaseId: env.databaseId,
         tableId: TABLES.mapSessions,
         queries,
+        // The loop pages by row count, never by the total; don't pay to count.
+        total: false,
       });
 
       sessions.push(...result.rows.map(toMapSession));

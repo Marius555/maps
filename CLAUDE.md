@@ -122,8 +122,8 @@ OpenFreeMap and have nothing to do with the geocoder budget above.
 
 Installed since the original scaffold: `zod`, `@tanstack/react-query`, `zustand`,
 `papaparse`, `date-fns`, `vitest`, `vite`, `fflate` (promoted from a pmtiles transitive —
-it unzips .xlsx), `resend`, `recharts` (asked for and granted; marketing pages only, and it
-brings Redux Toolkit transitively, so it is loaded with `next/dynamic`), `aws4fetch` (asked
+it unzips .xlsx), `resend`, `recharts` (asked for and granted; the landing page and the Analytics tab, and
+it brings Redux Toolkit transitively, so it is loaded with `next/dynamic`), `aws4fetch` (asked
 for and granted; signs R2's S3 requests, server-only), and `jsdom` as a
 devDependency only. Still not installed, from §3's
 "Add these": biome, playwright, sentry, posthog, and `@react-email/components` — three

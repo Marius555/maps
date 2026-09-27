@@ -61,7 +61,14 @@ export function PropertyFold({
         </Accordion.Trigger>
       </Accordion.Heading>
       <Accordion.Panel>
-        <Accordion.Body className="pb-4">{children}</Accordion.Body>
+        {/* The fold owns the rhythm between its controls, so callers pass them
+            bare. HeroUI's body has no gap of its own (`accordion__body-inner` is
+            `pt-0` with nothing between children), which left the card
+            designer's controls flush and every `PropertyHint` 4px inside the
+            control above it. `gap-3` is the Publish groups' own `space-y-3`. */}
+        <Accordion.Body className="flex flex-col gap-3 pt-1 pb-4">
+          {children}
+        </Accordion.Body>
       </Accordion.Panel>
     </Accordion.Item>
   );

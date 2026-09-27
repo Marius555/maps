@@ -80,6 +80,30 @@ export type Rate = {
   count: number;
 };
 
+/**
+ * One day of the range, for the charts.
+ *
+ * Every headline figure has its own per-day series here so the page can draw
+ * each one's shape beside its total. `visitors` is the day's own sketch
+ * estimated alone — the days do **not** add up to the range's Visitors figure,
+ * because somebody who came on Monday and Tuesday is one visitor for the pair
+ * and one on each day. That is correct for a line and wrong for a sum, which is
+ * why nothing on the page sums it.
+ */
+export type DailyRow = {
+  day: string;
+  sessions: number;
+  views: number;
+  interactions: number;
+  visitors: number;
+  opens: number;
+  searches: number;
+  directions: number;
+  calls: number;
+  /** Directions plus calls — the two things a store locator is for. */
+  actions: number;
+};
+
 export type AnalyticsView = {
   /** Whether anything at all was recorded in this range. */
   hasData: boolean;
@@ -104,9 +128,21 @@ export type AnalyticsView = {
     searches: Delta;
     directions: Delta;
     calls: Delta;
+    /**
+     * Directions and calls together: the visit that ended in somebody setting
+     * off for, or ringing, a location. One figure because it is one outcome
+     * reached two ways, and the dashboard's headline row has room for four.
+     */
+    actions: Delta;
   };
+  /**
+   * What an opened card led to, by kind: set off for it, rang it, wrote to it,
+   * went to its website. The outcomes donut — the same acts the unconverted
+   * table counts the absence of. Plain counts for the range, no comparison.
+   */
+  outcomes: { directions: number; calls: number; email: number; site: number };
   /** One entry per day in the range, including the empty ones. */
-  daily: { day: string; sessions: number; views: number; interactions: number }[];
+  daily: DailyRow[];
   places: PlaceRow[];
   /**
    * Locations that got opened and produced nothing — no directions, no call, no
@@ -120,6 +156,12 @@ export type AnalyticsView = {
    */
   unconverted: PlaceRow[];
   searches: SearchRow[];
+  /**
+   * Searches — each time somebody searched, not distinct terms — whose last
+   * recorded result count was zero. The one figure on the page a customer would
+   * pay for: somewhere people expect them to be and they are not.
+   */
+  searchesUnmatched: number;
   /** Towns picked from the gazetteer — demand where there is no location. */
   picks: LabelledCount[];
   /** Sessions where the map loaded and nothing else happened. */
@@ -180,20 +222,21 @@ export function buildView(input: BuildViewInput): AnalyticsView {
         previous.events.directions ?? 0,
       ),
       calls: delta(total.events.tel ?? 0, previous.events.tel ?? 0),
+      actions: delta(actionsOf(total), actionsOf(previous)),
     },
-    daily: input.allDays.map((day) => {
-      const fold = byDay.get(day);
-
-      return {
-        day,
-        sessions: fold?.sessions ?? 0,
-        views: fold?.views ?? 0,
-        interactions: fold?.interactions ?? 0,
-      };
-    }),
+    outcomes: {
+      directions: total.events.directions ?? 0,
+      calls: total.events.tel ?? 0,
+      email: total.events.email ?? 0,
+      site: total.events.site ?? 0,
+    },
+    daily: input.allDays.map((day) => dailyRow(day, byDay.get(day))),
     places: placeRows(total, input.places),
     unconverted: unconvertedRows(placeRows(total, input.places)),
     searches: searchRows(total),
+    searchesUnmatched: searchRows(total)
+      .filter((row) => row.matches === 0)
+      .reduce((count, row) => count + row.count, 0),
     picks: sortedCounts(total.picks),
     bounce: rate(total.bounced, total.sessions),
     returning: returningRate(total),
@@ -214,6 +257,40 @@ export function buildView(input: BuildViewInput): AnalyticsView {
     interactionPoints: interactionPoints(total, input.places),
     recent: input.recent,
   };
+}
+
+function dailyRow(day: string, fold: DayFold | undefined): DailyRow {
+  if (!fold) {
+    return {
+      day,
+      sessions: 0,
+      views: 0,
+      interactions: 0,
+      visitors: 0,
+      opens: 0,
+      searches: 0,
+      directions: 0,
+      calls: 0,
+      actions: 0,
+    };
+  }
+
+  return {
+    day,
+    sessions: fold.sessions,
+    views: fold.views,
+    interactions: fold.interactions,
+    visitors: estimate(fold.visitors),
+    opens: fold.events.open ?? 0,
+    searches: fold.events.search ?? 0,
+    directions: fold.events.directions ?? 0,
+    calls: fold.events.tel ?? 0,
+    actions: actionsOf(fold),
+  };
+}
+
+function actionsOf(fold: DayFold): number {
+  return (fold.events.directions ?? 0) + (fold.events.tel ?? 0);
 }
 
 function delta(value: number, previous: number): Delta {

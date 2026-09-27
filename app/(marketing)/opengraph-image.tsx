@@ -42,16 +42,19 @@ export default function OpengraphImage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 11,
-              background: ACCENT,
-              border: `5px solid ${GROUND}`,
-              boxShadow: `0 0 0 2px ${ACCENT}`,
-            }}
-          />
+          {/* The brand mark, public/logo/pinglide-mark.svg drawn inline. The
+              top margin centres the p's bowl on the name rather than the whole
+              glyph, because the stem is a descender. */}
+          <svg width="30" height="42" viewBox="21 5 70 96" style={{ marginTop: 12 }}>
+            <path
+              d="M82 40A26 26 0 1 1 56 14M30 40V92"
+              fill="none"
+              stroke={INK}
+              strokeWidth="12"
+              strokeLinecap="round"
+            />
+            <circle cx="74.38" cy="21.62" r="9" fill={ACCENT} />
+          </svg>
           <div style={{ fontSize: 30, fontWeight: 600, color: INK }}>
             {PRODUCT_NAME}
           </div>

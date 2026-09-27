@@ -14,6 +14,7 @@ import { ButtonPresets } from "./button-presets";
 import {
   PropertyCheckbox,
   PropertyChecks,
+  PropertyHint,
   PropertyScale,
 } from "@/components/ui/properties/property-fields";
 import { PropertyNumberSelect } from "@/components/ui/properties/property-select";
@@ -132,9 +133,9 @@ export function ButtonStyleProperties({
           else in this panel and here it means something. One line, and only
           while it is true. */}
       {block.buttonBackground ? null : (
-        <p className="-mt-1 text-xs text-muted">
+        <PropertyHint>
           Following each location&rsquo;s pin colour. Pick one to fix it instead.
-        </p>
+        </PropertyHint>
       )}
 
       {/*

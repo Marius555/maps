@@ -5,7 +5,10 @@ import { ColorSwatchRow } from "@/components/ui/color-swatch-row/color-swatch-ro
 import {
   BRIGHT_PRESETS,
 } from "@/components/ui/color-swatch-row/presets";
-import { PropertyChoice } from "@/components/ui/properties/property-fields";
+import {
+  PropertyChoice,
+  PropertyHint,
+} from "@/components/ui/properties/property-fields";
 
 /**
  * How many chips the sample card is drawn with — and nothing else.
@@ -54,9 +57,9 @@ export function PreviewProperties({
         onChange={(value) => onCount(value === REAL ? null : Number(value))}
       />
 
-      <p className="-mt-1 text-xs text-muted">
+      <PropertyHint>
         Only changes this preview. A real card shows every tag its location has.
-      </p>
+      </PropertyHint>
     </>
   );
 }
@@ -115,10 +118,10 @@ export function PinColorPreview({
         onChange={(next) => onColor(next ?? null)}
       />
 
-      <p className="-mt-1 text-xs text-muted">
+      <PropertyHint>
         Only changes this preview. A real card takes each location&rsquo;s own pin
         colour, from its group or its first tag.
-      </p>
+      </PropertyHint>
     </>
   );
 }

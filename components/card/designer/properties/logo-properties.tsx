@@ -11,7 +11,10 @@ import { useSavePlaceLogo } from "@/lib/query/photo";
 import type { Place } from "@/lib/repositories/types";
 import type { CardBlock } from "@/packages/shared/card-layout";
 import type { BlockPatch } from "./block-properties";
-import { PropertyChoice } from "@/components/ui/properties/property-fields";
+import {
+  PropertyChoice,
+  PropertyHint,
+} from "@/components/ui/properties/property-fields";
 
 /**
  * Which of its three drawings the mark is.
@@ -186,10 +189,10 @@ export function LogoProperties({
       )}
 
       {mode === "image" && !sample?.logoUrl && !hasImage ? (
-        <p className="-mt-1 text-xs text-muted">
+        <PropertyHint>
           Locations with no logo draw an empty block here. Choose Mixed to draw
           their pin instead.
-        </p>
+        </PropertyHint>
       ) : null}
     </>
   );

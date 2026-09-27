@@ -3,17 +3,18 @@
   "tagline": "Put your locations on a map and embed it on your site.",
   "website": "https://pinglide.com",
   "logo": {
-    "light": "",
-    "dark": "",
-    "alt": ""
+    "light": "/logo/pinglide-logo.svg",
+    "dark": "/logo/pinglide-logo-dark.svg",
+    "alt": "Pinglide"
   },
-  "favicon": "/favicon.ico",
+  "favicon": "/logo/pinglide-icon.svg",
   "company": {
     "legalName": "Pinglide",
     "registrationNumber": "",
     "vatNumber": "",
     "address": ""
   },
+  
   "contact": {
     "supportEmail": "support@pinglide.com",
     "privacyEmail": "privacy@pinglide.com"
@@ -25,10 +26,10 @@
     "dpaUrl": ""
   },
   "social": {
-    "x": "",
+    "x": "https://x.com/pinglide",
     "linkedin": "",
-    "facebook": "",
-    "instagram": "",
-    "github": ""
+    "facebook": "https://www.facebook.com/profile.php?id=61594772975690",
+    "instagram": "https://www.instagram.com/pinglide.company",
+    "github": "https://github.com/Marius555/maps"
   }
 }

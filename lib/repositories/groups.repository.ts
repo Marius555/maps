@@ -56,6 +56,18 @@ export async function listGroups(
   // Ownership of the map is what authorises everything about its groups.
   await getMap(ctx, mapId);
 
+  return readGroupsPage(mapId, options, true);
+}
+
+/**
+ * One page of rows with no ownership check, so `listAllGroups` checks the map
+ * once rather than before every page — see `readPlacesPage`.
+ */
+async function readGroupsPage(
+  mapId: string,
+  options: ListOptions,
+  total: boolean,
+): Promise<Page<Group>> {
   const limit = Math.min(options.limit ?? MAX_PAGE_SIZE, MAX_PAGE_SIZE);
   const queries = [Query.equal("mapId", mapId), ORDER, Query.limit(limit)];
   if (options.cursor) queries.push(Query.cursorAfter(options.cursor));
@@ -65,7 +77,7 @@ export async function listGroups(
       databaseId: env.databaseId,
       tableId: TABLES.groups,
       queries,
-      total: true,
+      total,
     });
 
     return {
@@ -86,14 +98,17 @@ export async function listAllGroups(
   ctx: RepoContext,
   mapId: string,
 ): Promise<Group[]> {
+  await getMap(ctx, mapId);
+
   const all: Group[] = [];
   let cursor: string | null = null;
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    const result: Page<Group> = await listGroups(ctx, mapId, {
-      cursor,
-      limit: MAX_PAGE_SIZE,
-    });
+    const result: Page<Group> = await readGroupsPage(
+      mapId,
+      { cursor, limit: MAX_PAGE_SIZE },
+      false,
+    );
 
     all.push(...result.items);
     if (!result.nextCursor) return all;

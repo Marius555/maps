@@ -15,7 +15,11 @@ import {
   WEBSITE_LABEL,
 } from "@/packages/shared/card-button";
 import type { BlockPatch } from "./block-properties";
-import { PropertyChoice, PropertyText } from "@/components/ui/properties/property-fields";
+import {
+  PropertyChoice,
+  PropertyHint,
+  PropertyText,
+} from "@/components/ui/properties/property-fields";
 
 /**
  * What the button does — as opposed to what it looks like, which is the group
@@ -174,9 +178,9 @@ export function ButtonProperties({
               two answers every location already has reads as broken rather than
               as empty. */}
           {fields.length === 0 && !isOwnLink ? (
-            <p className="-mt-1 text-xs text-muted py-2">
+            <PropertyHint>
               Add custom fields in Settings to give each location its own link.
-            </p>
+            </PropertyHint>
           ) : null}
         </>
       ) : null}

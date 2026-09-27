@@ -24,32 +24,36 @@ export default async function ImportPage(
   const { id } = await props.params;
   const user = await requireUser();
 
-  // The try wraps only the fetch — see the Locations page for why.
+  /**
+   * The map, and how much room is left on it — resolved here so the wizard can
+   * say so before the user waits out a geocoding pass they were never going to
+   * be allowed to save.
+   *
+   * The headroom is advisory only. `createPlaces` re-checks and rejects
+   * server-side, which is where CLAUDE.md §6 requires the actual enforcement to
+   * live — this is the courtesy of saying it early, not the rule.
+   *
+   * All three in parallel, like `loadPlaces` on the Locations page. None needs
+   * another, and the map used to be awaited on its own first, which put a whole
+   * round trip of skeleton in front of the other two for nothing. `countPlaces`
+   * checks ownership itself, so a missing map reaches the same `notFound()`
+   * whichever read fails first. The try wraps only the fetch — see the
+   * Locations page for why.
+   */
   let map: AppMap;
+  let plan: Awaited<ReturnType<typeof getUserPlan>>;
+  let used: number;
 
   try {
-    map = await loadMap(user.id, id);
+    [map, plan, used] = await Promise.all([
+      loadMap(user.id, id),
+      getUserPlan(user.id),
+      countPlaces(repoContext(user.id), id),
+    ]);
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
     throw error;
   }
-
-  /**
-   * How much room is left, resolved here so the wizard can say so before the
-   * user waits out a geocoding pass they were never going to be allowed to save.
-   *
-   * Advisory only. `createPlaces` re-checks and rejects server-side, which is
-   * where CLAUDE.md §6 requires the actual enforcement to live — this is the
-   * courtesy of saying it early, not the rule.
-   *
-   * In parallel, like `loadPlaces` on the Locations page. Neither of these needs
-   * the other and they used to be awaited one after the next, which is a third
-   * round trip's worth of skeleton for nothing.
-   */
-  const [plan, used] = await Promise.all([
-    getUserPlan(user.id),
-    countPlaces(repoContext(user.id), id),
-  ]);
 
   /*
    * The heading is `sr-only`. The sidebar's lit "Locations" row and the step trail

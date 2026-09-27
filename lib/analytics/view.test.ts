@@ -78,9 +78,71 @@ describe("totals", () => {
     const result = view(foldOf(session()));
 
     expect(result.daily).toEqual([
-      { day: "2026-09-06", sessions: 0, views: 0, interactions: 0 },
-      { day: "2026-09-07", sessions: 1, views: 1, interactions: 0 },
+      {
+        day: "2026-09-06",
+        sessions: 0,
+        views: 0,
+        interactions: 0,
+        visitors: 0,
+        opens: 0,
+        searches: 0,
+        directions: 0,
+        calls: 0,
+        actions: 0,
+      },
+      {
+        day: "2026-09-07",
+        sessions: 1,
+        views: 1,
+        interactions: 0,
+        visitors: 0,
+        opens: 0,
+        searches: 0,
+        directions: 0,
+        calls: 0,
+        actions: 0,
+      },
     ]);
+  });
+
+  it("gives every headline figure its own series per day", () => {
+    // What the sparkline under each figure is drawn from.
+    const result = view(
+      foldOf(
+        session({
+          visitor: "0123456789abcdef",
+          events: [
+            event("view"),
+            event("open", { place: "p1" }),
+            event("search", { q: "vilnius", n: 1 }),
+            event("directions", { place: "p1" }),
+            event("tel", { place: "p1" }),
+          ],
+        }),
+      ),
+    );
+
+    expect(result.daily[1]).toMatchObject({
+      visitors: 1,
+      opens: 1,
+      searches: 1,
+      directions: 1,
+      calls: 1,
+      actions: 2,
+    });
+    expect(result.totals.actions.value).toBe(2);
+  });
+
+  it("counts every search that found nothing, not every term", () => {
+    const result = view(
+      foldOf(
+        session({ events: [event("search", { q: "kaunas", n: 0 })] }),
+        session({ events: [event("search", { q: "kaunas", n: 0 })] }),
+        session({ events: [event("search", { q: "vilnius", n: 2 })] }),
+      ),
+    );
+
+    expect(result.searchesUnmatched).toBe(2);
   });
 });
 
@@ -269,6 +331,26 @@ describe("headline tiles", () => {
       directions: result.totals.directions.value,
       calls: result.totals.calls.value,
     }).toEqual({ sessions: 1, opens: 2, searches: 1, directions: 1, calls: 1 });
+  });
+});
+
+describe("outcomes", () => {
+  it("counts each thing an opened card led to, by kind", () => {
+    const result = view(
+      foldOf(
+        session({
+          events: [
+            event("open", { id: "p1" }),
+            event("directions", { id: "p1" }),
+            event("directions", { id: "p2" }),
+            event("tel", { id: "p1" }),
+            event("site", { id: "p2" }),
+          ],
+        }),
+      ),
+    );
+
+    expect(result.outcomes).toEqual({ directions: 2, calls: 1, email: 0, site: 1 });
   });
 });
 

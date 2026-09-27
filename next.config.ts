@@ -44,6 +44,24 @@ const nextConfig: NextConfig = {
     "*.trycloudflare.com",
   ],
 
+  experimental: {
+    /*
+     * Keep a visited dashboard page in the client router cache for 30 seconds.
+     *
+     * Every dashboard route is dynamic (the layout reads the session cookie), and
+     * the default for dynamic pages is 0 — so Back, or flipping between a map's
+     * editor and its Locations tab, went to the server and waited out its Appwrite
+     * reads every time. With this the second visit inside 30s is instant.
+     *
+     * What keeps it honest: `router.refresh()` empties this cache, and every
+     * mutation whose result lives only in server-rendered props (billing, account)
+     * already calls it; every other page hydrates from TanStack Query's cache,
+     * which a REST mutation updates directly. A new mutation that changes what
+     * *another* page renders on the server must do one of the two.
+     */
+    staleTimes: { dynamic: 30 },
+  },
+
   async headers() {
     return [
       { source: "/embed/:path*", headers: embedCorsHeaders },

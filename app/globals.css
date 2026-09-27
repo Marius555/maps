@@ -37,7 +37,8 @@
  *
  * 1. The accent is the interface's only chromatic voice. Every neutral is a true
  *    grey at zero chroma. The previous palette tinted every neutral at the
- *    accent's own hue, which made every page read pinkish and muddy.
+ *    accent's own hue, which made every page read pinkish and muddy. The
+ *    Analytics charts are the one recorded exception — see `--an-visitors`.
  * 2. `--radius` is a multiplier, not a value. @heroui/styles derives the whole
  *    Tailwind radius scale from it (`--radius-xl` is `calc(var(--radius) * 1.5)`
  *    and so on), so `rounded-*` utilities and HeroUI components share one
@@ -3394,6 +3395,14 @@ body.is-pin-dragging * {
   line-height: 0.96;
 }
 
+/* The hero's headline alone opens its lines up: the hand-drawn underline under
+   "locations" sits in that gap, and at 0.96 it would run into the line below.
+   A rule rather than a `leading-*` utility, because `.mk-display` is unlayered
+   and a utility would lose to it silently. */
+.mk-display.mk-hero-title {
+  line-height: 1.14;
+}
+
 /* The same lettering at label size, where the tracking has to open back up —
    tight tracking is a property of large type, not of the face. */
 .mk-eyebrow {
@@ -4000,6 +4009,70 @@ body.is-pin-dragging * {
  * for.
  */
 .mk-chart .recharts-surface:focus {
+  outline: none;
+}
+
+/*
+ * The Analytics page's colours (components/analytics/charts/chart-colors.ts).
+ *
+ * **The recorded exception to rule 1 at the top of this file.** The page used
+ * to follow it — the accent, then three greys — and the owner overrode that on
+ * 2026-09-27: four headline cards and every chart in one orange read as one
+ * thing drawn eleven times. So each *metric* owns a hue and keeps it on every
+ * chart it appears in: visitors are blue in their card, their sparkline, the
+ * traffic chart and the "Came back" meter alike. Colour follows the metric,
+ * never its rank. The rest of the interface is still accent-and-grey.
+ *
+ * The hues are the dataviz skill's reference palette with the accent in its
+ * orange slot. **Validated with its script against `--surface`** (#ffffff
+ * light, #141414 dark), in the orders the charts actually draw them:
+ *
+ * - All eight, adjacent: light CVD ΔE 9.1, normal-vision 19.6; dark 8.4, 19.3.
+ * - The engagement stack (opens, searches, directions, calls): light 9.1 /
+ *   22.9, dark 8.4 / 19.7.
+ * - The outcomes donut as a ring (directions, calls, site, email, back to
+ *   directions): dark 8.6 / 19.7; light site↔email CVD 7.2, inside the 6–8
+ *   band that is legal only with secondary encoding — which it has: 2px surface
+ *   gaps between slices and a legend naming every slice with its count.
+ * - Light aqua, yellow and magenta are under 3:1 on white (2.82, 2.17, 2.69):
+ *   the relief rule, met by the figures printed beside every chart and the
+ *   sr-only tables under them.
+ *
+ * Dark steps are selected for the dark band, not flipped. Re-run the validator
+ * if any of these move.
+ */
+:root,
+.light,
+[data-theme="light"],
+[data-theme="default"] {
+  --an-visitors: #2a78d6;
+  --an-visits: var(--accent);
+  --an-opens: #1baf7a;
+  --an-searches: #eda100;
+  --an-directions: #4a3aa7;
+  --an-calls: #e87ba4;
+  --an-site: #008300;
+  --an-email: #e34948;
+  --an-other: oklch(72% 0 0);
+}
+
+.dark,
+[data-theme="dark"] {
+  --an-visitors: #3987e5;
+  --an-visits: var(--accent);
+  --an-opens: #199e70;
+  --an-searches: #c98500;
+  --an-directions: #9085e9;
+  --an-calls: #d55181;
+  --an-site: #008300;
+  --an-email: #e66767;
+  --an-other: oklch(50% 0 0);
+}
+
+/* Recharts focuses its SVG on click; the app's own focus ring is the one used. */
+.an-chart .recharts-surface:focus,
+.an-chart .recharts-wrapper:focus,
+.an-chart .recharts-sector:focus {
   outline: none;
 }
 

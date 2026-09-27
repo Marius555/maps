@@ -3,6 +3,7 @@ import type { AuthUser } from "@/lib/auth/types";
 import type { PlanId } from "@/lib/repositories/plan-limits";
 import { MobileHeader } from "./mobile-header";
 import { MobileHeaderSlotProvider } from "./mobile-header-slot";
+import { PageMain } from "./page-transition/page-main";
 import { Sidebar } from "./sidebar/sidebar";
 import { SidebarProvider } from "./sidebar/sidebar-context";
 import { SidebarMobile } from "./sidebar/sidebar-mobile";
@@ -47,6 +48,10 @@ import { SidebarMobile } from "./sidebar/sidebar-mobile";
  * explanation has to be wherever the user is when they find that out. It renders nothing for a confirmed address, which is almost every session.
  * It is a client component reading `useMe()` rather than the `user` prop already
  * in scope here — see its own file for why the prop would go stale.
+ *
+ * `<main>` is rendered by `PageMain`, a client component, because it fades in
+ * on every navigation; it is the same element with the same classes, and every
+ * rule above about them still holds there.
  */
 export function AppShell({
   user,
@@ -79,9 +84,7 @@ export function AppShell({
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <MobileHeader plan={plan} />
             <VerifyEmailBanner />
-            <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]">
-              {children}
-            </main>
+            <PageMain>{children}</PageMain>
           </div>
         </MobileHeaderSlotProvider>
       </div>

@@ -39,6 +39,7 @@ import {
   PropertyCheckbox,
   PropertyChecks,
   PropertyChoice,
+  PropertyHint,
   PropertyScale,
 } from "@/components/ui/properties/property-fields";
 import { PropertyNumberSelect } from "@/components/ui/properties/property-select";
@@ -518,9 +519,9 @@ export function BlockProperties({
               {/* Said only for the band it is true of, and said as what the
                   owner gets rather than as what the flexbox does (§8). */}
               {zone === "bottom" ? (
-                <p className="-mt-1 text-xs text-muted">
+                <PropertyHint>
                   Pinned to the bottom edge on every location.
-                </p>
+                </PropertyHint>
               ) : null}
             </>
           ) : null}
@@ -581,9 +582,9 @@ export function BlockProperties({
                   rather than as what the model does (§8). A full-width block has
                   no room beside it to explain. */}
               {narrow ? (
-                <p className="-mt-1 text-xs text-muted">
+                <PropertyHint>
                   The rest of the line stays open — drop another block into it.
-                </p>
+                </PropertyHint>
               ) : null}
             </>
           ) : null}
@@ -646,10 +647,10 @@ export function BlockProperties({
               {/* Said only while it is true, and said as what to do about it
                   rather than as what the model does (§8). */}
               {block.overlapPct && overlapsNothing ? (
-                <p className="-mt-1 text-xs text-muted">
+                <PropertyHint>
                   Nothing to overlap here — move it next to the photo, in the
                   same part of the card.
-                </p>
+                </PropertyHint>
               ) : null}
             </>
           ) : null}

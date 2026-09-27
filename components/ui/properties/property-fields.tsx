@@ -182,6 +182,18 @@ export function PropertyChecks({ children }: { children: ReactNode }) {
 }
 
 /**
+ * A line of explanation under the control it is about.
+ *
+ * `-mt-1` against the fold's 12px gap puts it 8px under its control and 12px
+ * above the next one, which is what makes it read as belonging to the first.
+ * One component so that rule lives in one place — it was eight copies of a
+ * class string, one of which had grown a `py-2` patch of its own.
+ */
+export function PropertyHint({ children }: { children: ReactNode }) {
+  return <p className="-mt-1 text-pretty text-xs text-muted">{children}</p>;
+}
+
+/**
  * A yes-or-no about the selected block.
  *
  * A checkbox rather than the `Switch` the appearance panel uses, and the

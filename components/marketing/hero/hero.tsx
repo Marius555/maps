@@ -1,6 +1,8 @@
 import { LinkButton } from "@/components/ui/link-button";
 
 import { ScrollCue } from "./scroll-cue";
+import { HeroArrow } from "./scribbles/hero-arrow";
+import { HeroUnderline } from "./scribbles/hero-underline";
 
 /**
  * The hero: the page's whole argument in words, on a screen of its own.
@@ -22,6 +24,11 @@ import { ScrollCue } from "./scroll-cue";
  * section rather than inside it — without that the first thing a visitor sees is
  * a hero already a header short of fitting. That is also why the first child of
  * `.mk-snap` is not a snap point of its own: header plus hero *is* screen one.
+ *
+ * **The two scribbles are absolute, so neither can move the layout.** The
+ * underline sits in the gap `.mk-hero-title` opens between the two lines; the
+ * arrow fills the empty space right of the lede, only from `xl` — see
+ * `scribbles/`.
  */
 export function Hero() {
   return (
@@ -38,10 +45,16 @@ export function Hero() {
           Store locators for 40–500 locations
         </p>
 
-        <h1 className="mk-display mt-5 max-w-4xl text-[2.75rem] text-balance text-foreground sm:text-6xl lg:text-[4.75rem]">
-          All your <span className="text-accent">locations</span>,
+        <h1 className="mk-display mk-hero-title relative mt-5 max-w-4xl text-[2.75rem] text-balance text-foreground sm:text-6xl lg:text-[4.75rem]">
+          All your{" "}
+          <span className="relative whitespace-nowrap text-accent">
+            locations
+            <HeroUnderline />
+          </span>
+          ,
           <br />
           on your own site.
+          <HeroArrow />
         </h1>
 
         <p className="mt-6 max-w-xl text-lg/8 text-pretty text-muted sm:mt-8">

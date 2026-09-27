@@ -39,7 +39,11 @@ export function SidebarMobile({ user, plan }: { user: AuthUser; plan: PlanId }) 
           </Drawer.Body>
 
           <Drawer.Footer className="flex-col items-stretch">
-            <UserMenu user={user} plan={plan} />
+            <UserMenu
+              user={user}
+              plan={plan}
+              onNavigate={() => setMobileOpen(false)}
+            />
             <Button slot="close" variant="tertiary" size="sm">
               Close
             </Button>

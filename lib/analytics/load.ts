@@ -57,7 +57,13 @@ export async function loadAnalytics(
   ctx: RepoContext,
   mapId: string,
   range: AnalyticsRange,
-  places: Place[],
+  /**
+   * A promise is accepted, and awaited only where the view is built: the page
+   * starts the locations read beside this one rather than ahead of it, so the
+   * rollup and session reads below do not queue behind a paged read of every
+   * location they never look at.
+   */
+  places: Place[] | Promise<Place[]>,
   now: Date,
 ): Promise<AnalyticsData> {
   const window = dayWindow(range, now);
@@ -115,6 +121,8 @@ export async function loadAnalytics(
     fold: foldFor(day, rawByDay, rolled),
   }));
 
+  const located = await places;
+
   return {
     view: buildView({
       days,
@@ -122,7 +130,7 @@ export async function loadAnalytics(
         foldFor(day, rawByDay, rolled),
       ),
       allDays: daysIn(window),
-      places: places.map((place) => ({
+      places: located.map((place) => ({
         id: place.id,
         name: place.name,
         lat: place.lat,
