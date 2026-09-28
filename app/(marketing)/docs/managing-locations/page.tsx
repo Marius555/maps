@@ -97,8 +97,8 @@ export default function ManagingLocationsPage() {
         />
 
         <p>
-          The <strong>Tags</strong> button filters by tag. Tags in the same group
-          widen the list, tags in different groups narrow it, and{" "}
+          The <strong>Tags</strong> button filters by tag. Choosing several
+          shows the locations wearing any of them, and{" "}
           <strong>Untagged</strong> finds the locations wearing none.{" "}
           <strong>Clear tags</strong> resets it.
         </p>

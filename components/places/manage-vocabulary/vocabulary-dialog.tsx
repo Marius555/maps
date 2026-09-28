@@ -1,19 +1,19 @@
 "use client";
 
 import { Button, Tabs, toast } from "@heroui/react";
-import { Filter, ListPlus } from "lucide-react";
+import { ListPlus, Tags } from "lucide-react";
 import { useState } from "react";
 
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { CustomFieldEditor } from "@/components/fields/custom-field-editor";
-import { TagGroupEditor } from "@/components/tags/tag-group-editor";
+import { TagListEditor } from "@/components/tags/tag-list-editor";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { toastError } from "@/lib/query/toast-error";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { useVocabularyDraft, type VocabularyTab } from "./use-vocabulary-draft";
 
 /**
- * The map's vocabulary — its filter groups and its extra fields — in one dialog
+ * The map's vocabulary — its tags and its extra fields — in one dialog
  * on the Locations page.
  *
  * **One Save for both tabs, pinned in the footer.** Each tab used to be a
@@ -35,11 +35,14 @@ export function VocabularyDialog({
   places,
   isOpen,
   onOpenChange,
+  onEditPlace,
 }: {
   map: AppMap;
   places: Place[];
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  /** Opens a location in Edit location, on top of this dialog. */
+  onEditPlace: (placeId: string) => void;
 }) {
   return (
     <ResponsiveDialog
@@ -49,7 +52,12 @@ export function VocabularyDialog({
       dialogClassName="steady sm:h-[min(46rem,100%)] sm:max-w-2xl"
       drawerClassName="h-[92dvh]"
     >
-      <VocabularyForm map={map} places={places} onSaved={() => onOpenChange(false)} />
+      <VocabularyForm
+        map={map}
+        places={places}
+        onEditPlace={onEditPlace}
+        onSaved={() => onOpenChange(false)}
+      />
     </ResponsiveDialog>
   );
 }
@@ -57,10 +65,12 @@ export function VocabularyDialog({
 function VocabularyForm({
   map,
   places,
+  onEditPlace,
   onSaved,
 }: {
   map: AppMap;
   places: Place[];
+  onEditPlace: (placeId: string) => void;
   onSaved: () => void;
 }) {
   const draft = useVocabularyDraft(map);
@@ -104,8 +114,8 @@ function VocabularyForm({
           <Tabs.ListContainer>
             <Tabs.List aria-label="Tags and fields">
               <Tabs.Tab id="filters" className="gap-2">
-                <Filter aria-hidden="true" className="size-4 shrink-0" />
-                Filters
+                <Tags aria-hidden="true" className="size-4 shrink-0" />
+                Tags
                 <Tabs.Indicator />
               </Tabs.Tab>
               <Tabs.Tab id="fields" className="gap-2">
@@ -122,10 +132,12 @@ function VocabularyForm({
             className="mt-0 space-y-4 p-0 data-[inert=true]:hidden"
           >
             {problemFor("filters")}
-            <TagGroupEditor
+            <TagListEditor
               draft={draft.tagGroups}
               places={places}
+              pinIcons={map.pinIcons}
               onChange={draft.setTagGroups}
+              onEditPlace={onEditPlace}
             />
           </Tabs.Panel>
           <Tabs.Panel

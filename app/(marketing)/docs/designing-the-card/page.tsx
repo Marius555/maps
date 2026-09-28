@@ -178,7 +178,7 @@ export default function DesigningTheCardPage() {
             ],
             [
               "Button style",
-              "Style (Solid, Soft, Outline, Ghost or Pill), Colour, Border colour, Border width, Corners, Roominess, Hover and Full width.",
+              "Style (Solid, Soft, Outline, Ghost or Pill), Colour, Border colour, Border width, Corners, Inner padding, Hover and Full width.",
             ],
             [
               "Content",

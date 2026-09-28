@@ -73,6 +73,17 @@ export function useMarkTutorialSeen(tutorial: TutorialId) {
   });
 }
 
+/** Every onboarding overlay at once — "Don't show tips again". Same rules. */
+export function useDismissAllTutorials() {
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<void>("/api/account/tutorial", {
+        method: "POST",
+        keepalive: true,
+      }),
+  });
+}
+
 export function useRevokeSession() {
   const router = useRouter();
 

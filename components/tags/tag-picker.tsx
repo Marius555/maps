@@ -281,18 +281,17 @@ export function TagPicker({
                       </p>
                     ) : null}
 
-                    {usable.map((group) => (
-                      <fieldset key={group.id} className="space-y-1.5">
-                        {/* The group is the *question* the tags inside it answer
-                            — the embed reads groups as AND and their tags as OR
-                            — so a flat list of forty chips would hide which of
-                            them are alternatives. */}
-                        <legend className="text-xs font-medium text-muted">
-                          {group.label || "Ungrouped"}
-                        </legend>
-
-                        <div className="flex flex-wrap gap-2">
-                          {group.tags.map((tag) => {
+                    {/* One flat run of chips. Groups still decide how a
+                        visitor's filters combine, but they are not something an
+                        owner edits any more, so they are not shown either. */}
+                    {usable.length > 0 ? (
+                      <div
+                        role="group"
+                        aria-label="Tags"
+                        className="flex flex-wrap gap-2"
+                      >
+                        {usable.flatMap((group) =>
+                          group.tags.map((tag) => {
                             const isOn = selected.has(tag.id);
 
                             return (
@@ -304,10 +303,10 @@ export function TagPicker({
                                 onToggle={() => toggle(tag.id)}
                               />
                             );
-                          })}
-                        </div>
-                      </fieldset>
-                    ))}
+                          }),
+                        )}
+                      </div>
+                    ) : null}
 
                     {isFull ? (
                       <p className="text-xs text-muted">
@@ -315,21 +314,13 @@ export function TagPicker({
                       </p>
                     ) : null}
 
-                    {/*
-                      Where the headings above come from.
-
-                      The menu shows group names and offers only "New tag", so
-                      the groups read as a second vocabulary that exists and
-                      cannot be added to — a category by another name. One line
-                      naming the screen that owns them is the whole fix; a group
-                      picker in this form is not, because asking which *question*
-                      a tag answers, mid-way through filling in a location, is a
-                      concept lesson at the wrong moment.
-                    */}
+                    {/* Where the rest of a tag's life happens: this dialog is
+                        about one location, and renaming or recolouring acts on
+                        every location wearing the tag. */}
                     {usable.length > 0 ? (
                       <p className="border-t border-border pt-2 text-xs text-muted">
-                        Groups are the questions your tags answer. Add and rename
-                        them in Locations → Tags &amp; fields.
+                        Rename, recolour or remove tags in Locations → Tags
+                        &amp; fields.
                       </p>
                     ) : null}
                   </>

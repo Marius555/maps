@@ -1,19 +1,21 @@
 "use client";
 
 import { Button } from "@heroui/react";
-import { X } from "lucide-react";
+import { EyeOff, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
+import { IconButton } from "@/components/ui/icon-button";
 import type { TutorialId } from "@/lib/onboarding/tutorials";
-import { useMarkTutorialSeen } from "@/lib/query/account";
+import { useDismissAllTutorials, useMarkTutorialSeen } from "@/lib/query/account";
 import { type Callout, CALLOUTS } from "./callouts";
 import { ScribbleArrow } from "./scribble-arrow";
 import { scrimClipPath } from "./tutorial-layout";
 import { TutorialNote } from "./tutorial-note";
 import {
   claimTutorial,
+  dismissAllTutorials,
   dismissTutorial,
   isTutorialDismissed,
   openTutorial,
@@ -24,7 +26,8 @@ import { useTutorialLayout } from "./use-tutorial-layout";
 
 /**
  * An onboarding overlay: hand-drawn arrows at the controls that matter on this
- * page, and an X to close it. What each one points at is in `callouts.ts`.
+ * page, an X to close it, and beside the X a button that closes every overlay
+ * for good. What each one points at is in `callouts.ts`.
  *
  * The server decides whether to render this (`lib/auth/tutorial.ts`); closing
  * it is what marks it seen, never showing it. Pressing a thing an arrow points
@@ -48,6 +51,7 @@ export function Tutorial({ id }: { id: TutorialId }) {
   );
   const open = useSyncExternalStore(subscribeTutorials, openTutorial, () => null);
   const markSeen = useMarkTutorialSeen(id);
+  const dismissAll = useDismissAllTutorials();
 
   // Take the screen whenever it is free — on mount, or when the overlay ahead
   // of this one closes.
@@ -62,10 +66,18 @@ export function Tutorial({ id }: { id: TutorialId }) {
     markSeen.mutate();
   };
 
+  // Every overlay, not just this one: the ones still ahead of the owner are
+  // stamped too, so none of them comes back — unless `TUTORIAL_ALWAYS_PRESENT`
+  // is on, which draws them all on the next load whatever the stamps say.
+  const hideAll = () => {
+    dismissAllTutorials();
+    dismissAll.mutate();
+  };
+
   if (isDismissed || open !== id) return null;
 
   return createPortal(
-    <TutorialOverlay callouts={CALLOUTS[id]} onClose={close} />,
+    <TutorialOverlay callouts={CALLOUTS[id]} onClose={close} onHideAll={hideAll} />,
     document.body,
   );
 }
@@ -73,9 +85,11 @@ export function Tutorial({ id }: { id: TutorialId }) {
 function TutorialOverlay({
   callouts,
   onClose,
+  onHideAll,
 }: {
   callouts: readonly Callout[];
   onClose: () => void;
+  onHideAll: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const layout = useTutorialLayout(rootRef, callouts);
@@ -155,16 +169,32 @@ function TutorialOverlay({
         );
       })}
 
-      <Button
-        isIconOnly
-        autoFocus
-        aria-label="Close tutorial"
-        variant="secondary"
-        onPress={onClose}
-        className="pointer-events-auto absolute top-3 right-3 shadow-md"
-      >
-        <X aria-hidden="true" className="size-5" />
-      </Button>
+      {/* Bottom right, not top right: the maps list's Create map sits in the
+          top-right corner, and a second button there landed squarely on the
+          one control that overlay asks the owner to press. No overlay points at
+          anything in this corner, on any page or width. */}
+      <div className="pointer-events-auto absolute right-3 bottom-3 flex gap-2">
+        <IconButton
+          label="Don't show tips again"
+          icon={EyeOff}
+          size="md"
+          variant="secondary"
+          placement="top"
+          iconClassName="size-5"
+          onPress={onHideAll}
+          className="shadow-md"
+        />
+        <Button
+          isIconOnly
+          autoFocus
+          aria-label="Close tutorial"
+          variant="secondary"
+          onPress={onClose}
+          className="shadow-md"
+        >
+          <X aria-hidden="true" className="size-5" />
+        </Button>
+      </div>
     </motion.div>
   );
 }

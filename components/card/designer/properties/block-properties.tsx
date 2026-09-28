@@ -96,6 +96,7 @@ export type BlockPatch = Partial<
   // the Reset beside the picker says "back to the ground this theme draws", and
   // `undefined` already means "leave it alone".
   chipBackground?: string;
+  chipTagColor?: boolean;
   chipBorder?: string;
   /*
    * What the button does. Spelled out with `"directions"` in it rather than

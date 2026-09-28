@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   TUTORIAL_PREFS,
   markTutorialSeen,
+  markTutorialsSeen,
   shouldShowTutorial,
   tutorialAlwaysPresent,
   unseenTutorials,
@@ -111,5 +112,24 @@ describe("markTutorialSeen", () => {
     expect(userId).toBe("u1");
     expect(prefs.deletionStartedAt).toBe("2026-09-01T00:00:00.000Z");
     expect(typeof prefs[TUTORIAL_PREFS.editor]).toBe("string");
+  });
+});
+
+describe("markTutorialsSeen", () => {
+  it("stamps every overlay in one write, keeping other prefs and earlier stamps", async () => {
+    getPrefs.mockResolvedValue({
+      deletionStartedAt: "2026-09-01T00:00:00.000Z",
+      [TUTORIAL_PREFS.maps]: "2026-09-02T00:00:00.000Z",
+    });
+
+    await markTutorialsSeen("u1", ["maps", "editor", "card", "publish"]);
+
+    expect(updatePrefs).toHaveBeenCalledTimes(1);
+    const { prefs } = updatePrefs.mock.calls[0][0];
+    expect(prefs.deletionStartedAt).toBe("2026-09-01T00:00:00.000Z");
+    expect(prefs[TUTORIAL_PREFS.maps]).toBe("2026-09-02T00:00:00.000Z");
+    for (const key of [TUTORIAL_PREFS.editor, TUTORIAL_PREFS.card, TUTORIAL_PREFS.publish]) {
+      expect(typeof prefs[key]).toBe("string");
+    }
   });
 });

@@ -71,6 +71,18 @@ rewritten; it is the record of why this area is shaped as it is.
   pin. Nothing between the form and the snapshot may sort it.
 - Tag **groups are AND, tags inside one group are OR** (`packages/shared/tags.ts`, shared
   with the embed so the dashboard list and the embed filter agree).
+- **Groups are hidden from owners, not removed** (2026-09-28). Owners read "Group name" as a
+  second way to group locations, beside the tags that already do that. Tags & fields
+  (`tag-list-editor.tsx`), the picker, the filter menu and the bulk menu all draw one flat
+  list. The data and the AND/OR rule are unchanged, so a map with several groups filters
+  exactly as before. A new tag joins the first group with room, or a new group named
+  `IMPORTED_TAG_GROUP_LABEL` ("Tags", then "Tags 2" — group labels must be unique). The
+  embed is untouched.
+- **Tags & fields' "N locations" is a menu** (`tag-usage-menu.tsx`): pin, name, street.
+  Pressing a row opens Edit location *stacked over* the dialog, so the tag draft survives.
+  Because that dialog can create a tag through quick-add, the draft's save goes through
+  `withTagsAddedSince` (`lib/tags/tag-draft.ts`), which puts back tags the map gained while
+  the dialog was open. A tag removed in the draft was there on opening, so it stays gone.
 - A category became a tag **keeping its own `cat-xxxx` id** — the one id in the system
   breaking `newTagId`'s never-reuse rule, safe only because nothing mints a `cat-` id again.
 - `maps.categories` and `places.category` are **retired, not dropped**.
@@ -119,7 +131,7 @@ rewritten; it is the record of why this area is shaped as it is.
   the other two are canvas.
 - `newTagId` must never reuse or derive an id from a label — a label-derived id handed out
   twice resurrects a deleted tag onto every location that once wore it.
-- `components/tags/tag-picker.tsx` is the one control. Quick-add PATCHes the **whole**
+- `components/tags/tag-picker.tsx` is the one control for tagging a location. Quick-add PATCHes the **whole**
   `tagGroups` array (the column is one JSON blob) and parses it through `tagGroupsSchema`
   first, so a duplicate name is refused in the dialog instead of as a 400.
 - Chips reorder by drag (`use-chip-reorder.ts`); `Alt` + arrow does the same from the
@@ -127,7 +139,9 @@ rewritten; it is the record of why this area is shaped as it is.
 - The picker's popover anchors to the **field** via an explicit `triggerRef`, not to the
   button — the trigger changes shape once the first chip appears.
 - **No chip anywhere carries a colour dot**, and filter chips carry no colour: a chip is a
-  control, and pressed-or-not is what it has to communicate.
+  control, and pressed-or-not is what it has to communicate. The card's Tags block is the
+  exception, and only when the owner turns on **Use tag colours** (`chipTagColor`,
+  `docs/notes/cards.md`). There each chip is a label rather than a control.
 - The `category` card block is retired, not deleted — it draws the location's first tag.
 - Bulk tagging **adds and removes**, neither is a toggle, and both skip places the write
   would not change (a no-op PATCH bumps `updatedAt`, which the publish tab reads).

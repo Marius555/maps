@@ -9,6 +9,15 @@ building the same card from the same functions in `packages/shared/`.
 
 ## Invariants
 
+- **Tag-coloured chips are opt-in, per block (`chipTagColor`).** Absent is the neutral pill
+  every published card draws, so the flag, not an absent `chipBackground`, is what turns
+  them on. Set, each chip's ground is its tag's colour and beats `chipBackground`. The ink
+  is `tagChipColors` in `packages/shared/card-layout.ts`: `#111827` above OKLab L 0.7,
+  white below. Both renderers call it (`chipBox` in `card-block.tsx` writes `--chip-bg` and
+  `--card-color`; `buildTags` in `popup.ts` writes `--lm-chip-bg` and `--lm-card-color`).
+  `makeCardBlock` gives a *newly dropped* Tags block the flag; `defaultCardLayout()` and
+  saved layouts are untouched. The switch is **Use tag colours** in the Chips group, and
+  it hides Chip colour while it is on.
 - **The card's fixed words are translated in the embed only.** "Directions", "Email",
   "Website", "More details", "Open now", "Closed" and the day names come from the map's
   language (`embed/src/i18n.ts`; `buttonTargetOf`'s `words`, `formatDay`'s `closed`,
@@ -998,7 +1007,7 @@ it is choosing costs no label width at all, so Corners, Alignment, Vertical,
 Shadow, Fill/Fit, Width and Height stay tiles. A tile carrying a *word* gets
 about 36px of room across this column at five across, so every `room()` scale —
 None / Tight / Regular / Roomy / Wide — clipped: Padding, Gap between blocks,
-Margin, Space between days, Chip padding, Roominess and all three Border widths
+Margin, Space between days, Chip padding, Inner padding (once "Roominess") and all three Border widths
 are `PropertyNumberSelect` now, and Hover and Size are selects for the same
 reason with four and five words of their own. It is the argument the card's own
 Transparency already made in this file, applied to the seven controls it had not

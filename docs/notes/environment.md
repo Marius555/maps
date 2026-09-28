@@ -51,7 +51,9 @@ this is why each one exists.
   `publishTutorialSeenAt`), written by `POST /api/account/tutorial/{id}` when the overlay is
   closed: its X, Escape, or pressing what it points at, and for Card and Publish also
   reaching that page by any route — **never when it is merely shown**, so somebody who signs
-  up and closes the tab gets it again. Only one overlay is on screen at a time; a second waits
+  up and closes the tab gets it again. The button beside the X, "Don't show tips again",
+  stamps all four at once (`POST /api/account/tutorial`) — this flag still redraws them on
+  the next load. Only one overlay is on screen at a time; a second waits
   for the first to close. On the account rather than in `localStorage` because a new user is
   the one most likely to come back on another device. Unlike the two flags above it is
   **not** inert in production: it bypasses nothing, and the overlay it forces can always be

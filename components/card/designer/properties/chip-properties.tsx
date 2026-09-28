@@ -8,6 +8,7 @@ import {
 import type { CardBlock } from "@/packages/shared/card-layout";
 import type { BlockPatch } from "./block-properties";
 import { PropertyNumberSelect } from "@/components/ui/properties/property-select";
+import { PropertySwitch } from "@/components/ui/properties/property-switch";
 import { CHIP_BORDER_WIDTHS, CHIP_ROOM } from "./property-scales";
 
 /**
@@ -35,23 +36,45 @@ export function ChipProperties({
   block: CardBlock;
   onChange: (patch: BlockPatch) => void;
 }) {
+  const usesTagColors = block.chipTagColor === true;
+
   return (
     <>
-      <ColorSwatchRow
-        label="Chip colour"
-        value={block.chipBackground ?? ""}
-        leading={{ kind: "default", name: "Theme default" }}
-        presets={CHIP_PRESETS}
-        // The soft neutral both renderers already draw, so the wheel opens on
-        // roughly what is on screen rather than on a colour nobody has seen.
-        fallback="#e9ecef"
-        // An empty string is the absence, and the absence is theme-aware where a
-        // stored literal could not be: a pale pill picked against a light card
-        // vanishes the moment a visitor's map is dark.
-        onChange={(chipBackground) =>
-          onChange({ chipBackground: chipBackground ?? "" })
-        }
-      />
+      {/* Only the Tags block has tags to take a colour from. The retired
+          Category block draws one chip of the same kind, but nothing offers it
+          any more, so it keeps the one ground it always had. */}
+      {block.type === "tags" ? (
+        <div className="space-y-1">
+          <PropertySwitch
+            label="Use tag colours"
+            isSelected={usesTagColors}
+            onChange={(chipTagColor) => onChange({ chipTagColor })}
+          />
+          <p className="text-xs text-muted">
+            Each chip wears its tag&rsquo;s colour.
+          </p>
+        </div>
+      ) : null}
+
+      {/* Hidden while tag colours are on: every chip then wears its own tag's
+          colour, and a ground for the whole row would change nothing. */}
+      {usesTagColors ? null : (
+        <ColorSwatchRow
+          label="Chip colour"
+          value={block.chipBackground ?? ""}
+          leading={{ kind: "default", name: "Theme default" }}
+          presets={CHIP_PRESETS}
+          // The soft neutral both renderers already draw, so the wheel opens on
+          // roughly what is on screen rather than on a colour nobody has seen.
+          fallback="#e9ecef"
+          // An empty string is the absence, and the absence is theme-aware where a
+          // stored literal could not be: a pale pill picked against a light card
+          // vanishes the moment a visitor's map is dark.
+          onChange={(chipBackground) =>
+            onChange({ chipBackground: chipBackground ?? "" })
+          }
+        />
+      )}
 
       {/*
        * The outline, which is a pair and is stored as one.

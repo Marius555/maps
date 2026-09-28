@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useUpdateMap } from "@/lib/query/maps";
 import type { AppMap, MapField, MapTagGroup } from "@/lib/repositories/types";
 import { customFieldsSchema } from "@/lib/validation/field.schema";
+import { withTagsAddedSince } from "@/lib/tags/tag-draft";
 import { tagGroupsSchema } from "@/lib/validation/tag.schema";
 
 export type VocabularyTab = "filters" | "fields";
@@ -26,13 +27,16 @@ type Patch = { tagGroups?: MapTagGroup[]; fields?: MapField[] };
  */
 export function useVocabularyDraft(map: AppMap) {
   const updateMap = useUpdateMap(map.id);
+  // What the dialog opened on. "Changed" is measured against this rather than
+  // the live map, so a tag added elsewhere meanwhile does not read as an edit.
+  const [openedTagGroups] = useState<MapTagGroup[]>(map.tagGroups);
   const [tagGroups, setTagGroups] = useState<MapTagGroup[]>(map.tagGroups);
   const [fields, setFields] = useState<MapField[]>(map.fields);
   const [problem, setProblem] = useState<{ tab: VocabularyTab; message: string } | null>(
     null,
   );
 
-  const tagsDirty = JSON.stringify(tagGroups) !== JSON.stringify(map.tagGroups);
+  const tagsDirty = JSON.stringify(tagGroups) !== JSON.stringify(openedTagGroups);
   const fieldsDirty = JSON.stringify(fields) !== JSON.stringify(map.fields);
 
   /**
@@ -45,7 +49,9 @@ export function useVocabularyDraft(map: AppMap) {
     const patch: Patch = {};
 
     if (tagsDirty) {
-      const parsed = tagGroupsSchema.safeParse(tagGroups);
+      const parsed = tagGroupsSchema.safeParse(
+        withTagsAddedSince(tagGroups, openedTagGroups, map.tagGroups),
+      );
       if (!parsed.success) {
         setProblem({
           tab: "filters",
@@ -83,3 +89,4 @@ export function useVocabularyDraft(map: AppMap) {
     save,
   };
 }
+

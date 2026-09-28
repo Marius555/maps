@@ -17,6 +17,7 @@ import {
   cardRowBox,
   cardRows,
   chipStyleOf,
+  tagChipColors,
   justifyOf,
   defaultCardLayout,
   logoImageOf,
@@ -476,6 +477,15 @@ function buildTags(
     // own default in the `var()` fallback — the pattern every other optional
     // field on a card follows.
     if (chip?.background) pill.style.setProperty("--lm-chip-bg", chip.background);
+
+    // The tag's own colour, when the block asks for it. The ink rides on
+    // `--lm-card-color` because that is what the pill's `color` reads; the
+    // dashboard's twin is `chipBox` in components/card/card-block.tsx.
+    const own = chip?.tagColor ? tagChipColors(tag.color) : undefined;
+    if (own) {
+      pill.style.setProperty("--lm-chip-bg", own.background);
+      pill.style.setProperty("--lm-card-color", own.ink);
+    }
     if (chip?.padding) pill.style.setProperty("--lm-chip-pad", chip.padding);
 
     // The outline, which `chipStyleOf` hands over as a pair or not at all — a

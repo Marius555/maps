@@ -22,6 +22,7 @@
  */
 
 import { isCardFont } from "./card-fonts";
+import { lightnessOf, parseColor } from "./color";
 
 export type CardZone = "top" | "middle" | "bottom";
 
@@ -990,6 +991,16 @@ export type CardBlock = {
    */
   chipBackground?: string;
   /**
+   * Each chip wears its own tag's colour. `chips` blocks only.
+   *
+   * A flag rather than a new meaning for an absent `chipBackground`: every card
+   * already published draws neutral pills, and absent has to keep meaning that
+   * (CLAUDE.md §7). Set, it beats `chipBackground` chip by chip, and the label
+   * takes dark or white ink off the tag's lightness (`tagChipColors`) — a tag
+   * colour is the owner's pick from a palette with yellows in it.
+   */
+  chipTagColor?: true;
+  /**
    * Room inside each chip, in CSS pixels, on top of what a chip already has.
    * `chips` blocks only.
    *
@@ -1929,6 +1940,9 @@ function readBlock(
     const chipBackground = hex(raw.chipBackground);
     if (chipBackground) block.chipBackground = chipBackground;
 
+    // Presence is the value, as `bold` is: one way to say it.
+    if (raw.chipTagColor === true) block.chipTagColor = true;
+
     if (isNumber(raw.chipPadding)) {
       const padding = clamp(raw.chipPadding, CARD_LIMITS.chipPadding, 0);
       if (padding > 0) block.chipPadding = padding;
@@ -2684,6 +2698,8 @@ function textOf(block: CardBlock): CardBlockText | undefined {
 export type CardChipStyle = {
   /** A `background-color` for each chip. */
   background?: string;
+  /** Each chip wears its tag's colour instead — see `tagChipColors`. */
+  tagColor?: true;
   /** Extra `padding` on each chip, as a length. */
   padding?: string;
   /** A `justify-content` for the row they wrap in. */
@@ -2717,6 +2733,7 @@ export type CardChipStyle = {
 export function chipStyleOf(block: CardBlock): CardChipStyle | undefined {
   const chip: CardChipStyle = {
     ...(block.chipBackground ? { background: block.chipBackground } : {}),
+    ...(block.chipTagColor ? { tagColor: true as const } : {}),
     ...(block.chipPadding
       ? { padding: `${String(block.chipPadding)}px` }
       : {}),
@@ -2735,6 +2752,27 @@ export function chipStyleOf(block: CardBlock): CardChipStyle | undefined {
   };
 
   return Object.keys(chip).length > 0 ? chip : undefined;
+}
+
+/**
+ * One chip's ground and ink when it wears its tag's colour.
+ *
+ * Both renderers call this, so a yellow tag cannot be white-on-yellow in the
+ * studio and ink-on-yellow on a customer's site. 0.7 rather than the pin
+ * builder's 0.8 because a chip's label is small text, which needs more contrast
+ * than a pin's glyph. Undefined for a colour `parseColor` cannot read, which
+ * leaves the chip to the block's own style.
+ */
+export function tagChipColors(
+  color: string | undefined,
+): { background: string; ink: string } | undefined {
+  const parsed = color ? parseColor(color) : null;
+  if (!parsed) return undefined;
+
+  return {
+    background: color as string,
+    ink: lightnessOf(parsed) > 0.7 ? "#111827" : "#ffffff",
+  };
 }
 
 export type CardButtonStyle = {

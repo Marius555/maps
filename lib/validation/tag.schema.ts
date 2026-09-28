@@ -69,7 +69,7 @@ export const tagGroupSchema = z.object({
     .max(MAX_TAGS_PER_GROUP, `A group can hold up to ${MAX_TAGS_PER_GROUP} tags.`)
     .refine(
       (tags) => new Set(tags.map((tag) => tag.label.toLowerCase())).size === tags.length,
-      "Two tags in this group have the same name. Give each one a distinct name.",
+      "Two tags have the same name. Give each one a distinct name.",
     ),
 });
 
@@ -87,7 +87,7 @@ export const tagGroupsSchema = z
   )
   .refine(
     (groups) => countTags(groups) <= MAX_TAGS_TOTAL,
-    `You can have up to ${MAX_TAGS_TOTAL} tags across all groups.`,
+    `You can have up to ${MAX_TAGS_TOTAL} tags.`,
   )
   /*
    * Ids are unique across every group, not just within one. A place stores bare

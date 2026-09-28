@@ -237,3 +237,39 @@ describe("buildPopup, the pin's colour on the card", () => {
     ).toBe(TAG.color);
   });
 });
+
+describe("buildPopup, tag-coloured chips", () => {
+  const withTags = (block: Partial<CardBlock>): CardLayout => ({
+    ...layout,
+    zones: {
+      ...layout.zones,
+      middle: [{ id: "tags", type: "tags", ...block }],
+    },
+  });
+
+  const chips: TagChip[] = [
+    { id: "a", label: "Bikes", color: "#1e3a8a" },
+    { id: "b", label: "Sundays", color: "#fde047" },
+  ];
+
+  const pills = (card: HTMLElement) =>
+    [...card.querySelectorAll<HTMLElement>(".lm-popup__tag")];
+
+  it("draws each chip in its tag's colour, with ink that can be read on it", () => {
+    const card = buildPopup(base, undefined, [], withTags({ chipTagColor: true }), [], chips);
+    const [dark, light] = pills(card);
+
+    expect(dark.style.getPropertyValue("--lm-chip-bg")).toBe("#1e3a8a");
+    expect(dark.style.getPropertyValue("--lm-card-color")).toBe("#ffffff");
+    expect(light.style.getPropertyValue("--lm-chip-bg")).toBe("#fde047");
+    expect(light.style.getPropertyValue("--lm-card-color")).toBe("#111827");
+  });
+
+  it("writes nothing on a block that has not asked, so published cards stay as they are", () => {
+    const card = buildPopup(base, undefined, [], withTags({}), [], chips);
+
+    for (const pill of pills(card)) {
+      expect(pill.getAttribute("style")).toBeNull();
+    }
+  });
+});

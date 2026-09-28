@@ -27,9 +27,9 @@ import { TagToggleChip } from "./tag-chip";
  * filtered list and the visitor's filtered map cannot come to disagree about
  * what "sells bikes and opens Sundays" means.
  *
- * Grouped under their headings, like `BulkTagMenu`, because a tag on its own
- * does not say which question it answers and two groups can reasonably both
- * hold "Standard".
+ * One flat run of chips, like `BulkTagMenu` and the picker. Groups still decide
+ * how the selection combines (`matchesTags`), but they are not shown anywhere an
+ * owner edits tags any more, so a heading here would name something nobody made.
  */
 export function TagFilterMenu({
   groups,
@@ -102,28 +102,24 @@ export function TagFilterMenu({
       <Popover.Content placement="bottom start">
         <Popover.Dialog aria-label="Filter locations by tag">
           <div className="flex max-h-80 w-60 flex-col gap-3 overflow-y-auto">
-            {usable.map((group) => (
-              <fieldset key={group.id} className="space-y-1.5">
-                <legend className="text-xs font-medium text-muted">
-                  {group.label || "Untitled group"}
-                </legend>
+            <fieldset className="flex flex-wrap gap-2">
+              <legend className="sr-only">Tags</legend>
 
-                <div className="flex flex-wrap gap-2">
-                  {group.tags.map((tag) => (
-                    // The same chip the location form offers, from the same
-                    // file — an owner filtering their list and a visitor
-                    // filtering the published map are answering one question,
-                    // and it should not look like two.
-                    <TagToggleChip
-                      key={tag.id}
-                      label={tag.label || "Unnamed tag"}
-                      isOn={selected.has(tag.id)}
-                      onToggle={() => toggle(tag.id)}
-                    />
-                  ))}
-                </div>
-              </fieldset>
-            ))}
+              {usable.flatMap((group) =>
+                group.tags.map((tag) => (
+                  // The same chip the location form offers, from the same
+                  // file — an owner filtering their list and a visitor
+                  // filtering the published map are answering one question,
+                  // and it should not look like two.
+                  <TagToggleChip
+                    key={tag.id}
+                    label={tag.label || "Unnamed tag"}
+                    isOn={selected.has(tag.id)}
+                    onToggle={() => toggle(tag.id)}
+                  />
+                )),
+              )}
+            </fieldset>
 
             {/* Its own fieldset under the questions, because it is not an answer
                 to any of them — it is the absence of every answer. */}

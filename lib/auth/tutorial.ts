@@ -65,12 +65,30 @@ export async function markTutorialSeen(
   userId: string,
   tutorial: TutorialId,
 ): Promise<void> {
-  const prefs = await admin.users.getPrefs({ userId });
+  await markTutorialsSeen(userId, [tutorial]);
+}
 
-  await admin.users.updatePrefs({
-    userId,
-    prefs: { ...prefs, [TUTORIAL_PREFS[tutorial]]: new Date().toISOString() },
-  });
+/**
+ * Stamps several overlays in one write — the overlay's "Don't show tips again"
+ * passes all of them.
+ *
+ * A stamp already there keeps its own date: it records when that overlay was
+ * first closed, and hiding the rest later says nothing new about it.
+ */
+export async function markTutorialsSeen(
+  userId: string,
+  tutorials: readonly TutorialId[],
+): Promise<void> {
+  const prefs: Record<string, unknown> = await admin.users.getPrefs({ userId });
+  const now = new Date().toISOString();
+  const stamps: Record<string, string> = {};
+
+  for (const tutorial of tutorials) {
+    const key = TUTORIAL_PREFS[tutorial];
+    if (typeof prefs[key] !== "string") stamps[key] = now;
+  }
+
+  await admin.users.updatePrefs({ userId, prefs: { ...prefs, ...stamps } });
 }
 
 /**

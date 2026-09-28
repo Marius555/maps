@@ -588,8 +588,9 @@ html:has([data-app-frame]) {
  * Logo and Mixed, and `buildLogo` in embed/src/popup.ts returns null for it. But
  * the sample is whichever location happened to be first, so on the canvas an
  * invisible block reads as a broken control rather than as a missing logo. Same
- * argument, and the same dashed vocabulary, as `.card-button--empty` and the
- * gallery's own dropzone.
+ * argument, and the same dashed vocabulary, as the gallery's own dropzone. (A
+ * link Button with nothing behind it used to wear it too, and stopped: there the
+ * owner's own button style *is* what they came to see — see `CardButton`.)
  */
 .card-logo--empty {
   display: grid;
@@ -1150,24 +1151,6 @@ html:has([data-app-frame]) {
 .card-button--full {
   display: flex;
   width: 100%;
-}
-
-/*
- * A button with nowhere to go, on the designer canvas only.
- *
- * A real card draws nothing at all here. This exists so a block whose link is
- * not configured yet is still something you can see, select and give a link to
- * — the same argument the empty fold's placeholder and the spacer's hatch each
- * make. Dashed and muted, so it cannot be mistaken for the button it is not.
- */
-.card-button--empty {
-  border-style: dashed;
-  border-width: 1px;
-  border-color: var(--border);
-  /* The ground and not `background`, so the hover above washes *this* rather
-     than the accent the placeholder is deliberately not wearing. */
-  --card-button-ground: transparent;
-  color: var(--muted);
 }
 
 /*

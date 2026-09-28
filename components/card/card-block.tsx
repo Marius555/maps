@@ -24,6 +24,7 @@ import { pinColorOfChips, type TagChip } from "@/packages/shared/tags";
 import {
   buttonStyleOf,
   chipStyleOf,
+  tagChipColors,
   justifyOf,
   logoImageOf,
   logoRadiusOf,
@@ -31,7 +32,7 @@ import {
   type CardBlockType,
   type CardButtonStyle,
 } from "@/packages/shared/card-layout";
-import { buttonTargetOf } from "@/packages/shared/card-button";
+import { buttonTargetOf, WEBSITE_LABEL } from "@/packages/shared/card-button";
 import { directionsUrl } from "@/packages/shared/directions";
 import { SAMPLE_PLACE } from "@/lib/card/sample-place";
 
@@ -750,7 +751,7 @@ function TagChips({
           size="sm"
           variant="soft"
           className="card-chip max-w-full"
-          style={chipBox(chip)}
+          style={chipBox(chip, tag.color)}
         >
           <Chip.Label className="card-text truncate">{tag.label}</Chip.Label>
         </Chip>
@@ -801,9 +802,23 @@ function EmptyTagChip({ block }: { block: CardBlock }) {
  * two default to a transparent hairline of no width in that same rule, which is
  * the chip every published card is wearing.
  */
-function chipBox(chip: ReturnType<typeof chipStyleOf>): CSSProperties {
+function chipBox(
+  chip: ReturnType<typeof chipStyleOf>,
+  /**
+   * The tag's own colour, which beats the block's ground when the block says
+   * so. The ink goes on `--card-color` because that is what the label's
+   * `.card-text` reads first — the embed writes `--lm-card-color` for the same
+   * reason (`buildTags` in embed/src/popup.ts).
+   */
+  tagColor?: string,
+): CSSProperties {
+  const own = chip?.tagColor ? tagChipColors(tagColor) : undefined;
+
   return {
     ...(chip?.background ? { "--chip-bg": chip.background } : {}),
+    ...(own
+      ? { "--chip-bg": own.background, "--chip-fg": own.ink, "--card-color": own.ink }
+      : {}),
     ...(chip?.padding ? { "--card-chip-pad": chip.padding } : {}),
     ...(chip?.border ? { "--card-chip-border": chip.border } : {}),
     ...(chip?.borderWidth
@@ -1103,19 +1118,29 @@ function CardButton({
    * On the canvas it stands in instead: a block that collapses to zero height
    * cannot be selected, moved or given the link it is missing, which makes the
    * fix for an unconfigured button "delete it and start again".
+   *
+   * **Wearing its own style, not a placeholder's.** It was a dashed grey box,
+   * so switching Action from Directions to Link on a sample location with no
+   * website looked like the button's whole design had been thrown away. It is
+   * the button the locations that do have the link will draw, saying what they
+   * will say; the tooltip carries the one fact the dashed box used to.
    */
+  const style = buttonBox(buttonStyleOf(block, pinColor));
+  const className = `card-button card-text${buttonModifiers(block)}`;
+
   if (!target) {
     if (!isDesigner) return null;
 
     return (
-      <span className="card-button card-text card-button--empty">
-        {block.buttonLabel ?? "No link yet"}
+      <span
+        className={className}
+        style={style}
+        title="This location has no link, so its card won't show this button"
+      >
+        {unlinkedLabelOf(block, fields)}
       </span>
     );
   }
-
-  const style = buttonBox(buttonStyleOf(block, pinColor));
-  const className = `card-button card-text${buttonModifiers(block)}`;
 
   if (isDesigner) {
     return (
@@ -1137,6 +1162,21 @@ function CardButton({
       {target.label}
     </a>
   );
+}
+
+/**
+ * What a link button with nothing behind it says on the canvas: what it would
+ * say on a location that has the link — the same fallbacks `buttonTargetOf`
+ * uses, so the stand-in and the real button cannot disagree about the words.
+ */
+function unlinkedLabelOf(block: CardBlock, fields: MapField[]): string {
+  if (block.buttonLabel !== undefined) return block.buttonLabel;
+
+  const field = block.buttonSource
+    ? fields.find((candidate) => candidate.id === block.buttonSource)
+    : undefined;
+
+  return field?.label ?? WEBSITE_LABEL;
 }
 
 /**

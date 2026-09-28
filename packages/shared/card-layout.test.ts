@@ -26,6 +26,7 @@ import {
   cardRowBox,
   cardRows,
   chipStyleOf,
+  tagChipColors,
   defaultMarginOf,
   defaultCardLayout,
   emptyBlockHeight,
@@ -883,6 +884,35 @@ describe("the chip controls", () => {
 
     expect(block.chipBackground).toBe("#ff8800");
     expect(block.chipPadding).toBe(6);
+  });
+
+  it("keep tag colours on a chips block only, and only as `true`", () => {
+    const first = (block: Record<string, unknown>) =>
+      resolveCardLayout({ zones: { middle: [block] } }).zones.middle[0];
+
+    // One block per type on a card, so each case is its own card.
+    const tags = first({ id: "a", type: "tags", chipTagColor: true });
+    const name = first({ id: "b", type: "name", chipTagColor: true });
+    const garbage = first({ id: "c", type: "tags", chipTagColor: "yes" });
+
+    expect(tags.chipTagColor).toBe(true);
+    expect(chipStyleOf(tags)?.tagColor).toBe(true);
+    expect(name.chipTagColor).toBeUndefined();
+    expect(garbage.chipTagColor).toBeUndefined();
+  });
+
+  it("give a tag-coloured chip ink it can be read in", () => {
+    expect(tagChipColors("#fde047")).toEqual({
+      background: "#fde047",
+      ink: "#111827",
+    });
+    expect(tagChipColors("#1e3a8a")).toEqual({
+      background: "#1e3a8a",
+      ink: "#ffffff",
+    });
+    // Unreadable colours leave the chip to the block's own style.
+    expect(tagChipColors("not a colour")).toBeUndefined();
+    expect(tagChipColors(undefined)).toBeUndefined();
   });
 
   it("read zero padding as no padding, and clamp what is over the ceiling", () => {

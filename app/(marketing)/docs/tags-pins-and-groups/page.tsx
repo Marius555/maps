@@ -54,28 +54,21 @@ export default function TagsPinsAndGroupsPage() {
 
       <DocsSection id="tags" title="Setting up tags">
         <p>
-          Tags live in groups. A group is one question — “Sells”, or “Open on
-          Sundays” — and the tags inside it are its answers.
+          Tags are what visitors filter your map by — “Bikes”, “Open Sundays”.
+          Each one has a colour, and a location’s first tag colours its pin.
         </p>
 
         <DocsSteps>
           <DocsStep title="Open Tags & fields">
             <p>
               On Locations, press <strong>Tags &amp; fields</strong> and stay on
-              the <strong>Filters</strong> tab.
+              the <strong>Tags</strong> tab.
             </p>
           </DocsStep>
 
-          <DocsStep title="Add a group">
+          <DocsStep title="Add your tags">
             <p>
-              Press <strong>Add group</strong> and name it — what are you
-              filtering by?
-            </p>
-          </DocsStep>
-
-          <DocsStep title="Add its tags">
-            <p>
-              Type a tag name and press <strong>Add tag</strong>. Each new tag
+              Press <strong>Add tag</strong> and type its name. Each new tag
               takes the next unused colour; press its swatch to change it.
             </p>
           </DocsStep>
@@ -88,10 +81,14 @@ export default function TagsPinsAndGroupsPage() {
         </DocsSteps>
 
         <p>
-          Tags in the same group widen results; tags in different groups narrow
-          them. Choosing “Bikes” and “Scooters” from one group finds locations
-          with either; adding “Open Sundays” from another keeps only the ones
-          that are also open on Sundays.
+          Beside each tag in use, a count such as <strong>3 locations</strong>{" "}
+          lists the locations wearing it. Press one to open it in Edit location.
+        </p>
+
+        <p>
+          To show each tag in its own colour on the card, open the card
+          designer, select the <strong>Tags</strong> block and turn on{" "}
+          <strong>Use tag colours</strong>.
         </p>
 
         <DocsCallout>
@@ -105,8 +102,6 @@ export default function TagsPinsAndGroupsPage() {
           caption="Tag limits"
           head={["Limit", "Allowed"]}
           rows={[
-            ["Groups per map", "6"],
-            ["Tags per group", "24"],
             ["Tags per map", "60"],
             ["Tags per location", "20"],
             ["Length of a name", "64 characters"],

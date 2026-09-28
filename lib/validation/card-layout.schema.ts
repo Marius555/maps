@@ -121,6 +121,7 @@ export const cardBlockSchema = z.object({
   // again by the resolver, which is also what drops them off a block type
   // that does not draw chips at all.
   chipBackground: z.string().regex(HEX).optional(),
+  chipTagColor: z.literal(true).optional(),
   chipPadding: z.number().int().min(0).max(MAX_CHIP_PADDING).optional(),
   // And their outline, which is a pair: the resolver is what refuses to store
   // either half on its own, since a colour with no width draws nothing and a

@@ -179,6 +179,10 @@ export function makeCardBlock(type: CardBlockType): CardBlock {
     ...(spec.defaultPadding && hasControl(type, "padding")
       ? { padding: spec.defaultPadding }
       : {}),
+    // A Tags block arrives wearing its tags' own colours: the owner picked one
+    // for every tag, and a card that ignores it reads as the pick not working.
+    // On arrival only — a block already on a card keeps the pills it draws.
+    ...(type === "tags" ? { chipTagColor: true as const } : {}),
     // And, for the one type that has one, where it sits and how far it is pulled
     // over the block beside it — so a logo dropped under a photo arrives already
     // straddling its edge rather than sitting under it waiting to be found.
@@ -547,6 +551,8 @@ export function resizeCardBlock(
      * this theme draws", and `undefined` is already taken by "leave it alone".
      */
     chipBackground?: string;
+    /* Chips in their tags' own colours. Off is the absence, as `bold`'s is. */
+    chipTagColor?: boolean;
     /*
      * The chips' outline colour, on `chipBackground`'s terms — an empty string
      * is the Reset saying "no outline", and `undefined` is "leave it alone".
@@ -736,6 +742,11 @@ export function resizeCardBlock(
     if (patch.chipBackground) {
       next.chipBackground = patch.chipBackground.toLowerCase();
     } else delete next.chipBackground;
+  }
+
+  if (patch.chipTagColor !== undefined && hasControl(type, "chips")) {
+    if (patch.chipTagColor) next.chipTagColor = true;
+    else delete next.chipTagColor;
   }
 
   if (patch.chipPadding !== undefined && hasControl(type, "chips")) {

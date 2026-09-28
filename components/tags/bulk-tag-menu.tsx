@@ -19,9 +19,8 @@ import { TagActionChip } from "./tag-chip";
  * whatever the selection started as, which is the property that made adding
  * safe in the first place; removing has it too, and only ever lacked a button.
  *
- * Grouped under the same headings the filters use: a tag on its own does not say
- * which question it answers, and two groups can reasonably both contain
- * "Standard".
+ * One flat run of chips, like the picker and the filter: groups still decide how
+ * a visitor's filters combine, but they are no longer something an owner sees.
  *
  * A `Popover.Root` wrapping a real `Button`, which is how the drawing tools
  * menu beside it is built — the Dropdown collection API wants its trigger to be
@@ -106,13 +105,7 @@ export function BulkTagMenu({
               ))}
             </fieldset>
 
-            {usable.map((group) => (
-              <div key={group.id} className="flex flex-col gap-1.5">
-                <p className="pt-1 text-xs font-medium text-muted">
-                  {group.label || "Untitled group"}
-                </p>
-
-                {/*
+            {/*
                   The same chip the picker and the filter draw, so one
                   vocabulary looks like one vocabulary wherever it is met — but
                   as a button rather than a toggle, because clicking one here
@@ -120,17 +113,17 @@ export function BulkTagMenu({
                   the menu. A chip that looked like a toggle and acted once
                   would be the worse half of consistency.
                 */}
-                <div className="flex flex-wrap gap-1.5">
-                  {group.tags.map((tag) => (
-                    <TagActionChip
-                      key={tag.id}
-                      label={tag.label || "Unnamed tag"}
-                      onClick={() => pick(tag.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {usable.flatMap((group) =>
+                group.tags.map((tag) => (
+                  <TagActionChip
+                    key={tag.id}
+                    label={tag.label || "Unnamed tag"}
+                    onClick={() => pick(tag.id)}
+                  />
+                )),
+              )}
+            </div>
           </div>
         </Popover.Dialog>
       </Popover.Content>

@@ -192,7 +192,7 @@ export function ButtonStyleProperties({
           question from the block's own Padding above — that holds the button
           off its neighbours, this holds the label off the button's edge. */}
       <PropertyNumberSelect
-        label="Roominess"
+        label="Inner padding"
         value={block.buttonPadding ?? 0}
         options={BUTTON_ROOM}
         onChange={(buttonPadding) => onChange({ buttonPadding })}

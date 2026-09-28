@@ -7,8 +7,16 @@ import { useState } from "react";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { VocabularyDialog } from "./vocabulary-dialog";
 
-/** Opens the map's filter groups and extra fields — see VocabularyDialog. */
-export function VocabularyButton({ map, places }: { map: AppMap; places: Place[] }) {
+/** Opens the map's tags and extra fields — see VocabularyDialog. */
+export function VocabularyButton({
+  map,
+  places,
+  onEditPlace,
+}: {
+  map: AppMap;
+  places: Place[];
+  onEditPlace: (placeId: string) => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -23,6 +31,7 @@ export function VocabularyButton({ map, places }: { map: AppMap; places: Place[]
         places={places}
         isOpen={isOpen}
         onOpenChange={setIsOpen}
+        onEditPlace={onEditPlace}
       />
     </>
   );

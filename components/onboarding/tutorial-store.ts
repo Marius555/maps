@@ -1,4 +1,4 @@
-import type { TutorialId } from "@/lib/onboarding/tutorials";
+import { TUTORIAL_IDS, type TutorialId } from "@/lib/onboarding/tutorials";
 
 /**
  * Which onboarding overlays this tab has closed, and which one is on screen.
@@ -42,6 +42,16 @@ export function openTutorial(): TutorialId | null {
 export function dismissTutorial(id: TutorialId): void {
   dismissed.add(id);
   if (open === id) open = null;
+  emit();
+}
+
+/**
+ * Every overlay closed for the rest of this tab — the one on screen and any
+ * waiting behind it. The caller writes the stamps.
+ */
+export function dismissAllTutorials(): void {
+  for (const id of TUTORIAL_IDS) dismissed.add(id);
+  open = null;
   emit();
 }
 

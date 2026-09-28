@@ -180,7 +180,7 @@ export function PlacesManager({
         hasPlaces={places.length > 0}
         actions={
           <>
-            <VocabularyButton map={map} places={places} />
+            <VocabularyButton map={map} places={places} onEditPlace={setEditingId} />
             <SheetSyncButton mapId={map.id} initialLink={initialSheetLink} />
             <LinkButton variant="secondary" href={`/maps/${map.id}/places/import`}>
               Import locations
