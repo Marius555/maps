@@ -9,10 +9,10 @@ import { useForm } from "react-hook-form";
 import { AuthDivider } from "@/components/auth/auth-divider";
 import { GoogleButton } from "@/components/auth/google-button";
 import { LegalConsentNotice } from "@/components/brand/legal-consent-notice";
-import { ErrorMessage } from "@/components/ui/error-message";
 import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
 import { useLogin } from "@/lib/query/auth";
 import { applyFieldErrors } from "@/lib/query/form-errors";
+import { toastProblem } from "@/lib/query/toast-error";
 import { loginSchema, type LoginInput } from "@/lib/validation/auth.schema";
 
 export function LoginForm({ redirectTo }: { redirectTo: string }) {
@@ -23,7 +23,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
     control,
     handleSubmit,
     setError,
-    formState: { errors, isSubmitting },
+    formState: { isSubmitting },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -37,7 +37,10 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       // server before the redirect paints.
       router.refresh();
     } catch (error) {
-      applyFieldErrors(error, setError);
+      // A wrong password is something that just happened, so it is a toast
+      // (`lib/query/toast-error.ts`); an inline alert pushed the whole form
+      // down the moment it appeared. A field-level 422 still lands on its field.
+      if (!applyFieldErrors(error, setError)) toastProblem("Couldn't log in", error);
     }
   });
 
@@ -50,10 +53,6 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       <AuthDivider />
 
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        {login.error && !errors.email && !errors.password ? (
-          <ErrorMessage error={login.error} />
-        ) : null}
-
         <FormTextField
           control={control}
           name="email"
@@ -72,11 +71,21 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
 
           {/* Under the field rather than beside its label: React Aria owns the
               label row, and a link inside it would be read out as part of the
-              field's accessible name. */}
-          <div className="flex justify-end">
+              field's accessible name. The way to sign up shares the line, at
+              the same size, rather than sitting in a footer of its own. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted">
+            <span>
+              No account yet?{" "}
+              <Link
+                href="/signup"
+                className="underline transition-colors hover:text-foreground"
+              >
+                Sign up
+              </Link>
+            </span>
             <Link
               href="/forgot-password"
-              className="text-xs text-muted underline transition-colors hover:text-foreground"
+              className="underline transition-colors hover:text-foreground"
             >
               Forgot password?
             </Link>

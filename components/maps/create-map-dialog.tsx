@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
+import { Plus } from "lucide-react";
 import { useId, useState } from "react";
 
 import {
@@ -8,6 +9,8 @@ import {
   VerifyEmailNotice,
 } from "@/components/verify-email/verify-email-notice";
 import { CreateMapForm } from "./create-map-form";
+
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 
 /**
  * Create map, and the one state that switches it off.
@@ -56,30 +59,35 @@ export function CreateMapDialog({
 
   return (
     <div className={`flex flex-col gap-2 ${ALIGN[align]}`}>
-      <Button
-        variant={variant}
-        onPress={() => setIsOpen(true)}
-        isDisabled={unverified}
-        aria-describedby={unverified ? noteId : undefined}
-      >
-        {label}
-      </Button>
+      {/* The maps list's onboarding overlay points here. A wrapper, since the
+          Button's own props are React Aria's to filter. */}
+      <span data-tutorial="create-map" className="flex">
+        <Button
+          variant={variant}
+          onPress={() => setIsOpen(true)}
+          isDisabled={unverified}
+          aria-describedby={unverified ? noteId : undefined}
+          className="w-40"
+        >
+          <Plus aria-hidden="true" className="size-4" />
+          {label}
+        </Button>
+      </span>
 
       <VerifyEmailNotice id={noteId} />
 
-      <Modal.Backdrop isOpen={isOpen} onOpenChange={setIsOpen}>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[400px]">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading>Create map</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body>
-              <CreateMapForm onCreated={() => setIsOpen(false)} />
-            </Modal.Body>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
+      <ResponsiveDialog
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+        dialogClassName="sm:max-w-[400px]"
+      >
+        <ResponsiveDialog.Header>
+          <ResponsiveDialog.Heading>Create map</ResponsiveDialog.Heading>
+        </ResponsiveDialog.Header>
+        <ResponsiveDialog.Body>
+          <CreateMapForm onCreated={() => setIsOpen(false)} />
+        </ResponsiveDialog.Body>
+      </ResponsiveDialog>
     </div>
   );
 }

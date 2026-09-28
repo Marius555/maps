@@ -7,6 +7,7 @@ import {
   SIDEBAR_MAP_COOKIE,
 } from "@/components/layout/sidebar/sidebar-cookies";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { unseenTutorials } from "@/lib/auth/tutorial";
 import { repoContext } from "@/lib/repositories/context";
 import { sidebarMapId } from "@/lib/repositories/maps.repository";
 import { getUserPlan } from "@/lib/repositories/plan-limits";
@@ -34,9 +35,12 @@ export default async function DashboardLayout({
    * plan this is. `getUserPlan` is `cache()`d per request, so a page that already
    * needed the plan for a limit pays nothing for this.
    */
-  const [plan, mapId] = await Promise.all([
+  const [plan, mapId, tutorials] = await Promise.all([
     getUserPlan(user.id),
     sidebarMap(user.id, jar.get(SIDEBAR_MAP_COOKIE)?.value || null),
+    // For the overlays that follow the owner between pages. Cached per request,
+    // so a page asking about its own overlays reads the prefs no second time.
+    unseenTutorials(user.id),
   ]);
 
   return (
@@ -45,6 +49,7 @@ export default async function DashboardLayout({
       plan={plan}
       defaultCollapsed={isCollapsed}
       defaultMapId={mapId}
+      tutorials={tutorials}
     >
       {children}
     </AppShell>

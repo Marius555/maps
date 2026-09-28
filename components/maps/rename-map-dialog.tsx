@@ -1,10 +1,11 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { FormTextField } from "@/components/ui/form-field";
 import { applyFieldErrors } from "@/lib/query/form-errors";
@@ -40,17 +41,16 @@ export function RenameMapDialog({
   onOpenChange: (isOpen: boolean) => void;
 }) {
   return (
-    <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
-      <Modal.Container>
-        <Modal.Dialog className="sm:max-w-[400px]">
-          <Modal.CloseTrigger />
-          <Modal.Header>
-            <Modal.Heading>Rename map</Modal.Heading>
-          </Modal.Header>
-          <RenameForm mapId={mapId} mapName={mapName} onDone={() => onOpenChange(false)} />
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+    <ResponsiveDialog
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      dialogClassName="sm:max-w-[400px]"
+    >
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Rename map</ResponsiveDialog.Heading>
+      </ResponsiveDialog.Header>
+      <RenameForm mapId={mapId} mapName={mapName} onDone={() => onOpenChange(false)} />
+    </ResponsiveDialog>
   );
 }
 
@@ -85,8 +85,8 @@ function RenameForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate>
-      <Modal.Body className="space-y-3">
+    <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
+      <ResponsiveDialog.Body className="space-y-3">
         {updateMap.error && !errors.name ? <ErrorMessage error={updateMap.error} /> : null}
 
         <FormTextField
@@ -96,15 +96,15 @@ function RenameForm({
           autoFocus
           description="Yours alone — visitors never see it."
         />
-      </Modal.Body>
-      <Modal.Footer>
+      </ResponsiveDialog.Body>
+      <ResponsiveDialog.Footer>
         <Button slot="close" variant="tertiary">
           Cancel
         </Button>
         <Button type="submit" isPending={isSubmitting} isDisabled={!isDirty}>
           Save changes
         </Button>
-      </Modal.Footer>
+      </ResponsiveDialog.Footer>
     </form>
   );
 }

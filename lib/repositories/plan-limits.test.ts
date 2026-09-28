@@ -533,6 +533,21 @@ describe("assertPlanFeature", () => {
     await expect(fresh.assertPlanFeature(USER_ID, "sheetSync")).resolves.toBeUndefined();
   });
 
+  // The account menu greys Contact support on Free; this is the check that
+  // holds when somebody posts to the route anyway.
+  it("refuses contact support on the free plan and allows it on starter", async () => {
+    const { assertPlanFeature } = await planLimits();
+
+    await expect(assertPlanFeature(USER_ID, "support")).rejects.toMatchObject({
+      code: "plan_feature_required",
+    });
+
+    subscriptionRows = [{ plan: "starter", status: "active" }];
+    const fresh = await planLimits();
+
+    await expect(fresh.assertPlanFeature(USER_ID, "support")).resolves.toBeUndefined();
+  });
+
   it("has a row for every plan the limits table knows", async () => {
     // The `satisfies` on PLAN_FEATURES makes a missing plan a type error, but
     // only while both tables are edited in the same commit. Said out loud here

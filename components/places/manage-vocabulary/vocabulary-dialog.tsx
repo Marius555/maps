@@ -1,9 +1,10 @@
 "use client";
 
-import { Button, Modal, Tabs, toast } from "@heroui/react";
+import { Button, Tabs, toast } from "@heroui/react";
 import { Filter, ListPlus } from "lucide-react";
 import { useState } from "react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { CustomFieldEditor } from "@/components/fields/custom-field-editor";
 import { TagGroupEditor } from "@/components/tags/tag-group-editor";
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -41,13 +42,15 @@ export function VocabularyDialog({
   onOpenChange: (isOpen: boolean) => void;
 }) {
   return (
-    <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
-      <Modal.Container scroll="inside">
-        <Modal.Dialog className="steady h-full sm:h-[min(46rem,100%)] sm:max-w-2xl">
-          <VocabularyForm map={map} places={places} onSaved={() => onOpenChange(false)} />
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+    <ResponsiveDialog
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      scroll="inside"
+      dialogClassName="steady sm:h-[min(46rem,100%)] sm:max-w-2xl"
+      drawerClassName="h-[92dvh]"
+    >
+      <VocabularyForm map={map} places={places} onSaved={() => onOpenChange(false)} />
+    </ResponsiveDialog>
   );
 }
 
@@ -85,15 +88,14 @@ function VocabularyForm({
 
   return (
     <>
-      <Modal.CloseTrigger />
-      <Modal.Header className="gap-1">
-        <Modal.Heading>Tags &amp; fields</Modal.Heading>
+      <ResponsiveDialog.Header className="gap-1">
+        <ResponsiveDialog.Heading>Tags &amp; fields</ResponsiveDialog.Heading>
         <p className="text-sm text-muted">
           What visitors can filter by, and the extra details each location carries.
         </p>
-      </Modal.Header>
+      </ResponsiveDialog.Header>
 
-      <Modal.Body>
+      <ResponsiveDialog.Body>
         <Tabs
           className="w-full gap-4"
           selectedKey={tab}
@@ -139,9 +141,9 @@ function VocabularyForm({
             />
           </Tabs.Panel>
         </Tabs>
-      </Modal.Body>
+      </ResponsiveDialog.Body>
 
-      <Modal.Footer>
+      <ResponsiveDialog.Footer>
         <Button slot="close" variant="tertiary">
           Cancel
         </Button>
@@ -152,7 +154,7 @@ function VocabularyForm({
         >
           Save changes
         </Button>
-      </Modal.Footer>
+      </ResponsiveDialog.Footer>
     </>
   );
 }

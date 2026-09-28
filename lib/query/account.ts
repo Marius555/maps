@@ -4,7 +4,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
 import type { AuthUser } from "@/lib/auth/types";
+import type { TutorialId } from "@/lib/onboarding/tutorials";
 import type { ChangePasswordInput, ProfileInput } from "@/lib/validation/account.schema";
+import type { SupportRequestInput } from "@/lib/validation/support.schema";
 import { apiFetch } from "./fetcher";
 import { queryKeys } from "./keys";
 
@@ -52,6 +54,25 @@ export function useChangePassword() {
   });
 }
 
+/**
+ * An onboarding overlay was closed.
+ *
+ * The exception to the refresh rule above: the overlay has already hidden
+ * itself, and refreshing would reload the whole page to say nothing new —
+ * and when it was closed by pressing what it pointed at, the page is already
+ * on its way somewhere else.
+ * `keepalive` so the write survives the user navigating straight away.
+ */
+export function useMarkTutorialSeen(tutorial: TutorialId) {
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<void>(`/api/account/tutorial/${tutorial}`, {
+        method: "POST",
+        keepalive: true,
+      }),
+  });
+}
+
 export function useRevokeSession() {
   const router = useRouter();
 
@@ -71,5 +92,19 @@ export function useRevokeOtherSessions() {
     mutationFn: () =>
       apiFetch<{ signedOut: number }>("/api/account/sessions", { method: "DELETE" }),
     onSuccess: () => router.refresh(),
+  });
+}
+
+/**
+ * A bug report or support request, mailed to support. Another exception to the
+ * refresh rule: it changes nothing any page renders.
+ */
+export function useSendSupportRequest() {
+  return useMutation({
+    mutationFn: (input: SupportRequestInput) =>
+      apiFetch<void>("/api/account/support", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
   });
 }

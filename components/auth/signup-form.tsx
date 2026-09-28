@@ -8,10 +8,10 @@ import { useForm } from "react-hook-form";
 import { AuthDivider } from "@/components/auth/auth-divider";
 import { GoogleButton } from "@/components/auth/google-button";
 import { LegalConsentNotice } from "@/components/brand/legal-consent-notice";
-import { ErrorMessage } from "@/components/ui/error-message";
 import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
 import { useSignup } from "@/lib/query/auth";
 import { applyFieldErrors } from "@/lib/query/form-errors";
+import { toastProblem } from "@/lib/query/toast-error";
 import { signupSchema, type SignupInput } from "@/lib/validation/auth.schema";
 
 export function SignupForm() {
@@ -22,7 +22,7 @@ export function SignupForm() {
     control,
     handleSubmit,
     setError,
-    formState: { errors, isSubmitting },
+    formState: { isSubmitting },
   } = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
     defaultValues: { name: "", email: "", password: "" },
@@ -48,11 +48,13 @@ export function SignupForm() {
       router.replace("/verify-email?status=sent");
       router.refresh();
     } catch (error) {
-      applyFieldErrors(error, setError);
+      // The login form's rule: what just failed is a toast, and a field-level
+      // 422 (a throwaway address, a taken one) still lands on its field.
+      if (!applyFieldErrors(error, setError)) {
+        toastProblem("Couldn't create your account", error);
+      }
     }
   });
-
-  const hasFieldError = Boolean(errors.name || errors.email || errors.password);
 
   return (
     <div className="space-y-5">
@@ -65,8 +67,6 @@ export function SignupForm() {
       <AuthDivider />
 
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        {signup.error && !hasFieldError ? <ErrorMessage error={signup.error} /> : null}
-
         <FormTextField
           control={control}
           name="name"

@@ -1,7 +1,8 @@
 "use client";
 
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import type { Group } from "@/lib/repositories/types";
 
 /**
@@ -36,33 +37,29 @@ export function UngroupDialog({
   onClose: () => void;
 }) {
   return (
-    <Modal.Backdrop
+    <ResponsiveDialog
       isOpen={group !== null}
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose();
       }}
+      dialogClassName="sm:max-w-[400px]"
     >
-      <Modal.Container>
-        <Modal.Dialog className="sm:max-w-[400px]">
-          <Modal.CloseTrigger />
-          <Modal.Header>
-            <Modal.Heading>Ungroup {group?.name}?</Modal.Heading>
-          </Modal.Header>
-          <Modal.Body>
-            <p className="text-sm text-muted">
-              The locations and shapes in it move back to the main list. Only the
-              grouping goes, and nothing on the published map changes.
-            </p>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button slot="close" variant="tertiary">
-              Cancel
-            </Button>
-            {/* The name holds from the row's button through to here (§8). */}
-            <Button onPress={onConfirm}>Ungroup</Button>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Ungroup {group?.name}?</ResponsiveDialog.Heading>
+      </ResponsiveDialog.Header>
+      <ResponsiveDialog.Body>
+        <p className="text-sm text-muted">
+          The locations and shapes in it move back to the main list. Only the
+          grouping goes, and nothing on the published map changes.
+        </p>
+      </ResponsiveDialog.Body>
+      <ResponsiveDialog.Footer>
+        <Button slot="close" variant="tertiary">
+          Cancel
+        </Button>
+        {/* The name holds from the row's button through to here (§8). */}
+        <Button onPress={onConfirm}>Ungroup</Button>
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { ErrorMessage } from "@/components/ui/error-message";
 import type { Shape } from "@/lib/repositories/types";
 
@@ -29,36 +30,32 @@ export function DeleteShapeDialog({
   onClose: () => void;
 }) {
   return (
-    <Modal.Backdrop
+    <ResponsiveDialog
       isOpen={shape !== null}
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose();
       }}
+      dialogClassName="sm:max-w-[400px]"
     >
-      <Modal.Container>
-        <Modal.Dialog className="sm:max-w-[400px]">
-          <Modal.CloseTrigger />
-          <Modal.Header>
-            <Modal.Heading>Delete {shape?.name}?</Modal.Heading>
-          </Modal.Header>
-          <Modal.Body className="space-y-3">
-            <p className="text-sm text-muted">
-              This removes the shape from the map, and it can&apos;t be brought
-              back. If the map is published, it stays visible to visitors until
-              you publish again.
-            </p>
-            {error ? <ErrorMessage error={error} /> : null}
-          </Modal.Body>
-          <Modal.Footer>
-            <Button slot="close" variant="tertiary">
-              Keep it
-            </Button>
-            <Button variant="danger" isPending={isDeleting} onPress={onConfirm}>
-              Delete shape
-            </Button>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Delete {shape?.name}?</ResponsiveDialog.Heading>
+      </ResponsiveDialog.Header>
+      <ResponsiveDialog.Body className="space-y-3">
+        <p className="text-sm text-muted">
+          This removes the shape from the map, and it can&apos;t be brought
+          back. If the map is published, it stays visible to visitors until
+          you publish again.
+        </p>
+        {error ? <ErrorMessage error={error} /> : null}
+      </ResponsiveDialog.Body>
+      <ResponsiveDialog.Footer>
+        <Button slot="close" variant="tertiary">
+          Keep it
+        </Button>
+        <Button variant="danger" isPending={isDeleting} onPress={onConfirm}>
+          Delete shape
+        </Button>
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 }

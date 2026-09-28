@@ -18,6 +18,8 @@ export type NavItem = {
    * somebody who was mid-task and makes Back the only way home.
    */
   newTab?: boolean;
+  /** What the onboarding overlays find this row by (`data-tutorial`). */
+  tutorialTarget?: string;
 };
 
 /**
@@ -39,11 +41,12 @@ export function SidebarNavItem({
   /** Closes the mobile drawer once a destination is chosen. */
   onNavigate?: () => void;
 }) {
-  const { icon: Icon, label, href, newTab } = item;
+  const { icon: Icon, label, href, newTab, tutorialTarget } = item;
 
   return (
     <Link
       href={href}
+      data-tutorial={tutorialTarget}
       onClick={onNavigate}
       target={newTab ? "_blank" : undefined}
       rel={newTab ? "noreferrer" : undefined}

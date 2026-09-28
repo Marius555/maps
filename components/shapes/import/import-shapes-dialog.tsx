@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { useState } from "react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { formatCount } from "@/lib/format/number";
 import { MAX_SOURCE_BYTES, formatMb } from "@/lib/import/limits";
@@ -173,65 +174,61 @@ export function ImportShapesDialog({
   };
 
   return (
-    <Modal.Backdrop
+    <ResponsiveDialog
       isOpen={isOpen}
       onOpenChange={(open) => {
         if (open) return;
         reset();
         onClose();
       }}
+      dialogClassName="sm:max-w-[520px]"
     >
-      <Modal.Container>
-        <Modal.Dialog className="sm:max-w-[520px]">
-          <Modal.CloseTrigger />
-          <Modal.Header>
-            <Modal.Heading>Import shapes</Modal.Heading>
-          </Modal.Header>
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Import shapes</ResponsiveDialog.Heading>
+      </ResponsiveDialog.Header>
 
-          <Modal.Body className="space-y-3">
-            {parsed ? (
-              <>
-                {fileName ? (
-                  <p className="truncate text-xs text-muted">{fileName}</p>
-                ) : null}
-                <ImportPreview
-                  parsed={parsed}
-                  headroom={headroom}
-                  onSwapAxis={swapAxis}
-                />
-              </>
-            ) : (
-              <ShapeFileDrop isBusy={isReading} onPick={(file) => void pick(file)} />
-            )}
+      <ResponsiveDialog.Body className="space-y-3">
+        {parsed ? (
+          <>
+            {fileName ? (
+              <p className="truncate text-xs text-muted">{fileName}</p>
+            ) : null}
+            <ImportPreview
+              parsed={parsed}
+              headroom={headroom}
+              onSwapAxis={swapAxis}
+            />
+          </>
+        ) : (
+          <ShapeFileDrop isBusy={isReading} onPick={(file) => void pick(file)} />
+        )}
 
-            {readError ? <ErrorMessage error={readError} /> : null}
-            {bulkCreate.error ? <ErrorMessage error={bulkCreate.error} /> : null}
-          </Modal.Body>
+        {readError ? <ErrorMessage error={readError} /> : null}
+        {bulkCreate.error ? <ErrorMessage error={bulkCreate.error} /> : null}
+      </ResponsiveDialog.Body>
 
-          <Modal.Footer>
-            {parsed ? (
-              <>
-                <Button variant="tertiary" onPress={reset}>
-                  Choose another file
-                </Button>
-                <Button
-                  isPending={bulkCreate.isPending}
-                  isDisabled={overflows}
-                  onPress={() => void confirm()}
-                >
-                  {/* The count on the button, as everywhere else here: it is the
-                      last thing read before the press. */}
-                  Import {formatCount(parsed.shapes.length)}
-                </Button>
-              </>
-            ) : (
-              <Button slot="close" variant="tertiary">
-                Cancel
-              </Button>
-            )}
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+      <ResponsiveDialog.Footer>
+        {parsed ? (
+          <>
+            <Button variant="tertiary" onPress={reset}>
+              Choose another file
+            </Button>
+            <Button
+              isPending={bulkCreate.isPending}
+              isDisabled={overflows}
+              onPress={() => void confirm()}
+            >
+              {/* The count on the button, as everywhere else here: it is the
+                  last thing read before the press. */}
+              Import {formatCount(parsed.shapes.length)}
+            </Button>
+          </>
+        ) : (
+          <Button slot="close" variant="tertiary">
+            Cancel
+          </Button>
+        )}
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 }

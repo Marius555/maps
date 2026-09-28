@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { useState } from "react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { PinField } from "@/components/places/place-form/pin-field";
 import { formatCount } from "@/lib/format/number";
 import type { Group } from "@/lib/repositories/types";
@@ -56,42 +57,38 @@ export function GroupPinDialog({
   const [icon, setIcon] = useState("");
 
   return (
-    <Modal.Backdrop
+    <ResponsiveDialog
       isOpen={group !== null}
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose();
       }}
+      dialogClassName="sm:max-w-[480px]"
     >
-      <Modal.Container>
-        <Modal.Dialog className="sm:max-w-[480px]">
-          <Modal.CloseTrigger />
-          <Modal.Header>
-            <Modal.Heading>Pin for {group?.name}</Modal.Heading>
-          </Modal.Header>
-          <Modal.Body className="space-y-4">
-            <p className="text-sm text-muted">
-              Every location in this group gets this pin —{" "}
-              {formatCount(places)}{" "}
-              {places === 1 ? "location" : "locations"}. Any that should differ
-              can be changed one at a time afterwards.
-            </p>
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Pin for {group?.name}</ResponsiveDialog.Heading>
+      </ResponsiveDialog.Header>
+      <ResponsiveDialog.Body className="space-y-4">
+        <p className="text-sm text-muted">
+          Every location in this group gets this pin —{" "}
+          {formatCount(places)}{" "}
+          {places === 1 ? "location" : "locations"}. Any that should differ
+          can be changed one at a time afterwards.
+        </p>
 
-            <PinField
-              key={group?.id}
-              value={icon}
-              pinIcons={pinIcons}
-              onChange={setIcon}
-            />
-          </Modal.Body>
-          <Modal.Footer>
-            <Button slot="close" variant="tertiary">
-              Cancel
-            </Button>
-            {/* The name holds from the row's menu through to the toast (§8). */}
-            <Button onPress={() => onConfirm(icon)}>Change pins</Button>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+        <PinField
+          key={group?.id}
+          value={icon}
+          pinIcons={pinIcons}
+          onChange={setIcon}
+        />
+      </ResponsiveDialog.Body>
+      <ResponsiveDialog.Footer>
+        <Button slot="close" variant="tertiary">
+          Cancel
+        </Button>
+        {/* The name holds from the row's menu through to the toast (§8). */}
+        <Button onPress={() => onConfirm(icon)}>Change pins</Button>
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 }

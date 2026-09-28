@@ -5,6 +5,16 @@ rewritten; it is the record of why this area is shaped as it is.
 
 ## Invariants
 
+### Dialogs
+
+- **Every dialog goes through `ResponsiveDialog`** (`components/ui/responsive-dialog/`),
+  never `Modal` directly: a centred modal from `sm` up, a bottom drawer with a grab bar
+  and drag-to-dismiss below it. Write the inside with `ResponsiveDialog.Header /
+  Heading / Body / Footer`, which render the matching Modal or Drawer part from
+  context. A `<form>` wrapping Body and Footer needs `flex min-h-0 flex-1 flex-col`, or
+  the sheet's body cannot scroll. The pin studio and Edit location keep their own
+  hand-made switch, because their sheets have tuned heights.
+
 ### App shell
 
 - **`<main>` in `app-shell.tsx` is `relative`, and must stay so.** It is the dashboard's

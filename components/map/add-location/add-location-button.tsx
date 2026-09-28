@@ -143,7 +143,11 @@ export function AddLocationButton({
        * for the pin to land, and carrying one across the map to be refused is
        * the gesture this greying exists to stop.
        */}
-      <span {...(isFull ? {} : dragProps(""))} className="inline-flex">
+      <span
+        {...(isFull ? {} : dragProps(""))}
+        data-tutorial="add-location"
+        className="inline-flex"
+      >
         <Button
           size="sm"
           variant={isAdding ? "primary" : "tertiary"}

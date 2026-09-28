@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { useState } from "react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { SelectControl, type SelectOption } from "@/components/ui/select-control";
 import type { HeaderRowChoice } from "@/lib/import/table";
 
@@ -62,7 +63,7 @@ export function HeaderRowDialog({
   };
 
   return (
-    <Modal.Backdrop
+    <ResponsiveDialog
       isOpen={isOpen}
       onOpenChange={(open) => {
         // Reopening shows what's actually in use, not the last thing that was
@@ -71,36 +72,31 @@ export function HeaderRowDialog({
         onOpenChange(open);
       }}
     >
-      <Modal.Container>
-        <Modal.Dialog>
-          <Modal.CloseTrigger />
-          <Modal.Header>
-            <Modal.Heading>Which row has your column names?</Modal.Heading>
-          </Modal.Header>
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Which row has your column names?</ResponsiveDialog.Heading>
+      </ResponsiveDialog.Header>
 
-          <Modal.Body className="space-y-4">
-            <p className="text-xs text-muted">
-              We picked the row that best explains the data under it. Anything
-              above the row you choose is ignored.
-            </p>
+      <ResponsiveDialog.Body className="space-y-4">
+        <p className="text-xs text-muted">
+          We picked the row that best explains the data under it. Anything
+          above the row you choose is ignored.
+        </p>
 
-            <SelectControl
-              label="Column names are in"
-              options={options}
-              value={selected}
-              onChange={setSelected}
-            />
-          </Modal.Body>
+        <SelectControl
+          label="Column names are in"
+          options={options}
+          value={selected}
+          onChange={setSelected}
+        />
+      </ResponsiveDialog.Body>
 
-          <Modal.Footer>
-            <Button slot="close" variant="secondary">
-              Cancel
-            </Button>
-            <Button onPress={apply}>Use this row</Button>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+      <ResponsiveDialog.Footer>
+        <Button slot="close" variant="secondary">
+          Cancel
+        </Button>
+        <Button onPress={apply}>Use this row</Button>
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 }
 

@@ -54,6 +54,8 @@ export type SendEmailInput = {
   subject: string;
   html: string;
   text: string;
+  /** Where a reply goes, when that is not us — a bug report answers its reporter. */
+  replyTo?: string;
 };
 
 export async function sendEmail({
@@ -61,6 +63,7 @@ export async function sendEmail({
   subject,
   html,
   text,
+  replyTo,
 }: SendEmailInput): Promise<{ sent: boolean }> {
   const resend = getClient();
   if (!resend) return { sent: false };
@@ -75,6 +78,7 @@ export async function sendEmail({
       subject,
       html,
       text,
+      ...(replyTo ? { replyTo } : {}),
     });
 
     if (error) {

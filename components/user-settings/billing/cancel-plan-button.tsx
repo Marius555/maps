@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, Modal, toast } from "@heroui/react";
+import { Button, toast } from "@heroui/react";
 import { useState } from "react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { formatDate } from "@/lib/format/date";
 import { useCancelPlan } from "@/lib/query/billing";
 import { toastError } from "@/lib/query/toast-error";
@@ -38,51 +39,51 @@ export function CancelPlanButton({
         Cancel plan
       </Button>
 
-      <Modal.Backdrop isOpen={isOpen} onOpenChange={setIsOpen} className="steady">
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[420px]">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading>Cancel your {planName} plan?</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body className="space-y-3 text-sm text-muted">
-              <p>
-                You keep {planName} until {until}, and nothing more is charged after
-                that. Then the account moves to Free.
-              </p>
-              <p>
-                Your maps and locations stay, and published maps keep working. You
-                can resume any time before {until}.
-              </p>
-            </Modal.Body>
-            <Modal.Footer className="flex-wrap">
-              <Button slot="close" variant="tertiary">
-                Keep {planName}
-              </Button>
-              <Button
-                variant="danger"
-                isPending={cancelPlan.isPending}
-                onPress={() =>
-                  cancelPlan.mutate(undefined, {
-                    onSuccess: ({ endsAt }) => {
-                      setIsOpen(false);
-                      toast.success("Plan cancelled", {
-                        description: `You keep ${planName} until ${endsAt ? formatDate(endsAt) : until}.`,
-                      });
-                    },
-                    onError: (error) => {
-                      if (isEmailUnverified(error)) return;
-                      toastError(error, "Couldn't cancel your plan");
-                    },
-                  })
-                }
-              >
-                Cancel plan
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
+      <ResponsiveDialog
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+        className="steady"
+        dialogClassName="sm:max-w-[420px]"
+      >
+        <ResponsiveDialog.Header>
+          <ResponsiveDialog.Heading>Cancel your {planName} plan?</ResponsiveDialog.Heading>
+        </ResponsiveDialog.Header>
+        <ResponsiveDialog.Body className="space-y-3 text-sm text-muted">
+          <p>
+            You keep {planName} until {until}, and nothing more is charged after
+            that. Then the account moves to Free.
+          </p>
+          <p>
+            Your maps and locations stay, and published maps keep working. You
+            can resume any time before {until}.
+          </p>
+        </ResponsiveDialog.Body>
+        <ResponsiveDialog.Footer className="flex-wrap">
+          <Button slot="close" variant="tertiary">
+            Keep {planName}
+          </Button>
+          <Button
+            variant="danger"
+            isPending={cancelPlan.isPending}
+            onPress={() =>
+              cancelPlan.mutate(undefined, {
+                onSuccess: ({ endsAt }) => {
+                  setIsOpen(false);
+                  toast.success("Plan cancelled", {
+                    description: `You keep ${planName} until ${endsAt ? formatDate(endsAt) : until}.`,
+                  });
+                },
+                onError: (error) => {
+                  if (isEmailUnverified(error)) return;
+                  toastError(error, "Couldn't cancel your plan");
+                },
+              })
+            }
+          >
+            Cancel plan
+          </Button>
+        </ResponsiveDialog.Footer>
+      </ResponsiveDialog>
     </>
   );
 }

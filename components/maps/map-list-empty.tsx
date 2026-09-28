@@ -10,6 +10,9 @@ export function MapListEmpty() {
       title="No maps yet"
       description="Create a map, then drop your first location on it or import a spreadsheet."
       action={<CreateMapDialog align="center" />}
+      // The page is the surface here; a grey panel on it read as a disabled
+      // block rather than an invitation.
+      surface={false}
     />
   );
 }

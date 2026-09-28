@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { useId, useState } from "react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { PinImageField } from "@/components/map/pin-studio/pin-image-field";
 import { ControlNote } from "@/components/ui/control-note";
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -59,62 +60,59 @@ export function ClusterIconDialog({
   };
 
   return (
-    <Modal.Backdrop
+    <ResponsiveDialog
       isOpen={isOpen}
       onOpenChange={(open) => {
         if (open) return;
         setProblem(null);
         onClose();
       }}
+      scroll="inside"
+      dialogClassName="sm:max-w-[520px]"
     >
-      <Modal.Container scroll="inside">
-        <Modal.Dialog className="sm:max-w-[520px]">
-          <Modal.CloseTrigger />
-          <Modal.Header>
-            <Modal.Heading>Cluster icon</Modal.Heading>
-          </Modal.Header>
-          <Modal.Body className="space-y-4">
-            <p className="text-sm text-muted">
-              When the map is zoomed out, nearby locations merge into one marker
-              showing how many it holds. Choose what that marker looks like.
-            </p>
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Cluster icon</ResponsiveDialog.Heading>
+      </ResponsiveDialog.Header>
+      <ResponsiveDialog.Body className="space-y-4">
+        <p className="text-sm text-muted">
+          When the map is zoomed out, nearby locations merge into one marker
+          showing how many it holds. Choose what that marker looks like.
+        </p>
 
-            {isClustering ? null : (
-              <ControlNote id={noteId}>
-                Clustering is off on this map, so visitors see every pin. Turn it
-                on under Publish → Map controls.
-              </ControlNote>
-            )}
+        {isClustering ? null : (
+          <ControlNote id={noteId}>
+            Clustering is off on this map, so visitors see every pin. Turn it
+            on under Publish → Map controls.
+          </ControlNote>
+        )}
 
-            <ClusterIconPreview value={map.clusterIcon} pinIcons={map.pinIcons} />
+        <ClusterIconPreview value={map.clusterIcon} pinIcons={map.pinIcons} />
 
-            <ClusterIconPicker
-              value={map.clusterIcon}
-              pinIcons={map.pinIcons}
-              onChange={choose}
+        <ClusterIconPicker
+          value={map.clusterIcon}
+          pinIcons={map.pinIcons}
+          onChange={choose}
+        />
+      </ResponsiveDialog.Body>
+      <ResponsiveDialog.Footer>
+        <div className="flex w-full flex-col gap-2">
+          {problem ? <ErrorMessage error={problem} /> : null}
+
+          <div className="flex items-center gap-2">
+            <PinImageField
+              hasImage={hasImage}
+              onChange={(next) => {
+                if (next) choose(next);
+              }}
+              onProblem={setProblem}
             />
-          </Modal.Body>
-          <Modal.Footer>
-            <div className="flex w-full flex-col gap-2">
-              {problem ? <ErrorMessage error={problem} /> : null}
 
-              <div className="flex items-center gap-2">
-                <PinImageField
-                  hasImage={hasImage}
-                  onChange={(next) => {
-                    if (next) choose(next);
-                  }}
-                  onProblem={setProblem}
-                />
-
-                <Button slot="close" className="ms-auto">
-                  Done
-                </Button>
-              </div>
-            </div>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+            <Button slot="close" className="ms-auto">
+              Done
+            </Button>
+          </div>
+        </div>
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 }

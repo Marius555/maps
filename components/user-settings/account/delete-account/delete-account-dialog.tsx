@@ -1,9 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { useForm, useWatch } from "react-hook-form";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { FormTextField } from "@/components/ui/form-field";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { toastError } from "@/lib/query/toast-error";
@@ -71,7 +72,7 @@ export function DeleteAccountDialog({
     mapCount === 0 ? "Your account" : mapCount === 1 ? "Your map" : `All ${String(mapCount)} of your maps`;
 
   return (
-    <Modal.Backdrop
+    <ResponsiveDialog
       isOpen={isOpen}
       onOpenChange={(next) => {
         if (!busy) onOpenChange(next);
@@ -79,83 +80,80 @@ export function DeleteAccountDialog({
       isDismissable={!busy}
       isKeyboardDismissDisabled={busy}
       className="steady"
+      dialogClassName="sm:max-w-[440px]"
+      showCloseTrigger={!busy}
     >
-      <Modal.Container>
-        <Modal.Dialog className="sm:max-w-[440px]">
-          {busy ? null : <Modal.CloseTrigger />}
-          <Modal.Header>
-            <Modal.Heading>Delete your account?</Modal.Heading>
-          </Modal.Header>
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Delete your account?</ResponsiveDialog.Heading>
+      </ResponsiveDialog.Header>
 
-          <form onSubmit={onSubmit} noValidate>
-            <Modal.Body className="space-y-4">
-              <div className="space-y-2 text-sm text-muted">
-                <p>
-                  {maps}, every location and photo on them, and their analytics are
-                  deleted for good. Maps embedded on your websites stop working.
-                </p>
-                <p>
-                  Any subscription is cancelled first, so nothing more is charged.
-                  This can&apos;t be undone.
-                </p>
-              </div>
+      <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
+        <ResponsiveDialog.Body className="space-y-4">
+          <div className="space-y-2 text-sm text-muted">
+            <p>
+              {maps}, every location and photo on them, and their analytics are
+              deleted for good. Maps embedded on your websites stop working.
+            </p>
+            <p>
+              Any subscription is cancelled first, so nothing more is charged.
+              This can&apos;t be undone.
+            </p>
+          </div>
 
-              <div className="min-h-[6.25rem]">
-                {phase.kind === "deleting" ? (
-                  <DeletionProgress total={phase.total} left={phase.left} />
-                ) : phase.kind === "done" ? (
-                  <p className="text-sm text-muted" aria-live="polite">
-                    Account deleted. Taking you to the home page…
-                  </p>
-                ) : phase.kind === "failed" ? (
-                  <p className="text-sm text-danger" role="alert">
-                    {phase.message}
-                  </p>
-                ) : (
-                  <FormTextField
-                    control={control}
-                    name="email"
-                    type="email"
-                    label="Your email address"
-                    autoComplete="off"
-                    description={`Type ${email} to confirm.`}
-                    isDisabled={phase.kind === "starting"}
-                  />
-                )}
-              </div>
-            </Modal.Body>
+          <div className="min-h-[6.25rem]">
+            {phase.kind === "deleting" ? (
+              <DeletionProgress total={phase.total} left={phase.left} />
+            ) : phase.kind === "done" ? (
+              <p className="text-sm text-muted" aria-live="polite">
+                Account deleted. Taking you to the home page…
+              </p>
+            ) : phase.kind === "failed" ? (
+              <p className="text-sm text-danger" role="alert">
+                {phase.message}
+              </p>
+            ) : (
+              <FormTextField
+                control={control}
+                name="email"
+                type="email"
+                label="Your email address"
+                autoComplete="off"
+                description={`Type ${email} to confirm.`}
+                isDisabled={phase.kind === "starting"}
+              />
+            )}
+          </div>
+        </ResponsiveDialog.Body>
 
-            {/* Wraps below ~360px, where "Keep account" and "Delete account"
-                side by side are wider than the dialog. */}
-            <Modal.Footer className="flex-wrap">
-              {phase.kind === "failed" && phase.confirmed ? (
-                <>
-                  <Button slot="close" variant="tertiary">
-                    Close
-                  </Button>
-                  <Button type="button" variant="danger" onPress={resume}>
-                    Try again
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button slot="close" variant="tertiary" isDisabled={busy}>
-                    Keep account
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="danger"
-                    isDisabled={!matches || (busy && phase.kind !== "starting")}
-                    isPending={isSubmitting || phase.kind === "starting" || phase.kind === "deleting"}
-                  >
-                    Delete account
-                  </Button>
-                </>
-              )}
-            </Modal.Footer>
-          </form>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+        {/* Wraps below ~360px, where "Keep account" and "Delete account"
+            side by side are wider than the dialog. */}
+        <ResponsiveDialog.Footer className="flex-wrap">
+          {phase.kind === "failed" && phase.confirmed ? (
+            <>
+              <Button slot="close" variant="tertiary">
+                Close
+              </Button>
+              <Button type="button" variant="danger" onPress={resume}>
+                Try again
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button slot="close" variant="tertiary" isDisabled={busy}>
+                Keep account
+              </Button>
+              <Button
+                type="submit"
+                variant="danger"
+                isDisabled={!matches || (busy && phase.kind !== "starting")}
+                isPending={isSubmitting || phase.kind === "starting" || phase.kind === "deleting"}
+              >
+                Delete account
+              </Button>
+            </>
+          )}
+        </ResponsiveDialog.Footer>
+      </form>
+    </ResponsiveDialog>
   );
 }

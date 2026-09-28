@@ -1,7 +1,7 @@
 "use client";
 
-import { Modal } from "@heroui/react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import type { AppMap, Group, Place, Shape } from "@/lib/repositories/types";
 import { EmbedPreview } from "./embed-preview";
 
@@ -28,30 +28,28 @@ export function PreviewDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   return (
-    <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
-      <Modal.Container>
-        <Modal.Dialog className="sm:max-w-3xl">
-          <Modal.CloseTrigger />
+    <ResponsiveDialog
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      dialogClassName="sm:max-w-3xl"
+    >
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Preview</ResponsiveDialog.Heading>
+        <p className="text-xs text-muted">
+          Your locations as they are right now, in the real embed. Publish to
+          put this on your site.
+        </p>
+      </ResponsiveDialog.Header>
 
-          <Modal.Header>
-            <Modal.Heading>Preview</Modal.Heading>
-            <p className="text-xs text-muted">
-              Your locations as they are right now, in the real embed. Publish to
-              put this on your site.
-            </p>
-          </Modal.Header>
-
-          <Modal.Body>
-            <EmbedPreview
-              map={map}
-              places={places}
-              shapes={shapes}
-              groups={groups}
-              className="h-[60dvh] min-h-64"
-            />
-          </Modal.Body>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+      <ResponsiveDialog.Body>
+        <EmbedPreview
+          map={map}
+          places={places}
+          shapes={shapes}
+          groups={groups}
+          className="h-[60dvh] min-h-64"
+        />
+      </ResponsiveDialog.Body>
+    </ResponsiveDialog>
   );
 }

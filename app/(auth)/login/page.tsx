@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginForm } from "@/components/auth/login-form";
@@ -14,17 +13,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
   const { next } = await props.searchParams;
 
   return (
-    <AuthShell
-      title="Log in"
-      footer={
-        <>
-          No account yet?{" "}
-          <Link href="/signup" className="text-foreground underline">
-            Sign up
-          </Link>
-        </>
-      }
-    >
+    <AuthShell title="Log in">
       <LoginForm redirectTo={safeRedirect(next)} />
     </AuthShell>
   );

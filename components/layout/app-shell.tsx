@@ -1,5 +1,7 @@
+import { TutorialRouteWatcher } from "@/components/onboarding/tutorial-route-watcher";
 import { VerifyEmailBanner } from "@/components/verify-email/verify-email-banner";
 import type { AuthUser } from "@/lib/auth/types";
+import type { TutorialId } from "@/lib/onboarding/tutorials";
 import type { PlanId } from "@/lib/repositories/plan-limits";
 import { MobileHeader } from "./mobile-header";
 import { MobileHeaderSlotProvider } from "./mobile-header-slot";
@@ -58,12 +60,15 @@ export function AppShell({
   plan,
   defaultCollapsed,
   defaultMapId,
+  tutorials,
   children,
 }: {
   user: AuthUser;
   plan: PlanId;
   defaultCollapsed: boolean;
   defaultMapId: string | null;
+  /** The onboarding overlays this account has not closed yet. */
+  tutorials: readonly TutorialId[];
   children: React.ReactNode;
 }) {
   return (
@@ -88,6 +93,10 @@ export function AppShell({
           </div>
         </MobileHeaderSlotProvider>
       </div>
+
+      {/* In the shell because "back from the card designer" can land on any
+          page, and the shell is the one thing that sees every navigation. */}
+      <TutorialRouteWatcher pending={tutorials} />
     </SidebarProvider>
   );
 }

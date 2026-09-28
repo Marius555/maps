@@ -1,7 +1,8 @@
 "use client";
 
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { formatCount } from "@/lib/format/number";
 import type { Group } from "@/lib/repositories/types";
@@ -47,46 +48,42 @@ export function DeleteGroupDialog({
   const total = places + shapes;
 
   return (
-    <Modal.Backdrop
+    <ResponsiveDialog
       isOpen={group !== null}
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose();
       }}
+      dialogClassName="sm:max-w-[400px]"
     >
-      <Modal.Container>
-        <Modal.Dialog className="sm:max-w-[400px]">
-          <Modal.CloseTrigger />
-          <Modal.Header>
-            <Modal.Heading>Delete {group?.name} and its contents?</Modal.Heading>
-          </Modal.Header>
-          <Modal.Body className="space-y-3">
-            <p className="text-sm text-muted">
-              {contentsSentence(places, shapes)} This can&rsquo;t be undone.
-            </p>
-            {/* The same caveat every delete here carries. A map stays as it was
-                published until it is published again, and someone who deletes
-                forty locations and then checks their website needs to know that
-                before they conclude nothing happened. */}
-            <p className="text-sm text-muted">
-              If the map is published, they stay visible to visitors until you
-              publish again.
-            </p>
-            {error ? <ErrorMessage error={error} /> : null}
-          </Modal.Body>
-          <Modal.Footer>
-            <Button slot="close" variant="tertiary">
-              Keep them
-            </Button>
-            <Button variant="danger" isPending={isDeleting} onPress={onConfirm}>
-              {/* The count rides onto the button itself: it is the last thing
-                  read before the press, and "Delete 49" is a much harder thing
-                  to press by accident than "Delete". */}
-              {total > 0 ? `Delete ${formatCount(total)}` : "Delete group"}
-            </Button>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Delete {group?.name} and its contents?</ResponsiveDialog.Heading>
+      </ResponsiveDialog.Header>
+      <ResponsiveDialog.Body className="space-y-3">
+        <p className="text-sm text-muted">
+          {contentsSentence(places, shapes)} This can&rsquo;t be undone.
+        </p>
+        {/* The same caveat every delete here carries. A map stays as it was
+            published until it is published again, and someone who deletes
+            forty locations and then checks their website needs to know that
+            before they conclude nothing happened. */}
+        <p className="text-sm text-muted">
+          If the map is published, they stay visible to visitors until you
+          publish again.
+        </p>
+        {error ? <ErrorMessage error={error} /> : null}
+      </ResponsiveDialog.Body>
+      <ResponsiveDialog.Footer>
+        <Button slot="close" variant="tertiary">
+          Keep them
+        </Button>
+        <Button variant="danger" isPending={isDeleting} onPress={onConfirm}>
+          {/* The count rides onto the button itself: it is the last thing
+              read before the press, and "Delete 49" is a much harder thing
+              to press by accident than "Delete". */}
+          {total > 0 ? `Delete ${formatCount(total)}` : "Delete group"}
+        </Button>
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 }
 

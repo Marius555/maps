@@ -1,7 +1,7 @@
 "use client";
 
-import { Modal } from "@heroui/react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import type { Group } from "@/lib/repositories/types";
 import { GroupForm } from "./group-form";
 
@@ -22,33 +22,29 @@ export function GroupEditDialog({
   onClose: () => void;
 }) {
   return (
-    <Modal.Backdrop
+    <ResponsiveDialog
       isOpen={group !== null}
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose();
       }}
+      dialogClassName="sm:max-w-[420px]"
     >
-      <Modal.Container>
-        <Modal.Dialog className="sm:max-w-[420px]">
-          <Modal.CloseTrigger />
-          <Modal.Header>
-            <Modal.Heading>Edit group</Modal.Heading>
-          </Modal.Header>
-          <Modal.Body>
-            {/* Keyed so switching groups resets the form rather than keeping the
-                previous one's values. */}
-            {group ? (
-              <GroupForm
-                key={group.id}
-                mapId={mapId}
-                group={group}
-                onSaved={onClose}
-                onCancel={onClose}
-              />
-            ) : null}
-          </Modal.Body>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Edit group</ResponsiveDialog.Heading>
+      </ResponsiveDialog.Header>
+      <ResponsiveDialog.Body>
+        {/* Keyed so switching groups resets the form rather than keeping the
+            previous one's values. */}
+        {group ? (
+          <GroupForm
+            key={group.id}
+            mapId={mapId}
+            group={group}
+            onSaved={onClose}
+            onCancel={onClose}
+          />
+        ) : null}
+      </ResponsiveDialog.Body>
+    </ResponsiveDialog>
   );
 }

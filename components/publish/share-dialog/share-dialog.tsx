@@ -1,8 +1,10 @@
 "use client";
 
-import { Button, Modal, Separator } from "@heroui/react";
+import { Button, Separator } from "@heroui/react";
 import { Share2 } from "lucide-react";
+import { useState } from "react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { AllowedDomainsFold } from "../allowed-domains/allowed-domains-fold";
 import { EmbedSnippet } from "../embed-snippet";
@@ -40,59 +42,60 @@ export function ShareDialog({
    */
   isMeasuring: boolean;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+
   return (
-    <Modal>
-      <Button variant="secondary" size="sm" className="w-full">
+    <>
+      <Button variant="secondary" size="sm" className="w-full" onPress={() => setIsOpen(true)}>
         <Share2 aria-hidden="true" className="size-4" />
         Embed code and domains
       </Button>
 
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[36rem]">
-            <Modal.CloseTrigger />
+      <ResponsiveDialog
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+        dialogClassName="sm:max-w-[36rem]"
+      >
 
-            <Modal.Header>
-              <Modal.Heading>Put this map on your site</Modal.Heading>
-            </Modal.Header>
+        <ResponsiveDialog.Header>
+          <ResponsiveDialog.Heading>Put this map on your site</ResponsiveDialog.Heading>
+        </ResponsiveDialog.Header>
 
-            <Modal.Body className="space-y-5">
-              {/*
-               * Only once there is something to paste. Before the first publish
-               * there is no snapshot for a snippet to point at, and a snippet
-               * naming a file that does not exist is a broken map on somebody's
-               * site rather than a head start.
-               */}
-              {map.snapshotUrl ? (
-                <>
-                  <section className="space-y-2">
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Embed code
-                    </h3>
-                    <EmbedSnippet
-                      snapshotUrl={map.snapshotUrl}
-                      isMeasuring={isMeasuring}
-                      tagGroups={map.tagGroups}
-                      places={places}
-                    />
-                  </section>
+        <ResponsiveDialog.Body className="space-y-5">
+          {/*
+           * Only once there is something to paste. Before the first publish
+           * there is no snapshot for a snippet to point at, and a snippet
+           * naming a file that does not exist is a broken map on somebody's
+           * site rather than a head start.
+           */}
+          {map.snapshotUrl ? (
+            <>
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Embed code
+                </h3>
+                <EmbedSnippet
+                  snapshotUrl={map.snapshotUrl}
+                  isMeasuring={isMeasuring}
+                  tagGroups={map.tagGroups}
+                  places={places}
+                />
+              </section>
 
-                  <Separator />
-                </>
-              ) : (
-                <p className="text-pretty text-sm text-muted">
-                  Publish the map once and the embed code you paste into your
-                  site will appear here.
-                </p>
-              )}
+              <Separator />
+            </>
+          ) : (
+            <p className="text-pretty text-sm text-muted">
+              Publish the map once and the embed code you paste into your
+              site will appear here.
+            </p>
+          )}
 
-              {/* Keyed on the map so switching maps re-seeds the list rather
-                  than showing the previous one's saved domains. */}
-              <AllowedDomainsFold key={map.id} map={map} />
-            </Modal.Body>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+          {/* Keyed on the map so switching maps re-seeds the list rather
+              than showing the previous one's saved domains. */}
+          <AllowedDomainsFold key={map.id} map={map} />
+        </ResponsiveDialog.Body>
+      </ResponsiveDialog>
+    </>
   );
 }

@@ -30,12 +30,17 @@ export function MobileHeader({ plan }: { plan: PlanId }) {
 
   return (
     <header className="flex min-h-14 items-center gap-2 px-2 md:hidden">
-      <IconButton
-        label="Open navigation"
-        icon={Menu}
-        placement="bottom"
-        onPress={() => setMobileOpen(true)}
-      />
+      {/* The first-map tutorial points here below `md`, where the Locations
+          link is inside a closed drawer. A wrapper, since the Button's own
+          props are React Aria's to filter. */}
+      <span data-tutorial="nav-menu" className="flex">
+        <IconButton
+          label="Open navigation"
+          icon={Menu}
+          placement="bottom"
+          onPress={() => setMobileOpen(true)}
+        />
+      </span>
       <span className="truncate text-sm font-semibold tracking-tight text-foreground">
         <BrandLogo />
       </span>

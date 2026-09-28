@@ -5,8 +5,9 @@
 
 The person's settings, modelled on claude.ai's: a left column of sections
 (General, Account, Billing, Usage) and the section beside it. It
-replaced `/account`, which is now a redirect to `/settings/billing`, and the
-theme submenu in the account menu.
+replaced `/account`, which is now a redirect to `/settings/billing`. The theme
+is chosen here *and* in a Light / System / Dark row under the email in the
+account menu (`components/layout/user-menu-theme.tsx`) — two pickers, one store.
 
 **No visible heading, full width.** The "Settings" `<h1>` is `sr-only`
 (`PageTitle`), like every other dashboard page — the person pressed Settings to
@@ -39,6 +40,21 @@ columns. Forms that should stay narrow cap themselves (`sm:max-w-md`,
   a copy. `ThemeSync` (always mounted) re-applies it when the OS flips while the
   choice is System, and when another tab writes it. The key's name is load
   bearing: the pre-paint script reads it before React exists.
+- **Every theme picker goes through `theme-choice.ts`.** There are two — this
+  page and the account menu's row — and the menu's is a selectable
+  `Dropdown.Section`, not buttons inside the menu, because React Aria's menu
+  owns focus and anything that is not an item cannot be reached by keyboard.
+- **Report a bug and Contact support are one form, mailed, throttled, and loud
+  on failure.** `POST /api/account/support` (open to unconfirmed accounts) takes
+  a `kind` — `bug` with an area, `support` with a topic — plus a reply address
+  the person chooses (ComboBox: their account address, or another). The mail
+  goes to the support address with that on `replyTo`, and its subject is the
+  triage: `[Support · Pro · Billing] …`, `[Bug · Free · Import] …`. Contact
+  support is refused on Free by `assertPlanFeature(…, "support")` as well as
+  greyed in the menu. One message a minute per account across both kinds,
+  stamped on `prefs.supportRequestedAt` only after the send
+  (`lib/support/throttle.ts`); `{ sent: false }` is a 503, because the mail is
+  the whole action.
 - **The picker shows nothing selected until hydration.** `useThemeChoice` is
   null on the server, by design: the alternative is a guess that is wrong for
   half the visitors, and a hydration mismatch. The selection is a border colour

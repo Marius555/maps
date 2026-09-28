@@ -67,6 +67,8 @@ export type MarketingPlan = {
   analytics: boolean;
   /** Publishes without the "Made with" badge. */
   noBadge: boolean;
+  /** The Contact support form in the account menu. Not drawn as a row yet. */
+  support: boolean;
   /** The one line that is different about this plan, said in the plan's terms. */
   highlight: string;
 };
@@ -86,6 +88,7 @@ export const MARKETING_PLANS: MarketingPlan[] = [
     sheetSync: false,
     analytics: false,
     noBadge: false,
+    support: false,
     highlight: "No card, no trial clock.",
   },
   {
@@ -105,6 +108,7 @@ export const MARKETING_PLANS: MarketingPlan[] = [
     sheetSync: true,
     analytics: true,
     noBadge: true,
+    support: true,
     highlight: "Keep a map in step with a Google Sheet.",
   },
   {
@@ -124,6 +128,7 @@ export const MARKETING_PLANS: MarketingPlan[] = [
     sheetSync: true,
     analytics: true,
     noBadge: true,
+    support: true,
     highlight: "Three thousand locations on one map.",
   },
 ];

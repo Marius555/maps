@@ -114,11 +114,15 @@ export const LOOKUP_LIMITS = {
  * link, which is how a stranger's visitor finds us, and paying removes it. Read
  * at publish (publish.repository.ts) — so a plan change reaches a live map on its
  * next publish, never by itself, which is §7's rule for everything in a snapshot.
+ *
+ * `support` is the Contact support form in the account menu — email support is
+ * what the paid plans promise. Reporting a bug is not gated; see
+ * `lib/support/support-request.ts`.
  */
 export const PLAN_FEATURES = {
-  free: { routes: false, sheetSync: false, analytics: false, noBadge: false },
-  starter: { routes: true, sheetSync: true, analytics: true, noBadge: true },
-  pro: { routes: true, sheetSync: true, analytics: true, noBadge: true },
+  free: { routes: false, sheetSync: false, analytics: false, noBadge: false, support: false },
+  starter: { routes: true, sheetSync: true, analytics: true, noBadge: true, support: true },
+  pro: { routes: true, sheetSync: true, analytics: true, noBadge: true, support: true },
 } as const satisfies Record<PlanId, Record<GatedFeature, boolean>>;
 
 /**

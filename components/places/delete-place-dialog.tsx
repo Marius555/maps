@@ -1,7 +1,8 @@
 "use client";
 
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { ErrorMessage } from "@/components/ui/error-message";
 import type { Place } from "@/lib/repositories/types";
 
@@ -31,35 +32,31 @@ export function DeletePlaceDialog({
   onClose: () => void;
 }) {
   return (
-    <Modal.Backdrop
+    <ResponsiveDialog
       isOpen={place !== null}
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose();
       }}
+      dialogClassName="sm:max-w-[400px]"
     >
-      <Modal.Container>
-        <Modal.Dialog className="sm:max-w-[400px]">
-          <Modal.CloseTrigger />
-          <Modal.Header>
-            <Modal.Heading>Delete {place?.name}?</Modal.Heading>
-          </Modal.Header>
-          <Modal.Body className="space-y-3">
-            <p className="text-sm text-muted">
-              This removes the location from the map. If the map is published,
-              it stays visible to visitors until you publish again.
-            </p>
-            {error ? <ErrorMessage error={error} /> : null}
-          </Modal.Body>
-          <Modal.Footer>
-            <Button slot="close" variant="tertiary">
-              Keep it
-            </Button>
-            <Button variant="danger" isPending={isDeleting} onPress={onConfirm}>
-              Delete location
-            </Button>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Heading>Delete {place?.name}?</ResponsiveDialog.Heading>
+      </ResponsiveDialog.Header>
+      <ResponsiveDialog.Body className="space-y-3">
+        <p className="text-sm text-muted">
+          This removes the location from the map. If the map is published,
+          it stays visible to visitors until you publish again.
+        </p>
+        {error ? <ErrorMessage error={error} /> : null}
+      </ResponsiveDialog.Body>
+      <ResponsiveDialog.Footer>
+        <Button slot="close" variant="tertiary">
+          Keep it
+        </Button>
+        <Button variant="danger" isPending={isDeleting} onPress={onConfirm}>
+          Delete location
+        </Button>
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 }

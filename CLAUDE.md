@@ -230,6 +230,10 @@ one exists: `docs/notes/environment.md`.
   while it is unset; the same value goes on the `sheet-sync-daily` function) and
   `SHEET_SYNC_STEP_MS` (lookup time per sync step, default 5000 — raise only with the site
   timeout).
+- Server-only, optional: `TUTORIAL_ALWAYS_PRESENT` — true draws the onboarding overlays (maps
+  list, editor, card, publish) on every load; unset or false, each until the account closes
+  it once (one user pref per overlay, written on close or on reaching the page it points at,
+  never on show; one on screen at a time). Not production-inert: it bypasses nothing.
 - Server-only, optional: `ANALYTICS_SALT` — salts the anonymous monthly visitor key behind
   unique and returning visitors; unset, derived from `APPWRITE_API_KEY`.
 - Browser-safe, optional: `NEXT_PUBLIC_COLLECT_URL` — where a published map posts what its

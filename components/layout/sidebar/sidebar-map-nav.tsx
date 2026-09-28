@@ -65,11 +65,26 @@ export function SidebarMapNav({
 
   const items: NavItem[] = [
     { href: `/maps/${mapId}`, label: "Map", icon: MapIcon, exact: true },
-    { href: `/maps/${mapId}/places`, label: "Locations", icon: MapPin },
+    {
+      href: `/maps/${mapId}/places`,
+      label: "Locations",
+      icon: MapPin,
+      tutorialTarget: "locations-link",
+    },
     // After Locations, because the card is what a location looks like — you
     // have to have some before designing what they show.
-    { href: `/maps/${mapId}/card`, label: "Card", icon: LayoutTemplate },
-    { href: `/maps/${mapId}/publish`, label: "Publish", icon: Share2 },
+    {
+      href: `/maps/${mapId}/card`,
+      label: "Card",
+      icon: LayoutTemplate,
+      tutorialTarget: "card-link",
+    },
+    {
+      href: `/maps/${mapId}/publish`,
+      label: "Publish",
+      icon: Share2,
+      tutorialTarget: "publish-link",
+    },
     // After Publish, because it reports on the map rather than changing it.
     { href: `/maps/${mapId}/analytics`, label: "Analytics", icon: ChartColumn },
   ];

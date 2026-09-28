@@ -1,9 +1,10 @@
 "use client";
 
-import { Button, Modal } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { PenLine } from "lucide-react";
 import { useState } from "react";
 
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import type { EmbedStrings } from "@/packages/shared/embed-strings";
 import { WordingForm } from "./wording-form";
 
@@ -29,8 +30,8 @@ export function WordingDialog({
   const edited = Object.keys(strings).length;
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={setIsOpen}>
-      <Button variant="secondary" size="sm" className="w-full">
+    <>
+      <Button variant="secondary" size="sm" className="w-full" onPress={() => setIsOpen(true)}>
         <PenLine aria-hidden="true" className="size-4" />
         Edit wording
         {edited > 0 ? (
@@ -41,37 +42,36 @@ export function WordingDialog({
         ) : null}
       </Button>
 
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[32rem]">
-            <Modal.CloseTrigger />
+      <ResponsiveDialog
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+        dialogClassName="sm:max-w-[32rem]"
+      >
 
-            <Modal.Header>
-              <Modal.Heading>Edit wording</Modal.Heading>
-            </Modal.Header>
+        <ResponsiveDialog.Header>
+          <ResponsiveDialog.Heading>Edit wording</ResponsiveDialog.Heading>
+        </ResponsiveDialog.Header>
 
-            <Modal.Body>
-              <p className="mb-5 text-pretty text-sm text-muted">
-                What your visitors read on the map. Publish again to put your
-                changes on your site.
-              </p>
+        <ResponsiveDialog.Body>
+          <p className="mb-5 text-pretty text-sm text-muted">
+            What your visitors read on the map. Publish again to put your
+            changes on your site.
+          </p>
 
-              {/* Keyed so reopening after a language change seeds the form
-                  from that language rather than the one it first opened in. */}
-              <WordingForm
-                key={language}
-                language={language}
-                strings={strings}
-                onCancel={() => setIsOpen(false)}
-                onSave={(next) => {
-                  onSave(next);
-                  setIsOpen(false);
-                }}
-              />
-            </Modal.Body>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+          {/* Keyed so reopening after a language change seeds the form
+              from that language rather than the one it first opened in. */}
+          <WordingForm
+            key={language}
+            language={language}
+            strings={strings}
+            onCancel={() => setIsOpen(false)}
+            onSave={(next) => {
+              onSave(next);
+              setIsOpen(false);
+            }}
+          />
+        </ResponsiveDialog.Body>
+      </ResponsiveDialog>
+    </>
   );
 }

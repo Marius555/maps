@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { MapEditor } from "@/components/editor/map-editor";
+import { EditorTutorials } from "@/components/onboarding/editor-tutorials";
 import { Container } from "@/components/ui/container";
 import { PageTitle } from "@/components/ui/page-title";
 import { requireUser } from "@/lib/auth/current-user";
+import { unseenTutorials } from "@/lib/auth/tutorial";
 import { getCardDesign } from "@/lib/repositories/card-design.repository";
 import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
@@ -72,6 +74,15 @@ export default async function MapEditorPage(props: PageProps<"/maps/[id]">) {
         shapeLimit={data.shapeLimit}
         canDrawRoutes={data.canDrawRoutes}
       />
+
+      {/* Beside the editor rather than inside it: the overlays only read where
+          the toolbar and the sidebar ended up, and need nothing the editor owns
+          beyond the places cache it has already filled. */}
+      <EditorTutorials
+        mapId={data.map.id}
+        editor={data.tutorials.includes("editor")}
+        card={data.tutorials.includes("card")}
+      />
     </Container>
   );
 }
@@ -81,16 +92,19 @@ async function loadEditor(
   mapId: string,
   userId: string,
 ) {
-  const [map, places, shapes, groups, cardDesign, plan] = await Promise.all([
-    loadMap(userId, mapId),
-    listAllPlaces(ctx, mapId),
-    listAllShapes(ctx, mapId),
-    listAllGroups(ctx, mapId),
-    getCardDesign(ctx),
-    getUserPlan(userId),
-  ]);
+  const [map, places, shapes, groups, cardDesign, plan, tutorials] =
+    await Promise.all([
+      loadMap(userId, mapId),
+      listAllPlaces(ctx, mapId),
+      listAllShapes(ctx, mapId),
+      listAllGroups(ctx, mapId),
+      getCardDesign(ctx),
+      getUserPlan(userId),
+      unseenTutorials(userId),
+    ]);
 
   return {
+    tutorials,
     map,
     places,
     shapes,

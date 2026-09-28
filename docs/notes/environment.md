@@ -38,6 +38,25 @@ this is why each one exists.
   "nothing will save" above a dashboard where everything saves. It warns once per process,
   and **it is inert when `NODE_ENV` is `production`**, for the reason above it.
 
+- Optional, server-only: `TUTORIAL_ALWAYS_PRESENT`. Set to `1`/`true`/`yes`, the four
+  onboarding overlays (`components/onboarding/`) are drawn on every load, dismissed or not:
+  the maps list's arrow at Create map; the editor's two at the pin button and Locations on an
+  empty map, or its one at Card once the map has a saved location (the first dropped pin
+  swaps them live, and an import lands on the second); and "Ready to publish?" at Publish,
+  drawn by the dashboard shell on whatever page the owner reaches on leaving `/card`. Unset
+  or `false`, each is drawn until the account closes it once — and the maps list's only while
+  the account has no map and a confirmed address, since it points at a button the email gate
+  greys. "Seen" is one pref per overlay on the Appwrite user (`mapsTutorialSeenAt`,
+  `tutorialSeenAt` — the editor's kept the name it shipped with — `cardTutorialSeenAt`,
+  `publishTutorialSeenAt`), written by `POST /api/account/tutorial/{id}` when the overlay is
+  closed: its X, Escape, or pressing what it points at, and for Card and Publish also
+  reaching that page by any route — **never when it is merely shown**, so somebody who signs
+  up and closes the tab gets it again. Only one overlay is on screen at a time; a second waits
+  for the first to close. On the account rather than in `localStorage` because a new user is
+  the one most likely to come back on another device. Unlike the two flags above it is
+  **not** inert in production: it bypasses nothing, and the overlay it forces can always be
+  closed.
+
 - Optional in code, **required to sell anything**, server-only: `LEMON_API_KEY`,
   `LEMON_STORE_ID`, `LEMON_WEBHOOK_SECRET` and four variant ids —
   `LEMON_VARIANT_STARTER_MONTHLY`, `LEMON_VARIANT_STARTER_YEARLY`,
