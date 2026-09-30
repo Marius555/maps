@@ -165,6 +165,7 @@ export function CardBlockContent({
   const pinColor =
     data.pinColor ??
     resolvePin(place.icon, data.pinIcons)?.color ??
+    (place.color || undefined) ??
     pinColorOfChips(tagChips);
 
   switch (block.type) {

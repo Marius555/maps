@@ -22,6 +22,12 @@ const embedCorsHeaders = [
  
 ];
 
+const adminHeaders = [
+  { key: "Cache-Control", value: "private, no-store" },
+  { key: "X-Robots-Tag", value: "noindex, nofollow" },
+  { key: "X-Frame-Options", value: "DENY" },
+];
+
 const nextConfig: NextConfig = {
   /*
    * Origins the **dev server** will serve its own assets to. Ignored in a
@@ -98,6 +104,15 @@ const nextConfig: NextConfig = {
        * route in the app to cross-origin reads.
        */
       { source: "/api/collect", headers: embedCorsHeaders },
+      /*
+       * The operator console: never cached by anything between us and the
+       * browser, never indexed. The pages set `robots` metadata too; this also
+       * covers the login door and the API routes, which have no metadata.
+       */
+      { source: "/admin", headers: adminHeaders },
+      { source: "/admin/:path*", headers: adminHeaders },
+      { source: "/login/admin", headers: adminHeaders },
+      { source: "/api/admin/:path*", headers: adminHeaders },
     ];
   },
 

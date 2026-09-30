@@ -1,5 +1,6 @@
 import "server-only";
 
+import { countApiCall } from "@/lib/api-usage/counter";
 import { createThrottle } from "@/lib/geocoding/throttle";
 import { serviceUserAgent } from "@/lib/http/user-agent";
 
@@ -133,6 +134,7 @@ export async function geoapifyGet<T>(
 }
 
 async function request<T>(url: URL): Promise<T> {
+  const kind = kindOf(url.pathname);
   let response: Response;
 
   try {
@@ -146,14 +148,29 @@ async function request<T>(url: URL): Promise<T> {
     // DNS failures, refused connections and TLS errors reject as a bare
     // `TypeError: fetch failed`. Wrapped so every upstream failure arrives as one
     // type, with the cause kept so a timeout stays recognisable.
+    countApiCall({ provider: "geoapify", kind, ok: false });
     throw new GeoapifyError("Could not reach Geoapify", undefined, error);
   }
+
+  // Counted per request, retries included — each one is a credit spent.
+  countApiCall({ provider: "geoapify", kind, ok: response.ok });
 
   if (!response.ok) {
     throw new GeoapifyError(`Geoapify returned ${response.status}`, response.status);
   }
 
   return (await response.json()) as T;
+}
+
+/**
+ * Which operator-console bucket a request lands in. The routing adapter's
+ * `nearest` is a reverse geocode here, and is billed as one, so it is counted
+ * as one.
+ */
+function kindOf(path: string): "geocode" | "reverse" | "route" {
+  if (path.startsWith("/v1/routing")) return "route";
+  if (path.startsWith("/v1/geocode/reverse")) return "reverse";
+  return "geocode";
 }
 
 /**

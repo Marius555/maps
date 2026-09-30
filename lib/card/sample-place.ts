@@ -112,6 +112,7 @@ export const SAMPLE_PLACE: Place = Object.freeze({
   geocodeStatus: "manual",
   addressParts: null,
   groupId: "",
+  color: "",
   cardBlocks: {},
   createdAt: "",
   updatedAt: "",

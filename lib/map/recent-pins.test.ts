@@ -35,6 +35,7 @@ function place(icon: string, updatedAt: string): Place {
     geocodeStatus: "manual",
     addressParts: null,
     groupId: "",
+    color: "",
     cardBlocks: {},
     createdAt: updatedAt,
     updatedAt,

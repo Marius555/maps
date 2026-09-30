@@ -67,6 +67,18 @@ describe("resolveTags", () => {
     expect(resolved.tagGroups[1].tags.map((tag) => tag.label)).toEqual(["Skis"]);
   });
 
+  it("gives every new tag the colour it is handed, and leaves existing ones alone", () => {
+    const resolved = resolveTags(["Bikes", "Skis", "Hire"], existing, "Tags", "#f54600");
+    const tags = resolved.tagGroups.flatMap((group) => group.tags);
+
+    expect(tags.find((tag) => tag.id === "tag-bikes")?.color).toBe(
+      existing[0].tags[0].color,
+    );
+    expect(
+      tags.filter((tag) => tag.id !== "tag-bikes").map((tag) => tag.color),
+    ).toEqual(["#f54600", "#f54600"]);
+  });
+
   it("gives new tags colours the group is not already wearing", () => {
     // A location's first tag colours its pin, so a column of product lines that
     // imported as six of the same colour is a map with nothing to read.

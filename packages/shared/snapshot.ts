@@ -156,6 +156,12 @@ export type SnapshotPlace = {
    * is in. The group's **id** still does not travel — a visitor cannot see a
    * group or act on one, and `lib/snapshot/build.ts` says so at more length. It
    * is the colour that is a fact about the pin.
+   *
+   * **Or the location's own colour** (`places.color` — a file's colour column,
+   * or Edit location's Pin colour), written only when its custom pin has no
+   * colour of its own: the embed reads this field above the pin, the editor
+   * puts the location's colour under it, and leaving it out for a coloured pin
+   * is what keeps the two agreeing. No embed change was needed for it.
    */
   color?: string;
   description?: string;

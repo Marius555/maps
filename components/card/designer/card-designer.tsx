@@ -501,6 +501,7 @@ export function CardDesigner({
   const samplePinColor = useMemo(
     () =>
       resolvePin(sample?.icon ?? "", initialMap.pinIcons)?.color ??
+      (sample?.color || undefined) ??
       pinColorOfChips(tagChips),
     [sample, initialMap.pinIcons, tagChips],
   );

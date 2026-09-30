@@ -129,6 +129,19 @@ rewritten; it is the record of why this area is shaped as it is.
   for a place the map says nothing about. The card's Logo block reaches the same colour
   through `--lm-pin` rather than through `colorOf`, because that one renderer is CSS and
   the other two are canvas.
+- **A location can carry its own colour (`places.color`), and it sits between the custom
+  pin and the tags**: group → custom pin's colour → `place.color` → first tag → theme.
+  `groupColorIndex.forPlace` is the statement of it. It arrives from an imported file's
+  **Pin colour** column (hex only, `parseHexColor`; a bad cell is a row warning, never a
+  lost row) or Edit location's Pin colour field, and a sheet sync owns it when the column
+  is mapped. Publish writes it as `SnapshotPlace.color` **only when the custom pin has no
+  colour of its own**, because the embed reads that field *above* the pin — which is how
+  it needed no embed change. `""` is none, as `groupId` spells it.
+- **Tags an import or a sheet sync creates take the map's theme pin colour**
+  (`settings.pinColor`, the `newTagColor` argument of `resolveTags`), not the palette. An
+  imported map used to come out in eight colours nobody chose, one per tag; the owner
+  asked for the theme colour by default, with colours coming from the file's colour
+  column or a tag recoloured in Settings. Tags made by hand still go round the palette.
 - `newTagId` must never reuse or derive an id from a label — a label-derived id handed out
   twice resurrects a deleted tag onto every location that once wore it.
 - `components/tags/tag-picker.tsx` is the one control for tagging a location. Quick-add PATCHes the **whole**
@@ -138,10 +151,13 @@ rewritten; it is the record of why this area is shaped as it is.
   keyboard and is **not optional**.
 - The picker's popover anchors to the **field** via an explicit `triggerRef`, not to the
   button — the trigger changes shape once the first chip appears.
-- **No chip anywhere carries a colour dot**, and filter chips carry no colour: a chip is a
-  control, and pressed-or-not is what it has to communicate. The card's Tags block is the
-  exception, and only when the owner turns on **Use tag colours** (`chipTagColor`,
-  `docs/notes/cards.md`). There each chip is a label rather than a control.
+- **No toggle chip carries a colour dot**, and filter chips carry no colour: a chip is a
+  control, and pressed-or-not is what it has to communicate. Two exceptions, both chips
+  that are labels rather than toggles: the card's Tags block when the owner turns on
+  **Use tag colours** (`chipTagColor`, `docs/notes/cards.md`), and the chips a location
+  has already **chosen** in `TagPicker`, which carry a small dot of their tag's colour —
+  asked for by the owner, since the picker was the one place a tag's colour could not be
+  seen. The picker's menu options stay plain.
 - The `category` card block is retired, not deleted — it draws the location's first tag.
 - Bulk tagging **adds and removes**, neither is a toggle, and both skip places the write
   would not change (a no-op PATCH bumps `updatedAt`, which the publish tab reads).

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { countApiCall } from "@/lib/api-usage/counter";
 import { serviceUserAgent } from "@/lib/http/user-agent";
 import { confidenceFor } from "./confidence";
 import type { PhotonFeature, PhotonProperties } from "./reverse-select";
@@ -221,6 +222,7 @@ async function requestFeatures(
   url: URL,
   userAgent: string,
 ): Promise<PhotonFeature[]> {
+  const kind = url.pathname.includes("reverse") ? "reverse" : "geocode";
   let response: Response;
 
   try {
@@ -239,8 +241,11 @@ async function requestFeatures(
      * so every upstream failure arrives as one type, with the cause kept so an
      * aborted request is still recognisable as a timeout.
      */
+    countApiCall({ provider: "photon", kind, ok: false });
     throw new GeocoderError("Could not reach the geocoder", undefined, error);
   }
+
+  countApiCall({ provider: "photon", kind, ok: response.ok });
 
   if (!response.ok) {
     throw new GeocoderError(

@@ -62,6 +62,7 @@ export const GET = withoutAuth(async (request) => {
     // send would be cut off with the invocation.
     after(() =>
       sendEmail({
+        template: "welcome",
         to: user.email,
         ...welcomeMessage({
           name: greetingName(user.name, user.email),
@@ -105,6 +106,7 @@ export const POST = withoutAuth(async (request) => {
       const link = await createVerificationLink(account.$id);
 
       await sendEmail({
+        template: "verify",
         to: account.email,
         ...verifyEmailMessage({
           name: greetingName(account.name, account.email),

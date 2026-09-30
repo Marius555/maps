@@ -4,6 +4,7 @@ import { Resend } from "resend";
 
 import { PRODUCT_NAME } from "@/lib/config";
 import { env } from "@/lib/env";
+import { maskEmail } from "./mask";
 
 /**
  * The one place this app sends mail from.
@@ -49,7 +50,14 @@ function sender(): string {
   return `${PRODUCT_NAME} <${env.emailFrom}>`;
 }
 
+/**
+ * Which message this is, for the operator console's email log. One per
+ * template in `./templates`; required so a new caller cannot send unlabelled.
+ */
+export type EmailTemplate = "verify" | "welcome" | "reset" | "support";
+
 export type SendEmailInput = {
+  template: EmailTemplate;
   to: string;
   subject: string;
   html: string;
@@ -58,15 +66,23 @@ export type SendEmailInput = {
   replyTo?: string;
 };
 
-export async function sendEmail({
+export async function sendEmail(input: SendEmailInput): Promise<{ sent: boolean }> {
+  const outcome = await deliver(input);
+
+  await logSend(input, outcome);
+
+  return { sent: outcome.error === null };
+}
+
+async function deliver({
   to,
   subject,
   html,
   text,
   replyTo,
-}: SendEmailInput): Promise<{ sent: boolean }> {
+}: SendEmailInput): Promise<{ error: string | null }> {
   const resend = getClient();
-  if (!resend) return { sent: false };
+  if (!resend) return { error: "not_configured" };
 
   try {
     // Resend reports failure in the payload rather than by throwing, so the
@@ -83,13 +99,45 @@ export async function sendEmail({
 
     if (error) {
       console.error("Resend rejected an email:", error.name, error.message);
-      return { sent: false };
+      return { error: `${error.name}: ${error.message}` };
     }
 
-    return { sent: true };
+    return { error: null };
   } catch (error) {
     // A network failure or a malformed payload still lands here.
     console.error("Failed to send an email:", error);
-    return { sent: false };
+    return { error: error instanceof Error ? error.message : "send_failed" };
+  }
+}
+
+/**
+ * One row in the email log, after the send has its answer.
+ *
+ * Awaited rather than floated — every caller already runs inside `after()` or
+ * has finished its own work, and a floating write can be cut off with the
+ * invocation — but it can never fail the send: a logging failure is logged and
+ * dropped. The recipient is masked before it leaves this function.
+ */
+async function logSend(
+  { template, to, subject }: SendEmailInput,
+  { error }: { error: string | null },
+): Promise<void> {
+  if (process.env.NODE_ENV === "test") return;
+
+  try {
+    const { writeEmailLog } = await import("@/lib/repositories/email-log.repository");
+    const now = new Date();
+
+    await writeEmailLog({
+      sentAt: now.toISOString(),
+      day: now.toISOString().slice(0, 10),
+      template,
+      ok: error === null,
+      error,
+      recipient: maskEmail(to),
+      subject,
+    });
+  } catch (logError) {
+    console.error("Couldn't write the email log:", logError);
   }
 }

@@ -105,7 +105,7 @@ export function readVisitorGeo(headers: Headers): VisitorGeo {
  * The address is evidence for an owner chasing abuse on their own map, and it is
  * exactly as trustworthy as the network in front of us.
  */
-function readIp(headers: Headers): string | null {
+export function readIp(headers: Headers): string | null {
   const direct = clean(headers.get("x-appwrite-client-ip"), 45);
   if (direct) return direct;
 

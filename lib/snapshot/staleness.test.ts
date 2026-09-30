@@ -58,6 +58,7 @@ function makePlace(updatedAt: string): Place {
     geocodeConfidence: null,
     addressParts: null,
     groupId: "",
+    color: "",
     cardBlocks: {},
     geocodeStatus: "ok",
     createdAt: at(-100_000),

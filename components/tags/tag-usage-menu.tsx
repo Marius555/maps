@@ -72,7 +72,9 @@ export function TagUsageMenu({
                   <PinPreview
                     icon={place.icon}
                     pinIcons={pinIcons}
-                    fallbackColor={pinColorOfTags(tagGroups, place.tags)}
+                    fallbackColor={
+                      place.color || pinColorOfTags(tagGroups, place.tags)
+                    }
                     size="sm"
                     className="shrink-0"
                   />

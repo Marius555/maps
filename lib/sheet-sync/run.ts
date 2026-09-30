@@ -7,10 +7,12 @@ import { buildDraftPlaces, type DraftPlace } from "@/lib/import/draft-places";
 import { draftToCreateInput } from "@/lib/import/draft-to-place";
 import { fetchGoogleSheetCsv } from "@/lib/import/google-sheet-fetch";
 import {
+  IMPORTED_TAG_GROUP_LABEL,
   MAIN_TAG_GROUP_LABEL,
   normalizeLabel,
   resolveTags,
 } from "@/lib/import/resolve-tags";
+import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { readCsvText } from "@/lib/import/sources/csv";
 import { ImportSourceError } from "@/lib/import/sources/types";
 import { buildTable } from "@/lib/import/table";
@@ -246,12 +248,20 @@ async function step(
     ...diff.adds.map((add) => add.draft),
   ];
 
+  // In the theme's pin colour, as the import makes them (resolve-tags.ts).
+  const themeColor = readEmbedSettings(map.settings).pinColor;
   const mainTags = resolveTags(
     involved.map((draft) => draft.categoryLabel),
     map.tagGroups,
     MAIN_TAG_GROUP_LABEL,
+    themeColor,
   );
-  const tags = resolveTags(involved.flatMap((draft) => draft.tagLabels), mainTags.tagGroups);
+  const tags = resolveTags(
+    involved.flatMap((draft) => draft.tagLabels),
+    mainTags.tagGroups,
+    IMPORTED_TAG_GROUP_LABEL,
+    themeColor,
+  );
   const addedTags = mainTags.addedCount + tags.addedCount;
 
   const tagIdsFor = (draft: DraftPlace): string[] => [

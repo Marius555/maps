@@ -366,7 +366,9 @@ building the same card from the same functions in `packages/shared/`.
   `CardBlockData`, `BlockContext.pinColor` in the popup. A card that resolved it itself
   would be a fourth renderer free to disagree, and what it would miss is a **group**: a
   snapshot carries no groups at all, only `SnapshotPlace.color`, which publish writes
-  only when one actually decided.
+  only when one actually decided — a group, or the location's own `places.color` when its
+  custom pin has no colour (`docs/notes/tags-and-pins.md`). That is what makes an imported
+  colour paint the pin, the Logo block's pin and the Button together.
 - A new Button arrives full width (`defaultButtonFull`, read only by `makeCardBlock`).
 - A Label may contain spaces: `resizeCardBlock` must **not** normalise `buttonLabel`
   mid-typing. `readBlock` still collapses and trims on the way in.

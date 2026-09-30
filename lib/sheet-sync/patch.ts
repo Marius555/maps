@@ -14,6 +14,8 @@ export type SheetPlacePatch = {
   email?: string | null;
   url?: string | null;
   tags?: string[];
+  /** `#rrggbb`, or "" to hand the pin back to its pin, tags and the theme. */
+  color?: string;
   lat?: number;
   lng?: number;
   geocodeStatus?: GeocodeStatus;
@@ -23,7 +25,16 @@ export type SheetPlacePatch = {
 
 export type PatchablePlace = Pick<
   Place,
-  "name" | "address" | "description" | "phone" | "email" | "url" | "tags" | "lat" | "lng"
+  | "name"
+  | "address"
+  | "description"
+  | "phone"
+  | "email"
+  | "url"
+  | "tags"
+  | "lat"
+  | "lng"
+  | "color"
 > & { sourceKey?: string };
 
 /**
@@ -31,9 +42,10 @@ export type PatchablePlace = Pick<
  *
  * Exactly the ones a column was mapped to, and that is the whole of "the sheet
  * wins, extras kept". A map imported without a phone column keeps every phone
- * number typed in the app; a map whose sheet has one gets the sheet's. Photos,
- * logo, hours, pin, group, custom fields and card overrides have no column at
- * all, so nothing a sync does can reach them.
+ * number typed in the app; a map whose sheet has one gets the sheet's — and
+ * the same goes for a pin colour column, whose blank cell clears the colour
+ * back to the theme's. Photos, logo, hours, pin, group, custom fields and card
+ * overrides have no column at all, so nothing a sync does can reach them.
  */
 export function sheetOwnedFields(mapping: ColumnMapping) {
   return {
@@ -43,6 +55,7 @@ export function sheetOwnedFields(mapping: ColumnMapping) {
     email: Boolean(mapping.email),
     url: Boolean(mapping.url),
     tags: Boolean(mapping.category || mapping.tags),
+    color: Boolean(mapping.color),
   };
 }
 
@@ -81,6 +94,7 @@ export function sheetPatch(
   }
 
   if (owned.tags && !sameOrder(place.tags, tagIds)) patch.tags = [...tagIds];
+  if (owned.color && (place.color || "") !== draft.color) patch.color = draft.color;
 
   const addressChanged =
     owned.address &&

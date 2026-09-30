@@ -1,5 +1,6 @@
 import "server-only";
 
+import { countApiCall } from "@/lib/api-usage/counter";
 import { createThrottle } from "@/lib/geocoding/throttle";
 import { serviceUserAgent } from "@/lib/http/user-agent";
 import { MAX_POLYGON_POINTS } from "@/lib/validation/shape.schema";
@@ -278,6 +279,7 @@ async function fetchOsrm(
 }
 
 async function requestOsrm(url: URL, userAgent: string): Promise<OsrmResponse> {
+  const kind = url.pathname.includes("/nearest/") ? "nearest" : "route";
   let response: Response;
 
   try {
@@ -292,8 +294,11 @@ async function requestOsrm(url: URL, userAgent: string): Promise<OsrmResponse> {
     // DNS failures, refused connections and TLS errors reject as a bare
     // `TypeError: fetch failed`. Wrapped so every upstream failure arrives as
     // one type, with the cause kept so a timeout stays recognisable.
+    countApiCall({ provider: "osrm", kind, ok: false });
     throw new RoutingError("Could not reach the routing engine", undefined, error);
   }
+
+  countApiCall({ provider: "osrm", kind, ok: response.ok });
 
   if (!response.ok) {
     throw new RoutingError(`OSRM returned ${response.status}`, response.status);

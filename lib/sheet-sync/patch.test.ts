@@ -34,6 +34,23 @@ describe("sheetPatch", () => {
     expect(sheetPatch(place, row, BASIC_MAPPING, []).patch).toEqual({ phone: null });
   });
 
+  it("follows a pin colour column, and clears the colour when its cell empties", () => {
+    const mapping = { ...BASIC_MAPPING, color: "Colour" };
+    const place = linkedPlace({ name: "Bike Hub", address: "1 High St", color: "#e03131" });
+    const [recoloured, cleared] = sheetRowsFrom(
+      [
+        { Name: "Bike Hub", Address: "1 High St", Phone: "", Tags: "", Colour: "1C7ED6" },
+        { Name: "Bike Hub", Address: "1 High St", Phone: "", Tags: "", Colour: "" },
+      ],
+      mapping,
+    );
+
+    expect(sheetPatch(place, recoloured, mapping, []).patch.color).toBe("#1c7ed6");
+    expect(sheetPatch(place, cleared, mapping, []).patch.color).toBe("");
+    // No colour column: a colour chosen in the app survives the sync.
+    expect(sheetPatch(place, cleared, BASIC_MAPPING, []).patch.color).toBeUndefined();
+  });
+
   it("leaves a field alone when no column feeds it", () => {
     // No email column, so an email typed in the app survives every sync.
     const place = linkedPlace({

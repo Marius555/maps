@@ -32,10 +32,12 @@ import {
  * in Settings once the owner decides what the questions really are.
  *
  * **And a tag needs a colour**, since categories merged into tags and a
- * location's first tag is what colours its pin. Assigned round the palette in
- * the order the file presents them, so a column of six product lines imports as
- * six distinguishable colours rather than six of the same — which is the whole
- * reason anyone looks at the map afterwards.
+ * location's first tag is what colours its pin. The import and the sheet sync
+ * pass `newTagColor` — the map's theme pin colour — so a file's tags arrive in
+ * the theme colour and an imported map is not repainted in eight colours nobody
+ * chose; a file that wants colours says so in its colour column, and the owner
+ * recolours a tag in Settings when they want it to stand out. Without
+ * `newTagColor` they go round the palette in the order the file presents them.
  */
 
 /** Where imported tags go when the map has nowhere for them yet. */
@@ -97,6 +99,11 @@ export function resolveTags(
   labels: string[],
   existing: MapTagGroup[],
   groupLabel: string = IMPORTED_TAG_GROUP_LABEL,
+  /**
+   * The colour every tag this call *creates* gets. Tags the map already holds
+   * keep theirs. Absent, new tags go round the palette.
+   */
+  newTagColor?: string,
 ): ResolvedTags {
   const idByLabel = new Map<string, string>();
 
@@ -168,7 +175,7 @@ export function resolveTags(
       // visitor reads one legend, so two tags in different groups coming out the
       // same colour is the collision that actually costs something. Past eight,
       // `nextPaletteColor` cycles — sixty tags cannot all differ.
-      color: nextPaletteColor(takenColors(tagGroups)),
+      color: newTagColor ?? nextPaletteColor(takenColors(tagGroups)),
     };
 
     group.tags.push(tag);

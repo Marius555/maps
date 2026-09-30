@@ -47,6 +47,7 @@ import {
   DEFAULT_PIN_SHAPE,
   DEFAULT_PIN_SIZE,
   DEFAULT_RING_WIDTH,
+  resolvePin,
 } from "@/packages/shared/pin-icons";
 import {
   MIN_LINE_POINTS,
@@ -288,7 +289,7 @@ export function buildSnapshot(
           definedTags,
           definedFields,
           publishedLayout,
-          colors.overrideForPlace(place),
+          colors.overrideForPlace(place) ?? ownColor(place, map.pinIcons),
         ),
       ),
       // Dropped entirely when empty, like every other optional field — and this
@@ -579,6 +580,23 @@ function usedFields(fields: MapField[], places: Place[]): SnapshotField[] {
     }));
 }
 
+/**
+ * A location's own colour, for `SnapshotPlace.color` — but only where it is the
+ * answer the editor gives.
+ *
+ * The embed reads `SnapshotPlace.color` *first*, above the custom pin, while
+ * `groupColorIndex.forPlace` puts the location's own colour *under* a coloured
+ * custom pin. So a pin with a colour of its own publishes nothing here and the
+ * embed resolves the pin itself, exactly as it does today. Absent for every
+ * location without one, which is every location published before it existed.
+ */
+function ownColor(place: Place, pinIcons: AppMap["pinIcons"]): string | undefined {
+  if (!place.color) return undefined;
+  if (resolvePin(place.icon, pinIcons)?.color) return undefined;
+
+  return place.color;
+}
+
 function toSnapshotPlace(
   place: Place,
   definedTags: ReadonlySet<string>,
@@ -590,8 +608,9 @@ function toSnapshotPlace(
    */
   cardLayout: CardLayout | null,
   /**
-   * The colour a group decided for this pin, or undefined for one no group
-   * decided. See `lib/map/group-colors.ts` and `SnapshotPlace.color`.
+   * The colour a group, or the location's own `color`, decided for this pin —
+   * undefined when neither did. See `lib/map/group-colors.ts` and
+   * `SnapshotPlace.color`.
    */
   groupColor: string | undefined,
 ): SnapshotPlace {
@@ -605,8 +624,9 @@ function toSnapshotPlace(
 
   if (place.address) snapshot.address = place.address;
   if (place.icon) snapshot.icon = place.icon;
-  // Only when a group decided it. Absent is the pin working its own colour out,
-  // which is what every snapshot already on a customer's site says.
+  // Only when a group or the location's own colour decided it. Absent is the
+  // pin working its own colour out, which is what every snapshot already on a
+  // customer's site says.
   if (groupColor) snapshot.color = groupColor;
   if (place.description) snapshot.description = place.description;
   if (place.phone) snapshot.phone = place.phone;

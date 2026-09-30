@@ -169,6 +169,17 @@ export function TagPicker({
                 }`}
                 render={(props) => <li {...props} {...chipProps(chip.id)} />}
               >
+                {/* The tag's colour, on the chips already chosen — the owner
+                    asked to see which colour each one is, and the first one's
+                    is the pin's. Not on the options in the menu: those are
+                    toggles, see tag-chip.tsx. Absent for a tag with no colour. */}
+                {chip.color ? (
+                  <span
+                    aria-hidden="true"
+                    className="size-2.5 shrink-0 rounded-full border border-black/10"
+                    style={{ backgroundColor: chip.color }}
+                  />
+                ) : null}
                 <Chip.Label className="max-w-40 truncate">
                   {chip.label}
                 </Chip.Label>

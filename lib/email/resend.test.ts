@@ -42,6 +42,7 @@ afterEach(() => {
 });
 
 const MESSAGE = {
+  template: "verify" as const,
   to: "ada@example.com",
   subject: "Subject",
   html: "<p>Body</p>",

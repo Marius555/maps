@@ -7,7 +7,7 @@ import type { MapHandle } from "@/components/map/map-canvas-impl";
 import type { DraftPlace } from "@/lib/import/draft-places";
 import { draftToPlace } from "@/lib/import/draft-to-place";
 import { roundCoord } from "@/lib/map/geo";
-import type { AppMap } from "@/lib/repositories/types";
+import type { AppMap, Place } from "@/lib/repositories/types";
 
 /**
  * Where every row landed, and the way to move one that landed wrong.
@@ -75,6 +75,7 @@ export function ReviewMap({
       zoom={map.defaultZoom}
       style={map.style}
       places={placedPlaces}
+      colorFor={draftColor}
       selectedPlaceId={selectedKey}
       isAdding={placingKey !== null}
       fitToPlaces
@@ -115,4 +116,13 @@ export function ReviewMap({
       }}
     />
   );
+}
+
+/**
+ * A draft's pin colour: the file's colour column, or nothing — which leaves the
+ * pin in the theme colour, as it will be once saved. Module scope so its
+ * identity never changes; the marker layer repaints every pin when it does.
+ */
+function draftColor(place: Place): string | undefined {
+  return place.color || undefined;
 }

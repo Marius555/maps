@@ -95,7 +95,7 @@ export const DAILY_LOOKUP_BUDGET = 3_000;
  * 80%, leaving a fifth of the day for people. Not a tuned number — a reserve, and
  * the property that matters is only that it is comfortably under 1.
  */
-const BACKGROUND_RESERVE = 0.8;
+export const BACKGROUND_RESERVE = 0.8;
 
 /**
  * Who is waiting for this lookup.

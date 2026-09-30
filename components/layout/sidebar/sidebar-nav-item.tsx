@@ -20,6 +20,11 @@ export type NavItem = {
   newTab?: boolean;
   /** What the onboarding overlays find this row by (`data-tutorial`). */
   tutorialTarget?: string;
+  /**
+   * How many new things are behind this row — Notifications' unread count.
+   * Nothing is drawn at zero or when absent.
+   */
+  badge?: number;
 };
 
 /**
@@ -41,7 +46,8 @@ export function SidebarNavItem({
   /** Closes the mobile drawer once a destination is chosen. */
   onNavigate?: () => void;
 }) {
-  const { icon: Icon, label, href, newTab, tutorialTarget } = item;
+  const { icon: Icon, label, href, newTab, tutorialTarget, badge = 0 } = item;
+  const name = badge > 0 ? `${label}, ${badge} new` : label;
 
   return (
     <Link
@@ -51,21 +57,31 @@ export function SidebarNavItem({
       target={newTab ? "_blank" : undefined}
       rel={newTab ? "noreferrer" : undefined}
       aria-current={isActive ? "page" : undefined}
-      title={isCollapsed ? label : undefined}
+      title={isCollapsed ? name : undefined}
       /*
        * Named explicitly rather than by its contents. The visible label is a
        * zero-width element when collapsed, and whether a browser keeps a
        * zero-area node in the accessibility tree is not something to bet a
        * nav item's only name on.
        */
-      aria-label={newTab ? `${label} (opens in a new tab)` : label}
+      aria-label={newTab ? `${name} (opens in a new tab)` : name}
       className={`flex min-h-9 items-center rounded-2xl px-2.5 text-sm transition-[color,background-color] duration-[var(--duration-fast)] ${
         isActive
           ? "bg-default font-medium text-foreground"
           : "text-muted hover:bg-default/60 hover:text-foreground"
       } ${isCollapsed ? "justify-center gap-0" : "gap-2.5"}`}
     >
-      <Icon aria-hidden="true" className="size-5 shrink-0" />
+      <span className="relative flex shrink-0">
+        <Icon aria-hidden="true" className="size-5" />
+        {/* The count has nowhere to go on the collapsed rail, so a dot on the
+            icon says "something new" and the row's name says how much. */}
+        {badge > 0 && isCollapsed ? (
+          <span
+            aria-hidden="true"
+            className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent ring-2 ring-background"
+          />
+        ) : null}
+      </span>
 
       {/*
        * Collapsed to zero width rather than swapped for an `sr-only` span. The
@@ -81,11 +97,29 @@ export function SidebarNavItem({
         {label}
       </span>
 
+      {badge > 0 && !isCollapsed ? <NavBadge count={badge} /> : null}
+
       {/* Nothing to wait for when the destination is another tab — this one
           never navigates, so `useLinkStatus` would report a pending state that
           has no end. */}
       {newTab ? null : <NavPending />}
     </Link>
+  );
+}
+
+/**
+ * The count at the end of a row. Accent, because it is the one thing in the nav
+ * that asks to be pressed; capped so a long-unread account does not widen it.
+ * Hidden from assistive tech — the row's own name already says the number.
+ */
+function NavBadge({ count }: { count: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="min-w-5 shrink-0 rounded-full bg-accent px-1.5 text-center text-xs font-medium leading-5 text-accent-foreground tabular-nums"
+    >
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
 

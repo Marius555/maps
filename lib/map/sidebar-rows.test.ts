@@ -46,6 +46,7 @@ function place(id: string, groupId = ""): Place {
     geocodeStatus: "manual",
     addressParts: null,
     groupId,
+    color: "",
     cardBlocks: {},
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-01T00:00:00.000Z",

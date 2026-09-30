@@ -56,6 +56,7 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     geocodeConfidence: null,
     addressParts: null,
     groupId: "",
+    color: "",
     cardBlocks: {},
     geocodeStatus: "ok",
     createdAt: UPDATED_AT,

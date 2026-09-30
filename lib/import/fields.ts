@@ -22,6 +22,7 @@ export const IMPORT_FIELDS = [
   "phone",
   "email",
   "url",
+  "color",
   "lat",
   "lng",
   "latlng",
@@ -71,6 +72,7 @@ export const FIELD_LABELS: Record<ImportField, string> = {
   phone: "Phone",
   email: "Email",
   url: "Website",
+  color: "Pin colour",
   lat: "Latitude",
   lng: "Longitude",
   latlng: "Latitude and longitude together",
@@ -81,6 +83,7 @@ export const FIELD_HINTS: Partial<Record<ImportField, string>> = {
   latlng: 'One column holding both, like "52.5200, 13.4050" or a map link.',
   category: "One per row. Goes first, so it colours the pin.",
   tags: "Extra filters. One column, several tags per row, separated by , ; or |.",
+  color: "A hex code like #e03131. Colours the pin and its card; blank rows keep the theme colour.",
   lat: "Between -90 and 90.",
   lng: "Between -180 and 180.",
 };

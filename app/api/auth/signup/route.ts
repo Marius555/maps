@@ -52,6 +52,7 @@ export const POST = withoutAuth(async (request) => {
       const link = await createVerificationLink(user.id);
 
       await sendEmail({
+        template: "verify",
         to: user.email,
         ...verifyEmailMessage({ name: greetingName(user.name, user.email), url: link }),
       });

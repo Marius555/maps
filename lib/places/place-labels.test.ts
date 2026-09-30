@@ -35,6 +35,7 @@ function place(overrides: Partial<Place> = {}): Place {
     geocodeStatus: "manual",
     addressParts: null,
     groupId: "",
+    color: "",
     cardBlocks: {},
     createdAt: "2026-08-10T00:00:00.000Z",
     updatedAt: "2026-08-10T00:00:00.000Z",

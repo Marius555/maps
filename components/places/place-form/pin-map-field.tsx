@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { MapCanvas } from "@/components/map/map-canvas";
 import type { MapHandle } from "@/components/map/map-canvas-impl";
-import { roundCoord } from "@/lib/map/geo";
 import type { AppMap, Place } from "@/lib/repositories/types";
+import { pinColorOfTags } from "@/packages/shared/tags";
 
 /**
- * The pin, where it currently is, draggable.
+ * The pin, where it currently is — to look at, not to drag.
  *
  * The address field has always told the user "Or drag the pin on the map to place
  * it exactly" — inside a dialog with no map in it. From the Locations tab that
@@ -20,19 +20,21 @@ import type { AppMap, Place } from "@/lib/repositories/types";
  * the editor tab is the full canvas, and making this one tall would push the
  * fields the form is actually about below the fold.
  *
- * **The pin moves when it is dragged, and at no other time.** This was armed as
- * add mode, which bought the add cursor, a ghost pin trailing the pointer across
- * a map that already had the only pin it is ever going to have, and a click
- * anywhere that moved the location. The first two went; the click stayed one
- * round longer, and it was the worst of the three — a ghost at least announces
- * itself, while a click landing on the map while you read it silently relocates
- * the business. Dragging is the whole gesture now: it is deliberate, it starts
- * on the thing it moves, and it is the one this caption has always described.
+ * **Nothing on this map moves the pin.** It was armed as add mode once, then
+ * as a click-to-move, then as a drag — and each was a way to relocate a business
+ * by touching a map while reading it. The owner asked for the last one to go
+ * too: the pin moves only through Find New Location and the Coordinates fold,
+ * both of which are typed on purpose. `onMovePlace` is simply not passed, which
+ * is what builds the marker with `draggable: false` (use-place-markers.ts).
  *
- * `icon` is the form's live value rather than the saved row's, so the marker is a
- * preview of the draft: picking a pin below changes the pin above on the click,
- * and Cancel puts it back. Nothing here writes anything — `icon` is already in
- * form state, and the form's own submit is what saves it.
+ * **It ripples for as long as the dialog is open** — `.pulsing-pins` in
+ * globals.css, the drop ripple on a loop — so the eye lands on the one pin
+ * this dialog is about. Reduced motion gets a still halo in its place.
+ *
+ * `icon`, `color` and `tags` are the form's live values rather than the saved
+ * row's, so the marker is a preview of the draft: picking a pin or a colour
+ * below changes the pin above on the click, and Cancel puts it back. Nothing
+ * here writes anything — the form's own submit is what saves it.
  */
 export function PinMapField({
   map,
@@ -40,7 +42,8 @@ export function PinMapField({
   lat,
   lng,
   icon,
-  onChange,
+  color,
+  tags,
 }: {
   map: AppMap;
   place: Place;
@@ -48,44 +51,50 @@ export function PinMapField({
   lng: number;
   /** The form's live pin, which is not yet the one on the stored row. */
   icon: string;
-  onChange: (coords: { lat: number; lng: number }) => void;
+  /** The form's live pin colour, "" for none. */
+  color: string;
+  /** The form's live tags, whose first one colours a pin with nothing else. */
+  tags: string[];
 }) {
-  // The stored place with the form's live position and pin, so dragging the
-  // marker, typing a coordinate and picking a pin all move the same marker.
+  // The stored place with the form's live position, pin, colour and tags, so
+  // typing a coordinate, picking an address or a pin all redraw one marker.
   const places = useMemo(
-    () => [{ ...place, lat, lng, icon }],
-    [place, lat, lng, icon],
+    () => [{ ...place, lat, lng, icon, color, tags }],
+    [place, lat, lng, icon, color, tags],
   );
 
   const handle = useRef<MapHandle | null>(null);
 
   /*
-   * The last position this map itself produced.
+   * The position the camera was last pointed at.
    *
    * `center` is the opening camera and nothing more — the canvas does not follow
    * it — so a coordinate typed into the boxes below moved the marker and left the
    * camera where it was, which on a pin being rescued from the wrong continent
-   * meant the pin simply disappeared. Chasing every change instead would fight
-   * the user mid-drag, re-centring on each pointermove. Comparing against what
-   * the map last emitted separates the two: a drag is already on screen, a typed
-   * coordinate or a picked address is not.
+   * meant the pin simply disappeared. Every change of position now comes from
+   * outside this map, so every one is followed.
    */
-  const fromMap = useRef({ lat, lng });
+  const shown = useRef({ lat, lng });
 
   useEffect(() => {
-    if (fromMap.current.lat === lat && fromMap.current.lng === lng) return;
+    if (shown.current.lat === lat && shown.current.lng === lng) return;
 
-    fromMap.current = { lat, lng };
+    shown.current = { lat, lng };
     handle.current?.flyTo({ lng, lat }, { zoom: 15 });
   }, [lat, lng]);
 
-  const move = useCallback(
-    (coords: { lng: number; lat: number }) => {
-      const next = { lat: roundCoord(coords.lat), lng: roundCoord(coords.lng) };
-      fromMap.current = next;
-      onChange(next);
-    },
-    [onChange],
+  /*
+   * The same order the editor's canvas paints by (`groupColorIndex.forPlace`),
+   * short of the group step: this dialog has no groups loaded, and a grouped
+   * pin is rare enough that the draft's own colour is the better preview.
+   * Memoised because the marker layer repaints every pin when it changes.
+   */
+  const colorFor = useCallback(
+    (candidate: Place, pinColor?: string) =>
+      pinColor ||
+      candidate.color ||
+      pinColorOfTags(map.tagGroups, candidate.tags),
+    [map.tagGroups],
   );
 
   return (
@@ -95,7 +104,7 @@ export function PinMapField({
           what a sheet can show before anything is scrolled — and the map is the
           one thing here that reads fine smaller. A container query, so the size
           answers to the box rather than to the window. */}
-      <div className="h-40 overflow-hidden rounded-xl border border-border @md:h-48 @2xl:h-56">
+      <div className="pulsing-pins h-40 overflow-hidden rounded-xl border border-border @md:h-48 @2xl:h-56">
         <MapCanvas
           center={{ lng, lat }}
           // Closer than the map's default: this is one location, and opening on
@@ -104,6 +113,7 @@ export function PinMapField({
           style={map.style}
           places={places}
           pinIcons={map.pinIcons}
+          colorFor={colorFor}
           selectedPlaceId={place.id}
           isAdding={false}
           onSelectPlace={() => {}}
@@ -112,7 +122,8 @@ export function PinMapField({
           // branch — which clears a selection this map does not have and looks
           // for shape layers it was never given. Both no-ops.
           onMapClick={() => {}}
-          onMovePlace={(_placeId, coords) => move(coords)}
+          // No `onMovePlace`: without it the marker is not draggable. See the
+          // docblock above.
           onReady={(ready) => {
             handle.current = ready;
           }}
@@ -120,7 +131,7 @@ export function PinMapField({
       </div>
 
       <p className="text-xs text-muted">
-        Drag the pin to move this location.
+        Use Find New Location or Coordinates to move this location.
       </p>
     </div>
   );

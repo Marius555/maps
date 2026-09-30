@@ -166,6 +166,66 @@ describe("a European export", () => {
   });
 });
 
+describe("a file with a pin colour column", () => {
+  it("maps it from the header, and keeps blank and unreadable cells in the theme colour", () => {
+    const { mapping, drafts } = csv(
+      "Name,Address,Colour\n" +
+        "Alpha,Torstr. 1 Berlin,#E03131\n" +
+        "Beta,Hafenweg 9 Hamburg,1c7ed6\n" +
+        "Gamma,Domplatz 4 Köln,\n" +
+        "Delta,Marienplatz 1 München,reddish\n",
+    );
+
+    expect(mapping.color).toBe("Colour");
+    expect(drafts.map((draft) => draft.color)).toEqual(["#e03131", "#1c7ed6", "", ""]);
+    expect(messagesOn(drafts[3].issues, "color")).toContain("reddish");
+    // A bad colour is a note, never a lost location.
+    expect(
+      drafts[3].issues.filter((issue) => issue.field === "color").map((issue) => issue.severity),
+    ).toEqual(["warning"]);
+    expect(draftToCreateInput({ ...drafts[0], lat: 1, lng: 2 }).color).toBe("#e03131");
+    expect(draftToCreateInput({ ...drafts[2], lat: 1, lng: 2 }).color).toBeUndefined();
+  });
+
+  it("finds a column of # codes behind a header that says nothing", () => {
+    const { mapping } = csv(
+      "Name,Address,F3\n" +
+        "Alpha,Torstr. 1 Berlin,#e03131\n" +
+        "Beta,Hafenweg 9 Hamburg,#1c7ed6\n" +
+        "Gamma,Domplatz 4 Köln,#0ca678\n",
+    );
+
+    expect(mapping.color).toBe("F3");
+  });
+
+  it("does not read six-digit postcodes as colours", () => {
+    const { mapping } = csv(
+      "Name,Address,Code\n" +
+        "Alpha,Connaught Place Delhi,110001\n" +
+        "Beta,Colaba Mumbai,400005\n" +
+        "Gamma,MG Road Bengaluru,560001\n",
+    );
+
+    expect(mapping.color).toBeUndefined();
+  });
+
+  it("reads a colour element in an XML feed", () => {
+    const { mapping, drafts } = run(
+      readXmlText(
+        `<?xml version="1.0" encoding="UTF-8"?>
+         <locations>
+           <location><title>Alpha</title><address>Torstr. 1, Berlin</address><color>#E03131</color></location>
+           <location><title>Beta</title><address>Hafenweg 9, Hamburg</address><color>#1C7ED6</color></location>
+         </locations>`,
+        "stores.xml",
+      ),
+    );
+
+    expect(mapping.color).toBe("color");
+    expect(drafts.map((draft) => draft.color)).toEqual(["#e03131", "#1c7ed6"]);
+  });
+});
+
 describe("a store-locator XML feed", () => {
   it("becomes the same table a CSV would have", () => {
     const { mapping, drafts } = run(

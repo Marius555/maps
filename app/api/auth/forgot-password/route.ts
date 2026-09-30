@@ -49,6 +49,7 @@ export const POST = withoutAuth(async (request) => {
       const link = await createResetLink(account.$id);
 
       await sendEmail({
+        template: "reset",
         to: account.email,
         ...resetPasswordMessage({
           name: greetingName(account.name, account.email),

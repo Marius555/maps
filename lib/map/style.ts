@@ -297,7 +297,13 @@ export type ConcreteMapStyleKey = (typeof CONCRETE_MAP_STYLES)[number];
 export const MAP_STYLES = ["auto", ...CONCRETE_MAP_STYLES] as const;
 export type MapStyleKey = (typeof MAP_STYLES)[number];
 
-export const DEFAULT_MAP_STYLE: MapStyleKey = "auto";
+/**
+ * What a new map opens on: Positron, in both the dashboard's light and dark
+ * themes — the owner's choice. A pinned light basemap rather than Auto, so a
+ * map looks the same to its owner and to every visitor; Auto stays one click
+ * away in the gallery. Maps already saved keep the style they were given.
+ */
+export const DEFAULT_MAP_STYLE: MapStyleKey = "positron";
 
 /**
  * The style `auto` builds on, in both directions.

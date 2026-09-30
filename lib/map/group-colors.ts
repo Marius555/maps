@@ -47,7 +47,12 @@ export type GroupColorIndex = {
   overrideForPlace: (place: Place) => string | undefined;
   /**
    * A location's pin colour in full: the override, then the custom pin's own
-   * colour, then its first defined tag's.
+   * colour, then the location's own `color` (an imported file's colour column,
+   * or Edit location's Pin colour), then its first defined tag's.
+   *
+   * The location's colour sits *under* a custom pin's so that choosing a
+   * coloured pin later is still a way to change it, and *over* the tags because
+   * it was said about this one row, where a tag's colour was said about many.
    *
    * `pinColor` is passed in because the marker layer has already resolved the
    * pin by the time it paints one, and resolving it twice per pin across 3,000
@@ -107,6 +112,7 @@ export function groupColorIndex({
     forPlace: (place, pinColor) =>
       overrideForPlace(place) ??
       pinColor ??
+      (place.color || undefined) ??
       /*
        * The location's **first** tag, which is what replaced its category when
        * the two merged. Walked rather than read off `tags[0]` — `pinColorOfTags`

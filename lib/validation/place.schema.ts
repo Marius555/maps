@@ -3,7 +3,12 @@ import { z } from "zod";
 import { cardBlocksSchema } from "./card-overrides.schema";
 
 import { DAYS_IN_WEEK } from "@/packages/shared/hours";
-import { latSchema, lngSchema, pinIconRefSchema } from "./common";
+import {
+  hexColorSchema,
+  latSchema,
+  lngSchema,
+  pinIconRefSchema,
+} from "./common";
 import { placeFieldsSchema } from "./field.schema";
 import { groupIdSchema } from "./group.schema";
 import { placeTagsSchema } from "./tag.schema";
@@ -88,6 +93,16 @@ export const openingHoursSchema = z
 const optionalEmail = z.union([z.email("Enter a valid email address."), z.literal("")]);
 const optionalUrl = z.union([z.url("Enter a valid URL, including https://"), z.literal("")]);
 
+/**
+ * This location's own pin colour, or "" for none.
+ *
+ * "" rather than null, on `groupId`'s terms: it is what the column holds for a
+ * location that never had one, and what Edit location's "Use theme colour"
+ * sends to clear it. Absent means what a pin did before the field existed — its
+ * custom pin's colour, then its first tag's, then the theme's.
+ */
+export const placeColorSchema = z.union([hexColorSchema, z.literal("")]);
+
 export const createPlaceSchema = z.object({
   name: z
     .string()
@@ -126,6 +141,11 @@ export const createPlaceSchema = z.object({
   // one afterwards, by being dragged onto a row or caught by a marquee.
   groupId: groupIdSchema.optional(),
   /*
+   * A colour the imported file gave this row. Optional, not defaulted, so a
+   * create that has none writes nothing to the column at all.
+   */
+  color: placeColorSchema.optional(),
+  /*
    * Which row of a linked Google Sheet this location is, set by an import that
    * keeps the map in sync (lib/sheet-sync/row-key.ts). Absent for everything
    * else, and a location without one is never touched by a sync.
@@ -156,6 +176,7 @@ export const updatePlaceSchema = z
     geocodeConfidence: geocodeConfidenceSchema,
     addressParts: addressPartsSchema,
     groupId: groupIdSchema,
+    color: placeColorSchema,
     /*
      * How this location's card differs from the account's own design.
      *
@@ -185,6 +206,7 @@ export const placeFormSchema = z.object({
   tags: placeTagsSchema,
   fields: placeFieldsSchema,
   icon: pinIconRefSchema,
+  color: placeColorSchema,
   description: z.string().max(5000),
   phone: z.string().trim().max(32),
   email: optionalEmail,

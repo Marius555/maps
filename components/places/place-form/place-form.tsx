@@ -113,6 +113,7 @@ export function PlaceForm({
       tags: place.tags,
       fields: place.fields,
       icon: place.icon,
+      color: place.color,
       description: place.description ?? "",
       phone: place.phone ?? "",
       email: place.email ?? "",
@@ -130,11 +131,13 @@ export function PlaceForm({
   const lng = useWatch({ control, name: "lng" });
   // Watched for the map above, which draws the draft rather than the saved row.
   const icon = useWatch({ control, name: "icon" });
+  const color = useWatch({ control, name: "color" });
+  const tags = useWatch({ control, name: "tags" });
 
   /*
-   * Moved up out of the essentials, because two sections write the position now:
-   * the map and the boxes under "Coordinates". One setter, so a drag and a typed
-   * number cannot mark the form dirty in different ways.
+   * Moved up out of the essentials, because two sections write the position:
+   * the address search and the boxes under "Coordinates". One setter, so a
+   * picked match and a typed number cannot mark the form dirty in different ways.
    */
   const setPosition = (coords: { lat: number; lng: number }) => {
     setValue("lat", coords.lat, { shouldDirty: true });
@@ -156,8 +159,8 @@ export function PlaceForm({
         placeId: place.id,
         input: {
           ...values,
-          // Coordinates set here were placed deliberately — by drag, by typing,
-          // or by picking a match — so a later geocode pass must not overwrite
+          // Coordinates set here were placed deliberately — by typing or by
+          // picking a match — so a later geocode pass must not overwrite
           // them.
           geocodeStatus:
             values.lat === place.lat && values.lng === place.lng
@@ -264,6 +267,8 @@ export function PlaceForm({
           lat={lat}
           lng={lng}
           icon={icon}
+          color={color}
+          tags={tags}
           onMove={setPosition}
         />
 

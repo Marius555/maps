@@ -1,8 +1,10 @@
 "use client";
 
-import { BookOpen, LayoutGrid } from "lucide-react";
+import { Bell, BookOpen, LayoutGrid } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
+
+import { useNotifications } from "@/lib/query/notifications";
 
 import { useSidebar } from "./sidebar-context";
 import { SidebarMapNav, isItemActive } from "./sidebar-map-nav";
@@ -16,6 +18,9 @@ const GLOBAL_ITEMS: NavItem[] = [
     // Exact, or it would stay lit while you're inside a single map.
     exact: true,
   },
+  // Beside All maps rather than in the account menu: a message from us is only
+  // worth sending if it is seen, and a count in a closed menu is not.
+  { href: "/notifications", label: "Notifications", icon: Bell },
   {
     href: "/docs",
     label: "Documentation",
@@ -35,6 +40,7 @@ export function SidebarNav({
 }) {
   const pathname = usePathname();
   const { lastMapId, rememberMap } = useSidebar();
+  const unread = useNotifications().data?.unreadCount ?? 0;
 
   /*
    * The map in the URL, or failing that the one the layout chose — the last
@@ -57,7 +63,7 @@ export function SidebarNav({
         {GLOBAL_ITEMS.map((item) => (
           <li key={item.href}>
             <SidebarNavItem
-              item={item}
+              item={item.href === "/notifications" ? { ...item, badge: unread } : item}
               isActive={isItemActive(pathname, item)}
               isCollapsed={isCollapsed}
               onNavigate={onNavigate}

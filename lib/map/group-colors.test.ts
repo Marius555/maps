@@ -16,7 +16,10 @@ function group(id: string, color: string): Group {
   };
 }
 
-function place(id: string, { groupId = "", tags = [] as string[] } = {}): Place {
+function place(
+  id: string,
+  { groupId = "", tags = [] as string[], color = "" } = {},
+): Place {
   return {
     id,
     mapId: "map-1",
@@ -42,6 +45,7 @@ function place(id: string, { groupId = "", tags = [] as string[] } = {}): Place 
     geocodeStatus: "manual",
     addressParts: null,
     groupId,
+    color,
     cardBlocks: {},
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-01T00:00:00.000Z",
@@ -137,6 +141,15 @@ describe("groupColorIndex", () => {
       expect(index.forPlace(place("p1", { tags: ["t1"] }), "#f08c00")).toBe("#f08c00");
       expect(index.forPlace(place("p1", { tags: ["t1"] }))).toBe("#e03131");
       expect(index.forPlace(place("p1"))).toBeUndefined();
+    });
+
+    it("puts the location's own colour under the pin's and over the tag's", () => {
+      const index = groupColorIndex({ groups: [], shapes: [], tagGroups: TAGS });
+      const colored = place("p1", { tags: ["t1"], color: "#1c7ed6" });
+
+      expect(index.forPlace(colored, "#f08c00")).toBe("#f08c00");
+      expect(index.forPlace(colored)).toBe("#1c7ed6");
+      expect(index.forPlace(place("p1", { tags: ["t1"], color: "" }))).toBe("#e03131");
     });
   });
 

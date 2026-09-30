@@ -136,6 +136,7 @@ export function useCreatePlace(mapId: string) {
         addressParts: input.addressParts ?? null,
         geocodeStatus: input.geocodeStatus ?? "manual",
         groupId: input.groupId ?? "",
+        color: input.color ?? "",
         // A brand-new location has singled nothing out.
         cardBlocks: {},
         createdAt: now,

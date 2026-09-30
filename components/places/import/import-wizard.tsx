@@ -15,10 +15,12 @@ import { importableDrafts } from "@/lib/import/draft-places";
 import { draftToCreateInput } from "@/lib/import/draft-to-place";
 import { preflightProblem } from "@/lib/import/preflight";
 import {
+  IMPORTED_TAG_GROUP_LABEL,
   MAIN_TAG_GROUP_LABEL,
   normalizeLabel,
   resolveTags,
 } from "@/lib/import/resolve-tags";
+import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { ApiError } from "@/lib/query/fetcher";
 import { useBulkCreatePlaces } from "@/lib/query/import";
 import { useUpdateMap } from "@/lib/query/maps";
@@ -180,15 +182,22 @@ export function ImportWizard({
      * place offers. `flatMap` on the second because a tags column carries
      * several per row.
      */
+    // New tags arrive in the theme's pin colour, so an import does not repaint
+    // the map in palette colours nobody chose. See resolve-tags.ts.
+    const themeColor = readEmbedSettings(map.settings).pinColor;
+
     const mainTags = resolveTags(
       drafts.map((draft) => draft.categoryLabel),
       map.tagGroups,
       MAIN_TAG_GROUP_LABEL,
+      themeColor,
     );
 
     const tags = resolveTags(
       drafts.flatMap((draft) => draft.tagLabels),
       mainTags.tagGroups,
+      IMPORTED_TAG_GROUP_LABEL,
+      themeColor,
     );
 
     // Built up front so every row can be checked before the first request goes

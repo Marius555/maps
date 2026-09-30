@@ -20,4 +20,7 @@ export const TABLES = {
   mapSessions: "mapSessions",
   mapDaily: "mapDaily",
   sheetLinks: "sheetLinks",
+  notifications: "notifications",
+  apiCalls: "apiCalls",
+  emailLog: "emailLog",
 } as const;

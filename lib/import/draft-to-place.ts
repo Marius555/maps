@@ -47,6 +47,8 @@ export function draftToPlace(draft: DraftPlace, mapId: string): Place {
     // A CSV has no group column, and the review step has no sidebar to show one
     // in. Imported locations land loose and are grouped afterwards, if at all.
     groupId: "",
+    // The file's colour column, so the review map shows the pins as they will be.
+    color: draft.color,
     cardBlocks: {},
     createdAt: now,
     updatedAt: now,
@@ -80,6 +82,8 @@ export function draftToCreateInput(
     phone: draft.phone || undefined,
     email: draft.email || undefined,
     url: draft.url || undefined,
+    // Only when the file gave one; absent is a pin in the theme colour.
+    color: draft.color || undefined,
     sortOrder: 0,
     geocodeStatus: toGeocodeStatus(draft.status),
     // The review step already showed this; saving it is what lets a row still say

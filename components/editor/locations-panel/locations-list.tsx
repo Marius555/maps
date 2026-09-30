@@ -486,7 +486,7 @@ export function LocationsList({
                 <PlaceListItem
                   key={row.key}
                   place={place}
-                  pinColor={pinColorOfTags(tagGroups, place.tags)}
+                  pinColor={place.color || pinColorOfTags(tagGroups, place.tags)}
                   pinIcons={pinIcons}
                   groupColor={row.groupColor}
                   isSelected={
@@ -586,7 +586,8 @@ export function LocationsList({
                   groupColor={row.groupColor}
                   pinColor={
                     row.place
-                      ? pinColorOfTags(tagGroups, row.place.tags)
+                      ? row.place.color ||
+                        pinColorOfTags(tagGroups, row.place.tags)
                       : undefined
                   }
                   // Same two windows a loose row uses, so a stop whose lookup is

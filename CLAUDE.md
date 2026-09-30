@@ -108,6 +108,14 @@ aside at 80% so a nightly sync cannot starve somebody typing an address, and the
 re-spending the sweep. Full reasoning, the rival price table and the sizing arithmetic in
 `docs/notes/billing.md`.
 
+**An operator console exists at `/admin`** (login at `/login/admin`): one account configured
+in env, not in Appwrite, with its own HMAC-signed cookie that no customer session can be
+confused with. It reads across every account (users, upstream API calls per provider, the
+lookup budget, emails sent, subscriptions and revenue, maps and published-map traffic), which
+is why `lib/repositories/admin/**` is the one place allowed to skip `RepoContext`. It records
+two new things: upstream requests (`apiCalls`, batched in memory) and email sends (`emailLog`,
+recipient masked). `docs/notes/admin.md`.
+
 **Not built yet, and next — the rest of Week 4:** landing page, one platform page (Webflow
 first), docs with screenshots. Plus the two upstreams §12 says are forced before anyone pays
 us, which are now a switch rather than two machines: `GEOCODER_PROVIDER=geoapify` and
@@ -148,6 +156,7 @@ npm run setup:lemon -- --verify  # check .env's ids against the store; non-zero 
 npm run billing:replay -- <event> --email you@example.com  # signed webhook at a running server
 
 npm run build:disposable-domains # re-vendor the throwaway-email domain list (75k, ~1.2MB)
+npm run admin:hash      # admin console password → ADMIN_PASSWORD_HASH + ADMIN_SESSION_SECRET (stdin)
 
 npm run build:tile-styles -- https://tiles.example.com   # our own five style documents
 npm run mirror:tile-assets      # fonts, sprites, Natural Earth raster -> public/tiles/ (414MB)
@@ -272,6 +281,11 @@ one exists: `docs/notes/environment.md`.
   different user, which is why the three places the UI explains the freeze agree with it.
   Warns once, and **inert in a production build** by the same `NODE_ENV` check.
 
+- Server-only, optional: `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`, `ADMIN_SESSION_SECRET` — the
+  operator console at `/admin`. **All three or no console**: unset, both its pages and its
+  login route 404. The password is only ever a scrypt hash (`npm run admin:hash`), in a
+  format with no `$` because dotenv-expand would eat it. Set all three on Appwrite Sites too.
+
 **Not env, but configured the same way: `brand.json`** at the root — name, tagline, logo,
 favicon, company, contact and legal links. `lib/brand.ts` validates it at module load, so a bad
 value fails the build with the field named; an empty string means "not set" and nothing it
@@ -341,7 +355,9 @@ Area-specific invariants live at the head of each file in the table below.
   server-rendered figure and a client-rendered one printed different strings for
   the same number on one screen, and "1m" reads as *milli*. Any client component
   formatting one would also hydrate-mismatch. Write the labels out; `VIEW_TICKS`
-  in `lib/marketing/cost.ts` is the worked example.
+  in `lib/marketing/cost.ts` is the worked example. Dates are worse: the server has no
+  locale at all, so a React Aria date field laid out en-US on the server and lt-LT in the
+  browser — its segments render client-only, `components/ui/form-date-time-field.tsx`.
 - **`prefers-reduced-motion` cuts every animation to a single 0.01ms pass**, so a state
   told only in motion is told to nobody. Give it a static form too.
 
@@ -365,7 +381,9 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `app/(marketing)/**`, `components/marketing/**`, `lib/marketing/**` | `docs/notes/marketing.md` |
 | `lib/billing/**`, `lib/repositories/{subscriptions,usage,plan-limits}.repository.ts`, `app/api/webhooks/billing/**`, `app/(dashboard)/settings/billing/**`, `app/(marketing)/upgrade/**` | `docs/notes/billing.md` |
 | `app/(dashboard)/settings/**`, `components/user-settings/**`, `lib/theme/**`, `lib/account-deletion/**`, `lib/auth/sessions.ts`, the `.steady` block in `globals.css` | `docs/notes/settings.md` |
+| `lib/notifications/**`, `components/notifications/**`, `app/api/notifications/**`, `lib/repositories/notifications.repository.ts` | `docs/notes/notifications.md` |
 | `documents/legal/**`, `lib/legal/**`, `components/legal/**`, the `legal` links in `brand.json` | `documents/legal/README.md` |
+| `app/admin/**`, `app/(auth)/login/admin/**`, `app/api/admin/**`, `components/admin/**`, `lib/admin/**`, `lib/repositories/admin/**`, `lib/api-usage/**`, `lib/repositories/{api-calls,email-log}.repository.ts` | `docs/notes/admin.md` |
 
 Self-hosting runbooks, unchanged: `docs/self-hosting-geocoding.md`,
 `docs/self-hosting-routing.md`, `docs/self-hosting-tiles.md`.
@@ -529,12 +547,16 @@ from one list, and moving it would orphan every map already saved. It is a `varc
 theme keys stay short.
 
 ### `places`
-`mapId` · `name` · `lat` · `lng` · `address` · `tags` (string[]) · `fields?` (JSON) · `icon?` · `groupId?` · `description?` · `phone?` · `email?` · `url?` · `hours?` (JSON) · `photoIds?` (string[]) · `photoId?` (retired) · `logoId?` · `sortOrder` · `geocodeConfidence?` · `geocodeStatus` (`ok` | `low` | `failed` | `manual`) · ~~`category`~~ (retired) · `cardBlocks?` (JSON) · `sourceKey?`
+`mapId` · `name` · `lat` · `lng` · `address` · `tags` (string[]) · `fields?` (JSON) · `icon?` · `color?` · `groupId?` · `description?` · `phone?` · `email?` · `url?` · `hours?` (JSON) · `photoIds?` (string[]) · `photoId?` (retired) · `logoId?` · `sortOrder` · `geocodeConfidence?` · `geocodeStatus` (`ok` | `low` | `failed` | `manual`) · ~~`category`~~ (retired) · `cardBlocks?` (JSON) · `sourceKey?`
 
 `cardBlocks` is how *this* location's card differs from the account's design:
 `{ [blockId]: CardBlock }`, a whole resolved block per entry rather than a diff
 — see §0. It can change what a block *is* and nothing else; which blocks a card
 has, where they sit and in what order stay in `cardDesigns`, one row per account.
+
+`color` is this location's own pin colour (`#rrggbb`, `""` for none), from an imported
+file's colour column or Edit location. It ranks under a custom pin's colour and over the
+first tag's — `docs/notes/tags-and-pins.md`.
 
 `logoId` is this location's own brand mark, as a storage file id — not the image
 on the map's custom pin, which is `pinIcons` and is shared by every location

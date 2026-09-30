@@ -82,7 +82,7 @@ export function PlaceList({
             <PlaceListItem
               key={place.id}
               place={place}
-              pinColor={pinColorOfTags(tagGroups, place.tags)}
+              pinColor={place.color || pinColorOfTags(tagGroups, place.tags)}
               pinIcons={pinIcons}
               isSelected={place.id === selectedPlaceId}
               isAddressPending={pendingAddressIds?.has(place.id) ?? false}

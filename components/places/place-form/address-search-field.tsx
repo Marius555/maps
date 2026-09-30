@@ -31,6 +31,7 @@ export function AddressSearchField({
   label = "Address",
   hideLabel,
   hint = "Or drag the pin on the map to place it exactly.",
+  emptyMessage = "No matches for that address. Try adding a city or postcode, or drag the pin instead.",
   onChange,
   onPick,
 }: {
@@ -42,6 +43,8 @@ export function AddressSearchField({
   hideLabel?: boolean;
   /** `null` for no hint at all. */
   hint?: string | null;
+  /** What a search with no matches says — where the pin can be moved instead. */
+  emptyMessage?: string;
   onChange: (address: string) => void;
   onPick: (candidate: GeocodeCandidate) => void;
 }) {
@@ -110,7 +113,7 @@ export function AddressSearchField({
 
       <GeocodeResultList
         candidates={candidates}
-        emptyMessage="No matches for that address. Try adding a city or postcode, or drag the pin instead."
+        emptyMessage={emptyMessage}
         onPick={(candidate) => {
           onPick(candidate);
           setCandidates(null);

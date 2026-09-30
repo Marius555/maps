@@ -7,7 +7,9 @@ import { FormTextField } from "@/components/ui/form-field";
 import { roundCoord } from "@/lib/map/geo";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import type { PlaceFormValues } from "@/lib/validation/place.schema";
+import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { AddressSearchField } from "../address-search-field";
+import { PinColorField } from "../pin-color-field";
 import { PinMapField } from "../pin-map-field";
 import { PinField } from "../pin-field";
 
@@ -22,7 +24,7 @@ import { PinField } from "../pin-field";
  * which is the question that brings anyone to this dialog — and the field that
  * used to lead, the address, is now beside the map it moves rather than above a
  * fold. It also means the hint under the address can be dropped here: the map
- * says "drag the pin, or click the map" in its own caption, right there.
+ * says how to move the pin in its own caption, right there.
  *
  * The coordinates have moved out entirely, into a fold of their own. They are
  * the escape hatch for a pin the geocoder put in the wrong country, and an
@@ -36,6 +38,8 @@ export function EssentialsSection({
   lat,
   lng,
   icon,
+  color,
+  tags,
   onMove,
 }: {
   map: AppMap;
@@ -49,6 +53,9 @@ export function EssentialsSection({
    * the same reason: the map above draws the draft, not the stored row.
    */
   icon: string;
+  /** The form's live pin colour and tags, for the same reason as `icon`. */
+  color: string;
+  tags: string[];
   /**
    * The form's one position setter, shared with the Coordinates fold — two
    * sections move this pin, and two copies of "write lat and lng, mark dirty"
@@ -64,7 +71,8 @@ export function EssentialsSection({
         lat={lat}
         lng={lng}
         icon={icon}
-        onChange={onMove}
+        color={color}
+        tags={tags}
       />
 
       {/* One field per row, at every width. They shared a line while the address
@@ -90,6 +98,9 @@ export function EssentialsSection({
               error={errors.address?.message}
               // The map above already says it, in its own caption.
               hint={null}
+              // The pin on this dialog's map does not drag, so the way out of
+              // a search with no matches is typing the coordinates.
+              emptyMessage="No matches for that address. Try adding a city or postcode, or type the position under Coordinates."
               onChange={field.onChange}
               onPick={(candidate) => {
                 // The matched label replaces what was typed, so the stored
@@ -147,6 +158,20 @@ export function EssentialsSection({
           <PinField
             value={field.value}
             pinIcons={map.pinIcons}
+            onChange={field.onChange}
+          />
+        )}
+      />
+
+      {/* Under the pin it colours. A file's colour column lands here too, and
+          this is where it is changed or handed back to the theme. */}
+      <Controller
+        control={control}
+        name="color"
+        render={({ field }) => (
+          <PinColorField
+            value={field.value ?? ""}
+            themeColor={readEmbedSettings(map.settings).pinColor}
             onChange={field.onChange}
           />
         )}

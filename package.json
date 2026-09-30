@@ -25,6 +25,7 @@
     "setup:r2": "node --env-file=.env scripts/setup-r2.mjs",
     "deploy:cdn": "node --env-file=.env scripts/upload-cdn.mjs",
     "setup:lemon": "node --env-file=.env scripts/setup-lemon.mjs",
+    "admin:hash": "node scripts/hash-admin-password.mjs",
     "billing:replay": "node --env-file=.env scripts/replay-webhook.mjs",
     "migrate:auto-style": "node --env-file=.env scripts/migrate-auto-style.mjs",
     "migrate:shape-kinds": "node --env-file=.env scripts/migrate-shape-kinds.mjs",

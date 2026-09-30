@@ -8,6 +8,7 @@ import { isNotFound, toRepositoryError } from "@/lib/appwrite/errors";
 import { env } from "@/lib/env";
 import type { RepoContext } from "./context";
 import { deleteMap, getMap, listMaps } from "./maps.repository";
+import { deleteNotificationsForUser } from "./notifications.repository";
 import { deletePlacesById } from "./places.repository";
 
 /**
@@ -138,9 +139,12 @@ export async function deleteEmptiedMap(ctx: RepoContext, mapId: string): Promise
 
 /**
  * The rows keyed to the account rather than to a map: its card design, its
- * lookup meter, its subscription record. The last thing before the login goes.
+ * lookup meter, its subscription record, the notifications sent to it alone.
+ * The last thing before the login goes.
  */
 export async function deleteAccountRows(ctx: RepoContext): Promise<void> {
+  await deleteNotificationsForUser(ctx.userId);
+
   try {
     for (const tableId of [TABLES.cardDesigns, TABLES.usage, TABLES.subscriptions]) {
       await admin.tablesDB.deleteRows({

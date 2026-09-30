@@ -122,9 +122,9 @@ describe("style tables", () => {
     for (const style of MAP_STYLES) expect(style.length).toBeLessThanOrEqual(32);
   });
 
-  it("defaults to Auto, so a new map follows whoever is looking", () => {
-    expect(DEFAULT_MAP_STYLE).toBe("auto");
-    expect(isAutoMapStyle(DEFAULT_MAP_STYLE)).toBe(true);
+  it("defaults to Positron, the same in a light or a dark dashboard", () => {
+    expect(DEFAULT_MAP_STYLE).toBe("positron");
+    expect(isAutoMapStyle(DEFAULT_MAP_STYLE)).toBe(false);
   });
 
   it("accepts every selectable style and rejects anything else", () => {

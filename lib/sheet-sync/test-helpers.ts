@@ -46,6 +46,7 @@ export function linkedPlace(
     email: null,
     url: null,
     tags: [],
+    color: "",
     lat: 52.52,
     lng: 13.405,
     sourceKey,

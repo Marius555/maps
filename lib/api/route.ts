@@ -3,6 +3,7 @@ import "server-only";
 import type { NextRequest, NextResponse } from "next/server";
 import { ZodError, type ZodType, z } from "zod";
 
+import { requireAdmin } from "@/lib/admin/auth/guard";
 import { requireUser } from "@/lib/auth/current-user";
 import { assertEmailVerified } from "@/lib/auth/email-gate";
 import type { AuthUser } from "@/lib/auth/types";
@@ -74,6 +75,31 @@ export function withoutAuth(
   return async (request: NextRequest): Promise<NextResponse> => {
     try {
       return await handler(request);
+    } catch (error) {
+      return toErrorResponse(error);
+    }
+  };
+}
+
+/**
+ * For the operator console's routes (`/api/admin/**`). The admin is not an
+ * Appwrite user, so there is no `user` or `ctx` to hand on — only the check,
+ * which is the signed admin cookie (`lib/admin/auth/guard.ts`), never the
+ * customer session — and the route's params, awaited as `withAuth` does.
+ */
+export function withAdmin<Params = Record<string, never>>(
+  handler: (request: NextRequest, params: Params) => Promise<NextResponse>,
+) {
+  return async (
+    request: NextRequest,
+    args?: RouteArgs<Params>,
+  ): Promise<NextResponse> => {
+    try {
+      await requireAdmin();
+
+      const params = ((await args?.params) ?? {}) as Params;
+
+      return await handler(request, params);
     } catch (error) {
       return toErrorResponse(error);
     }

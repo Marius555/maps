@@ -124,6 +124,20 @@ export const env = {
    */
   analyticsSalt: process.env.ANALYTICS_SALT ?? "",
   /**
+   * The operator console at `/admin` — one account, configured here rather than
+   * in Appwrite, so it is nobody's customer account and no customer session can
+   * ever read as it. `lib/admin/auth/config.ts` is the only reader.
+   *
+   * **Unset — any one of the three — means the console does not exist**: both
+   * pages 404 and the login route refuses everybody, the posture
+   * `LEMON_WEBHOOK_SECRET` takes. The password is only ever stored as a scrypt
+   * hash (`npm run admin:hash`), in a format with no `$` in it because Next's
+   * dotenv-expand would read `$N` as a variable and silently corrupt the value.
+   */
+  adminEmail: (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase(),
+  adminPasswordHash: process.env.ADMIN_PASSWORD_HASH ?? "",
+  adminSessionSecret: process.env.ADMIN_SESSION_SECRET ?? "",
+  /**
    * One variant id per plan and cadence, as the provider's dashboard shows them.
    *
    * Configuration rather than code because they are different numbers in test and

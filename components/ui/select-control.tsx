@@ -34,6 +34,7 @@ export function SelectControl({
   error,
   isDisabled,
   variant,
+  hideLabel = false,
   onChange,
 }: {
   label: string;
@@ -55,6 +56,8 @@ export function SelectControl({
    * the token, since `--field-border` is every input in the app.
    */
   variant?: "primary" | "secondary";
+  /** Keep the label as the accessible name only, where the options say it already. */
+  hideLabel?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
@@ -67,7 +70,7 @@ export function SelectControl({
       variant={variant}
       onChange={(key) => onChange(String(key ?? ""))}
     >
-      <Label>{label}</Label>
+      <Label className={hideLabel ? "sr-only" : undefined}>{label}</Label>
       <Select.Trigger>
         {/* min-w-0 on the value, so a long option truncates rather than pushing
             the indicator out of the trigger. */}

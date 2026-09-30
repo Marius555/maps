@@ -53,6 +53,13 @@ import { Chip } from "@heroui/react";
  * edited rather than a decoration on something else.
  *
  * This used to be a `TagDot`, rendered by both chips below.
+ *
+ * **One exception, outside this file:** the chips a location has already
+ * *chosen*, in `TagPicker` (Edit location), carry a small dot of their tag's
+ * colour. The owner asked for it — tags are created with a colour and the
+ * picker was the one place it could not be seen — and those chips are a list
+ * of answers with a remove button, not toggles, so the argument above does not
+ * reach them. The options in the picker's menu stay plain.
  */
 
 /**

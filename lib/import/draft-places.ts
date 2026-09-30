@@ -1,6 +1,7 @@
 import type { GeocodeCandidate } from "@/lib/geocoding/types";
 import { isValidLngLat, roundCoord } from "@/lib/map/geo";
 import type { GeocodeStatus } from "@/lib/validation/place.schema";
+import { parseHexColor } from "./color";
 import type { ColumnMapping } from "./column-mapping";
 import { normalizeEmail, normalizeUrl } from "./contact";
 import { parseCoordinate, parseLatLngPair } from "./coordinates";
@@ -53,6 +54,12 @@ export type DraftPlace = {
   phone: string;
   email: string;
   url: string;
+  /**
+   * The row's pin colour as `#rrggbb`, or "" when the file gave none — or gave
+   * something that is not a colour, which is a warning on the row rather than
+   * a lost location. "" leaves the pin to the theme and its tags.
+   */
+  color: string;
   lat: number | null;
   lng: number | null;
   status: DraftStatus;
@@ -115,6 +122,9 @@ export function buildDraftPlaces(
     const address = composeAddress(row, mapping);
     const coordinates = readCoordinates(row, mapping);
 
+    const rawColor = cell(row, mapping.color);
+    const color = parseHexColor(rawColor) ?? "";
+
     const rawEmail = cell(row, mapping.email);
     const rawUrl = cell(row, mapping.url);
     const email = normalizeEmail(rawEmail);
@@ -150,6 +160,14 @@ export function buildDraftPlaces(
       });
     }
 
+    if (rawColor && !color) {
+      sourceIssues.push({
+        field: "color",
+        severity: "warning",
+        message: `${quoteValue(rawColor)} isn't a colour code, so this pin keeps the theme colour. Use a hex code like #e03131.`,
+      });
+    }
+
     const draft: DraftPlace = {
       key: `row-${rowNumber}`,
       rowNumber,
@@ -161,6 +179,7 @@ export function buildDraftPlaces(
       phone: cell(row, mapping.phone),
       email,
       url,
+      color,
       lat: coordinates.kind === "ok" ? coordinates.lat : null,
       lng: coordinates.kind === "ok" ? coordinates.lng : null,
       // Coordinates from the file are treated as deliberate, so a later geocode
@@ -184,7 +203,12 @@ export function buildDraftPlaces(
  * These survive every edit, because editing a name does not un-mangle the
  * coordinate cell the file shipped with.
  */
-const SOURCE_FIELDS = new Set<RowIssue["field"]>(["coordinates", "email", "url"]);
+const SOURCE_FIELDS = new Set<RowIssue["field"]>([
+  "coordinates",
+  "email",
+  "url",
+  "color",
+]);
 
 /**
  * Everything wrong with a draft right now.

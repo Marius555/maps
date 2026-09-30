@@ -1,3 +1,4 @@
+import { parseHexColor } from "../color";
 import { parseCoordinate, parseLatLngPair, parseMapLink } from "../coordinates";
 import type { ImportField } from "../fields";
 import { COUNTRY_WORDS } from "./countries";
@@ -76,6 +77,17 @@ export function valueScore(field: ImportField, stats: ColumnStats): number {
       return ratio(stats, isEmail) * 0.95;
     case "url":
       return ratio(stats, isUrl) * 0.9;
+    case "color":
+      // A column of `#` hex codes is nothing else. Only *with* the `#`: bare,
+      // "110001" is a hex code and also an Indian postcode or a six-digit id,
+      // and this field is self-evident — assigned on values alone. A bare-hex
+      // column still maps from a header that says "Colour".
+      return (
+        ratio(
+          stats,
+          (value) => value.trim().startsWith("#") && parseHexColor(value) !== null,
+        ) * 0.95
+      );
     case "phone":
       return phoneScore(stats);
     case "postcode":

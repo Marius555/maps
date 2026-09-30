@@ -1634,6 +1634,27 @@ html:has([data-app-frame]) {
 }
 
 /*
+ * The one pin in the Edit location dialog, rippling for as long as the dialog
+ * is open, so the eye lands on the location the dialog is about. The drop
+ * ripple on a loop — the same keyframes, slower, and never finished.
+ *
+ * Reduced motion gets a still halo instead: the blanket rule at the bottom of
+ * this file would otherwise play one 0.01ms pass and land on opacity 0, which
+ * tells nobody which pin this is.
+ */
+.pulsing-pins .map-pin__pulse {
+  animation: map-pin-drop 1.6s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulsing-pins .map-pin__pulse {
+    animation: none;
+    opacity: 0.3;
+    transform: scale(2);
+  }
+}
+
+/*
  * The pins that cannot be stops, while the route tool is armed.
  *
  * A route's stops are locations and only locations, and the routing engine

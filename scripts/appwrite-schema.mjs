@@ -64,6 +64,9 @@ export const SUBSCRIPTION_STATUSES = [
 ];
 // Hand-copied from lib/billing/types.ts's BillingCadence, on the same terms.
 export const BILLING_CADENCES = ["monthly", "yearly"];
+// Hand-copied from lib/notifications/types.ts, on the same terms.
+export const NOTIFICATION_KINDS = ["info", "success", "warning"];
+export const NOTIFICATION_AUDIENCES = ["all", "plan", "user"];
 
 export const TABLES = [
   {
@@ -73,7 +76,7 @@ export const TABLES = [
       varchar("userId", 36, { required: true }),
       varchar("name", 128, { required: true }),
       varchar("slug", 64, { required: true }),
-      varchar("style", 32, { xdefault: "liberty" }),
+      varchar("style", 32, { xdefault: "positron" }),
       float("defaultLat", { required: true, min: -90, max: 90 }),
       float("defaultLng", { required: true, min: -180, max: 180 }),
       float("defaultZoom", { required: true, min: 0, max: 24 }),
@@ -134,6 +137,15 @@ export const TABLES = [
     indexes: [
       { key: "idx_maps_userId", type: "key", columns: ["userId"], orders: ["asc"] },
       { key: "idx_maps_slug", type: "unique", columns: ["slug"], orders: ["asc"] },
+      // The operator console counts published maps across every account
+      // (lib/repositories/admin/content.ts); a query on an unindexed column is
+      // refused outright.
+      {
+        key: "idx_maps_publishedAt",
+        type: "key",
+        columns: ["publishedAt"],
+        orders: ["desc"],
+      },
     ],
   },
   {
@@ -218,6 +230,14 @@ export const TABLES = [
       // Which group this location belongs to, or "" for none — the same way
       // `category` and `icon` already spell "nothing chosen".
       varchar("groupId", 36, { xdefault: "" }),
+      /*
+       * This location's own pin colour, `#rrggbb`, or absent/"" for none.
+       *
+       * Written by an import whose file had a colour column, a sheet sync, or
+       * Edit location's Pin colour field. Absent is the old behaviour: the pin
+       * takes its custom pin's colour, then its first tag's, then the theme's.
+       */
+      varchar("color", 7),
       /*
        * How *this* location's card differs from the account's own design.
        *
@@ -499,6 +519,14 @@ export const TABLES = [
         columns: ["userId", "period"],
         orders: ["asc", "asc"],
       },
+      // Every account's row for one month — the console's top spenders. The
+      // unique index above cannot answer it: its prefix is `userId`.
+      {
+        key: "idx_usage_period",
+        type: "key",
+        columns: ["period"],
+        orders: ["asc"],
+      },
     ],
   },
   {
@@ -585,6 +613,14 @@ export const TABLES = [
         columns: ["mapId", "day"],
         orders: ["asc", "asc"],
       },
+      {
+        // Sessions per day across every map, for the operator console. Every
+        // other index here starts with `mapId`.
+        key: "idx_mapsessions_day",
+        type: "key",
+        columns: ["day"],
+        orders: ["asc"],
+      },
     ],
   },
   {
@@ -624,6 +660,106 @@ export const TABLES = [
         columns: ["mapId", "day"],
         orders: ["asc", "asc"],
       },
+    ],
+  },
+  {
+    // Messages from us to account owners — the Notifications page. Written by
+    // the admin dashboard (to come) through `createNotification`, read by the
+    // dashboard through `listNotificationsFor`. docs/notes/notifications.md.
+    //
+    // Like `usage`, rows carry no permission: the admin client is the only
+    // reader and writer, and nothing here is ever fetched by a browser.
+    //
+    // `audience` picks who sees a row: `all`, the plans in `audiencePlans`, or
+    // the one account in `audienceUserId`. A `publishedAt` in the future is a
+    // scheduled message — it is not listed until then. `expiresAt` absent means
+    // it never stops showing.
+    //
+    // Read state is not here: it is one `notificationsSeenAt` stamp on the
+    // account's prefs, so a broadcast is one row rather than one per account.
+    id: "notifications",
+    name: "Notifications",
+    columns: [
+      varchar("title", 120, { required: true }),
+      text("body", { required: true }),
+      enumeration("kind", NOTIFICATION_KINDS, { required: true }),
+      enumeration("audience", NOTIFICATION_AUDIENCES, { required: true }),
+      varchar("audienceUserId", 36),
+      varchar("audiencePlans", 16, { array: true }),
+      varchar("linkUrl", 2048),
+      varchar("linkLabel", 40),
+      datetime("publishedAt", { required: true }),
+      datetime("expiresAt"),
+    ],
+    indexes: [
+      {
+        key: "idx_notifications_audience_published",
+        type: "key",
+        columns: ["audience", "publishedAt"],
+        orders: ["asc", "desc"],
+      },
+      {
+        key: "idx_notifications_user",
+        type: "key",
+        columns: ["audienceUserId"],
+        orders: ["asc"],
+      },
+    ],
+  },
+  {
+    // Upstream requests per UTC day, per provider and kind — what the operator
+    // console's APIs page charts. `usage` cannot answer it: that counts lookups
+    // an account spent, pooled across providers, and not the requests actually
+    // made (a retry is a second request and a second credit).
+    //
+    // Written by `lib/api-usage/counter.ts`, which tallies in memory and flushes
+    // every few seconds, so a 3,000-row import is a handful of writes rather than
+    // 6,000. Read-add-write like `usage`, and it undercounts the same way under a
+    // race — see the head of usage.repository.ts for why that direction is fine.
+    //
+    // No permission: the admin client is the only reader and writer.
+    id: "apiCalls",
+    name: "API calls",
+    columns: [
+      varchar("day", 10, { required: true }),
+      // geoapify | photon | osrm
+      varchar("provider", 16, { required: true }),
+      // geocode | reverse | route | nearest
+      varchar("kind", 16, { required: true }),
+      integer("ok", { min: 0, xdefault: 0 }),
+      integer("failed", { min: 0, xdefault: 0 }),
+    ],
+    indexes: [
+      {
+        key: "idx_apicalls_day_provider_kind",
+        type: "unique",
+        columns: ["day", "provider", "kind"],
+        orders: ["asc", "asc", "asc"],
+      },
+    ],
+  },
+  {
+    // One row per transactional email we tried to send — the console's Email
+    // page. Written by `sendEmail` after it has its answer, never before, and
+    // never able to fail the send (docs/notes/auth.md: sending email may never
+    // fail a request).
+    //
+    // The recipient is stored masked (`wa•••@gmail.com`): enough to recognise a
+    // complaint, not a second copy of the user list.
+    id: "emailLog",
+    name: "Email log",
+    columns: [
+      datetime("sentAt", { required: true }),
+      varchar("day", 10, { required: true }),
+      varchar("template", 32, { required: true }),
+      boolean("ok", { xdefault: false }),
+      varchar("error", 200),
+      varchar("recipient", 128),
+      varchar("subject", 200),
+    ],
+    indexes: [
+      { key: "idx_emaillog_sent", type: "key", columns: ["sentAt"], orders: ["desc"] },
+      { key: "idx_emaillog_day", type: "key", columns: ["day"], orders: ["asc"] },
     ],
   },
 ];

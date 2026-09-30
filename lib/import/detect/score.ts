@@ -88,6 +88,7 @@ const SELF_EVIDENT: ReadonlySet<ImportField> = new Set<ImportField>([
   "email",
   "url",
   "phone",
+  "color",
   "lat",
   "lng",
   "latlng",

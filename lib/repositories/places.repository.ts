@@ -249,6 +249,9 @@ export async function createPlace(
         geocodeConfidence: input.geocodeConfidence ?? null,
         addressParts: serialiseJson(input.addressParts),
         groupId: input.groupId ?? "",
+        // Only when there is one, so a location without a colour writes
+        // nothing to the column.
+        ...(input.color ? { color: input.color } : {}),
       },
       permissions: ownerPermissions(ctx.userId),
     });
@@ -297,7 +300,7 @@ export async function createPlaces(
           lat: input.lat,
           lng: input.lng,
           address: input.address,
-            tags: input.tags,
+          tags: input.tags,
           fields: serialiseJson(input.fields),
           icon: input.icon,
           description: input.description ?? null,
@@ -311,6 +314,8 @@ export async function createPlaces(
           addressParts: serialiseJson(input.addressParts),
           // Only an import that keeps the map in sync with a sheet sets this.
           ...(input.sourceKey ? { sourceKey: input.sourceKey } : {}),
+          // Only a file with a colour column sets this.
+          ...(input.color ? { color: input.color } : {}),
         })),
       });
 

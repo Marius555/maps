@@ -40,6 +40,7 @@ const EMPTY: Place = {
   geocodeStatus: "manual",
   addressParts: null,
   groupId: "",
+  color: "",
   cardBlocks: {},
   createdAt: "",
   updatedAt: "",

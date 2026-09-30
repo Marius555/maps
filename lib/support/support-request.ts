@@ -66,6 +66,7 @@ export async function sendSupportRequest({
 
   const sentAt = new Date().toISOString();
   const { sent } = await sendEmail({
+    template: "support",
     to,
     replyTo: input.replyTo,
     ...supportRequestMessage({

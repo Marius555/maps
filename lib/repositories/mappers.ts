@@ -38,6 +38,7 @@ import {
   type MapSessionRow,
   type MapTagGroup,
   type MapRow,
+  type NotificationRow,
   type Place,
   type PlaceRow,
   type SessionEvent,
@@ -45,6 +46,12 @@ import {
   type Shape,
   type ShapeRow,
 } from "./types";
+import {
+  NOTIFICATION_KINDS,
+  type AppNotification,
+  type NotificationKind,
+} from "@/lib/notifications/types";
+import { isSafeNotificationLink } from "@/lib/validation/notification.schema";
 
 /**
  * Row → domain. These never throw: a row written by an older version of the app,
@@ -172,6 +179,11 @@ export function toGroup(row: GroupRow): Group {
   };
 }
 
+/** Only a well-formed hex reaches a renderer; a hand-edited cell reads as none. */
+function toPlaceColor(value: string | null | undefined): string {
+  return value && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : "";
+}
+
 export function toPlace(row: PlaceRow): Place {
   /*
    * One list, from two columns, with a rule rather than a merge.
@@ -222,6 +234,7 @@ export function toPlace(row: PlaceRow): Place {
     // than taking the whole list down.
     addressParts: parseJson<AddressParts | null>(row.addressParts, null),
     groupId: row.groupId ?? "",
+    color: toPlaceColor(row.color),
     /*
      * How this location's card differs from the account design, if at all.
      *
@@ -347,4 +360,32 @@ function toSessionEvents(value: string | null | undefined): SessionEvent[] {
   }
 
   return events;
+}
+
+/**
+ * A stored notification → what an owner is shown.
+ *
+ * Never the audience: who else a message went to is not this reader's business.
+ * An unknown kind reads as `info` rather than failing the page, and a link that
+ * no longer passes the write-side check (or lost its label) is dropped rather
+ * than drawn — this is the last line before it becomes an `href`.
+ */
+export function toNotification(row: NotificationRow): AppNotification {
+  const linkUrl =
+    row.linkUrl && row.linkLabel && isSafeNotificationLink(row.linkUrl)
+      ? row.linkUrl
+      : null;
+
+  return {
+    id: row.$id,
+    title: row.title,
+    body: row.body,
+    kind: (NOTIFICATION_KINDS as readonly string[]).includes(row.kind ?? "")
+      ? (row.kind as NotificationKind)
+      : "info",
+    linkUrl,
+    linkLabel: linkUrl ? (row.linkLabel ?? null) : null,
+    publishedAt: row.publishedAt,
+    expiresAt: row.expiresAt || null,
+  };
 }

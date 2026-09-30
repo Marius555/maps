@@ -52,8 +52,13 @@ export function PlaceTableRow({
   onRetryAddress?: () => void;
   onDelete: () => void;
 }) {
-  /** The colour the pin took, so exactly one chip is marked as its source. */
-  const pinColor = pinColorOfChips(tagChips);
+  /**
+   * The colour the pin took from a tag, so exactly one chip is marked as its
+   * source — and none when the location has a colour of its own, because then
+   * no tag is what coloured it.
+   */
+  const tagColor = place.color ? undefined : pinColorOfChips(tagChips);
+  const pinColor = place.color || tagColor;
 
   // Only worth offering while there is still nothing to show. A location whose
   // address the customer has since typed has no failure left to retry.
@@ -149,7 +154,7 @@ export function PlaceTableRow({
                 key={chip.id}
                 className="flex max-w-32 items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-xs"
               >
-                {chip.color && chip.color === pinColor ? (
+                {chip.color && chip.color === tagColor ? (
                   <span
                     aria-hidden="true"
                     className="size-1.5 shrink-0 rounded-full"

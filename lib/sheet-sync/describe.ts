@@ -21,6 +21,7 @@ export function describeSheetOwnedFields(mapping: ColumnMapping): string {
     owned.email ? "email" : null,
     owned.url ? "website" : null,
     owned.tags ? "tags" : null,
+    owned.color ? "pin colour" : null,
   ].filter((name): name is string => Boolean(name));
 
   const list =

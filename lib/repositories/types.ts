@@ -63,6 +63,8 @@ export type PlaceRow = Models.Row & {
   geocodeStatus?: string | null;
   addressParts?: string | null;
   groupId?: string | null;
+  /** This location's own pin colour as `#rrggbb`, or "" / absent for none. */
+  color?: string | null;
   /** How this location's card differs from the account design, as JSON. */
   cardBlocks?: string | null;
   /** Which row of the map's linked Google Sheet this came from, if any. */
@@ -234,6 +236,15 @@ export type Place = {
   addressParts: AddressParts | null;
   /** The group this belongs to, or "" — see the `Group` type below. */
   groupId: string;
+  /**
+   * This location's own pin colour, `#rrggbb`, or "" for none.
+   *
+   * Set by an import whose file had a colour column, or in Edit location. It
+   * sits below a custom pin's own colour and above the first tag's — see
+   * `groupColorIndex` in lib/map/group-colors.ts, which is the one statement of
+   * that order. "" is the pin as it was before this field existed.
+   */
+  color: string;
   /**
    * How this location's card differs from the account's own design, keyed by
    * block id — `{}` for the overwhelming majority of locations, which is every
@@ -438,4 +449,17 @@ export type MapDailyRow = Models.Row & {
   views?: number | null;
   interactions?: number | null;
   totals?: string | null;
+};
+
+export type NotificationRow = Models.Row & {
+  title: string;
+  body: string;
+  kind?: string | null;
+  audience: string;
+  audienceUserId?: string | null;
+  audiencePlans?: string[] | null;
+  linkUrl?: string | null;
+  linkLabel?: string | null;
+  publishedAt: string;
+  expiresAt?: string | null;
 };

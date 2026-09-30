@@ -5,6 +5,7 @@ import { Menu } from "lucide-react";
 import { PlanBadge } from "@/components/billing/plan-badge";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { IconButton } from "@/components/ui/icon-button";
+import { useNotifications } from "@/lib/query/notifications";
 import type { PlanId } from "@/lib/repositories/plan-limits";
 import { MobileHeaderSlot } from "./mobile-header-slot";
 import { useSidebar } from "./sidebar/sidebar-context";
@@ -27,19 +28,28 @@ import { useSidebar } from "./sidebar/sidebar-context";
  */
 export function MobileHeader({ plan }: { plan: PlanId }) {
   const { setMobileOpen } = useSidebar();
+  const unread = useNotifications().data?.unreadCount ?? 0;
 
   return (
     <header className="flex min-h-14 items-center gap-2 px-2 md:hidden">
       {/* The first-map tutorial points here below `md`, where the Locations
           link is inside a closed drawer. A wrapper, since the Button's own
           props are React Aria's to filter. */}
-      <span data-tutorial="nav-menu" className="flex">
+      <span data-tutorial="nav-menu" className="relative flex">
         <IconButton
-          label="Open navigation"
+          label={unread > 0 ? `Open navigation, ${unread} new notifications` : "Open navigation"}
           icon={Menu}
           placement="bottom"
           onPress={() => setMobileOpen(true)}
         />
+        {/* The Notifications row and its count are inside the closed drawer on
+            a phone, so the button that opens it carries the news. */}
+        {unread > 0 ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute right-1.5 top-1.5 size-2 rounded-full bg-accent ring-2 ring-background"
+          />
+        ) : null}
       </span>
       <span className="truncate text-sm font-semibold tracking-tight text-foreground">
         <BrandLogo />

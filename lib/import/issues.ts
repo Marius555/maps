@@ -21,7 +21,7 @@
  *   dropped along the way and saying so is the honest thing to do.
  */
 
-export type IssueField = "name" | "address" | "coordinates" | "email" | "url";
+export type IssueField = "name" | "address" | "coordinates" | "email" | "url" | "color";
 
 export type IssueSeverity = "error" | "warning";
 

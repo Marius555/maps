@@ -24,4 +24,6 @@ export const queryKeys = {
   cardDesign: ["cardDesign"] as const,
   /** One page of the account's invoices, as the provider lists them. */
   invoices: (page: number) => ["invoices", page] as const,
+  /** The account's notifications and unread count — lib/notifications. */
+  notifications: ["notifications"] as const,
 } as const;

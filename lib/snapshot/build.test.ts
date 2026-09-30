@@ -68,6 +68,7 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     geocodeConfidence: null,
     addressParts: null,
     groupId: "",
+    color: "",
     cardBlocks: {},
     geocodeStatus: "ok",
     createdAt: GENERATED_AT,
@@ -1808,6 +1809,43 @@ describe("buildSnapshot group colours", () => {
    */
   it("says nothing about the colour of a location no group decided", () => {
     const snapshot = build([makePlace()], [], []);
+
+    expect(snapshot.places[0]).not.toHaveProperty("color");
+  });
+
+  /*
+   * A location's own colour (an imported colour column, or Edit location's Pin
+   * colour). The embed reads `SnapshotPlace.color` above the custom pin, and the
+   * editor puts the location's colour under it — so it is only published when
+   * the pin has no colour of its own, or the two would disagree.
+   */
+  it("publishes a location's own colour", () => {
+    const snapshot = build([makePlace({ color: "#e03131" })], [], []);
+
+    expect(snapshot.places[0]?.color).toBe("#e03131");
+  });
+
+  it("lets a group's colour beat the location's own", () => {
+    const snapshot = build(
+      [makePlace({ groupId: "group-1", color: "#e03131" })],
+      [],
+      [makeGroup()],
+    );
+
+    expect(snapshot.places[0]?.color).toBe("#2f9e44");
+  });
+
+  it("leaves the colour to a custom pin that has one", () => {
+    const { snapshot } = buildSnapshot(
+      makeMap({
+        pinIcons: [
+          { id: "ab12cd34", label: "Flagship", color: "#1c7ed6", glyph: "store", image: "" },
+        ],
+      }),
+      [makePlace({ icon: "custom:ab12cd34", color: "#e03131" })],
+      [],
+      GENERATED_AT,
+    );
 
     expect(snapshot.places[0]).not.toHaveProperty("color");
   });
