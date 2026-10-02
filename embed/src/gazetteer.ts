@@ -30,7 +30,7 @@ import {
 } from "@/packages/shared/gazetteer";
 import type { SnapshotGazetteer } from "@/packages/shared/snapshot";
 
-import { warn } from "./config";
+import { warn } from "./page";
 
 export type { GazetteerHit };
 

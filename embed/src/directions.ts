@@ -245,7 +245,7 @@ export function installDirectionsAsk(
      *
      * `sendBeacon` inside a click handler is safe — it hands the payload to the
      * browser and returns. Nothing here calls `preventDefault`, opens a window,
-     * or awaits anything, which is the rule embed/dev/dev.html:174-182 states.
+     * or awaits anything — the Directions invariant in docs/notes/publish-and-embed.md.
      */
     if (event.type === "click") track("directions", { id: anchor.dataset.lmDir ?? "" });
 

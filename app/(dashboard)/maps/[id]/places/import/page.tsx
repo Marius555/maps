@@ -56,9 +56,9 @@ export default async function ImportPage(
   }
 
   /*
-   * The heading is `sr-only`. The sidebar's lit "Locations" row and the step trail
-   * at the top of the wizard already say where this is and how far through it you
-   * are; a title drawn over them was a third answer to a question nobody had.
+   * The heading is `sr-only`. The Source step draws the same words itself
+   * (`ImportHeading`, title `aria-hidden`), and the three working steps draw
+   * none — the sidebar's lit "Locations" row already says where this is.
    */
   return (
     /*

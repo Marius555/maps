@@ -42,8 +42,9 @@
        *
        * **This page's whole job is to show what a customer sees.** A bare
        * element selector here makes it show its own styling instead, which is
-       * worse than no harness. `embed/dev/dev.html` has never had one, which is
-       * exactly why the same map measured clean there and broken here.
+       * worse than no harness. The fixture harness that sat beside this page
+       * (`dev.html`, deleted since) never had one, which is exactly why the same
+       * map measured clean there and broken here.
        *
        * The embed now carries a reset for this (`.lm-root :is(button, a, input,
        * ul, li)` in embed/src/styles.css) — but that is a floor for pages we do
@@ -92,13 +93,10 @@
     -->
     <div id="docs">
       <p class="note">
-        <code>/embed/dev.html</code> renders a <em>fixture</em>, which is what
-        makes it useful: no Appwrite, no login, no publish. That also means its
-        map id is not real, so the collector drops every beacon it sends and
-        analytics can never be checked there end to end. This page is the other
-        half — it points the same built bundle at a
-        <strong>real published snapshot</strong>, so a session recorded here lands
-        in the real tables and shows up on the map's Analytics tab.
+        This page points the built embed at a
+        <strong>real published snapshot</strong> — exactly what a visitor to a
+        customer's site gets — so a session recorded here lands in the real
+        tables and shows up on the map's Analytics tab.
       </p>
 
       <p class="note">

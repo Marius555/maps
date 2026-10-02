@@ -108,9 +108,10 @@ export type RecordSessionInput = {
  * ceiling is a spend guard, and refusing a paying customer's visitors to save a
  * hundred rows would be the expensive mistake.
  *
- * Bounded, because one process may serve every map in the app. At the cap it is
- * emptied rather than evicted entry by entry — this is a cache, not a store, and
- * a cold entry costs two reads.
+ * Bounded, because one process may serve every map in the app. At the cap the
+ * oldest entry goes. It used to be emptied outright, which let anybody posting
+ * beacons for 500 made-up map ids flush every real map's entry at once — the
+ * miss costs nothing for a fake id and two reads for every real one.
  */
 type GateEntry = { gate: CollectGate | null; checkedAt: number };
 
@@ -133,7 +134,14 @@ export async function readCollectGate(mapId: string): Promise<CollectGate | null
 
   const gate = await loadCollectGate(mapId);
 
-  if (gates.size >= GATE_MAX_ENTRIES) gates.clear();
+  // Re-inserted, so the Map's insertion order is least-recently-refreshed first.
+  gates.delete(mapId);
+
+  if (gates.size >= GATE_MAX_ENTRIES) {
+    const oldest = gates.keys().next().value;
+    if (oldest !== undefined) gates.delete(oldest);
+  }
+
   gates.set(mapId, { gate, checkedAt: Date.now() });
 
   return gate;

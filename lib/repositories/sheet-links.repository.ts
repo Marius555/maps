@@ -119,6 +119,11 @@ export async function setSheetAutoSync(
 ): Promise<SheetLink | null> {
   await getMap(ctx, mapId);
 
+  // Switching it on is the plan decision; switching it off never is. Without
+  // this a downgraded account could turn its daily sync back on, and the cron
+  // would visit the link every night only for the step to refuse it.
+  if (autoSync) await assertPlanFeature(ctx.userId, "sheetSync");
+
   try {
     const existing = await findRow(mapId);
     if (!existing) return null;

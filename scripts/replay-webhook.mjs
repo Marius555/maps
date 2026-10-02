@@ -170,12 +170,21 @@ const renewsAt = (() => {
  * both, because the route prefers `ends_at` and reading a renewal date off a
  * cancelled subscription would extend a plan somebody stopped paying for.
  */
+/*
+ * Signed the way `checkoutUserSignature` in lib/billing/lemon.ts signs a real
+ * checkout — the route ignores an unsigned user id.
+ */
+const userSig = createHmac("sha256", secret)
+  .update(`checkout-user:${userId}`)
+  .digest("hex")
+  .slice(0, 32);
+
 const winding = shape.status === "cancelled" || shape.status === "expired";
 
 const body =
   shape.kind === "subscription"
     ? {
-        meta: { event_name: event, custom_data: { user_id: userId } },
+        meta: { event_name: event, custom_data: { user_id: userId, user_sig: userSig } },
         data: {
           id: subscriptionId,
           type: "subscriptions",
@@ -189,7 +198,7 @@ const body =
         },
       }
     : {
-        meta: { event_name: event, custom_data: { user_id: userId } },
+        meta: { event_name: event, custom_data: { user_id: userId, user_sig: userSig } },
         data: {
           id: "replay-invoice",
           type: "subscription-invoices",

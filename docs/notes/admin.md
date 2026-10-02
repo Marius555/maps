@@ -32,7 +32,7 @@ Notifications is the one page that writes — `docs/notes/notifications.md`.
 - **Login is throttled per IP (5 / 15 min) and globally (20 / 15 min)**, counting every
   attempt, successes included. It always spends one scrypt, against a decoy when the email
   is wrong, so neither the message nor the timing reveals which half was right. The
-  throttle is in-memory and best effort, as `lib/auth/throttle.ts` says; the scrypt cost is
+  throttle is in-memory and best effort, as `lib/rate-limit/limiter.ts` says; the scrypt cost is
   the defence that survives a restart.
 - **API calls are counted batched and best effort.** `lib/api-usage/counter.ts` tallies in
   memory and flushes every 15s, one read-add-write per (day, provider, kind) that moved. A

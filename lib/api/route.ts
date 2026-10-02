@@ -7,8 +7,11 @@ import { requireAdmin } from "@/lib/admin/auth/guard";
 import { requireUser } from "@/lib/auth/current-user";
 import { assertEmailVerified } from "@/lib/auth/email-gate";
 import type { AuthUser } from "@/lib/auth/types";
+import { RATE_LIMITS, type RatePolicyName } from "@/lib/limits/rate";
+import { clientIp } from "@/lib/rate-limit/ip";
+import { rateLimit } from "@/lib/rate-limit/limiter";
 import { repoContext, type RepoContext } from "@/lib/repositories/context";
-import { RepositoryError } from "@/lib/repositories/errors";
+import { RateLimitError, RepositoryError } from "@/lib/repositories/errors";
 import type { ApiFieldErrors } from "./error-codes";
 import { fail } from "./responses";
 
@@ -49,7 +52,7 @@ type RouteArgs<Params> = { params: Promise<Params> };
  */
 export function withAuth<Params = Record<string, never>>(
   handler: Handler<Params>,
-  options: { allowUnverified?: boolean } = {},
+  options: { allowUnverified?: boolean; rateLimit?: PolicyPer<"user"> } = {},
 ) {
   return async (
     request: NextRequest,
@@ -57,6 +60,9 @@ export function withAuth<Params = Record<string, never>>(
   ): Promise<NextResponse> => {
     try {
       const user = await requireUser();
+
+      rateLimit(options.rateLimit ?? defaultUserPolicy(request.method), user.id);
+
       if (!options.allowUnverified) assertEmailVerified(user, request.method);
 
       const params = ((await args?.params) ?? {}) as Params;
@@ -68,12 +74,22 @@ export function withAuth<Params = Record<string, never>>(
   };
 }
 
-/** For routes that must answer before there is a session (login, signup). */
+/**
+ * For routes that must answer before there is a session (login, signup).
+ *
+ * `rateLimit` names an IP-keyed policy from `lib/limits/rate.ts`, counted before
+ * the handler runs so a flood is refused without costing an Appwrite call. A
+ * route that throttles by something only its body knows (an email address)
+ * calls `rateLimit` itself as well.
+ */
 export function withoutAuth(
   handler: (request: NextRequest) => Promise<NextResponse>,
+  options: { rateLimit?: PolicyPer<"ip"> } = {},
 ) {
   return async (request: NextRequest): Promise<NextResponse> => {
     try {
+      if (options.rateLimit) rateLimit(options.rateLimit, clientIp(request.headers));
+
       return await handler(request);
     } catch (error) {
       return toErrorResponse(error);
@@ -106,7 +122,27 @@ export function withAdmin<Params = Record<string, never>>(
   };
 }
 
+/** The policies in `RATE_LIMITS` counted against `per` — so a route cannot key an IP policy by account. */
+type PolicyPer<Per extends string> = {
+  [Name in RatePolicyName]: (typeof RATE_LIMITS)[Name]["per"] extends Per ? Name : never;
+}[RatePolicyName];
+
+/**
+ * What an authenticated route is limited by when it names nothing stricter.
+ *
+ * Applied to every `withAuth` route, which is the point: a route written next
+ * month is limited by having been written normally, the same argument the email
+ * gate makes above.
+ */
+function defaultUserPolicy(method: string): PolicyPer<"user"> {
+  return method === "GET" || method === "HEAD" || method === "OPTIONS" ? "read" : "write";
+}
+
 export function toErrorResponse(error: unknown): NextResponse {
+  if (error instanceof RateLimitError) {
+    return fail(error.code, error.message, error.status, undefined, error.retryAfterSeconds);
+  }
+
   if (error instanceof RepositoryError) {
     return fail(error.code, error.message, error.status);
   }

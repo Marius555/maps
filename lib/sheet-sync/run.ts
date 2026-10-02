@@ -17,12 +17,14 @@ import { readCsvText } from "@/lib/import/sources/csv";
 import { ImportSourceError } from "@/lib/import/sources/types";
 import { buildTable } from "@/lib/import/table";
 import { repoContext } from "@/lib/repositories/context";
+import { removeStorageFiles } from "@/lib/repositories/place-files";
 import { RepositoryError, planFeatureMessage } from "@/lib/repositories/errors";
 import { getMap, updateMap } from "@/lib/repositories/maps.repository";
 import {
   applySheetPatches,
   createPlaces,
   deletePlacesById,
+  placeFileIds,
   listAllPlaces,
 } from "@/lib/repositories/places.repository";
 import { PLAN_LIMITS, getUserPlan, planAllows } from "@/lib/repositories/plan-limits";
@@ -430,6 +432,10 @@ async function step(
       map.id,
       diff.removals.map((place) => place.id),
     );
+
+    // A short budget: this is one step of a sync that must finish inside the
+    // host's request cap. What does not fit is logged, not retried.
+    await removeStorageFiles(placeFileIds(diff.removals), 3_000);
   }
 
   // Before the places that wear them, so no location is ever saved naming a

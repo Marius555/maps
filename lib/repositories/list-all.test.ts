@@ -44,16 +44,30 @@ import { listAllShapes } from "./shapes.repository";
 const ctx = { userId: "owner" };
 const MAP_ID = "map-1";
 
-/** `count` rows, served in Appwrite's 100-row pages. */
+/** One serialised query of `method` from a listRows call, parsed. */
+function queryOf(args: { queries: string[] }, method: string): unknown[] | undefined {
+  for (const raw of args.queries) {
+    const query = JSON.parse(raw) as { method: string; values: unknown[] };
+    if (query.method === method) return query.values;
+  }
+  return undefined;
+}
+
+/**
+ * `count` rows, served in Appwrite's 100-row pages by cursor or by offset,
+ * the way Appwrite would: a count only when asked for, and `0` otherwise.
+ */
 function servePages(count: number) {
-  let served = 0;
+  const ids = Array.from({ length: count }, (_, i) => `row-${i}`);
 
-  listRows.mockImplementation(async () => {
-    const size = Math.min(100, count - served);
-    const rows = Array.from({ length: size }, (_, i) => ({ $id: `row-${served + i}` }));
-    served += size;
+  listRows.mockImplementation(async (args: { queries: string[]; total: boolean }) => {
+    const limit = Number(queryOf(args, "limit")?.[0] ?? 25);
+    const cursor = queryOf(args, "cursorAfter")?.[0];
+    const offset = Number(queryOf(args, "offset")?.[0] ?? 0);
+    const start = cursor ? ids.indexOf(String(cursor)) + 1 : offset;
+    const rows = ids.slice(start, start + limit).map(($id) => ({ $id }));
 
-    return { rows, total: 0 };
+    return { rows, total: args.total ? count : 0 };
   });
 }
 
@@ -78,21 +92,62 @@ describe.each([
     expect(listRows).toHaveBeenCalledTimes(3);
   });
 
-  it("does not ask Appwrite to count rows it pages through", async () => {
-    servePages(150);
+  it("asks Appwrite to count at most once, however many pages", async () => {
+    servePages(350);
 
     await listAll(ctx, MAP_ID);
 
-    for (const [args] of listRows.mock.calls) {
-      expect(args).toMatchObject({ total: false });
-    }
+    const counted = listRows.mock.calls.filter(([args]) => args.total === true);
+    expect(counted.length).toBeLessThanOrEqual(1);
   });
 
-  it("still refuses a map owned by somebody else, before reading a row", async () => {
+  it("still refuses a map owned by somebody else, and returns none of its rows", async () => {
+    servePages(150);
     getRow.mockResolvedValue({ $id: MAP_ID, userId: "someone-else" });
 
+    // The rows may be asked for beside the check, but the read only ever
+    // resolves to an error: nothing about another account's map gets out.
     await expect(listAll(ctx, MAP_ID)).rejects.toBeInstanceOf(NotFoundError);
-    expect(listRows).not.toHaveBeenCalled();
+  });
+});
+
+describe("listAllPlaces' parallel pages", () => {
+  it("reads every page after the first by offset, in order", async () => {
+    servePages(1234);
+
+    const places = await listAllPlaces(ctx, MAP_ID);
+
+    expect(places.map((place) => place.id)).toEqual(
+      Array.from({ length: 1234 }, (_, i) => `row-${i}`),
+    );
+    expect(listRows).toHaveBeenCalledTimes(13);
+    expect(listRows.mock.calls.some(([args]) => queryOf(args, "cursorAfter"))).toBe(false);
+  });
+
+  it("falls back to the cursor walk when a row disappears mid-read", async () => {
+    servePages(250);
+    const serve = listRows.getMockImplementation()!;
+    // The count says 251: one row was deleted after it was taken.
+    listRows.mockImplementation(async (args: { queries: string[]; total: boolean }) => {
+      const page = await serve(args);
+      return args.total ? { ...page, total: 251 } : page;
+    });
+
+    const places = await listAllPlaces(ctx, MAP_ID);
+
+    expect(places).toHaveLength(250);
+    expect(new Set(places.map((place) => place.id)).size).toBe(250);
+    expect(listRows.mock.calls.some(([args]) => queryOf(args, "cursorAfter"))).toBe(true);
+  });
+
+  it("breaks timestamp ties by sequence, so offsets keep the walk's order", async () => {
+    servePages(150);
+
+    await listAllPlaces(ctx, MAP_ID);
+
+    for (const [args] of listRows.mock.calls) {
+      expect(args.queries).toContain(JSON.stringify({ method: "orderAsc", attribute: "$sequence" }));
+    }
   });
 });
 

@@ -16,7 +16,9 @@ import type { RepoContext } from "./context";
 import { NotFoundError, PlanLimitError } from "./errors";
 import { toPlace } from "./mappers";
 import { getMap, ownerPermissions } from "./maps.repository";
-import { PLAN_LIMITS, getUserPlan } from "./plan-limits";
+import { removeStorageFiles } from "./place-files";
+import { PLAN_LIMITS, getUserPlan, rollBackIfOverLimit } from "./plan-limits";
+import { readPagesInParallel } from "./read-pages";
 import type { Page, Place, PlaceRow } from "./types";
 
 /**
@@ -32,6 +34,8 @@ function serialiseJson(value: object | null | undefined): string | null {
 const MAX_PAGE_SIZE = 100;
 /** Belt and braces on listAllPlaces: 50 pages is far past any plan's limit. */
 const MAX_PAGES = 50;
+/** Offset pages in flight at once in `readAllPlaces`. */
+const OFFSET_CONCURRENCY = 6;
 /** Rows per createRows call. Keeps any single bulk request modest. */
 const BULK_CHUNK_SIZE = 50;
 
@@ -106,8 +110,71 @@ export async function listAllPlaces(
   ctx: RepoContext,
   mapId: string,
 ): Promise<Place[]> {
-  await getMap(ctx, mapId);
+  // Beside the rows rather than ahead of them: nothing is returned unless the
+  // map is the caller's, and a check in series cost every map page one more
+  // round trip to Appwrite before its first row was even asked for.
+  const [, rows] = await Promise.all([getMap(ctx, mapId), readAllPlaces(mapId)]);
 
+  return rows;
+}
+
+/**
+ * Every page of a map's places, with no ownership check — the caller has made it.
+ *
+ * Pages after the first are read side by side by offset (`readPagesInParallel`),
+ * so a 3,000-location map is one request then thirty at once rather than thirty
+ * in series. Anything that would make offsets lie falls back to `walkPlaces`.
+ */
+function readAllPlaces(mapId: string): Promise<Place[]> {
+  return readPagesInParallel({
+    pageSize: MAX_PAGE_SIZE,
+    maxRows: MAX_PAGES * MAX_PAGE_SIZE,
+    concurrency: OFFSET_CONCURRENCY,
+    idOf: (place) => place.id,
+    readFirst: () => readPlacesAt(mapId, 0, true),
+    readAt: async (offset) => (await readPlacesAt(mapId, offset, false)).items,
+    fallback: () => walkPlaces(mapId),
+  });
+}
+
+/**
+ * One page by offset, in exactly the order the cursor walk reads.
+ *
+ * `$sequence` breaks `$createdAt` ties explicitly. An import writes rows in
+ * batches that share a timestamp, and Appwrite already breaks those ties by
+ * `$sequence` on its own — measured against the cursor walk over maps with
+ * tied rows, page by page. Saying so here keeps offsets deterministic rather
+ * than relying on that, and keeps the Locations list in the order it had.
+ */
+async function readPlacesAt(
+  mapId: string,
+  offset: number,
+  total: boolean,
+): Promise<{ items: Place[]; total: number }> {
+  const queries = [
+    Query.equal("mapId", mapId),
+    ORDER,
+    Query.orderAsc("$sequence"),
+    Query.limit(MAX_PAGE_SIZE),
+  ];
+  if (offset > 0) queries.push(Query.offset(offset));
+
+  try {
+    const result = await admin.tablesDB.listRows<PlaceRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.places,
+      queries,
+      total,
+    });
+
+    return { items: result.rows.map(toPlace), total: result.total };
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+/** The sequential cursor walk: slower, but nothing written mid-read can make it skip a row. */
+async function walkPlaces(mapId: string): Promise<Place[]> {
   const all: Place[] = [];
   let cursor: string | null = null;
 
@@ -223,8 +290,10 @@ export async function createPlace(
     throw new PlanLimitError("places", limit, plan);
   }
 
+  let created: PlaceRow;
+
   try {
-    const row = await admin.tablesDB.createRow<PlaceRow>({
+    created = await admin.tablesDB.createRow<PlaceRow>({
       databaseId: env.databaseId,
       tableId: TABLES.places,
       rowId: ID.unique(),
@@ -255,11 +324,18 @@ export async function createPlace(
       },
       permissions: ownerPermissions(ctx.userId),
     });
-
-    return toPlace(row);
   } catch (error) {
     throw toRepositoryError(error);
   }
+
+  await rollBackIfOverLimit({
+    total: () => countPlaces(ctx, mapId),
+    limit,
+    undo: () => deletePlacesById(ctx, mapId, [created.$id]),
+    error: new PlanLimitError("places", limit, plan),
+  });
+
+  return toPlace(created);
 }
 
 /**
@@ -276,6 +352,8 @@ export async function createPlaces(
   await getMap(ctx, mapId);
   if (inputs.length === 0) return [];
 
+  const plan = await getUserPlan(ctx.userId);
+  const limit = PLAN_LIMITS[plan].places;
   const existing = await assertPlaceHeadroom(ctx, mapId, inputs.length);
 
   const permissions = ownerPermissions(ctx.userId);
@@ -291,8 +369,8 @@ export async function createPlaces(
         databaseId: env.databaseId,
         tableId: TABLES.places,
         rows: chunk.map((input, offset) => ({
-          // Bulk create takes per-row $id and $permissions inline; without them
-          // the rows would land with no owner.
+          // Bulk create takes per-row $id and $permissions inline. The
+          // permissions are empty on purpose — see `ownerPermissions`.
           $id: ID.unique(),
           $permissions: permissions,
           mapId,
@@ -321,11 +399,18 @@ export async function createPlaces(
 
       created.push(...result.rows.map(toPlace));
     }
-
-    return created;
   } catch (error) {
     throw toRepositoryError(error);
   }
+
+  await rollBackIfOverLimit({
+    total: () => countPlaces(ctx, mapId),
+    limit,
+    undo: () => deletePlacesById(ctx, mapId, created.map((place) => place.id)),
+    error: new PlanLimitError("places", limit, plan),
+  });
+
+  return created;
 }
 
 export async function updatePlace(
@@ -456,7 +541,7 @@ export async function deletePlace(
   mapId: string,
   placeId: string,
 ): Promise<void> {
-  await getPlace(ctx, mapId, placeId);
+  const place = await getPlace(ctx, mapId, placeId);
 
   try {
     await admin.tablesDB.deleteRow({
@@ -467,4 +552,13 @@ export async function deletePlace(
   } catch (error) {
     throw toRepositoryError(error);
   }
+
+  // After the row, never before: a failed delete must not leave a location
+  // showing broken images. See lib/repositories/place-files.ts for why at all.
+  await removeStorageFiles(placeFileIds([place]));
+}
+
+/** Every storage file these locations name — photos and the logo. */
+export function placeFileIds(places: readonly Pick<Place, "photoIds" | "logoId">[]): string[] {
+  return places.flatMap((place) => [...place.photoIds, ...(place.logoId ? [place.logoId] : [])]);
 }

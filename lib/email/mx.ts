@@ -42,7 +42,7 @@ const TIMEOUT_MS = 2_000;
 const TTL_OK_MS = 6 * 60 * 60 * 1000;
 const TTL_BAD_MS = 10 * 60 * 1000;
 
-/** Swept lazily past this, the same way `lib/auth/throttle.ts` keeps its map bounded. */
+/** Swept lazily past this, the same way `lib/rate-limit/limiter.ts` keeps its map bounded. */
 const MAX_TRACKED_KEYS = 5_000;
 
 const cache = new Map<string, { ok: boolean; expiresAt: number }>();

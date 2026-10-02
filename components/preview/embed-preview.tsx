@@ -75,9 +75,8 @@ const NO_GROUPS: readonly Group[] = [];
  *
  * It renders the *real* embed bundle against a snapshot built in the browser
  * from the map's current state, so there is no second implementation of popups,
- * clustering or the results panel to keep in step with the one that ships. Same
- * idea as the `/embed/dev.html` harness, pointed at live data instead of a
- * fixture.
+ * clustering or the results panel to keep in step with the one that ships — and
+ * no fixture to drift, which is what retired the old `/embed/dev.html` harness.
  *
  * The iframe is load-bearing, not incidental:
  *

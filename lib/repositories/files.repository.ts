@@ -19,6 +19,18 @@ import { getPlace } from "./places.repository";
 import type { Place, PlaceRow } from "./types";
 
 /**
+ * Anybody may read an uploaded image; nobody but the admin client may change or
+ * delete it.
+ *
+ * Owners used to be given `update` and `delete` here, "writes still go through
+ * us". They did not have to: the session cookie is the Appwrite session secret,
+ * so an owner could delete a file straight through Appwrite's API — and, while
+ * `places.photoIds` was owner-writable too, point it at somebody else's file and
+ * delete *that* through our own photo route. See `ownerPermissions`.
+ */
+export const PUBLIC_FILE_PERMISSIONS = [Permission.read(Role.any())];
+
+/**
  * A location's photos.
  *
  * Uploaded with public read permission on purpose: these images load on a
@@ -70,12 +82,7 @@ export async function addPlacePhotos(
         bucketId: env.storageId,
         fileId: ID.unique(),
         file,
-        permissions: [
-          Permission.read(Role.any()),
-          // Only the owner can replace or remove it; writes still go through us.
-          Permission.update(Role.user(ctx.userId)),
-          Permission.delete(Role.user(ctx.userId)),
-        ],
+        permissions: PUBLIC_FILE_PERMISSIONS,
       });
 
       uploaded.push(created.$id);
@@ -202,11 +209,7 @@ export async function setPlaceLogo(
       bucketId: env.storageId,
       fileId: ID.unique(),
       file,
-      permissions: [
-        Permission.read(Role.any()),
-        Permission.update(Role.user(ctx.userId)),
-        Permission.delete(Role.user(ctx.userId)),
-      ],
+      permissions: PUBLIC_FILE_PERMISSIONS,
     });
 
     uploaded = created.$id;

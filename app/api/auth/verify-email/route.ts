@@ -4,7 +4,7 @@ import { noContent } from "@/lib/api/responses";
 import { parseBody, withoutAuth } from "@/lib/api/route";
 import { findUserByEmail, markEmailVerified } from "@/lib/auth/account";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
-import { throttle } from "@/lib/auth/throttle";
+import { rateLimit } from "@/lib/rate-limit/limiter";
 import { consumeToken, createVerificationLink } from "@/lib/auth/tokens";
 import { greetingName } from "@/lib/email/greeting";
 import { sendEmail } from "@/lib/email/resend";
@@ -75,7 +75,7 @@ export const GET = withoutAuth(async (request) => {
   } catch {
     return landing("expired");
   }
-});
+}, { rateLimit: "authToken" });
 
 /**
  * Send a new confirmation email.
@@ -92,7 +92,7 @@ export const GET = withoutAuth(async (request) => {
 export const POST = withoutAuth(async (request) => {
   const { email } = await parseBody(request, forgotPasswordSchema);
 
-  throttle({ key: `verify:${email.toLowerCase()}`, limit: 3, windowMs: 15 * 60 * 1000 });
+  rateLimit("authEmailAddress", `verify:${email.toLowerCase()}`);
 
   // After the response, for the reason forgot-password documents at length: an
   // awaited lookup-and-send answers a real address about a second slower than an
@@ -119,4 +119,4 @@ export const POST = withoutAuth(async (request) => {
   });
 
   return noContent();
-});
+}, { rateLimit: "authEmail" });

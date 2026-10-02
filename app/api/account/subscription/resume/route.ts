@@ -41,4 +41,4 @@ export const POST = withAuth(async ({ user }) => {
   if (details?.state) await upsertSubscription({ ...details.state, userId: user.id });
 
   return ok({ renewsAt: details?.renewsAt ?? null });
-});
+}, { rateLimit: "billing" });

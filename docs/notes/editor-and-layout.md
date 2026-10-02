@@ -196,21 +196,28 @@ rewritten; it is the record of why this area is shaped as it is.
   (`max-w-5xl`) or `narrow`. `Measure` is the readable column *inside* a full-width page.
   The import wizard caps itself per step (`isWide`), animating between `max-w-2xl` and
   `max-w-full` — **`max-w-full`, because `none` is not a length and will not interpolate.**
-- **That cap is the only one; a step must not re-cap itself narrower.** The step trail is
-  left-aligned in the wizard's wrapper, so it lines up with a step only while the step fills
-  the wrapper. Source and Addresses were `mx-auto max-w-2xl` inside a `max-w-5xl` wrapper,
-  which left the trail up to 176px left of the tabs it labels. Measured after: the trail's
-  `ol` and the tab list share a left edge at 1440px and at 400px.
-- **The Source step's two tab panels are force-mounted and stacked in one grid cell.**
-  React Aria mounts only the selected panel, the two differ by ~14px, and the step is
-  centred with `my-auto` — so every switch moved the whole block by half the difference.
-  `shouldForceMount` plus `[grid-area:1/1]` makes the cell the taller panel's height at
-  every width; the unselected one is `inert` and `invisible` (never `hidden`, which would
-  drop its height). **No transition on those panels:** React Aria marks a panel with a
-  running transition `data-exiting`, HeroUI makes that `position: absolute`, and the cell
-  collapsed to the other panel for the length of the fade — measured, 198px → 184px and a
-  7px jump. `data-[exiting=true]:static` is the guard. Measured after: six switches, one
-  distinct cell height and strip position across every frame.
+- **That cap is the only one; a step must not re-cap itself narrower.** The Source title
+  and the resumed-run notice are left-aligned in the wizard's wrapper, so they line up with
+  a step only while the step fills the wrapper. Source and Addresses were once
+  `mx-auto max-w-2xl` inside a `max-w-5xl` wrapper, which left the (since removed) step
+  trail up to 176px left of what it labelled.
+- **There is no step trail.** It was removed at the owner's request; each step says what
+  it is by what it shows. **Columns has Back**, beside Continue, which runs the wizard's
+  `startOver` — `reset()` plus `persist.clearStorage()` — because picking a file jumps
+  straight to Columns and a persisted run otherwise brought the user back there on every
+  reload, with no way out but a banner shown only for resumed runs.
+- **The Source step's two panels are both mounted and stacked in one grid cell.** The
+  source is picked with two radio cards (`source-choice.tsx`, a HeroUI `RadioGroup`), which
+  replaced a tab strip. The two panels differ in height, and the step is centred with
+  `my-auto`, so mounting only the selected one moved the whole block by half the difference
+  on every switch. `[grid-area:1/1]` makes the cell the taller panel's height at every
+  width; the unselected one is `inert` and `invisible` (never `hidden`, which would drop
+  its height). **No transition on those panels.** The tabs this replaced showed why: React
+  Aria marked a fading panel `data-exiting`, HeroUI made that `position: absolute`, and
+  the cell collapsed for the length of the fade (198px → 184px, a 7px jump).
+- **The Source step is the only step with a visible title.** `ImportHeading` draws it there
+  alone, and the title is `aria-hidden` because `PageTitle`'s sr-only `<h1>` already says
+  it. The three working steps keep their height for the file.
 - **An error about something that just happened is a toast; a message explaining why a
   button is disabled stays inline.** The Source step's read failures, the sheet link's
   format errors (the field keeps `isInvalid`), the address lookup stopping and a failed

@@ -30,4 +30,4 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   // The origin is read from the request rather than configured, so a self-hosted
   // or preview deployment publishes URLs that point at itself.
   return ok(await publishMap(ctx, params.id, new URL(request.url).origin));
-});
+}, { rateLimit: "publish" });

@@ -1,7 +1,7 @@
 "use client";
 
 import { Alert, Button } from "@heroui/react";
-import { Columns2 } from "lucide-react";
+import { ArrowLeft, Columns2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 
@@ -35,7 +35,18 @@ import { SwapCoordsBanner } from "./swap-coords-banner";
  * unanswerable in a file whose headers are "Column A".."Column I". An em dash
  * over three rows of real values asks it better, and asks it in place.
  */
-export function MappingStep({ onContinue }: { onContinue: () => void }) {
+export function MappingStep({
+  onBack,
+  onContinue,
+}: {
+  /**
+   * Back to the file picker. The wizard throws the run away on the way — on
+   * disk as well as in memory — because the Source screen picks a file and
+   * nothing more, so a reload must not bring this step back.
+   */
+  onBack: () => void;
+  onContinue: () => void;
+}) {
   const headers = useImportStore((state) => state.headers);
   const rows = useImportStore((state) => state.rows);
   const mapping = useImportStore((state) => state.mapping);
@@ -148,14 +159,18 @@ export function MappingStep({ onContinue }: { onContinue: () => void }) {
         ) : null}
 
         {/* `ml-auto` rather than `justify-between`: with no header-row line to
-            sit opposite, `justify-between` would leave this at the left edge. */}
-        <Button
-          className="ml-auto"
-          isDisabled={problems.length > 0}
-          onPress={onNext}
-        >
-          Continue
-        </Button>
+            sit opposite, `justify-between` would leave these at the left edge.
+            Back sits with Continue, the way Review pairs "Back to columns" with
+            Import, so the way out is beside the way on. */}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <Button variant="tertiary" onPress={onBack}>
+            <ArrowLeft aria-hidden="true" className="size-4" />
+            Back
+          </Button>
+          <Button isDisabled={problems.length > 0} onPress={onNext}>
+            Continue
+          </Button>
+        </div>
       </div>
 
       {/*

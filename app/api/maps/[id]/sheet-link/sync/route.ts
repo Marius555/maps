@@ -1,5 +1,6 @@
 import { fail, ok } from "@/lib/api/responses";
 import { parseBody, withAuth } from "@/lib/api/route";
+import { rateLimit } from "@/lib/rate-limit/limiter";
 import { NotFoundError } from "@/lib/repositories/errors";
 import { getSheetLink } from "@/lib/repositories/sheet-links.repository";
 import { runSheetSyncStep } from "@/lib/sheet-sync/run";
@@ -23,6 +24,10 @@ type Params = { id: string };
  */
 export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   const input = await parseBody(request, syncSheetSchema);
+
+  // The press, not the steps: one sync of a big sheet is dozens of calls, each
+  // under the ordinary write limit. What this caps is how often a sync starts.
+  if (!input.continuing) rateLimit("sheetSync", ctx.userId);
   const link = await getSheetLink(ctx, params.id);
 
   if (!link) throw new NotFoundError("This map isn't linked to a Google Sheet.");

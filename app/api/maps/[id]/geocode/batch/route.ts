@@ -7,20 +7,21 @@ import { getMap } from "@/lib/repositories/maps.repository";
 import { assertPlaceHeadroom } from "@/lib/repositories/places.repository";
 import {
   assertLookupHeadroom,
-  recordLookups,
+  lookupMeter,
 } from "@/lib/repositories/usage.repository";
+import { IN_FLIGHT_LIMITS } from "@/lib/limits/rate";
+import { inFlight } from "@/lib/rate-limit/limiter";
 import { geocodeBatchSchema } from "@/lib/validation/geocode.schema";
 
 type Params = { id: string };
 
-/**
- * A chunk of 25 rows spends around six seconds inside the provider's own pacing,
- * and the platform's default cap is shorter than that on some plans. Declared
- * rather than left to the default, because the failure it prevents is a chunk
- * that is killed mid-flight after the upstream requests have already been paid
- * for — see `MAX_GEOCODE_BATCH`, which is chosen against this number.
+/*
+ * A chunk of 25 rows spends around six seconds inside the provider's own pacing.
+ * There used to be a `maxDuration = 60` here; it is a Vercel setting and does
+ * nothing on Appwrite Sites, which cuts every request at 30 seconds (CLAUDE.md
+ * §12). What protects the bill from a chunk killed mid-flight is `lookupMeter`,
+ * which records as it goes.
  */
-export const maxDuration = 60;
 
 /**
  * Geocodes a chunk of an import.
@@ -81,10 +82,15 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
 
   await assertLookupHeadroom(ctx.userId, billable, "interactive");
 
+  /*
+   * One batch at a time per account. The headroom check above runs before any
+   * of this batch is recorded, so two batches side by side could each pass it
+   * with room for only one; the import wizard sends them one after another
+   * anyway, and a 429 here is what its retry already waits out.
+   */
+  const release = inFlight(`geocodeBatch:${ctx.userId}`, IN_FLIGHT_LIMITS.geocodeBatch);
+  const meter = lookupMeter(ctx.userId);
   const geocoder = getGeocoder();
-
-  /* Out here so the catch bills what the loop actually got through. */
-  let spent = 0;
 
   try {
     const results: BatchGeocodeResult[] = [];
@@ -107,7 +113,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
         countryCode: input.countryCode,
         limit: 5,
       });
-      spent += 1;
+      await meter.spent();
 
       const [best = null, ...alternatives] = candidates;
 
@@ -118,8 +124,6 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
         status: statusFor(best),
       });
     }
-
-    await recordLookups(ctx.userId, spent);
 
     /*
      * The pacing goes back with the results so the wizard can say how long the
@@ -133,8 +137,9 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
      */
     return ok({ results, paceMs: geocoder.paceMs });
   } catch (error) {
-    await recordLookups(ctx.userId, spent);
-
     return geocoderFailure(error);
+  } finally {
+    await meter.flush();
+    release();
   }
-});
+}, { rateLimit: "metered" });

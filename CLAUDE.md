@@ -163,19 +163,23 @@ npm run mirror:tile-assets      # fonts, sprites, Natural Earth raster -> public
 npm run migrate:style-host      # move published snapshots to the current tile host
 npm run migrate:snapshots-to-r2 # copy Appwrite-hosted snapshots to R2 (--dry-run first)
 npm run migrate:tags            # fold categories into tags (--dry-run first)
+npm run migrate:permissions     # strip owner permissions from rows/files (--dry-run first; --verify-subscriptions)
 ```
 
 `npm run check` does **not** build the embed. After changing anything under `/embed`, run `npm run build:embed` too — that is where the size budget is enforced.
 
-**Testing the embed by hand:** `npm run build:embed`, start the dev server, open
-`/embed/dev.html`. It renders the real bundle against a fixture snapshot with no
-Appwrite, login or publish involved. **`/embed/live.html` is the other half** — the same
-bundle against a *real* published snapshot, so it is the only way to check analytics end to
-end, and the Publish page's **Open test page** button links to it (`embedTestPageUrl`). It
+**Testing the embed by hand:** `npm run build:embed`, start the dev server, and use the
+Publish page — its preview runs the real bundle against the map as it is in the editor, and
+its **Open test page** button opens `/embed/live.html` (`embedTestPageUrl`), the same
+bundle against the *real* published snapshot, which is the only way to check analytics end
+to end. What to check is listed in `docs/notes/publish-and-embed.md` ("Checking the embed by
+hand"). `/embed/dev-legacy.html` is the one fixture left, a pre-merge snapshot for the §7
+check. (`/embed/dev.html` and its hand-written fixture were deleted on 2026-10-02: the
+fixture drifted from what a publish writes and showed maps no customer would see.) The test page
 reports whether the snapshot it loaded actually carries an endpoint, which the Analytics tab
 cannot: that reads `settings` as stored, not as published. Source is `embed/dev/`, committed;
 Vite's `publicDir` copies it into the gitignored `public/embed/`. **Gitignored is not
-undeployed** — `prebuild` runs `build:embed`, so both pages exist in production, `noindex`,
+undeployed** — `prebuild` runs `build:embed`, so both harness pages exist in production, `noindex`,
 deliberately.
 
 Linting is **ESLint flat config** (`eslint.config.mjs`, `eslint-config-next` core-web-vitals + typescript), not Biome. §3 chooses Biome; when you migrate, swap the `lint` script and delete the ESLint config. Until then `npm run lint` is the check.
@@ -318,6 +322,11 @@ Area-specific invariants live at the head of each file in the table below.
   theme change. Shapes survive only because `use-shape-layers.ts` re-adds them on
   `styledata`; pins survive because they are DOM. Test this first after touching anything
   in that path.
+- **No row or file grants its owner a write permission.** The session cookie is the
+  Appwrite session secret, so any permission on a row can be used straight through
+  Appwrite's API, past every check. That once let a user set their own subscription to
+  `pro`. `ownerPermissions()` returns `[]`, and every access goes through the admin client.
+  Limits live in `lib/limits/`, and `docs/notes/limits.md` says how to change one.
 - **Dangling ids are the normal state, not an error.** Nothing sweeps a deleted tag off the
   places wearing it, or a removed block off the pins overriding it. Narrow them away at
   publish and drop them when drawing — do not add a cleanup pass over 3,000 rows.
@@ -328,7 +337,7 @@ Area-specific invariants live at the head of each file in the table below.
   it `retired` so it stops being offered and keeps being read.
 - **One writer per JSON blob column.** `updateMap` serialises `settings` whole, so two
   forms writing it is a lost update. `useEmbedDesign` is the only writer.
-- **The embed's own-code budget is 49.2KB and it currently sits at 46.8KB**, minified
+- **The embed's own-code budget is 49.2KB and it currently sits at 47.1KB**, minified
   since 2026-09-26. That is the binding number, and anything new has to be paid for by
   removing something. The **total** used to be the gate at 2 bytes; it is reported now and not
   enforced, because its stated job was catching MapLibre ballooning and it had become a
@@ -383,6 +392,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `app/(dashboard)/settings/**`, `components/user-settings/**`, `lib/theme/**`, `lib/account-deletion/**`, `lib/auth/sessions.ts`, the `.steady` block in `globals.css` | `docs/notes/settings.md` |
 | `lib/notifications/**`, `components/notifications/**`, `app/api/notifications/**`, `lib/repositories/notifications.repository.ts` | `docs/notes/notifications.md` |
 | `documents/legal/**`, `lib/legal/**`, `components/legal/**`, the `legal` links in `brand.json` | `documents/legal/README.md` |
+| `lib/limits/**`, `lib/rate-limit/**`, `lib/api/route.ts`'s wrappers, `rollBackIfOverLimit`, `ownerPermissions`, `scripts/migrate-permissions.mjs` | `docs/notes/limits.md` |
 | `app/admin/**`, `app/(auth)/login/admin/**`, `app/api/admin/**`, `components/admin/**`, `lib/admin/**`, `lib/repositories/admin/**`, `lib/api-usage/**`, `lib/repositories/{api-calls,email-log}.repository.ts` | `docs/notes/admin.md` |
 
 Self-hosting runbooks, unchanged: `docs/self-hosting-geocoding.md`,
@@ -471,7 +481,7 @@ The embed must **never** import React, HeroUI, Motion, TanStack Query, Zustand, 
 
 Target: **under 250KB gzipped including MapLibre.** If a change pushes it over, flag it.
 
-**Measured, that target is unreachable with MapLibre v6** — its own dist files are 297.4KB gzipped at 6.11.2 (`maplibre-gl.mjs` 146.9 + `maplibre-gl-shared.mjs` 144.6 + the worker 6.0), minified already, with no slim build. Actual total is **344.2KB**, of which ours is 46.8KB (minified). `npm run build:embed` enforces a **49.2KB budget on our code** and a **305KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 46.8KB.
+**Measured, that target is unreachable with MapLibre v6** — its own dist files are 297.4KB gzipped at 6.11.2 (`maplibre-gl.mjs` 146.9 + `maplibre-gl-shared.mjs` 144.6 + the worker 6.0), minified already, with no slim build. Actual total is **344.6KB**, of which ours is 47.1KB (minified, loader and map chunk together). `npm run build:embed` enforces a **49.2KB budget on our code** and a **305KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 47.1KB.
 
 The own-code budget has been raised six times — 42 → 46 → 47 → 48 → 48.1 → 49.2KB — and each raise is argued in `scripts/check-embed-size.mjs` rather than merely recorded. It **must not be raised to get past a binding budget**: a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam — the bottom-sheet drawer was built that way, clawed from 285 bytes over to 18 under without touching the number. The fourth raise is the counter-example and is labelled as one: carrying *both* narrow-screen drawers cost 162 bytes, four trims paid back 18 of them, and the remaining 144 was the owner's call taken with the numbers on the table rather than a conclusion the file reached. The fifth (split dots where dotted routes share a road) was the same kind of call: granted at 75 bytes over for a first design that failed, and its replacement costs ~163 bytes, 63 over the old 48KB. The sixth (routes sharing a road take turns, dot by dot and dash by dash) was granted by the owner in advance and cost ~990 bytes: MapLibre cannot alternate symbol dots across tile edges, so the embed places them itself. The bundle was **not minified** then (Vite library mode leaves ES output alone), which is why it cost that much. Minification was switched on afterwards (2026-09-26, `output.minify` in `embed/vite.config.mts`) and took ours from 49.1KB to 45.6KB; the embed's language table, badge and page events were paid for out of that without a seventh raise.
 

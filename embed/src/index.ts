@@ -8,20 +8,13 @@ import type { MapAppearance } from "@/packages/shared/map-appearance";
 import type { MapSnapshot, SnapshotPlace } from "@/packages/shared/snapshot";
 
 import { isDomainAllowed } from "./allowlist";
-import {
-  readConfig,
-  readFocusPlaceId,
-  warn,
-  whenVisible,
-  type EmbedConfig,
-} from "./config";
+import type { EmbedConfig } from "./config";
 import { button, el, icon } from "./dom";
 import { createGazetteer } from "./gazetteer";
 import { nearestPlace, formatDistance, distanceKm, type Located } from "./geo";
 import { installDirectionsAsk, refreshDirections } from "./directions";
 import { createList, type ListHandle } from "./list";
 import { createMap, type MapHandle } from "./map";
-import { fetchSnapshot } from "./snapshot";
 import {
   buildSearchIndex,
   createNearestButton,
@@ -39,14 +32,12 @@ import embedCss from "./styles.css?inline";
 import { createTracker, trackLinks, type Track } from "./track";
 import "./worker";
 import { setStrings, t } from "./i18n";
+import { readFocusPlaceId, warn } from "./page";
 
 /**
- * Entry point.
- *
- * Boots one map per `<script data-snapshot>` on the page. Script tags are found
- * by attribute rather than through `document.currentScript`, which is always
- * null in an ES module — and MapLibre v6 is ESM only, so a module is what this
- * has to be.
+ * The map itself, loaded by `boot.ts` (shipped as `map.js`) once a map's box
+ * is near the viewport. The loader finds the script tags, places the box and
+ * starts the snapshot request; this module is handed all three.
  *
  * Nothing here writes an error into the host page. A failure is a console
  * warning and an empty container: a stranger's site must never sprout our
@@ -66,35 +57,19 @@ function injectStyles(): void {
   document.head.append(style);
 }
 
-function boot(): void {
-  const scripts = document.querySelectorAll<HTMLScriptElement>(
-    "script[data-snapshot]",
-  );
-
-  for (const script of scripts) void mount(script);
-}
-
-async function mount(script: HTMLScriptElement): Promise<void> {
-  // A module is evaluated once per URL however many times it is included, but
-  // the guard also covers a host page that re-runs boot itself.
-  if (script.dataset.lmMounted) return;
-  script.dataset.lmMounted = "1";
-
-  const config = readConfig(script);
-  if (!config) return;
-
-  const container = resolveContainer(script, config);
-  if (!container) return;
-
-  // Before the fetch, not just before the render: a page with four maps below
-  // the fold should make no requests at all until they are scrolled towards.
-  // The container is already sized, so nothing shifts when the map arrives.
-  await whenVisible(container, config.eager);
-
+/**
+ * One map, into `container`, from a snapshot request the loader already started
+ * — so it travelled beside this chunk and MapLibre rather than after them.
+ */
+export async function mount(
+  container: HTMLElement,
+  config: EmbedConfig,
+  snapshotRequest: Promise<MapSnapshot>,
+): Promise<void> {
   let snapshot: MapSnapshot;
 
   try {
-    snapshot = await fetchSnapshot(config.snapshotUrl);
+    snapshot = await snapshotRequest;
   } catch (error) {
     warn(`couldn't load the map data. ${String(error)}`);
     return;
@@ -142,33 +117,6 @@ function onlyTagged(snapshot: MapSnapshot, tags: string[]): void {
       north: Math.max(...lats),
     };
   }
-}
-
-/**
- * Where the map goes: an element the customer named, or one inserted right where
- * they pasted the script. The second case is what makes the snippet a single
- * line — no "and add a div with this id" step.
- */
-function resolveContainer(
-  script: HTMLScriptElement,
-  config: EmbedConfig,
-): HTMLElement | null {
-  if (config.target) {
-    const target = document.querySelector<HTMLElement>(config.target);
-    if (!target) {
-      warn(`couldn't find the element "${config.target}" to render into.`);
-      return null;
-    }
-
-    target.style.height = `${config.height}px`;
-    return target;
-  }
-
-  const container = el("div");
-  container.style.height = `${config.height}px`;
-  script.insertAdjacentElement("afterend", container);
-
-  return container;
 }
 
 async function render(
@@ -1218,12 +1166,4 @@ function wireControls({
 
   // The map builds itself from the snapshot; the list has to be told once.
   list?.setPlaces(snapshot.places, origin);
-}
-
-// Module scripts are deferred, so the DOM is normally parsed by now. The guard
-// covers a host page that injects the script some other way.
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", boot, { once: true });
-} else {
-  boot();
 }

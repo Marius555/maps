@@ -47,4 +47,4 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   } catch (error) {
     return geocoderFailure(error);
   }
-});
+}, { rateLimit: "metered" });

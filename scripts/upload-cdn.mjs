@@ -98,7 +98,8 @@ async function main() {
   const counts = { uploaded: 0, unchanged: 0 };
 
   /*
-   * map.js last. It imports ./maplibre-gl.mjs by relative URL, so the files it
+   * map.js last. It imports ./map-[hash].js and ./maplibre-gl*.mjs by relative
+   * URL (the hashed map chunk is in `vendor` here, so it goes up first), so the files it
    * names must already be there when a visitor's browser first sees it.
    */
   for (const name of vendor) {

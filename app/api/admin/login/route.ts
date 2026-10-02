@@ -6,12 +6,10 @@ import { adminConfig } from "@/lib/admin/auth/config";
 import { setAdminCookie } from "@/lib/admin/auth/cookie";
 import { decoyHash, verifyPassword } from "@/lib/admin/auth/password";
 import { signAdminSession } from "@/lib/admin/auth/session";
-import { readIp } from "@/lib/analytics/collect/geo-headers";
-import { throttle } from "@/lib/auth/throttle";
+import { clientIp } from "@/lib/rate-limit/ip";
+import { rateLimit } from "@/lib/rate-limit/limiter";
 import { NotFoundError, RepositoryError } from "@/lib/repositories/errors";
 import { adminLoginSchema } from "@/lib/validation/admin.schema";
-
-const WINDOW_MS = 15 * 60 * 1000;
 
 /**
  * Sign in to the operator console.
@@ -22,7 +20,7 @@ const WINDOW_MS = 15 * 60 * 1000;
  * - **Throttled twice** — per address and in total. Per address stops one
  *   client guessing; the global ceiling stops a spread of them, and costs the
  *   real admin at most a fifteen-minute wait, which for a one-person console is
- *   the right trade. Best effort, like every `throttle()` (the file says why);
+ *   the right trade. Best effort, like every `rateLimit()` (lib/rate-limit/limiter.ts says why);
  *   the scrypt cost is the defence that survives a restart.
  * - **One answer for every failure**, and the same time for it: a wrong email
  *   still spends a full scrypt against a decoy, so neither the message nor the
@@ -32,10 +30,11 @@ export const POST = withoutAuth(async (request) => {
   const config = adminConfig();
   if (!config) throw new NotFoundError();
 
-  const ip = readIp(request.headers) ?? "unknown";
+  // After the config check, so an install with no console still answers 404.
+  const ip = clientIp(request.headers);
 
-  throttle({ key: `admin-login:${ip}`, limit: 5, windowMs: WINDOW_MS });
-  throttle({ key: "admin-login:*", limit: 20, windowMs: WINDOW_MS });
+  rateLimit("adminLogin", ip);
+  rateLimit("adminLoginAll", "*");
 
   const { email, password } = await parseBody(request, adminLoginSchema);
 

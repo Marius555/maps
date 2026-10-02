@@ -234,8 +234,10 @@ async function setupTable(table) {
         tableId: table.id,
         name: table.name,
         // Empty table-level permissions: every read and write goes through the
-        // admin client inside /lib/repositories, so plan limits cannot be
-        // bypassed by lifting the session secret out of devtools.
+        // admin client inside /lib/repositories. This alone is not enough —
+        // rowSecurity means each row's own permissions also count, so rows must
+        // be created with none (`ownerPermissions` returns []), or a user who
+        // lifts the session secret out of devtools can edit them directly.
         permissions: [],
         rowSecurity: true,
       }),

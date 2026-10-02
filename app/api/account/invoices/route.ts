@@ -32,4 +32,4 @@ export const GET = withAuth(async ({ request, user }) => {
 
     return fail("internal_error", "Couldn't load your invoices. Try again in a moment.", 502);
   }
-});
+}, { rateLimit: "billing" });

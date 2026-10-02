@@ -1,6 +1,7 @@
 "use client";
 
 import { Chip } from "@heroui/react";
+import Link from "next/link";
 
 import { DataTable, type DataColumn } from "@/components/analytics/tables/data-table";
 import { PLAN_COLOR } from "@/lib/admin/colors";
@@ -16,10 +17,13 @@ const COLUMNS: DataColumn<UserRow>[] = [
     isRowHeader: true,
     sortValue: (row) => row.email,
     render: (row) => (
-      <div className="min-w-0">
-        <p className="truncate font-medium text-foreground">{row.name || "—"}</p>
-        <p className="truncate text-xs text-muted">{row.email}</p>
-      </div>
+      <Link
+        href={`/admin/users/${row.id}`}
+        className="block min-w-0 rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+      >
+        <span className="block truncate font-medium text-foreground">{row.name || "—"}</span>
+        <span className="block truncate text-xs text-muted">{row.email}</span>
+      </Link>
     ),
   },
   {
@@ -36,6 +40,20 @@ const COLUMNS: DataColumn<UserRow>[] = [
         {PLAN_LABEL[row.plan] ?? row.plan}
       </span>
     ),
+  },
+  {
+    id: "maps",
+    label: "Maps",
+    numeric: true,
+    sortValue: (row) => row.maps - row.mapLimit,
+    render: (row) =>
+      row.maps > row.mapLimit ? (
+        <span className="font-medium text-danger">
+          {row.maps} / {row.mapLimit} <span className="text-xs">over</span>
+        </span>
+      ) : (
+        `${String(row.maps)} / ${String(row.mapLimit)}`
+      ),
   },
   {
     id: "status",

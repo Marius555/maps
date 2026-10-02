@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { noContent } from "@/lib/api/responses";
 import { parseBody, withoutAuth } from "@/lib/api/route";
 import { findUserByEmail } from "@/lib/auth/account";
-import { throttle } from "@/lib/auth/throttle";
+import { rateLimit } from "@/lib/rate-limit/limiter";
 import { createResetLink } from "@/lib/auth/tokens";
 import { greetingName } from "@/lib/email/greeting";
 import { sendEmail } from "@/lib/email/resend";
@@ -39,7 +39,7 @@ export const POST = withoutAuth(async (request) => {
   // allowed to differ on, because it describes the *caller* rather than whether
   // the address exists. Keyed by address, so one person hammering the form
   // cannot lock everyone else out of resetting theirs.
-  throttle({ key: `reset:${email.toLowerCase()}`, limit: 3, windowMs: 15 * 60 * 1000 });
+  rateLimit("authEmailAddress", `reset:${email.toLowerCase()}`);
 
   after(async () => {
     try {
@@ -64,4 +64,4 @@ export const POST = withoutAuth(async (request) => {
   });
 
   return noContent();
-});
+}, { rateLimit: "authEmail" });

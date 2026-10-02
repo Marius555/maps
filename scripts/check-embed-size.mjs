@@ -38,7 +38,8 @@ const OUT_DIR = join(process.cwd(), "public", "embed");
 const HARNESS_DIR = join(process.cwd(), "embed", "dev");
 
 /**
- * Everything in the bundle that is ours: map.js plus the CSS inlined into it.
+ * Everything in the bundle that is ours: map.js (the loader), the map-[hash].js
+ * chunk it imports, and the CSS inlined into that.
  *
  * Raised from 40KB when the card designer landed, deliberately and with the
  * number written down here rather than shaved out of something else: per-block

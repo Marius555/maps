@@ -42,8 +42,8 @@ and the five blockers this file raised are answered below rather than removed.
   id, no listeners, no timer — `createTracker` returns a no-op. That is what
   every map published before this shipped gets forever, and what every map whose
   owner has left the switch off gets today.
-- **`sendBeacon`, never `fetch`.** `embed/dev/dev.html` requires that a
-  Directions press open instantly and never be intercepted. `sendBeacon` hands
+- **`sendBeacon`, never `fetch`.** A Directions press must open instantly and never
+  be intercepted (`docs/notes/publish-and-embed.md`, Invariants). `sendBeacon` hands
   the payload over and returns; an awaited `fetch` in a click handler is exactly
   what that rule forbids.
 - **`text/plain`, not `application/json`.** `text/plain` is CORS-safelisted, so

@@ -19,6 +19,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const SECRET = "whsec-test";
+
+/** What `checkoutUserSignature("user-1")` returns under SECRET. */
+const USER_1_SIG = createHmac("sha256", SECRET)
+  .update("checkout-user:user-1")
+  .digest("hex")
+  .slice(0, 32);
 const VARIANTS = {
   starter: { monthly: "111", yearly: "112" },
   pro: { monthly: "221", yearly: "222" },
@@ -154,14 +160,23 @@ describe("offerForVariant", () => {
 });
 
 describe("readWebhook", () => {
+  // The user id is trusted only when signed, so this block needs the secret —
+  // and "refuses everybody when no secret is configured" leaves an empty one
+  // mocked behind it.
+  beforeEach(() => {
+    vi.doMock("@/lib/env", () => ({
+      env: { lemonWebhookSecret: SECRET, lemonVariants: VARIANTS },
+    }));
+  });
+
   function payload(overrides: Record<string, unknown> = {}) {
     return {
       meta: {
         event_name: "subscription_created",
-        custom_data: { user_id: "user-1" },
+        custom_data: { user_id: "user-1", user_sig: USER_1_SIG },
       },
       data: {
-        id: "sub-9",
+        id: "9009",
         attributes: {
           status: "active",
           customer_id: 42,
@@ -185,7 +200,7 @@ describe("readWebhook", () => {
         status: "active",
         // Numbers in the payload, strings in our columns.
         billingCustomerId: "42",
-        billingSubscriptionId: "sub-9",
+        billingSubscriptionId: "9009",
         currentPeriodEnd: "2026-10-20T00:00:00.000Z",
         cadence: "monthly",
       },
@@ -235,6 +250,29 @@ describe("readWebhook", () => {
     expect(event?.state?.billingCustomerId).toBe("42");
   });
 
+  /*
+   * The provider's public buy links take `checkout[custom][user_id]` from
+   * anybody. Without the signature, a stranger could attach a subscription to
+   * somebody else's account.
+   */
+  it("ignores an account id that is not signed", async () => {
+    const { readWebhook } = await lemon();
+    const body = payload();
+
+    const unsigned = readWebhook({
+      ...body,
+      meta: { ...body.meta, custom_data: { user_id: "user-1" } },
+    });
+    const forged = readWebhook({
+      ...body,
+      meta: { ...body.meta, custom_data: { user_id: "user-2", user_sig: USER_1_SIG } },
+    });
+
+    expect(unsigned?.userId).toBeNull();
+    expect(forged?.userId).toBeNull();
+    expect(unsigned?.state?.billingCustomerId).toBe("42");
+  });
+
   it("declines anything that is not a webhook at all", async () => {
     const { readWebhook } = await lemon();
 
@@ -261,7 +299,7 @@ describe("invoice payloads", () => {
   const invoice = {
     meta: {
       event_name: "subscription_payment_success",
-      custom_data: { user_id: "user-1" },
+      custom_data: { user_id: "user-1", user_sig: USER_1_SIG },
     },
     data: {
       id: "inv-3",
@@ -332,7 +370,7 @@ describe("fetchSubscriptionState", () => {
     vi.stubGlobal("fetch", async () =>
       Response.json({
         data: {
-          id: "sub-9",
+          id: "9009",
           attributes: {
             status: "active",
             customer_id: 42,
@@ -346,11 +384,11 @@ describe("fetchSubscriptionState", () => {
 
     const { fetchSubscriptionState } = await lemon();
 
-    expect(await fetchSubscriptionState("sub-9")).toEqual({
+    expect(await fetchSubscriptionState("9009")).toEqual({
       plan: "pro",
       status: "active",
       billingCustomerId: "42",
-      billingSubscriptionId: "sub-9",
+      billingSubscriptionId: "9009",
       currentPeriodEnd: "2026-10-20T00:00:00.000Z",
       cadence: "monthly",
     });
@@ -373,7 +411,7 @@ describe("fetchSubscriptionState", () => {
 
     // The opposite direction: this one *should* come back, so it has to reach
     // the route's catch and become a 5xx.
-    await expect(fetchSubscriptionState("sub-9")).rejects.toBeInstanceOf(BillingError);
+    await expect(fetchSubscriptionState("9009")).rejects.toBeInstanceOf(BillingError);
   });
 
   it("asks nothing when there is no id to ask about", async () => {
@@ -525,7 +563,7 @@ describe("changePlan", () => {
     const fetchMock = vi.fn(async () =>
       Response.json({
         data: {
-          id: "sub-9",
+          id: "9009",
           attributes: {
             status: "active",
             customer_id: 42,
@@ -547,7 +585,7 @@ describe("changePlan", () => {
     const { createLemonProvider } = await lemon();
 
     await createLemonProvider().changePlan({
-      billingSubscriptionId: "sub-9",
+      billingSubscriptionId: "9009",
       plan: "pro",
       cadence: "yearly",
       prorate: true,
@@ -559,9 +597,9 @@ describe("changePlan", () => {
     };
 
     expect(init.method).toBe("PATCH");
-    expect(url).toMatch(/\/subscriptions\/sub-9$/);
+    expect(url).toMatch(/\/subscriptions\/9009$/);
     expect(body.data.type).toBe("subscriptions");
-    expect(body.data.id).toBe("sub-9");
+    expect(body.data.id).toBe("9009");
     // The variant alone: proration is left at the provider's default, onto the
     // next renewal, and nothing is invoiced on the spot.
     expect(body.data.attributes).toEqual({ variant_id: Number(VARIANTS.pro.yearly) });
@@ -575,7 +613,7 @@ describe("changePlan", () => {
     const { createLemonProvider } = await lemon();
 
     await createLemonProvider().changePlan({
-      billingSubscriptionId: "sub-9",
+      billingSubscriptionId: "9009",
       plan: "starter",
       cadence: "monthly",
       prorate: false,
@@ -600,7 +638,7 @@ describe("changePlan", () => {
     const { createLemonProvider } = await lemon();
 
     const state = await createLemonProvider().changePlan({
-      billingSubscriptionId: "sub-9",
+      billingSubscriptionId: "9009",
       plan: "starter",
       cadence: "yearly",
       prorate: true,
@@ -611,7 +649,7 @@ describe("changePlan", () => {
       cadence: "yearly",
       status: "active",
       billingCustomerId: "42",
-      billingSubscriptionId: "sub-9",
+      billingSubscriptionId: "9009",
       currentPeriodEnd: "2026-10-20T00:00:00.000Z",
     });
   });
@@ -622,7 +660,7 @@ describe("changePlan", () => {
 
     await expect(
       createLemonProvider().changePlan({
-        billingSubscriptionId: "sub-9",
+        billingSubscriptionId: "9009",
         plan: "pro",
         cadence: "monthly",
         prorate: true,
@@ -641,7 +679,7 @@ describe("changePlan", () => {
 describe("toDetails", () => {
   const subscription = (attributes: Record<string, unknown>) => ({
     data: {
-      id: "sub-9",
+      id: "9009",
       attributes: {
         status: "active",
         customer_id: 42,
@@ -666,7 +704,7 @@ describe("toDetails", () => {
           update_payment_method: "https://portal.test/card",
         },
       }),
-      "sub-9",
+      "9009",
     );
 
     expect(details).toMatchObject({
@@ -685,7 +723,7 @@ describe("toDetails", () => {
 
     const details = toDetails(
       subscription({ status: "cancelled", cancelled: true, ends_at: "2026-10-20T00:00:00.000Z" }),
-      "sub-9",
+      "9009",
     );
 
     expect(details?.cancelled).toBe(true);
@@ -699,7 +737,7 @@ describe("toDetails", () => {
 
     const details = toDetails(
       subscription({ payment_processor: "paypal", card_brand: "", card_last_four: "" }),
-      "sub-9",
+      "9009",
     );
 
     expect(details?.payment).toEqual({ method: "paypal", brand: null, lastFour: null });
@@ -708,8 +746,8 @@ describe("toDetails", () => {
   it("claims no method when the provider sends none", async () => {
     const { toDetails } = await lemon();
 
-    expect(toDetails(subscription({}), "sub-9")?.payment.method).toBeNull();
-    expect(toDetails({}, "sub-9")).toBeNull();
+    expect(toDetails(subscription({}), "9009")?.payment.method).toBeNull();
+    expect(toDetails({}, "9009")).toBeNull();
   });
 });
 

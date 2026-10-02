@@ -5,6 +5,9 @@
  * so the boot code finds script tags by attribute instead. That turns out to be
  * the better design anyway: several maps on one page each get their own tag, and
  * nothing depends on execution order.
+ *
+ * **The loader's alone** (`boot.ts`). Nothing in the app chunk may import this
+ * file — see `page.ts` for why, and for the `warn` the app uses instead.
  */
 
 export const DEFAULT_HEIGHT = 520;
@@ -50,28 +53,6 @@ export function readConfig(script: HTMLScriptElement): EmbedConfig | null {
     eager:
       script.dataset.eager !== undefined && script.dataset.eager !== "false",
   };
-}
-
-/**
- * The location to open on, from the host page's own URL: `?place=<id>`.
- *
- * Read from `window.location` rather than an attribute, which is only possible
- * because the embed is a module script on the page itself and not an iframe —
- * so a customer can link to one of their stockists with a normal URL on their
- * own domain, and it survives being copied out of the address bar.
- *
- * Read-only, deliberately. Writing back to a stranger's address bar when a popup
- * opens would rewrite history on a page we are a guest on.
- *
- * An id belonging to a different map on the same page simply won't be found in
- * this snapshot, which is what makes several maps per page work with no config.
- */
-export function readFocusPlaceId(): string | null {
-  try {
-    return new URLSearchParams(window.location.search).get("place");
-  } catch {
-    return null;
-  }
 }
 
 /**

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { fail, ok } from "@/lib/api/responses";
 import { parseBody, withAuth } from "@/lib/api/route";
+import { assertUploadSize } from "@/lib/api/upload-size";
 import {
   addPlacePhotos,
   clearPlacePhotos,
@@ -28,6 +29,8 @@ const reorderSchema = z.object({
  * photos should be four uploads and one row write rather than four round trips.
  */
 export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
+  assertUploadSize(request, "photos");
+
   let files: FormDataEntryValue[];
 
   try {
@@ -49,7 +52,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   const place = await addPlacePhotos(ctx, params.id, params.placeId, photos);
 
   return ok({ place });
-});
+}, { rateLimit: "upload" });
 
 export const PATCH = withAuth<Params>(async ({ request, params, ctx }) => {
   const { photoIds } = await parseBody(request, reorderSchema);

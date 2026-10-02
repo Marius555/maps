@@ -6,7 +6,7 @@ import {
   PasswordRefusedError,
   WrongPasswordError,
 } from "@/lib/auth/account";
-import { throttle } from "@/lib/auth/throttle";
+import { rateLimit } from "@/lib/rate-limit/limiter";
 import { changePasswordSchema } from "@/lib/validation/account.schema";
 
 /**
@@ -29,7 +29,7 @@ import { changePasswordSchema } from "@/lib/validation/account.schema";
 export const PATCH = withAuth(async ({ request, user }) => {
   const input = await parseBody(request, changePasswordSchema);
 
-  throttle({ key: `password:${user.id}`, limit: 5, windowMs: 15 * 60_000 });
+  rateLimit("password", user.id);
 
   if (!(await accountHasPassword(user.id))) {
     return fail(

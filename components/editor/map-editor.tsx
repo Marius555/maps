@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cardAccentVars } from "@/components/card/card-frame";
 import { useMapExport } from "@/components/export/use-map-export";
-import { GroupEditDialog } from "@/components/groups/group-form/group-edit-dialog";
 import { usePruneEmptyGroups } from "@/components/groups/use-prune-empty-groups";
 import type { DraggedObject } from "@/components/groups/use-row-drag";
 import { MapCanvas } from "@/components/map/map-canvas";
@@ -12,15 +11,10 @@ import type { MapHandle } from "@/components/map/map-canvas-impl";
 import { MapHintBar } from "@/components/map/map-hint-bar";
 import { MapSearch } from "@/components/map/map-search/map-search";
 import { MapToolbar } from "@/components/map/map-toolbar";
-import { PinStudio } from "@/components/map/pin-studio/pin-studio";
 import { useRouteRequest } from "@/components/map/routes/use-route-request";
 import { useRoutability } from "@/components/map/routes/use-routability";
 import { SelectionBar } from "@/components/map/selection-bar";
 import { BulkTagMenu } from "@/components/tags/bulk-tag-menu";
-import { PlaceEditDialog } from "@/components/places/place-form/place-edit-dialog";
-import { PreviewDialog } from "@/components/preview/preview-dialog";
-import { ImportShapesDialog } from "@/components/shapes/import/import-shapes-dialog";
-import { ClusterIconDialog } from "@/components/map/clusters/cluster-icon/cluster-icon-dialog";
 import type { GeocodeCandidate } from "@/lib/geocoding/types";
 import { isDefaultView } from "@/lib/map/default-view";
 import { mapThemeClass } from "@/lib/map/style";
@@ -84,8 +78,18 @@ import {
   type ShapeKind,
 } from "@/packages/shared/shapes";
 import { DEFAULT_SHAPE_OPACITY } from "@/lib/validation/shape.schema";
-import { ShapeEditDialog } from "@/components/shapes/shape-form/shape-edit-dialog";
 import { EditorSidebar } from "./editor-sidebar";
+import {
+  LazyClusterIconDialog,
+  LazyGroupEditDialog,
+  LazyImportShapesDialog,
+  LazyPinStudio,
+  LazyPlaceEditDialog,
+  LazyPreviewDialog,
+  LazyShapeEditDialog,
+  OpenedOnce,
+  usePrefetchEditorDialogs,
+} from "./lazy-dialogs";
 import { useAddressResolution } from "./use-address-resolution";
 import { usePinMoveHistory } from "./use-pin-move-history";
 
@@ -140,6 +144,7 @@ export function MapEditor({
   const { data: storedShapes = [] } = useShapes(map.id, initialShapes);
   const { data: groups = [] } = useGroups(map.id, initialGroups);
   const { data: cardDesign = initialCardDesign } = useCardDesign(initialCardDesign);
+  usePrefetchEditorDialogs();
 
   /*
    * Bonded lines resolved once, here, and everything downstream reads the
@@ -1604,60 +1609,75 @@ export function MapEditor({
         onEdit={setEditingId}
       />
 
-      <PlaceEditDialog
-        map={map}
-        place={editingPlace}
-        onClose={() => setEditingId(null)}
-      />
+      {/* Each dialog's code arrives the first time it opens — see lazy-dialogs.tsx. */}
+      <OpenedOnce open={editingPlace != null}>
+        <LazyPlaceEditDialog
+          map={map}
+          place={editingPlace}
+          onClose={() => setEditingId(null)}
+        />
+      </OpenedOnce>
 
-      <ShapeEditDialog
-        mapId={map.id}
-        shape={editingShape}
-        onClose={() => setEditingShapeId(null)}
-      />
+      <OpenedOnce open={editingShape != null}>
+        <LazyShapeEditDialog
+          mapId={map.id}
+          shape={editingShape}
+          onClose={() => setEditingShapeId(null)}
+        />
+      </OpenedOnce>
 
-      <GroupEditDialog
-        mapId={map.id}
-        group={editingGroup}
-        onClose={() => setEditingGroupId(null)}
-      />
+      <OpenedOnce open={editingGroup != null}>
+        <LazyGroupEditDialog
+          mapId={map.id}
+          group={editingGroup}
+          onClose={() => setEditingGroupId(null)}
+        />
+      </OpenedOnce>
 
-      <PinStudio
-        map={map}
-        places={places}
-        isOpen={isStudioOpen}
-        onOpenChange={setIsStudioOpen}
-        // Finishing a pin in the studio arms add mode with it, exactly as
-        // pressing a tile in the row does — so the sheet closes onto a map that
-        // is ready to be clicked.
-        onPick={startAdding}
-      />
+      <OpenedOnce open={isStudioOpen}>
+        <LazyPinStudio
+          map={map}
+          places={places}
+          isOpen={isStudioOpen}
+          onOpenChange={setIsStudioOpen}
+          // Finishing a pin in the studio arms add mode with it, exactly as
+          // pressing a tile in the row does — so the sheet closes onto a map that
+          // is ready to be clicked.
+          onPick={startAdding}
+        />
+      </OpenedOnce>
 
-      <ImportShapesDialog
-        mapId={map.id}
-        isOpen={isImportingShapes}
-        // The live array, not the server render: importing twice in a row has to
-        // count the first import's shapes against the limit and number past them.
-        shapes={shapes}
-        limit={shapeLimit}
-        onClose={() => setIsImportingShapes(false)}
-      />
+      <OpenedOnce open={isImportingShapes}>
+        <LazyImportShapesDialog
+          mapId={map.id}
+          isOpen={isImportingShapes}
+          // The live array, not the server render: importing twice in a row has to
+          // count the first import's shapes against the limit and number past them.
+          shapes={shapes}
+          limit={shapeLimit}
+          onClose={() => setIsImportingShapes(false)}
+        />
+      </OpenedOnce>
 
-      <ClusterIconDialog
-        map={map}
-        isClustering={clustering}
-        isOpen={isEditingClusterIcon}
-        onClose={() => setIsEditingClusterIcon(false)}
-      />
+      <OpenedOnce open={isEditingClusterIcon}>
+        <LazyClusterIconDialog
+          map={map}
+          isClustering={clustering}
+          isOpen={isEditingClusterIcon}
+          onClose={() => setIsEditingClusterIcon(false)}
+        />
+      </OpenedOnce>
 
-      <PreviewDialog
-        map={map}
-        places={places}
-        shapes={shapes}
-        groups={groups}
-        isOpen={isPreviewOpen}
-        onOpenChange={setIsPreviewOpen}
-      />
+      <OpenedOnce open={isPreviewOpen}>
+        <LazyPreviewDialog
+          map={map}
+          places={places}
+          shapes={shapes}
+          groups={groups}
+          isOpen={isPreviewOpen}
+          onOpenChange={setIsPreviewOpen}
+        />
+      </OpenedOnce>
     </div>
   );
 }

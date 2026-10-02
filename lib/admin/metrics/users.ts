@@ -3,6 +3,8 @@ import "server-only";
 import type { Delta } from "@/lib/analytics/view";
 import { requireAdmin } from "@/lib/admin/auth/guard";
 import { GREY, PLAN_COLOR, SPLIT_COLORS } from "@/lib/admin/colors";
+import { PLAN_LIMITS, type PlanId } from "@/lib/limits/plans";
+import { listAllMaps } from "@/lib/repositories/admin/content";
 import { listAllSubscriptions } from "@/lib/repositories/admin/subscriptions";
 import { listAllUsers, listOAuthUserIds } from "@/lib/repositories/admin/users";
 import type { AdminRange } from "@/lib/validation/admin.schema";
@@ -27,6 +29,9 @@ export type UserRow = {
   verified: boolean;
   method: string;
   plan: string;
+  /** Maps the account owns, and how many its plan allows. */
+  maps: number;
+  mapLimit: number;
 };
 
 export type UsersMetrics = {
@@ -48,11 +53,15 @@ const PLAN_LABEL: Record<string, string> = { free: "Free", starter: "Starter", p
 export async function loadUsersMetrics(range: AdminRange): Promise<UsersMetrics> {
   await requireAdmin();
 
-  const [{ users, total, truncated }, identities, subscriptions] = await Promise.all([
+  const [{ users, total, truncated }, identities, subscriptions, maps] = await Promise.all([
     listAllUsers(),
     listOAuthUserIds(),
     listAllSubscriptions(),
+    listAllMaps(),
   ]);
+
+  const mapCounts = new Map<string, number>();
+  for (const map of maps) mapCounts.set(map.userId, (mapCounts.get(map.userId) ?? 0) + 1);
 
   const now = new Date();
   const period = periodOf(range, now);
@@ -75,6 +84,8 @@ export async function loadUsersMetrics(range: AdminRange): Promise<UsersMetrics>
     verified: user.verified,
     method: identities.get(user.id) ?? "email",
     plan: paying.get(user.id) ?? "free",
+    maps: mapCounts.get(user.id) ?? 0,
+    mapLimit: PLAN_LIMITS[asPlan(paying.get(user.id))].maps,
   }));
 
   const verified = rows.filter((row) => row.verified).length;
@@ -106,4 +117,8 @@ export async function loadUsersMetrics(range: AdminRange): Promise<UsersMetrics>
     })),
     users: rows,
   };
+}
+
+function asPlan(value: string | undefined): PlanId {
+  return value && value in PLAN_LIMITS ? (value as PlanId) : "free";
 }

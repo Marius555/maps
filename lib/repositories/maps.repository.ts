@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ID, Permission, Query, Role } from "node-appwrite";
+import { ID, Query } from "node-appwrite";
 
 import { admin } from "@/lib/appwrite/admin";
 import { TABLES } from "@/lib/appwrite/config";
@@ -11,21 +11,34 @@ import { randomSuffix, slugify } from "@/lib/utils/slug";
 import { CUSTOM_PIN_PREFIX } from "@/packages/shared/pin-icons";
 import type { CreateMapInput, UpdateMapInput } from "@/lib/validation/map.schema";
 import type { RepoContext } from "./context";
+import { listPlaceFileIds, removeStorageFiles } from "./place-files";
 import { ConflictError, NotFoundError, PlanLimitError } from "./errors";
 import { toAppMap } from "./mappers";
-import { PLAN_LIMITS, getUserPlan } from "./plan-limits";
+import { PLAN_LIMITS, getUserPlan, rollBackIfOverLimit } from "./plan-limits";
 import type { AppMap, MapRow } from "./types";
 
 const MAX_MAPS_PER_PAGE = 100;
 const SLUG_ATTEMPTS = 3;
 
-/** Row permissions the owner gets on everything they create. */
+/**
+ * Row permissions the owner gets on everything they create: **none**.
+ *
+ * Every read and write in the app goes through the admin client inside
+ * /lib/repositories, scoped by `ctx.userId`, so a permission on the row buys the
+ * app nothing. What it did buy was a hole: the session cookie is the real
+ * Appwrite session secret, its owner can copy it out of devtools, and with it
+ * call Appwrite's REST API directly. A row the user may `update` is therefore a
+ * row they may edit past every Zod schema and plan check — a subscription row
+ * set to `pro`, a place moved to another map, a photo id pointed at somebody
+ * else's file. `npm run migrate:permissions` strips what older rows were given.
+ *
+ * The `userId` parameter stays so every caller still says whose row it is; if a
+ * read permission is ever genuinely needed, it goes here and nothing else does.
+ */
 function ownerPermissions(userId: string): string[] {
-  return [
-    Permission.read(Role.user(userId)),
-    Permission.update(Role.user(userId)),
-    Permission.delete(Role.user(userId)),
-  ];
+  void userId;
+
+  return [];
 }
 
 export async function listMaps(ctx: RepoContext): Promise<AppMap[]> {
@@ -121,6 +134,38 @@ export async function countMaps(ctx: RepoContext): Promise<number> {
   }
 }
 
+/**
+ * Whether `mapId` is among the account's `count` oldest maps.
+ *
+ * What "within the plan" means for maps once an account holds more than its
+ * plan allows — only possible after a downgrade. The oldest keep publishing
+ * because they are the ones most likely to be live on somebody's site already;
+ * a newer map is the one its owner is still building.
+ */
+export async function isAmongFirstMaps(
+  userId: string,
+  mapId: string,
+  count: number,
+): Promise<boolean> {
+  try {
+    const result = await admin.tablesDB.listRows<MapRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.maps,
+      queries: [
+        Query.equal("userId", userId),
+        Query.orderAsc("$createdAt"),
+        Query.orderAsc("$id"),
+        Query.select(["$id"]),
+        Query.limit(count),
+      ],
+    });
+
+    return result.rows.some((row) => row.$id === mapId);
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
 export async function createMap(
   ctx: RepoContext,
   input: CreateMapInput,
@@ -159,6 +204,19 @@ export async function createMap(
           allowedDomains: [],
         },
         permissions: ownerPermissions(ctx.userId),
+      });
+
+      await rollBackIfOverLimit({
+        total: () => countMaps(ctx),
+        limit,
+        undo: async () => {
+          await admin.tablesDB.deleteRow({
+            databaseId: env.databaseId,
+            tableId: TABLES.maps,
+            rowId: row.$id,
+          });
+        },
+        error: new PlanLimitError("maps", limit, plan),
       });
 
       return toAppMap(row);
@@ -269,18 +327,23 @@ async function clearFromPlaces(
 export async function deleteMap(ctx: RepoContext, mapId: string): Promise<void> {
   await getMap(ctx, mapId);
 
+  let fileIds: string[];
+
   try {
+    // Read before anything is deleted — afterwards no row is left to name them.
+    fileIds = await listPlaceFileIds([Query.equal("mapId", mapId)]);
+
     // Snapshots first. They are world-readable by design, so a deleted map that
     // kept its live snapshot would carry on serving the customer's locations to
     // anyone holding the URL.
     await deleteSnapshots(mapId);
 
-    // Places, shapes and the sheet link next: a map row deleted before its
-    // children would orphan them with no owner left to find them by — and an
-    // orphaned sheet link would have the daily sync failing on it every night.
-    // By query rather than through sheet-links.repository, which imports this
-    // module.
-    for (const tableId of [TABLES.places, TABLES.shapes, TABLES.sheetLinks]) {
+    // Places, shapes, groups and the sheet link next: a map row deleted before
+    // its children would orphan them with no owner left to find them by — and
+    // an orphaned sheet link would have the daily sync failing on it every
+    // night. By query rather than through the other repositories, which import
+    // this module.
+    for (const tableId of [TABLES.places, TABLES.shapes, TABLES.groups, TABLES.sheetLinks]) {
       await admin.tablesDB.deleteRows({
         databaseId: env.databaseId,
         tableId,
@@ -296,6 +359,8 @@ export async function deleteMap(ctx: RepoContext, mapId: string): Promise<void> 
   } catch (error) {
     throw toRepositoryError(error);
   }
+
+  await removeStorageFiles(fileIds);
 }
 
 export { ownerPermissions };

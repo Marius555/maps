@@ -3,9 +3,11 @@ import { parseBody, withAuth } from "@/lib/api/route";
 import { routerFailure } from "@/lib/api/router-errors";
 import { getMap } from "@/lib/repositories/maps.repository";
 import { assertPlanFeature } from "@/lib/repositories/plan-limits";
+import { IN_FLIGHT_LIMITS } from "@/lib/limits/rate";
+import { inFlight } from "@/lib/rate-limit/limiter";
 import {
   assertLookupHeadroom,
-  recordLookups,
+  lookupMeter,
 } from "@/lib/repositories/usage.repository";
 import { getRouter, isRoutableSnap } from "@/lib/routing";
 import { routableSchema } from "@/lib/validation/routable.schema";
@@ -52,15 +54,16 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
    */
   await assertLookupHeadroom(ctx.userId, input.points.length, "background");
 
+  // The sweep asks one batch at a time; a single pin may be asked meanwhile.
+  const release = inFlight(`routable:${ctx.userId}`, IN_FLIGHT_LIMITS.routable);
+
   /*
-   * Declared out here so the catch can still read it.
-   *
-   * The loop is sequential, so its length is exactly how many points the engine
-   * answered before anything went wrong — and those were real upstream requests
-   * whether or not the caller ever sees them. Billing the whole batch would charge
-   * for work nobody did; billing none of it would make a failing sweep the cheapest
-   * way to spend the day's budget.
+   * Each point the engine answers is billed as it answers — those were real
+   * upstream requests whether or not the caller ever sees them. Billing the whole
+   * batch would charge for work nobody did; billing none of it would make a
+   * failing sweep the cheapest way to spend the day's budget.
    */
+  const meter = lookupMeter(ctx.userId);
   const results: boolean[] = [];
 
   try {
@@ -74,14 +77,14 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
      */
     for (const point of input.points) {
       results.push(isRoutableSnap(await router.nearest(point, input.profile)));
+      await meter.spent();
     }
-
-    await recordLookups(ctx.userId, results.length);
 
     return ok({ results });
   } catch (error) {
-    await recordLookups(ctx.userId, results.length);
-
     return routerFailure(error);
+  } finally {
+    await meter.flush();
+    release();
   }
-});
+}, { rateLimit: "metered" });

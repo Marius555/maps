@@ -25,4 +25,4 @@ export const POST = withoutAuth(async (request) => {
   await setSessionCookie(session);
 
   return ok({ user });
-});
+}, { rateLimit: "authToken" });

@@ -24,7 +24,7 @@ export function SheetPicker({
   if (sheetNames.length < 2) return null;
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg bg-surface-secondary px-4 py-3">
+    <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border px-4 py-3">
       <div className="min-w-48 flex-1">
         <SelectControl
           label="Sheet"

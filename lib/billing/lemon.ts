@@ -86,6 +86,28 @@ function apiKey(): string {
   return env.lemonApiKey;
 }
 
+/**
+ * The provider's subscription ids are integers, and anything else is refused
+ * before it reaches a URL.
+ *
+ * The id comes from our own `subscriptions` row, which only the admin client may
+ * write — but that was not always so (see `ownerPermissions`), and a value like
+ * `../customers/1` spliced into `/subscriptions/${id}` would have sent the
+ * store's API key to whichever endpoint it named. A 404 is the answer a bad id
+ * deserves, so that is the status it carries.
+ */
+export function assertSubscriptionId(id: string): string {
+  if (!/^\d{1,20}$/.test(id)) {
+    throw new BillingError("That subscription id isn't one the payment provider issued.", 404);
+  }
+
+  return id;
+}
+
+function subscriptionPath(id: string): string {
+  return `/subscriptions/${assertSubscriptionId(id)}`;
+}
+
 async function send<T>(
   path: string,
   init: { method: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown },
@@ -168,8 +190,17 @@ async function createCheckout(request: CheckoutRequest): Promise<Checkout> {
            * alternative — matching on the email address — would be unsound,
            * because the buyer can change that address at the checkout and would
            * then be granted somebody else's plan.
+           *
+           * **Signed, because the provider's public buy links accept
+           * `checkout[custom][user_id]` from anybody.** Unsigned, a stranger
+           * could buy a plan onto another account's id and later cancel it,
+           * replacing that account's own subscription row. The webhook trusts
+           * `user_id` only beside a valid `user_sig`; see `checkoutUserSignature`.
            */
-          custom: { user_id: request.userId },
+          custom: {
+            user_id: request.userId,
+            user_sig: checkoutUserSignature(request.userId),
+          },
         },
         product_options: {
           /*
@@ -235,7 +266,7 @@ async function subscriptionDetails(
   let json: SubscriptionResponse;
 
   try {
-    json = await send(`/subscriptions/${billingSubscriptionId}`, { method: "GET" });
+    json = await send(subscriptionPath(billingSubscriptionId), { method: "GET" });
   } catch (error) {
     if (error instanceof BillingError && error.status === 404) return null;
 
@@ -256,7 +287,7 @@ async function listInvoices(billingSubscriptionId: string, page: number): Promis
   if (!billingSubscriptionId) return { invoices: [], page: 1, lastPage: 1 };
 
   const query = new URLSearchParams({
-    "filter[subscription_id]": billingSubscriptionId,
+    "filter[subscription_id]": assertSubscriptionId(billingSubscriptionId),
     "page[number]": String(Math.max(1, Math.floor(page))),
     "page[size]": String(INVOICE_PAGE_SIZE),
   });
@@ -277,7 +308,7 @@ async function listInvoices(billingSubscriptionId: string, page: number): Promis
 async function cancelSubscription(
   billingSubscriptionId: string,
 ): Promise<SubscriptionDetails | null> {
-  const json = await send<SubscriptionResponse>(`/subscriptions/${billingSubscriptionId}`, {
+  const json = await send<SubscriptionResponse>(subscriptionPath(billingSubscriptionId), {
     method: "DELETE",
   });
 
@@ -288,7 +319,7 @@ async function cancelSubscription(
 async function resumeSubscription(
   billingSubscriptionId: string,
 ): Promise<SubscriptionDetails | null> {
-  const json = await send<SubscriptionResponse>(`/subscriptions/${billingSubscriptionId}`, {
+  const json = await send<SubscriptionResponse>(subscriptionPath(billingSubscriptionId), {
     method: "PATCH",
     body: {
       data: {
@@ -329,7 +360,7 @@ async function changePlan(
 
   const json = await send<{
     data?: { id?: string; attributes?: SubscriptionAttributes };
-  }>(`/subscriptions/${request.billingSubscriptionId}`, {
+  }>(subscriptionPath(request.billingSubscriptionId), {
     method: "PATCH",
     body: {
       data: {
@@ -383,6 +414,31 @@ export function verifyWebhook(rawBody: string, signature: string | null): boolea
     createHmac("sha256", env.lemonWebhookSecret).update(rawBody).digest("hex"),
     "utf8",
   );
+  const actual = Buffer.from(signature, "utf8");
+
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+/**
+ * An HMAC of our user id, round-tripped through the checkout beside it.
+ *
+ * Keyed by the webhook secret because that is the one secret this integration
+ * already cannot run without — the webhook refuses everybody while it is unset,
+ * so a checkout signed with an empty key could never be read back anyway.
+ * Prefixed so the same key signing a webhook body can never produce a value
+ * that means this.
+ */
+export function checkoutUserSignature(userId: string): string {
+  return createHmac("sha256", env.lemonWebhookSecret)
+    .update(`checkout-user:${userId}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+function hasValidUserSignature(userId: string, signature: unknown): boolean {
+  if (!env.lemonWebhookSecret || typeof signature !== "string") return false;
+
+  const expected = Buffer.from(checkoutUserSignature(userId), "utf8");
   const actual = Buffer.from(signature, "utf8");
 
   return actual.length === expected.length && timingSafeEqual(actual, expected);
@@ -575,7 +631,7 @@ export function toInvoicePage(json: InvoiceListResponse): InvoicePage {
 }
 
 type WebhookBody = {
-  meta?: { event_name?: string; custom_data?: { user_id?: unknown } };
+  meta?: { event_name?: string; custom_data?: { user_id?: unknown; user_sig?: unknown } };
   data?: {
     id?: string;
     attributes?: SubscriptionAttributes & { subscription_id?: number | string };
@@ -669,7 +725,7 @@ export async function fetchSubscriptionState(
   let json: { data?: { id?: string; attributes?: SubscriptionAttributes } };
 
   try {
-    json = await send(`/subscriptions/${subscriptionId}`, { method: "GET" });
+    json = await send(subscriptionPath(subscriptionId), { method: "GET" });
   } catch (error) {
     if (error instanceof BillingError && error.status === 404) return null;
 
@@ -705,8 +761,19 @@ export function readWebhook(body: unknown): WebhookEvent | null {
 
   if (typeof name !== "string" || !name) return null;
 
+  /*
+   * Only a signed id is an account. An unsigned one came from a public buy link
+   * somebody typed a user id into, or from a checkout made before signing
+   * existed — either way the route falls back to the stored customer id, which
+   * keeps every existing subscriber's renewals attached.
+   */
   const rawUserId = payload.meta?.custom_data?.user_id;
-  const userId = typeof rawUserId === "string" && rawUserId ? rawUserId : null;
+  const userId =
+    typeof rawUserId === "string" &&
+    rawUserId &&
+    hasValidUserSignature(rawUserId, payload.meta?.custom_data?.user_sig)
+      ? rawUserId
+      : null;
 
   const attributes = payload.data?.attributes;
 

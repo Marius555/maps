@@ -205,6 +205,32 @@ export function lookupLimitMessage(limit: number, plan: PlanId): string {
 }
 
 /**
+ * Thrown when one caller has asked too often — `lib/rate-limit/limiter.ts`.
+ *
+ * Carries how long to wait, which the route layer sends as `Retry-After`, and
+ * says it in the message too: "try again later" is the error §8 forbids.
+ */
+export class RateLimitError extends RepositoryError {
+  constructor(
+    readonly retryAfterSeconds: number,
+    message = `Too many requests. Try again in ${waitPhrase(retryAfterSeconds)}.`,
+  ) {
+    super("rate_limited", message, 429);
+  }
+}
+
+/** "12 seconds", "3 minutes" — rounded up, never "0 seconds". */
+export function waitPhrase(seconds: number): string {
+  const whole = Math.max(1, Math.ceil(seconds));
+
+  if (whole < 60) return `${String(whole)} ${whole === 1 ? "second" : "seconds"}`;
+
+  const minutes = Math.ceil(whole / 60);
+
+  return `${String(minutes)} ${minutes === 1 ? "minute" : "minutes"}`;
+}
+
+/**
  * Thrown when the app as a whole has spent its day's upstream budget.
  *
  * **Deliberately says nothing about the caller's plan, and that is the point.**
@@ -225,6 +251,48 @@ export class DailyBudgetError extends RepositoryError {
       503,
     );
   }
+}
+
+/**
+ * Thrown by Publish when the map holds more than the owner's plan allows — which
+ * only happens after a downgrade, because every create is refused at the limit.
+ *
+ * Nothing is deleted and the live map stays live: this stops the next publish,
+ * not the last one. So the way out it offers is to trim or to upgrade, and the
+ * count it names is how many to remove, since that is the number somebody acts
+ * on.
+ */
+export class PublishOverLimitError extends RepositoryError {
+  constructor(
+    readonly resource: LimitedResource,
+    readonly count: number,
+    readonly limit: number,
+    readonly plan: PlanId,
+  ) {
+    super("plan_limit_reached", publishOverLimitMessage(resource, count, limit, plan), 403);
+  }
+}
+
+export function publishOverLimitMessage(
+  resource: LimitedResource,
+  count: number,
+  limit: number,
+  plan: PlanId,
+): string {
+  const [noun, plural] = NOUNS[resource];
+
+  if (resource === "maps") {
+    const first = limit === 1 ? "your first map" : `your first ${formatCount(limit)} maps`;
+
+    return `The ${plan} plan publishes ${first}, and this one comes after. Delete an older map or upgrade to publish it.`;
+  }
+
+  const over = count - limit;
+
+  return (
+    `This map has ${formatCount(count)} ${plural} and the ${plan} plan publishes up to ` +
+    `${formatCount(limit)}. Remove ${formatCount(over)} ${over === 1 ? noun : plural} or upgrade to publish it.`
+  );
 }
 
 /** What each resource is called in a sentence, singular and plural. */

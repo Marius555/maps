@@ -62,4 +62,4 @@ export const POST = withoutAuth(async (request) => {
   });
 
   return created({ user });
-});
+}, { rateLimit: "signup" });

@@ -58,4 +58,4 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   } catch (error) {
     return routerFailure(error);
   }
-});
+}, { rateLimit: "metered" });

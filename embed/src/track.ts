@@ -19,8 +19,8 @@ import type { MapSnapshot } from "@/packages/shared/snapshot";
  *
  * Three rules this file must keep:
  *
- * - **`sendBeacon`, never `fetch`.** embed/dev/dev.html:174-182 says a Directions
- *   press must open instantly and must never be intercepted. `sendBeacon` hands
+ * - **`sendBeacon`, never `fetch`.** A Directions press must open instantly and
+ *   must never be intercepted (docs/notes/publish-and-embed.md, Invariants). `sendBeacon` hands
  *   the payload to the browser and returns synchronously; an awaited `fetch` in
  *   a click handler is exactly the thing that rule forbids.
  * - **`text/plain`, not `application/json`.** `text/plain` is CORS-safelisted, so

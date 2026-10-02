@@ -7,7 +7,7 @@ import { DISPOSABLE_DOMAINS } from "./disposable-domains.generated";
 /**
  * Is this the domain of a throwaway mailbox?
  *
- * **Friction, not a guarantee** — the same honesty `lib/auth/throttle.ts` and the
+ * **Friction, not a guarantee** — the same honesty `lib/rate-limit/limiter.ts` and the
  * embed's domain allowlist already carry (CLAUDE.md §7). A vendored list goes
  * stale the day after it is generated, and the services on it mint new domains
  * faster than anyone re-runs a script. `lib/email/mx.ts` is the half that catches

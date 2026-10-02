@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 
-import { formatCount } from "@/lib/format/number";
 import { MAX_SOURCE_ROWS } from "@/lib/import/limits";
 import { finishSource, readFile, type LoadedSource } from "@/lib/import/read-source";
 import { readGoogleSheet } from "@/lib/import/sources/google-sheet";
@@ -13,7 +12,8 @@ import { useImportStore } from "@/lib/stores/import-store";
 import { FileDrop } from "./file-drop";
 import { SheetPicker } from "./sheet-picker";
 import { SheetUrlForm } from "./sheet-url-form";
-import { SourceTabs, type SourceTab } from "./source-tabs";
+import { SourceChoice, type SourceTab } from "./source-choice";
+import { SourceFacts } from "./source-facts";
 
 /**
  * Step 1: where the locations come from.
@@ -106,23 +106,15 @@ export function SourceStep({
 
   return (
     /*
-     * No panel. The step is the control.
+     * No panel around the step: it sits on the page (one ground per screen —
+     * see the Surfaces notes in docs/notes/editor-and-layout.md).
      *
-     * This used to be a `SectionPanel` titled "Where are your locations?", which
-     * put a white card on a grey page and a grey dropzone inside the card —
-     * three grounds deep for one file picker, and the innermost of them
-     * (`--surface-secondary`, 96%) is actually *darker* than the page it was
-     * meant to echo (97.5%). The title said what `ImportSteps` already says
-     * directly above it, and the description is a fact about the file, so it
-     * belongs with the file picker rather than in a header.
-     *
-     * No width of its own. The wizard caps the Source step, so the tab strip,
-     * the dropzone, the notes below them and the step trail above them are one
-     * column by construction — a second, narrower cap here is what used to
-     * leave the trail hanging off to the left of the tabs.
+     * No width of its own. The wizard caps the Source step, so the title above,
+     * the cards, the panel and the notes below them are one column by
+     * construction.
      */
-    <div className="space-y-4">
-      <SourceTabs
+    <div className="space-y-5">
+      <SourceChoice
         current={tab}
         onChange={setTab}
         filePanel={<FileDrop isBusy={isBusy} onPick={onPickFile} />}
@@ -142,15 +134,13 @@ export function SourceStep({
 
       {/* Said here rather than at the end, because finding out after a
           ten-minute address lookup that the file was never going to fit is the
-          worst possible moment to learn it. The row cap moved here from the
-          panel description it used to sit in — same two facts about the file,
-          now on one line beside each other. */}
-      <p className="text-xs text-muted">
-        One row per location, up to {formatCount(MAX_SOURCE_ROWS)} rows.{" "}
-        {remaining === 0
-          ? `Your ${headroom.plan} plan is full at ${formatCount(headroom.limit)} locations. Upgrade, or remove some before importing.`
-          : `You can add ${formatCount(remaining)} more ${remaining === 1 ? "location" : "locations"} on your ${headroom.plan} plan.`}
-      </p>
+          worst possible moment to learn it. */}
+      <SourceFacts
+        maxRows={MAX_SOURCE_ROWS}
+        plan={headroom.plan}
+        limit={headroom.limit}
+        remaining={remaining}
+      />
     </div>
   );
 }

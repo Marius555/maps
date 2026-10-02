@@ -186,7 +186,7 @@ export function GeocodeStep({
 
   return (
     // No width of its own: the wizard caps this step, and a second cap here
-    // would pull the content away from the step trail above it.
+    // would pull the content away from the resumed-run notice above it.
     <div className="space-y-4">
       <div className="space-y-1">
         <h2 className="text-sm font-semibold text-foreground">

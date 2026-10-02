@@ -6,6 +6,8 @@ import { readVisitorGeo } from "@/lib/analytics/collect/geo-headers";
 import { truncateIp } from "@/lib/analytics/collect/truncate-ip";
 import { visitorKey } from "@/lib/analytics/collect/visitor-key";
 import { toErrorResponse } from "@/lib/api/route";
+import { clientIp } from "@/lib/rate-limit/ip";
+import { rateLimit } from "@/lib/rate-limit/limiter";
 import {
   readCollectGate,
   recordSession,
@@ -61,6 +63,14 @@ export function OPTIONS(): NextResponse {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    /*
+     * First, and before the body is read: a visitor posts once per session, so
+     * a hundred a minute from one address is a script filling some owner's
+     * monthly session ceiling with junk. Keyed by IP because there is no account
+     * here; generous because an office or a campus is one address.
+     */
+    rateLimit("collect", clientIp(request.headers));
+
     const body = await readBody(request);
     if (body === null) return oversized();
 

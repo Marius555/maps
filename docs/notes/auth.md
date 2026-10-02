@@ -471,7 +471,7 @@ because it is the only one whose visitor is signed in.
 MIT and regenerated daily. It is stale the day after it is generated, and the
 services on it mint new domains faster than anyone re-runs a script.
 
-So it is the same kind of thing as `lib/auth/throttle.ts` and the embed's domain
+So it is the same kind of thing as `lib/rate-limit/limiter.ts` and the embed's domain
 allowlist: it raises the cost of doing something we would rather people didn't,
 and it does not pretend to make that thing impossible. Anyone determined can
 register a domain. What this stops is the ten-second throwaway from the first
@@ -507,7 +507,7 @@ effect does not depend on but a colleague's memory does.
 
 ## The throttle is friction, not a guarantee
 
-`lib/auth/throttle.ts` counts in this process's memory. A second instance has its
+`lib/rate-limit/limiter.ts` counts in this process's memory. A second instance has its
 own counters and a restart forgets everything. It exists so one person holding
 down a button cannot turn our Resend quota into someone else's inbox problem, and
 for that it is enough. Keyed per address, because a global counter is a denial of

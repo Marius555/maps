@@ -18,7 +18,7 @@ import { useResendVerification } from "@/lib/query/auth";
  * account it obviously is reads as a system that has lost track.
  *
  * The route behind both is the same `POST /api/auth/verify-email`, already
- * throttled at three per fifteen minutes per address (`lib/auth/throttle.ts`), so
+ * throttled at three per fifteen minutes per address (`lib/rate-limit/limiter.ts`), so
  * holding the button down costs our Resend quota nothing.
  *
  * It swaps itself for the confirmation rather than showing both, because the

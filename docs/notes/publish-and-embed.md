@@ -13,6 +13,24 @@ rewritten; it is the record of why this area is shaped as it is.
   script served as anything else refuses to run — and `map.js` goes up **last**, because it
   imports `./maplibre-gl.mjs` by relative URL. R2's ETags are weak (`W/"…"`); compare the
   hash inside them.
+- **`map.js` is a ~1KB loader, and the map is `map-[hash].js`** (`embed/src/boot.ts` →
+  `embed/src/index.ts`). A module runs nothing until its whole static graph has arrived, so
+  a single file made the visitor wait for map.js → MapLibre → MapLibre's shared chunk, in
+  series, before the snapshot was even asked for — and a map below the fold downloaded
+  ~300KB on page load anyway. The loader waits for the box to near the viewport, then asks
+  for the snapshot, the chunk and both MapLibre files at once (measured on the since-deleted `dev.html`: all
+  four start within 1ms of each other). **Nothing the chunk imports may be imported by the
+  loader** — Rollup would hoist it into `map.js` and the chunk would import it back from
+  `./map.js`, a second evaluation of the loader on any page whose CMS appends `?ver=`.
+  Hence `config.ts` (the loader's) and `page.ts` (the app's) each carry a `warn`. Old
+  hashed chunks stay in R2, so a visitor holding a cached old `map.js` still works.
+- **A Directions press opens instantly and is never intercepted.** It has broken twice. No
+  `window.open`, no `preventDefault`, nothing awaited in the click: the link is a real
+  `<a>` and the new tab is Google's (or Apple's) from the first frame. The first press may
+  start a location lookup *behind* the tab — and raise the permission prompt — but a second
+  link pressed afterwards raises no second prompt. This is why analytics uses `sendBeacon`
+  (`embed/src/track.ts`). The rest of what to check by hand is under
+  [Checking the embed by hand](#checking-the-embed-by-hand).
 - **What the map says is `lang` + `strings` on the snapshot, and absent is English.**
   `packages/shared/embed-strings.ts` is the English table; the presets are dashboard-only
   (`lib/embed/languages`), and publish writes only the words that differ from English. The
@@ -151,9 +169,10 @@ rewritten; it is the record of why this area is shaped as it is.
   find-nearest inside the search field (8px low). It was reported three times as an embed bug
   — "the zoom buttons are too big", "padding top and bottom", "the nearest-to-me button is
   lower than the search bar" — and chased through three rounds of fixes to `styles.css`,
-  because `/embed/dev.html` has no such rule and measured clean every time. **Neither harness
-  may ever style a bare element**: the moment one does it stops predicting what a customer
-  sees, which is the only reason either page exists. Both are scoped to `#form` now.
+  because `/embed/dev.html` (deleted since) had no such rule and measured clean every time.
+  **No harness page may ever style a bare element**: the moment one does it stops
+  predicting what a customer sees, which is the only reason a harness exists. `live.html`
+  is scoped to `#form`.
 - **The map draws zoom in and zoom out and nothing else.** Compass, find-my-location,
   fullscreen and the scale bar went on request ("there is too many default map buttons, we
   don't need ruler, full screen, compass, location button, just zoom in and out"), and the
@@ -1062,3 +1081,107 @@ the attribution instead of the two colliding. It is a link to brand.json's `webs
 **Host-page events.** Every `track()` call also dispatches `pinglide` on `document` with
 `{ type, map, ...data }`, whether or not our own measurement is on — it is a DOM event, not
 a request. It is what lets an owner forward map activity to their own analytics.
+
+## Checking the embed by hand
+
+Where to look: the **Publish page's preview** (the real bundle against the map as it is in
+the editor) and its **Open test page** button, `/embed/live.html` (the real bundle against
+the published snapshot — the only place analytics can be checked end to end). Republish
+before using the test page; it shows what is live, not what is in the editor.
+`/embed/dev-legacy.html` is the one fixture left: a snapshot published before the merge,
+which must look the way it always did (§7). Run it after touching anything below.
+
+This list used to live in `/embed/dev.html`, against a hand-written fixture. That fixture
+drifted from what a publish actually writes — the old basemap, an old card layout — until
+it showed something no customer would ever see, and it was deleted on 2026-10-02. Each item
+now says what to set up on a real map instead of naming a fixture's locations.
+
+**Pins.** Coloured by their first tag, untagged ones grey. Locations with an icon draw as
+large balls with a white glyph, the rest small. Every pin sits centred on its coordinate.
+Two pins close together cluster at low zoom, mixing both sizes into one bubble. OpenStreetMap
+attribution shows exactly once. Put a domain other than the one you are on into the
+allowlist and the map must refuse to render, warning in the console only.
+
+**The pin, the card and the row agree on one colour.** Give a location two tags, with the
+one that comes *second* in the map's vocabulary first on the location. The pin takes that
+first tag's colour, and the chip carrying the dot on its card is that tag — not the one
+first in the vocabulary. If the dot moves to another chip, `tagChipsOf` is being sorted
+somewhere it must not be.
+
+**The card is never under the panel, and never cut off.** On a wide map it opens to the
+right of its pin, and the map pans just enough to keep it clear of a floating panel — the
+placement measures the room the panel leaves, not the whole frame. Narrow the map below
+about twice the card's width and it opens below the pin instead. Clicking a results row
+flies there with the card already on its side: one motion. The card is exactly as wide as
+its popup (MapLibre's cap counts its own tip). Hovering the gallery arrows moves nothing.
+
+**The card's content.** The two renderers are twins: anything that looks different here
+from the same card in `/maps/…/card` is a bug in one of them.
+- A Button block in link mode pointed at a field appears only on locations with that field
+  filled; a button with nothing to point at draws nothing and takes no space. A Button left
+  on its default action is Directions, on every card, with an href that is a real
+  google.com/maps/dir URL from that pin's coordinates (maps.apple.com on an iPhone). Neither
+  opens in this tab. An outlined button wears the stylesheet's ground, never a colour baked
+  into the snapshot.
+- With `hideDirections` on, the links row leaves Directions out (the button already goes
+  there). A row with all four links off vanishes rather than leaving an empty padded box.
+  Each row is a glyph and a label in the card's small print — a site reads as its host and
+  path, not "Website".
+- Custom fields show as labelled rows in the order the map defines them, a link field's
+  button shows the owner's label, never the URL, and a location with no values shows no
+  field rows.
+- A gallery wraps both ways with no counter, and its arrows never pan the map. A location
+  with one photo written the old way (`photoUrl`, no `photoUrls`) shows it with no arrows.
+- Directions and the phone number are plain text on one line, bold on hover and focus; on a
+  narrow panel the number ellipses rather than wrapping.
+
+**Shapes and routes.** Shapes draw under every pin and cluster, outline solid and fill
+translucent. A circle holds its ground distance across zoom. Clicking a fill opens its card
+where you clicked; a pin inside a shape still opens the pin's card. A route's card reads
+"1.5 km · 19 min"; a line without `durationS` shows the distance alone, as before routes.
+
+**Map controls.** Zoom in and zoom out, nothing else: 36px squares with an 8px corner, the
+same box as the search field, the glyph filling the button.
+
+**Results list.** Search and filters docked at the top. Clicking a row opens its card and
+marks the row; clicking a pin scrolls its row into view. The breakpoints are container
+queries: narrow the *window* and nothing changes, squeeze the map's own box and it stacks,
+map on top, 60/40 at both layouts.
+
+**Nearest to me.** A crosshair button that re-sorts the whole list by distance. It lights
+while distances are measured; pressing it lit puts the owner's order back. Picking a place
+out of the search box lights it too. Block location for the site and press it: the button
+disables while asking, the pill says *Location is off for this site*, and it goes away on
+its own after a few seconds (sooner on a click) — including on a map published with no
+search and no filters.
+
+**Directions origin.** Every Directions link (rows, the card's links row, a default Button
+block) carries `&origin=` as soon as anything knows where you are, however vague. The
+sharpest reading wins, not the latest: press the crosshair, then the map's Find my location,
+and the links move to the precise fix — press the crosshair again and they must not move
+back.
+
+**Tags.** Several tag groups, each under its own heading. Within a group chips widen the
+results; across groups they narrow. If ticking a second chip in one group ever removes a
+location, the matching is wrong. Every tag label is also searchable by typing — a chip
+scrolled out of view is one a visitor can still type.
+
+**Search.** Filters immediately, and after a beat offers places and postcodes from the
+gazetteer underneath (`npm run build:gazetteer -- <country>` first, or it stays empty and
+the console says why). Pick a town with no location in it: the map flies there, the list
+re-sorts by distance from it rather than emptying, and the crosshair lights. A no-match
+search says so. The whole control works from the keyboard — type, arrow down, Enter,
+Escape — and focus shows a darker border, not a coloured ring.
+
+**Appearance.** Set labels to "some", points of interest off and cycle paths on: city and
+district names but no street names, water names or shop markers, cycleways as green ribbons
+under the labels. Switch the OS to dark and reload on an Auto map: the same three hold on top
+of the inverted basemap.
+
+**Analytics: one beacon per session, and not one before the tab goes away.** With
+measurement on and republished, open the test page's Network tab, click a pin, search and
+press Directions: no request to `/api/collect` while you do. Switch tabs: exactly one POST,
+answering 204, and never a second flush. The session then shows on the map's Analytics tab.
+
+**Placement.** A snippet with no `data-target` inserts the map exactly where it was pasted:
+text after the script sits under the map.

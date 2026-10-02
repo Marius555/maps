@@ -31,7 +31,8 @@
     "migrate:shape-kinds": "node --env-file=.env scripts/migrate-shape-kinds.mjs",
     "migrate:style-host": "node --env-file=.env scripts/migrate-style-host.mjs",
     "migrate:snapshots-to-r2": "node --env-file=.env scripts/migrate-snapshots-to-r2.mjs",
-    "migrate:tags": "node --env-file=.env scripts/migrate-categories-to-tags.mjs"
+    "migrate:tags": "node --env-file=.env scripts/migrate-categories-to-tags.mjs",
+    "migrate:permissions": "node --env-file=.env scripts/migrate-permissions.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.6",

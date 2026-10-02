@@ -12,10 +12,11 @@ import { uploadSnapshot } from "@/lib/snapshot/storage";
 import { effectiveCardLayout } from "@/lib/card/designer-status";
 import { getCardDesign } from "./card-design.repository";
 import type { RepoContext } from "./context";
+import { PublishOverLimitError } from "./errors";
 import { listAllGroups } from "./groups.repository";
 import { toAppMap } from "./mappers";
-import { getMap } from "./maps.repository";
-import { getUserPlan, planAllows } from "./plan-limits";
+import { getMap, isAmongFirstMaps } from "./maps.repository";
+import { PLAN_LIMITS, getUserPlan, planAllows, type PlanId } from "./plan-limits";
 import { listAllPlaces } from "./places.repository";
 import { listAllShapes } from "./shapes.repository";
 import type { AppMap, MapRow } from "./types";
@@ -66,18 +67,27 @@ export async function publishMap(
    */
   origin: string,
 ): Promise<PublishResult> {
-  // Ownership first — nothing is generated for a map the caller can't publish.
-  const map = await getMap(ctx, mapId);
-  const [places, shapes, groups, cardDesign] = await Promise.all([
+  /*
+   * Ownership is checked in the same batch as the reads, not ahead of them —
+   * nothing below runs, and nothing is generated, unless `getMap` resolved.
+   *
+   * The plan is the map's owner's rather than the caller's, because the nightly
+   * sheet sync republishes with no session — and the badge is the owner's
+   * plan's answer. `ctx.userId` *is* the owner here: `getMap` refuses any map
+   * whose `userId` differs, which is what lets this read join the batch rather
+   * than wait for the map row to name its owner.
+   */
+  const [map, places, shapes, groups, cardDesign, plan] = await Promise.all([
+    getMap(ctx, mapId),
     listAllPlaces(ctx, mapId),
     listAllShapes(ctx, mapId),
     // Only their colours are published, never their ids — see buildSnapshot.
     listAllGroups(ctx, mapId),
     getCardDesign(ctx),
+    getUserPlan(ctx.userId),
   ]);
-  // By the map's owner rather than the caller, because the nightly sheet sync
-  // republishes with no session — and the badge is the owner's plan's answer.
-  const plan = await getUserPlan(map.userId);
+
+  await assertPublishable(map.userId, mapId, plan, places.length, shapes.length);
 
   const generatedAt = new Date().toISOString();
   const { snapshot, skipped } = buildSnapshot(
@@ -113,5 +123,41 @@ export async function publishMap(
     };
   } catch (error) {
     throw toRepositoryError(error);
+  }
+}
+
+/**
+ * Refuse to publish a map that holds more than its owner's plan allows.
+ *
+ * Every create is refused at the limit, so this only ever fires after a
+ * downgrade: a Pro account's 400-location map, now on Starter. Without it the
+ * limits were only on *making* things — the whole map went on publishing
+ * everything it held, which made a downgrade a way to keep the higher plan.
+ *
+ * Nothing is deleted and the live snapshot is left exactly as it was: the map on
+ * the customer's site keeps working, and it is the next publish that waits until
+ * the map fits or the plan does. Here rather than in the route because the
+ * nightly sheet sync republishes through `publishMap` too, and must meet the
+ * same rule.
+ */
+async function assertPublishable(
+  userId: string,
+  mapId: string,
+  plan: PlanId,
+  placeCount: number,
+  shapeCount: number,
+): Promise<void> {
+  const limits = PLAN_LIMITS[plan];
+
+  if (placeCount > limits.places) {
+    throw new PublishOverLimitError("places", placeCount, limits.places, plan);
+  }
+
+  if (shapeCount > limits.shapes) {
+    throw new PublishOverLimitError("shapes", shapeCount, limits.shapes, plan);
+  }
+
+  if (!(await isAmongFirstMaps(userId, mapId, limits.maps))) {
+    throw new PublishOverLimitError("maps", 0, limits.maps, plan);
   }
 }

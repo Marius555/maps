@@ -9,9 +9,13 @@ import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID } from "./config";
  * Admin client — carries the API key, so it bypasses row permissions.
  *
  * Every row read and write in the app goes through this client, inside
- * /lib/repositories, always scoped by the caller's userId. That is what makes
- * plan limits (CLAUDE.md §6) genuinely server-side: a user who lifts their
- * session secret out of devtools still cannot talk to the database directly.
+ * /lib/repositories, always scoped by the caller's userId. That is half of what
+ * makes plan limits (CLAUDE.md §6) genuinely server-side. The other half is that
+ * rows and files carry **no** user write permission (`ownerPermissions`,
+ * `PUBLIC_FILE_PERMISSIONS`): the session cookie *is* the Appwrite session
+ * secret, and a user who lifts it out of devtools can call Appwrite directly
+ * with whatever rights their rows grant them. They used to grant `update`,
+ * which made a subscription row a user-editable plan.
  *
  * Memoising is safe because this client holds no per-user state.
  */

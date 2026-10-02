@@ -1,18 +1,18 @@
 "use client";
 
 import { Button } from "@heroui/react";
-import { FileSpreadsheet } from "lucide-react";
+import { Upload } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { FILE_ACCEPT } from "@/lib/import/read-source";
+
+const FORMATS = ["CSV", "XLSX", "XML"] as const;
 
 /**
  * Choose a file, or drop one.
  *
  * Both, because the two habits are genuinely different: people who keep the file
  * in a folder browse for it, people who have it open in another window drag it.
- * The dashed frame is honest now — it was refused in the original file step
- * precisely because nothing there accepted a drop.
  */
 export function FileDrop({
   isBusy,
@@ -28,24 +28,15 @@ export function FileDrop({
     // biome-ignore lint/a11y/noStaticElementInteractions: the keyboard path is
     // the button inside; the drop target is pointer-only by nature.
     <div
-      // Not capped here. The frame still must not stretch to the full content
-      // width — a dashed rectangle 1800px across reads as a layout bug rather
-      // than a target — but the cap lives on the import wizard, so the tab
-      // strip and this frame are one width by construction instead of two that
-      // have to be kept equal by hand.
-      //
       // `h-full` and `justify-center` because this shares a grid cell with the
-      // Google Sheet panel (see `source-tabs.tsx`), which is the taller of the
-      // two. Without them the frame ended short of the cell and left an empty
-      // band above the plan line that only this tab had.
+      // Google Sheet panel (see `source-choice.tsx`). Without them the frame
+      // would end short of the cell whenever the other panel is the taller.
       //
-      // Transparent at rest, so the frame is a dashed outline on the page
-      // rather than a filled well. It used to be `bg-surface-secondary`, which
-      // was a legible recess while this sat inside a white `SectionPanel` and
-      // became a grey patch on a grey page the moment the panel went. The
-      // dashed border is the whole affordance and needs no ground behind it.
-      className={`flex h-full w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-6 text-center transition-colors ${
-        isOver ? "border-primary bg-primary/5" : "border-border"
+      // Transparent at rest: the dashed border is the whole affordance and
+      // needs no ground behind it (one ground per screen — see the Surfaces
+      // notes in docs/notes/editor-and-layout.md).
+      className={`flex h-full w-full flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+        isOver ? "border-foreground/20 bg-surface" : "border-border"
       }`}
       onDragOver={(event) => {
         event.preventDefault();
@@ -62,9 +53,9 @@ export function FileDrop({
     >
       <span
         aria-hidden="true"
-        className="grid size-9 place-items-center rounded-full bg-surface-secondary text-muted"
+        className="grid size-12 place-items-center rounded-full bg-default text-muted"
       >
-        <FileSpreadsheet className="size-4" />
+        <Upload className="size-5" />
       </span>
 
       <input
@@ -80,17 +71,35 @@ export function FileDrop({
         }}
       />
 
-      <div className="space-y-1">
-        <Button isPending={isBusy} onPress={() => input.current?.click()}>
-          Choose file
-        </Button>
-        <p className="text-xs text-muted">or drag one here</p>
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-foreground">
+          {isOver ? "Drop to read it" : "Drop your file here"}
+        </p>
+
+        <div className="flex items-center justify-center gap-3 text-xs text-muted">
+          <span>or</span>
+          <Button isPending={isBusy} onPress={() => input.current?.click()}>
+            Choose file
+          </Button>
+        </div>
       </div>
 
-      <p className="max-w-sm text-pretty text-xs text-muted">
-        CSV, Excel (.xlsx) or XML. Your file is read in your browser — nothing is
-        saved until you confirm.
-      </p>
+      <div className="space-y-2">
+        <ul className="flex items-center justify-center gap-1.5">
+          {FORMATS.map((format) => (
+            <li
+              key={format}
+              className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-muted"
+            >
+              {format}
+            </li>
+          ))}
+        </ul>
+
+        <p className="max-w-sm text-pretty text-xs text-muted">
+          Read in your browser — nothing is saved until you confirm.
+        </p>
+      </div>
     </div>
   );
 }

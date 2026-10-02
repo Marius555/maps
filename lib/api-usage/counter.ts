@@ -11,7 +11,7 @@ import type { ApiCallCount, ApiKind, ApiProvider } from "@/lib/repositories/api-
  * timer flushes it, one write per (day, provider, kind) that moved, every
  * `FLUSH_MS`. An import is then a handful of writes.
  *
- * **Best effort, and it says so**, in the same words `lib/auth/throttle.ts`
+ * **Best effort, and it says so**, in the same words `lib/rate-limit/limiter.ts`
  * uses: the tally lives in this process, so a restart loses at most one flush
  * window and a second instance keeps its own. These are operator statistics,
  * not a bill — the plan allowance is `usage.repository.ts`, which is written

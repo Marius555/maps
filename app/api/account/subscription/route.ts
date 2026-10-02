@@ -156,7 +156,7 @@ export const PATCH = withAuth(async ({ request, user }) => {
   await upsertSubscription({ ...state, userId: user.id }, kept);
 
   return ok({ plan: state.plan, cadence: state.cadence, kept });
-});
+}, { rateLimit: "billing" });
 
 /**
  * Cancel: stop the renewal, keep the plan until the period paid for ends.
@@ -196,4 +196,4 @@ export const DELETE = withAuth(async ({ user }) => {
   if (details?.state) await upsertSubscription({ ...details.state, userId: user.id });
 
   return ok({ endsAt: details?.endsAt ?? details?.state?.currentPeriodEnd ?? null });
-});
+}, { rateLimit: "billing" });

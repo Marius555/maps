@@ -1,5 +1,6 @@
 import { fail, ok } from "@/lib/api/responses";
 import { withAuth } from "@/lib/api/route";
+import { assertUploadSize } from "@/lib/api/upload-size";
 import {
   clearPlaceLogo,
   setPlaceLogo,
@@ -20,6 +21,8 @@ type Params = { id: string; placeId: string };
  * disk here.
  */
 export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
+  assertUploadSize(request, "logo");
+
   let entry: FormDataEntryValue | null;
 
   try {
@@ -37,7 +40,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   }
 
   return ok({ place: await setPlaceLogo(ctx, params.id, params.placeId, entry) });
-});
+}, { rateLimit: "upload" });
 
 export const DELETE = withAuth<Params>(async ({ params, ctx }) =>
   ok({ place: await clearPlaceLogo(ctx, params.id, params.placeId) }),

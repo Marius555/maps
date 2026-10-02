@@ -24,4 +24,4 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   const input = await parseBody(request, googleSheetSourceSchema);
 
   return ok({ csv: await fetchGoogleSheetCsv(input) });
-});
+}, { rateLimit: "sheetImport" });

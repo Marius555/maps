@@ -5,6 +5,7 @@ import {
   planFeatureNote,
   planLimitMessage,
   planLimitUsage,
+  publishOverLimitMessage,
 } from "./errors";
 import { PLAN_LIMITS } from "./plan-limits";
 
@@ -22,6 +23,8 @@ const listRows = vi.fn();
 const getRow = vi.fn();
 const createRow = vi.fn();
 const createRows = vi.fn();
+const deleteRow = vi.fn();
+const deleteRows = vi.fn();
 
 vi.mock("@/lib/appwrite/admin", () => ({
   admin: {
@@ -30,6 +33,8 @@ vi.mock("@/lib/appwrite/admin", () => ({
       getRow: (...args: unknown[]) => getRow(...args),
       createRow: (...args: unknown[]) => createRow(...args),
       createRows: (...args: unknown[]) => createRows(...args),
+      deleteRow: (...args: unknown[]) => deleteRow(...args),
+      deleteRows: (...args: unknown[]) => deleteRows(...args),
     },
   },
 }));
@@ -42,6 +47,14 @@ const ctx = { userId: USER_ID };
 let existingPlaceCount = 0;
 /** How many shapes the map already has. Set per test. */
 let existingShapeCount = 0;
+/**
+ * Rows another request inserted at the same moment — counted only once this
+ * test's own insert has happened, which is what a race looks like from inside
+ * one request: the pre-check saw the map without them, the recount sees them.
+ */
+let racingRows = 0;
+/** What this test has inserted so far, per table, so a recount includes it. */
+let inserted = { places: 0, shapes: 0 };
 /** The row `plan-limits` reads. Empty array means the free plan. */
 let subscriptionRows: {
   plan?: string;
@@ -57,6 +70,8 @@ beforeEach(() => {
 
   existingPlaceCount = 0;
   existingShapeCount = 0;
+  racingRows = 0;
+  inserted = { places: 0, shapes: 0 };
   subscriptionRows = [];
 
   getRow.mockImplementation(async () => ({
@@ -79,20 +94,31 @@ beforeEach(() => {
       return { rows: subscriptionRows, total: subscriptionRows.length };
     }
 
-    if (tableId === "shapes") return { rows: [], total: existingShapeCount };
+    const table = tableId === "shapes" ? "shapes" : "places";
+    const existing = table === "shapes" ? existingShapeCount : existingPlaceCount;
+    const racers = inserted[table] > 0 ? racingRows : 0;
 
-    return { rows: [], total: existingPlaceCount };
+    return { rows: [], total: existing + inserted[table] + racers };
   });
 
-  createRow.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
-    $id: "row-new",
-    $createdAt: "2026-01-01T00:00:00.000Z",
-    $updatedAt: "2026-01-01T00:00:00.000Z",
-    ...data,
-  }));
+  createRow.mockImplementation(
+    async ({ tableId, data }: { tableId: string; data: Record<string, unknown> }) => {
+      inserted[tableId === "shapes" ? "shapes" : "places"] += 1;
+
+      return {
+        $id: "row-new",
+        $createdAt: "2026-01-01T00:00:00.000Z",
+        $updatedAt: "2026-01-01T00:00:00.000Z",
+        ...data,
+      };
+    },
+  );
 
   createRows.mockImplementation(
-    async ({ rows }: { rows: Record<string, unknown>[] }) => ({
+    async ({ tableId, rows }: { tableId: string; rows: Record<string, unknown>[] }) => {
+      inserted[tableId === "shapes" ? "shapes" : "places"] += rows.length;
+
+      return {
       rows: rows.map((row, index) => ({
         $createdAt: "2026-01-01T00:00:00.000Z",
         $updatedAt: "2026-01-01T00:00:00.000Z",
@@ -100,7 +126,8 @@ beforeEach(() => {
         $id: `place-${index}`,
       })),
       total: rows.length,
-    }),
+      };
+    },
   );
 });
 
@@ -166,6 +193,18 @@ describe("createPlace", () => {
       code: "plan_limit_reached",
     });
   });
+
+  it("removes the place it just made when a racing request took the last slot", async () => {
+    existingPlaceCount = PLAN_LIMITS.free.places - 1;
+    racingRows = 1;
+    const { createPlace } = await repository();
+
+    await expect(createPlace(ctx, MAP_ID, placeInput("Shop"))).rejects.toMatchObject({
+      code: "plan_limit_reached",
+    });
+    expect(deleteRows).toHaveBeenCalledOnce();
+    expect(JSON.stringify(deleteRows.mock.calls[0][0].queries)).toContain("row-new");
+  });
 });
 
 describe("createPlaces", () => {
@@ -208,17 +247,52 @@ describe("createPlaces", () => {
     expect(rows.map((row: { sortOrder: number }) => row.sortOrder)).toEqual([3, 4]);
   });
 
-  it("gives every bulk row owner permissions", async () => {
+  /*
+   * The opposite of what this test used to assert. The session cookie is the
+   * Appwrite session secret, so any permission a row grants its owner is one
+   * they can exercise straight through Appwrite's API, past every check here —
+   * `update` on a place was a way to move it to another map. Every access goes
+   * through the admin client, so a row needs none.
+   */
+  it("gives bulk rows no permissions, so no owner can edit them past this code", async () => {
     const { createPlaces } = await repository();
 
     await createPlaces(ctx, MAP_ID, [placeInput("A")]);
 
     const { rows } = createRows.mock.calls[0][0];
-    // Bulk create takes permissions per row; without them the rows land ownerless.
-    expect(rows[0].$permissions).toEqual(
-      expect.arrayContaining([`read("user:${USER_ID}")`]),
-    );
+    expect(rows[0].$permissions).toEqual([]);
     expect(rows[0].$id).toBeTruthy();
+  });
+
+  /*
+   * Two imports landing together both count the same number and both pass. The
+   * recount after the insert is what stops them: whichever sees the map past the
+   * limit removes every row it just wrote and refuses.
+   */
+  it("removes its own rows when a racing request pushed the map past the limit", async () => {
+    existingPlaceCount = PLAN_LIMITS.free.places - 2;
+    racingRows = 2;
+    const { createPlaces } = await repository();
+
+    await expect(
+      createPlaces(ctx, MAP_ID, [placeInput("A"), placeInput("B")]),
+    ).rejects.toMatchObject({ code: "plan_limit_reached", status: 403 });
+
+    expect(deleteRows).toHaveBeenCalledOnce();
+    const { queries } = deleteRows.mock.calls[0][0];
+    expect(JSON.stringify(queries)).toContain("place-0");
+    expect(JSON.stringify(queries)).toContain("place-1");
+  });
+
+  it("keeps its rows when the recount is still within the limit", async () => {
+    existingPlaceCount = PLAN_LIMITS.free.places - 4;
+    racingRows = 2;
+    const { createPlaces } = await repository();
+
+    await expect(
+      createPlaces(ctx, MAP_ID, [placeInput("A"), placeInput("B")]),
+    ).resolves.toHaveLength(2);
+    expect(deleteRows).not.toHaveBeenCalled();
   });
 
   it("writes nothing for an empty batch", async () => {
@@ -295,6 +369,57 @@ describe("createShape", () => {
     const { createShape } = await shapes();
 
     await expect(createShape(ctx, MAP_ID, shapeInput("Zone"))).resolves.toBeTruthy();
+  });
+
+  /*
+   * A route is stored as a line carrying a `route` field. The routing endpoints
+   * check the plan, but a free account could otherwise post a route it computed
+   * itself and publish it.
+   */
+  const routeInput = {
+    name: "Delivery",
+    geometry: {
+      kind: "line" as const,
+      points: [
+        [25.28, 54.687],
+        [25.3, 54.69],
+      ] as [number, number][],
+      route: {
+        profile: "car" as const,
+        stops: [{ at: [25.28, 54.687] as [number, number] }, { at: [25.3, 54.69] as [number, number] }],
+        durationS: 300,
+      },
+    },
+    color: "#1c7ed6",
+    opacity: 1,
+    sortOrder: 0,
+    groupId: "",
+  };
+
+  it("refuses a route on the free plan", async () => {
+    const { createShape } = await shapes();
+
+    await expect(createShape(ctx, MAP_ID, routeInput)).rejects.toMatchObject({
+      code: "plan_feature_required",
+    });
+    expect(createRow).not.toHaveBeenCalled();
+  });
+
+  it("saves a route on a plan that has them", async () => {
+    subscriptionRows = [{ plan: "starter", status: "active" }];
+    const { createShape } = await shapes();
+
+    await expect(createShape(ctx, MAP_ID, routeInput)).resolves.toBeTruthy();
+  });
+
+  it("saves a plain line on the free plan", async () => {
+    const { createShape } = await shapes();
+    const { route: _route, ...line } = routeInput.geometry;
+    void _route;
+
+    await expect(
+      createShape(ctx, MAP_ID, { ...routeInput, geometry: line }),
+    ).resolves.toBeTruthy();
   });
 });
 
@@ -401,6 +526,21 @@ describe("createShapes", () => {
     const { rows } = createRows.mock.calls[0][0];
     expect(rows[0].kind).toBe("polygon");
     expect(JSON.parse(rows[0].geometry)).not.toHaveProperty("kind");
+  });
+});
+
+describe("publishOverLimitMessage", () => {
+  it("says how many to remove, and the other way out", () => {
+    expect(publishOverLimitMessage("places", 40, 25, "free")).toBe(
+      "This map has 40 locations and the free plan publishes up to 25. Remove 15 locations or upgrade to publish it.",
+    );
+    expect(publishOverLimitMessage("shapes", 4, 3, "free")).toContain("Remove 1 shape or");
+  });
+
+  it("names which maps still publish when there are too many", () => {
+    expect(publishOverLimitMessage("maps", 0, 1, "free")).toBe(
+      "The free plan publishes your first map, and this one comes after. Delete an older map or upgrade to publish it.",
+    );
   });
 });
 

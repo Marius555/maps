@@ -33,7 +33,7 @@ import type { AppMap } from "@/lib/repositories/types";
 import { useImportStore } from "@/lib/stores/import-store";
 import { MAX_BULK_PLACES } from "@/lib/validation/place.schema";
 import { GeocodeStep } from "./geocode-step";
-import { ImportSteps } from "./import-steps";
+import { ImportHeading } from "./import-heading";
 import { MappingStep } from "./mapping-step/mapping-step";
 import { ReviewStep } from "./review-step/review-step";
 import { SourceStep } from "./source-step/source-step";
@@ -362,11 +362,9 @@ export function ImportWizard({
    * dropzone and a progress bar, and stretching either across a 2560px monitor
    * would make them harder to use, not easier.
    *
-   * **This is the only cap, and the steps must not add their own.** The step
-   * trail is left-aligned in this wrapper, so it lines up with whatever the
-   * step draws only while the step fills the wrapper. Source and Addresses used
-   * to sit at a centred `max-w-2xl` inside a `max-w-5xl` wrapper, which put the
-   * trail up to 176px left of the tabs it was labelling.
+   * **This is the only cap, and the steps must not add their own.** The
+   * Source title and the resumed-run notice are left-aligned in this wrapper,
+   * so they line up with whatever the step draws only while the step fills it.
    */
   const isWide = step === "mapping" || step === "review";
 
@@ -421,7 +419,7 @@ export function ImportWizard({
           </AnimatePresence>
         </div>
 
-        <ImportSteps current={step} />
+        {step === "source" ? <ImportHeading /> : null}
 
         {/*
          * `popLayout`, and the mode matters more than it looks.
@@ -451,7 +449,10 @@ export function ImportWizard({
             ) : null}
 
             {step === "mapping" ? (
-              <MappingStep onContinue={() => setStep("geocoding")} />
+              <MappingStep
+                onBack={startOver}
+                onContinue={() => setStep("geocoding")}
+              />
             ) : null}
 
             {step === "geocoding" ? (

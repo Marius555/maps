@@ -11,9 +11,11 @@ import type {
   UpdateGroupInput,
 } from "@/lib/validation/group.schema";
 import type { RepoContext } from "./context";
-import { NotFoundError } from "./errors";
+import { NotFoundError, RepositoryError } from "./errors";
 import { toGroup } from "./mappers";
 import { getMap, ownerPermissions } from "./maps.repository";
+import { listPlaceFileIds, removeStorageFiles } from "./place-files";
+import { MAX_GROUPS_PER_MAP, rollBackIfOverLimit } from "./plan-limits";
 import type { Group, GroupRow, Page } from "./types";
 
 /**
@@ -23,8 +25,11 @@ import type { Group, GroupRow, Page } from "./types";
  *
  * Two differences, both deliberate:
  *
- * **No plan check.** A group cannot outnumber the places and shapes inside it,
- * and those are limited already. §6's table has no row for groups.
+ * **No plan check, but a ceiling.** A group normally cannot outnumber the
+ * places and shapes inside it, and those are limited already — but an empty
+ * group can be made, and past 2,000 `listAllGroups` refuses to page, which
+ * breaks the editor and publishing for that map. `MAX_GROUPS_PER_MAP` is the
+ * same on every plan.
  *
  * **`deleteGroup` leaves its members' `groupId` dangling.** Not for want of a
  * bulk primitive — `setGroupPin` below writes every member in one request, and
@@ -98,8 +103,16 @@ export async function listAllGroups(
   ctx: RepoContext,
   mapId: string,
 ): Promise<Group[]> {
-  await getMap(ctx, mapId);
+  // Beside the rows rather than ahead of them: nothing is returned unless the
+  // map is the caller's, and a check in series cost every map page one more
+  // round trip to Appwrite before its first row was even asked for.
+  const [, rows] = await Promise.all([getMap(ctx, mapId), readAllGroups(mapId)]);
 
+  return rows;
+}
+
+/** Every page of a map's groups, with no ownership check — the caller has made it. */
+async function readAllGroups(mapId: string): Promise<Group[]> {
   const all: Group[] = [];
   let cursor: string | null = null;
 
@@ -154,8 +167,21 @@ export async function createGroup(
 ): Promise<Group> {
   await getMap(ctx, mapId);
 
+  const tooMany = () =>
+    // The photo cap's code and status (files.repository.ts): a fixed ceiling on
+    // every plan, so there is nothing to upgrade to.
+    new RepositoryError(
+      "validation_failed",
+      `A map can hold ${String(MAX_GROUPS_PER_MAP)} groups. Delete one you no longer use, then try again.`,
+      422,
+    );
+
+  if ((await countGroups(mapId)) >= MAX_GROUPS_PER_MAP) throw tooMany();
+
+  let created: GroupRow;
+
   try {
-    const row = await admin.tablesDB.createRow<GroupRow>({
+    created = await admin.tablesDB.createRow<GroupRow>({
       databaseId: env.databaseId,
       tableId: TABLES.groups,
       rowId: ID.unique(),
@@ -167,8 +193,37 @@ export async function createGroup(
       },
       permissions: ownerPermissions(ctx.userId),
     });
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
 
-    return toGroup(row);
+  await rollBackIfOverLimit({
+    total: () => countGroups(mapId),
+    limit: MAX_GROUPS_PER_MAP,
+    undo: async () => {
+      await admin.tablesDB.deleteRow({
+        databaseId: env.databaseId,
+        tableId: TABLES.groups,
+        rowId: created.$id,
+      });
+    },
+    error: tooMany(),
+  });
+
+  return toGroup(created);
+}
+
+/** Only ever called after `getMap` has checked the caller owns `mapId`. */
+async function countGroups(mapId: string): Promise<number> {
+  try {
+    const result = await admin.tablesDB.listRows<GroupRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.groups,
+      queries: [Query.equal("mapId", mapId), Query.limit(1)],
+      total: true,
+    });
+
+    return result.total;
   } catch (error) {
     throw toRepositoryError(error);
   }
@@ -283,9 +338,8 @@ export async function deleteGroup(
  * — so a failure half-way would scatter them across the map instead of leaving a
  * group still holding whatever survived.
  *
- * Photos are not deleted, matching `deletePlace` and `deleteMap`. That is a
- * pre-existing leak across every delete path in the app rather than a decision
- * taken here; fixing it in one of them would be the inconsistency.
+ * The locations' photos and logos go too, after the rows — see
+ * lib/repositories/place-files.ts.
  */
 export async function deleteGroupContents(
   ctx: RepoContext,
@@ -296,7 +350,10 @@ export async function deleteGroupContents(
 
   const scope = [Query.equal("mapId", mapId), Query.equal("groupId", groupId)];
 
+  let fileIds: string[];
+
   try {
+    fileIds = await listPlaceFileIds(scope);
     // Sequential rather than a Promise.all: two bulk deletes against the same
     // account fired together buy nothing worth the risk of one landing while the
     // other is rejected for rate.
@@ -317,6 +374,8 @@ export async function deleteGroupContents(
       tableId: TABLES.groups,
       rowId: groupId,
     });
+
+    await removeStorageFiles(fileIds);
 
     return { places: places.total, shapes: shapes.total };
   } catch (error) {

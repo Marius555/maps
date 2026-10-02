@@ -11,11 +11,17 @@ import type {
   UpdateShapeInput,
 } from "@/lib/validation/shape.schema";
 import type { RepoContext } from "./context";
-import { NotFoundError, PlanLimitError } from "./errors";
+import { NotFoundError, PlanFeatureError, PlanLimitError } from "./errors";
 import { toShape } from "./mappers";
 import { toShapeColumns } from "./shape-geometry";
 import { getMap, ownerPermissions } from "./maps.repository";
-import { PLAN_LIMITS, getUserPlan } from "./plan-limits";
+import {
+  PLAN_LIMITS,
+  getUserPlan,
+  planAllows,
+  rollBackIfOverLimit,
+  type PlanId,
+} from "./plan-limits";
 import type { Page, Shape, ShapeRow } from "./types";
 
 /**
@@ -90,8 +96,16 @@ export async function listAllShapes(
   ctx: RepoContext,
   mapId: string,
 ): Promise<Shape[]> {
-  await getMap(ctx, mapId);
+  // Beside the rows rather than ahead of them: nothing is returned unless the
+  // map is the caller's, and a check in series cost every map page one more
+  // round trip to Appwrite before its first row was even asked for.
+  const [, rows] = await Promise.all([getMap(ctx, mapId), readAllShapes(mapId)]);
 
+  return rows;
+}
+
+/** Every page of a map's shapes, with no ownership check — the caller has made it. */
+async function readAllShapes(mapId: string): Promise<Shape[]> {
   const all: Shape[] = [];
   let cursor: string | null = null;
 
@@ -173,8 +187,12 @@ export async function createShape(
     throw new PlanLimitError("shapes", limit, plan);
   }
 
+  assertRoutesAllowed(plan, [input.geometry]);
+
+  let created: ShapeRow;
+
   try {
-    const row = await admin.tablesDB.createRow<ShapeRow>({
+    created = await admin.tablesDB.createRow<ShapeRow>({
       databaseId: env.databaseId,
       tableId: TABLES.shapes,
       rowId: ID.unique(),
@@ -194,11 +212,18 @@ export async function createShape(
       },
       permissions: ownerPermissions(ctx.userId),
     });
-
-    return toShape(row);
   } catch (error) {
     throw toRepositoryError(error);
   }
+
+  await rollBackIfOverLimit({
+    total: () => countShapes(ctx, mapId),
+    limit,
+    undo: () => deleteShapesById(mapId, [created.$id]),
+    error: new PlanLimitError("shapes", limit, plan),
+  });
+
+  return toShape(created);
 }
 
 /**
@@ -230,6 +255,11 @@ export async function createShapes(
     throw new PlanLimitError("shapes", limit, plan);
   }
 
+  assertRoutesAllowed(
+    plan,
+    inputs.map((input) => input.geometry),
+  );
+
   const permissions = ownerPermissions(ctx.userId);
   const created: Shape[] = [];
 
@@ -244,8 +274,8 @@ export async function createShapes(
         databaseId: env.databaseId,
         tableId: TABLES.shapes,
         rows: chunk.map((input, offset) => ({
-          // Bulk create takes per-row $id and $permissions inline; without them
-          // the rows would land with no owner.
+          // Bulk create takes per-row $id and $permissions inline. The
+          // permissions are empty on purpose — see `ownerPermissions`.
           $id: ID.unique(),
           $permissions: permissions,
           mapId,
@@ -263,11 +293,18 @@ export async function createShapes(
 
       created.push(...result.rows.map(toShape));
     }
-
-    return created;
   } catch (error) {
     throw toRepositoryError(error);
   }
+
+  await rollBackIfOverLimit({
+    total: () => countShapes(ctx, mapId),
+    limit,
+    undo: () => deleteShapesById(mapId, created.map((shape) => shape.id)),
+    error: new PlanLimitError("shapes", limit, plan),
+  });
+
+  return created;
 }
 
 export async function updateShape(
@@ -277,6 +314,8 @@ export async function updateShape(
   input: UpdateShapeInput,
 ): Promise<Shape> {
   await getShape(ctx, mapId, shapeId);
+
+  if (input.geometry) assertRoutesAllowed(await getUserPlan(ctx.userId), [input.geometry]);
 
   /*
    * Geometry is the one field whose domain shape is not its column shape — one
@@ -316,5 +355,42 @@ export async function deleteShape(
     });
   } catch (error) {
     throw toRepositoryError(error);
+  }
+}
+
+/**
+ * Refuse a route on a plan without routes.
+ *
+ * The routing engine's two endpoints already check the plan, but a route is
+ * saved as an ordinary line shape carrying a `route` field — so without this a
+ * free account could post a route with points it computed itself and publish it.
+ * A plain line (no `route`) is allowed on every plan, which is also how a
+ * downgraded account keeps editing: renaming or recolouring sends no geometry,
+ * and converting a route back to a line drops the field.
+ */
+function assertRoutesAllowed(
+  plan: PlanId,
+  geometries: readonly CreateShapeInput["geometry"][],
+): void {
+  const hasRoute = geometries.some(
+    (geometry) => geometry.kind === "line" && geometry.route !== undefined,
+  );
+
+  if (hasRoute && !planAllows(plan, "routes")) {
+    throw new PlanFeatureError("routes", plan);
+  }
+}
+
+/** Remove rows this module just created. Scoped by `mapId` as well as by id. */
+async function deleteShapesById(mapId: string, shapeIds: readonly string[]): Promise<void> {
+  for (let start = 0; start < shapeIds.length; start += MAX_PAGE_SIZE) {
+    await admin.tablesDB.deleteRows({
+      databaseId: env.databaseId,
+      tableId: TABLES.shapes,
+      queries: [
+        Query.equal("mapId", mapId),
+        Query.equal("$id", shapeIds.slice(start, start + MAX_PAGE_SIZE)),
+      ],
+    });
   }
 }

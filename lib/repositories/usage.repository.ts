@@ -261,6 +261,43 @@ export async function recordLookups(userId: string, count: number): Promise<void
   ]);
 }
 
+/**
+ * Records a long request's lookups as it spends them, rather than once at the end.
+ *
+ * A batch that recorded only when it finished lost its whole count if the host
+ * cut it off first — Appwrite Sites ends every request at 30 seconds, and a
+ * request killed there never reaches its last line. So the count is written every
+ * `every` lookups, and `flush` writes the remainder; at worst a cut-off request
+ * leaves `every - 1` unrecorded. Five keeps the extra writes to a fifth of the
+ * lookups, each already a slower upstream call.
+ *
+ * `flush` belongs in a `finally`, so a request that fails still bills what it
+ * reached — the same rule the routes followed with one call at the end.
+ */
+export function lookupMeter(
+  userId: string,
+  every = 5,
+): { spent: (count?: number) => Promise<void>; flush: () => Promise<void> } {
+  let pending = 0;
+
+  const flush = async () => {
+    if (pending === 0) return;
+
+    const count = pending;
+    pending = 0;
+
+    await recordLookups(userId, count);
+  };
+
+  return {
+    async spent(count = 1) {
+      pending += count;
+      if (pending >= every) await flush();
+    },
+    flush,
+  };
+}
+
 async function bump(userId: string, period: string, count: number): Promise<void> {
   try {
     const row = await findRow(userId, period);

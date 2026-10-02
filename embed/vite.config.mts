@@ -32,9 +32,10 @@ export default defineConfig({
   root: resolve(import.meta.dirname),
   /**
    * The manual test harness (embed/dev/) is copied into the build output, so it
-   * sits next to map.js: /embed/dev.html exercises the real bundle against a
-   * committed fixture — no Appwrite, no login, no publish — and
-   * /embed/live.html points it at a real published snapshot.
+   * sits next to map.js: /embed/live.html points the real bundle at a real
+   * published snapshot, and /embed/dev-legacy.html at a pre-merge one (§7).
+   * (/embed/dev.html, against a hand-written fixture, was deleted on 2026-10-02
+   * once the fixture had drifted from anything a publish writes.)
    *
    * It lands in public/embed/, which is gitignored, so the harness is committed
    * as source and never checked in at its served path. **That is not the same as
@@ -61,7 +62,9 @@ export default defineConfig({
     cssTarget: ["chrome111", "safari16.4", "firefox128", "edge111"],
     sourcemap: true,
     lib: {
-      entry: resolve(import.meta.dirname, "src", "index.ts"),
+      // The loader; it imports the map itself (src/index.ts) as a second chunk.
+      // See the head of src/boot.ts for why that split is the fast path.
+      entry: resolve(import.meta.dirname, "src", "boot.ts"),
       formats: ["es"],
       fileName: () => "map.js",
     },
@@ -73,6 +76,13 @@ export default defineConfig({
         // Rewrites the bare specifier to a sibling file, resolved relative to
         // map.js on our origin. scripts/copy-maplibre-worker.mjs puts it there.
         paths: { "maplibre-gl": "./maplibre-gl.mjs" },
+        /*
+         * The map chunk the loader imports. Hashed, so a new build never meets a
+         * cached copy of the old one, and old ones stay valid for any visitor
+         * still holding an old map.js. Never "maplibre-gl*": that prefix is how
+         * check-embed-size.mjs tells MapLibre from our own code.
+         */
+        chunkFileNames: "map-[hash].js",
         /*
          * Here rather than `build.minify`, which library mode deliberately
          * weakens for ES output — Vite keeps the whitespace so a consumer's

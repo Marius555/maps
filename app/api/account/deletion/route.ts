@@ -58,5 +58,5 @@ export const POST = withAuth(
 
     return ok({ mapsLeft: (await listOwnedMapIds(ctx)).length });
   },
-  { allowUnverified: true },
+  { allowUnverified: true, rateLimit: "billing" },
 );
