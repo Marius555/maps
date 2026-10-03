@@ -288,11 +288,11 @@ describe("trackLinks", () => {
     expect(track).not.toHaveBeenCalled();
   });
 
-  it("sees a gallery step even though it stops propagation", () => {
+  it("sees the gallery opening even though it stops propagation", () => {
     // The reason this listener is registered in the capture phase.
     const track = vi.fn();
     const root = rootWith(
-      `<div data-lm-place="p1"><button class="lm-popup__step">Next</button></div>`,
+      `<div data-lm-place="p1"><button class="lm-popup__gallery">Photos</button></div>`,
     );
     const step = root.querySelector("button");
     step?.addEventListener("click", (event) => {

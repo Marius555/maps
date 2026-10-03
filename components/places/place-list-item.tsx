@@ -15,7 +15,11 @@ import {
   LIST_ROW_SURFACE_CLASS,
   listRowMotion,
 } from "@/components/ui/list-row-motion";
-import { RowMenu, type RowMenuItem } from "@/components/ui/row-menu";
+import {
+  type PinColorMenu,
+  PlaceRowMenu,
+} from "@/components/places/pin-color/place-row-menu";
+import type { RowMenuItem } from "@/components/ui/row-menu";
 import { TreeBranch } from "@/components/ui/tree-branch";
 import type { Place } from "@/lib/repositories/types";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
@@ -52,6 +56,7 @@ export function PlaceListItem({
   onEdit,
   onDelete,
   onRetryAddress,
+  pinColorMenu,
   onCreateGroup,
   onRemoveFromGroup,
   onDropObject,
@@ -60,8 +65,9 @@ export function PlaceListItem({
   place: Place;
   /**
    * What this location's own tags say its pin should be — its first tag's
-   * colour, resolved by the caller holding the map's vocabulary. Beaten by
-   * `groupColor` and by a custom pin's own colour, in that order.
+   * colour, or its own colour when it has one, resolved by the caller holding
+   * the map's vocabulary. Beaten by a custom pin's own colour, and by
+   * `groupColor` unless the location has a colour of its own.
    */
   pinColor?: string;
   /** The map's own pins, so `custom:<id>` on a place resolves to a drawing. */
@@ -93,6 +99,8 @@ export function PlaceListItem({
   onEdit: () => void;
   onDelete: () => void;
   onRetryAddress?: () => void;
+  /** Offers Pin colour. Omitted for a row that exists only in the cache. */
+  pinColorMenu?: PinColorMenu;
   /** Only passed for a loose row — see the menu item. */
   onCreateGroup?: () => void;
   /** Only passed for a row in a group — see the menu item. */
@@ -233,7 +241,8 @@ export function PlaceListItem({
           <PinPreview
             icon={place.icon}
             pinIcons={pinIcons}
-            color={groupColor}
+            // A colour of its own beats the group's — lib/map/group-colors.ts.
+            color={place.color ? undefined : groupColor}
             fallbackColor={pinColor}
             size="sm"
             className="shrink-0"
@@ -250,9 +259,15 @@ export function PlaceListItem({
 
         {/* `NO_DRAG_PROPS` stops a press on the menu from also picking the row
             up — see useRowDragSource. */}
-        <div className="shrink-0" {...NO_DRAG_PROPS}>
-          <RowMenu label={`Actions for ${place.name}`} items={items} />
-        </div>
+        <PlaceRowMenu
+          label={`Actions for ${place.name}`}
+          items={items}
+          place={place}
+          pinIcons={pinIcons}
+          pinColorMenu={pinColorMenu}
+          className="shrink-0"
+          {...NO_DRAG_PROPS}
+        />
       </div>
     </motion.li>
   );

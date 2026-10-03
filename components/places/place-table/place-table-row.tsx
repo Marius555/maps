@@ -4,7 +4,11 @@ import { Skeleton } from "@heroui/react";
 import { Pencil, RotateCw, Trash2 } from "lucide-react";
 
 import { PinPreview } from "@/components/map/pin-preview";
-import { RowMenu, type RowMenuItem } from "@/components/ui/row-menu";
+import {
+  type PinColorMenu,
+  PlaceRowMenu,
+} from "@/components/places/pin-color/place-row-menu";
+import type { RowMenuItem } from "@/components/ui/row-menu";
 import { formatCoords } from "@/lib/map/geo";
 import type { Place } from "@/lib/repositories/types";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
@@ -35,6 +39,7 @@ export function PlaceTableRow({
   onSelect,
   onEdit,
   onRetryAddress,
+  pinColorMenu,
   onDelete,
 }: {
   place: Place;
@@ -50,6 +55,8 @@ export function PlaceTableRow({
   onSelect: () => void;
   onEdit: () => void;
   onRetryAddress?: () => void;
+  /** Offers Pin colour in the row's menu. */
+  pinColorMenu?: PinColorMenu;
   onDelete: () => void;
 }) {
   /**
@@ -191,12 +198,15 @@ export function PlaceTableRow({
       <td className="w-10 py-2 pr-2 align-middle">
         {/* The menu is a control inside a clickable row: without this, opening it
             would also open the edit dialog behind it. */}
-        <div
+        <PlaceRowMenu
+          label={`Actions for ${place.name}`}
+          items={items}
+          place={place}
+          pinIcons={pinIcons}
+          pinColorMenu={pinColorMenu}
           className="flex justify-end"
           onClick={(event) => event.stopPropagation()}
-        >
-          <RowMenu label={`Actions for ${place.name}`} items={items} />
-        </div>
+        />
       </td>
     </tr>
   );

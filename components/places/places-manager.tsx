@@ -22,6 +22,7 @@ import { VocabularyButton } from "./manage-vocabulary/vocabulary-button";
 import { PlaceCountBadge } from "./place-count-badge";
 import { PlaceEditDialog } from "./place-form/place-edit-dialog";
 import { PlaceList } from "./place-list";
+import { usePinColorMenus } from "./pin-color/use-pin-color-menus";
 import { PlaceTable } from "./place-table/place-table";
 import { PlacesToolbar } from "./places-toolbar";
 import { SheetSyncButton } from "./sheet-sync/sheet-sync-button";
@@ -79,6 +80,9 @@ export function PlacesManager({
    */
   const { pendingIds, failedIds, resolveAddress, retainOnly } =
     useAddressResolution(map.id);
+
+  // Pin colour lives in each row's menu now, not in Edit location.
+  const pinColorMenuFor = usePinColorMenus(map);
 
   /*
    * Which group each selected tag answers, built once.
@@ -166,6 +170,7 @@ export function PlacesManager({
     onSelect: setEditingId,
     onEdit: setEditingId,
     onRetryAddress: retryAddress,
+    pinColorMenuFor,
   };
 
   return (

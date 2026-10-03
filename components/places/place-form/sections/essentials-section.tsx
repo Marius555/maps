@@ -7,9 +7,7 @@ import { FormTextField } from "@/components/ui/form-field";
 import { roundCoord } from "@/lib/map/geo";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import type { PlaceFormValues } from "@/lib/validation/place.schema";
-import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { AddressSearchField } from "../address-search-field";
-import { PinColorField } from "../pin-color-field";
 import { PinMapField } from "../pin-map-field";
 import { PinField } from "../pin-field";
 
@@ -38,7 +36,6 @@ export function EssentialsSection({
   lat,
   lng,
   icon,
-  color,
   tags,
   onMove,
 }: {
@@ -53,8 +50,7 @@ export function EssentialsSection({
    * the same reason: the map above draws the draft, not the stored row.
    */
   icon: string;
-  /** The form's live pin colour and tags, for the same reason as `icon`. */
-  color: string;
+  /** The form's live tags, for the same reason as `icon`. */
   tags: string[];
   /**
    * The form's one position setter, shared with the Coordinates fold — two
@@ -71,7 +67,10 @@ export function EssentialsSection({
         lat={lat}
         lng={lng}
         icon={icon}
-        color={color}
+        // Not a form field: the pin's colour is set from the location's row
+        // menu, so this dialog never writes it and can't save over a change
+        // made there while it was open.
+        color={place.color}
         tags={tags}
       />
 
@@ -158,20 +157,6 @@ export function EssentialsSection({
           <PinField
             value={field.value}
             pinIcons={map.pinIcons}
-            onChange={field.onChange}
-          />
-        )}
-      />
-
-      {/* Under the pin it colours. A file's colour column lands here too, and
-          this is where it is changed or handed back to the theme. */}
-      <Controller
-        control={control}
-        name="color"
-        render={({ field }) => (
-          <PinColorField
-            value={field.value ?? ""}
-            themeColor={readEmbedSettings(map.settings).pinColor}
             onChange={field.onChange}
           />
         )}

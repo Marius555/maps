@@ -4,6 +4,26 @@
 
 ## Invariants
 
+- **/pricing is one screen, and it is a budget too.** `Section`'s `fill` holds the
+  viewport under the 72px header (`calc(100svh-4.5rem)`, measured) and centres the
+  title, the toggle row and the cards. Measured 2026-10-03 at 1536×695 — a 1536×864
+  laptop at 125% scaling — the cards end at **688px**, seven pixels inside the
+  window. That is why there is no eyebrow and no lede, why the title is one line at
+  `lg`, why the card rows are `PlanRowList dense`, and why the discount control sits
+  in the toggle's row rather than under the cards. Re-measure before adding a row to
+  a card. **The title is gone from the screen** (`Section`'s `hideTitle`, an `sr-only`
+  h1) at the owner's request, 2026-10-03: the navbar's "Pricing" link already says
+  where the visitor is — do not put a visible title or subtitle back.
+  **No `Reveal` on the cards**: arriving by a link, `MarketingMain`'s route fade
+  is the entrance; on a reload nothing moves (the owner's rule, 2026-10-03).
+- **The site-wide `.mk-site :focus-visible` outline skips `input` and `textarea`.**
+  HeroUI rings its own fields, and the outline on top drew /pricing's discount field
+  with a double border.
+- **The public site's `<main>` is `MarketingMain`**, which fades and rises 8px on
+  every navigation (`components/layout/page-transition/`). It may transform because
+  the document scrolls here, not `<main>`, and nothing inside it is
+  `position: fixed`. Adding something fixed inside a marketing page breaks that
+  assumption for 240ms per navigation — portal it instead.
 - **Every child of `.mk-snap` holds one screen, and that is a budget with a
   number.** The landing page's snap is mandatory, which is only honest while no
   section overflows. The tallest section needs **688px** of content (the scale

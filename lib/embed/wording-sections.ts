@@ -58,10 +58,11 @@ export const WORDING_SECTIONS: {
       { key: "closed", label: "Closed all day" },
       { key: "previousPhoto", label: "Previous photo" },
       { key: "nextPhoto", label: "Next photo" },
+      { key: "viewPhotos", label: "Open the photos" },
     ],
   },
   {
     title: "Other",
-    fields: [{ key: "dismiss", label: "Close a message" }],
+    fields: [{ key: "dismiss", label: "Close a message or the photos" }],
   },
 ];

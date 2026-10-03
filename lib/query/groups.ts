@@ -214,6 +214,13 @@ export type GroupMembers = {
  *
  * Each PATCH carries `groupId` alone, so `mergePlaceFields`/`mergeShapeFields`
  * let it commute with a rename or a drag landing at the same time.
+ *
+ * **Joining also clears a location's own colour**, so it wears its new group's.
+ * A location's colour beats its group's (`lib/map/group-colors.ts`) — which is
+ * what makes Pin colour work on a grouped pin — so without this a pin that
+ * arrived with a colour (an imported colour column, an earlier pick) would join
+ * a group and visibly not belong to it. A colour picked *after* joining wins.
+ * Leaving a group touches only `groupId`: whatever the pin wore stays.
  */
 export function useAssignToGroup(mapId: string) {
   const updatePlace = useUpdatePlace(mapId);
@@ -226,7 +233,10 @@ export function useAssignToGroup(mapId: string) {
     async ({ placeIds, shapeIds }: GroupMembers, groupId: string) => {
       await Promise.all([
         ...placeIds.map((placeId) =>
-          updatePlaceAsync({ placeId, input: { groupId } }),
+          updatePlaceAsync({
+            placeId,
+            input: groupId ? { groupId, color: "" } : { groupId },
+          }),
         ),
         ...shapeIds.map((shapeId) =>
           updateShapeAsync({ shapeId, input: { groupId } }),

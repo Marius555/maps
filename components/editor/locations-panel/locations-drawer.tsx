@@ -14,11 +14,11 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
  * there instead of a grab rail, and the count badge that is half of what the shut
  * sheet exists to show.
  *
- * The peek strip covers the corner MapLibre stacks its zoom buttons and its
- * attribution in, so the frame lifts both by `--sheet-peek` — see
- * `--map-chrome-inset` in app/globals.css. Attribution that is covered is
- * attribution that is absent (§12). The containing block and the clip the sheet
- * needs are on the editor row in `map-editor.tsx`.
+ * The peek strip covers the bottom of the map, so the frame lifts the zoom
+ * buttons by `--sheet-peek` — see `--map-chrome-inset` in app/globals.css. The
+ * attribution ⓘ stays under the sheet on purpose (the owner's call; same file).
+ * The containing block and the clip the sheet needs are on the editor row in
+ * `map-editor.tsx`.
  */
 export function LocationsDrawer({
   title,

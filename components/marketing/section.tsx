@@ -45,21 +45,37 @@ export function Section({
   lede,
   headingLevel = "h2",
   screen = false,
+  fill = false,
+  hideTitle = false,
   className = "",
   children,
 }: {
   id?: string;
-  eyebrow: string;
+  /** Optional: /pricing is one screen of plans and needs no label above its title. */
+  eyebrow?: string;
   title: string;
   lede?: string;
   /** `h1` when the section *is* the page — /pricing is one section long. */
   headingLevel?: "h1" | "h2";
   /** Hold a whole viewport and centre the contents in it. */
   screen?: boolean;
+  /**
+   * Fill the viewport *under the site header* and centre the contents, title
+   * centred too — /pricing, which is one screen of plans and should open on
+   * them. 4.5rem is the header: its `py-6` and the 1.5rem logo row.
+   */
+  fill?: boolean;
+  /**
+   * Keep the heading for screen readers and search, draw nothing — /pricing,
+   * where the navbar link already said where the visitor was going.
+   */
+  hideTitle?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
   const Heading = headingLevel;
+  // `fill` runs the tighter of the two scales, the way `screen` does.
+  const compact = screen || fill;
 
   return (
     <section
@@ -74,23 +90,25 @@ export function Section({
       className={`relative px-5 sm:px-8 ${
         screen
           ? "flex min-h-[100svh] flex-col justify-center py-10 sm:py-12"
-          : "scroll-mt-12 py-20 sm:py-28"
+          : fill
+            ? "flex min-h-[calc(100svh-4.5rem)] flex-col justify-center py-4 sm:py-6"
+            : "scroll-mt-12 py-20 sm:py-28"
       } ${className}`}
     >
       <div className="relative mx-auto w-full max-w-6xl">
-        <Reveal>
-          <p className="mk-eyebrow text-muted">{eyebrow}</p>
+        <Reveal className={hideTitle ? "sr-only" : fill ? "text-center" : undefined}>
+          {eyebrow ? <p className="mk-eyebrow mb-4 text-muted">{eyebrow}</p> : null}
           <Heading
-            className={`mk-display mt-4 max-w-3xl text-3xl text-balance text-foreground ${
-              screen ? "sm:text-4xl" : "sm:text-5xl"
-            }`}
+            className={`mk-display max-w-3xl text-3xl text-balance text-foreground ${
+              fill ? "mx-auto lg:max-w-none" : ""
+            } ${compact ? "sm:text-4xl" : "sm:text-5xl"}`}
           >
             {title}
           </Heading>
           {lede ? (
             <p
               className={`max-w-2xl text-pretty text-muted ${
-                screen ? "mt-4 text-sm/6 sm:text-base/7" : "mt-5 text-base/7"
+                compact ? "mt-4 text-sm/6 sm:text-base/7" : "mt-5 text-base/7"
               }`}
             >
               {lede}
@@ -98,7 +116,9 @@ export function Section({
           ) : null}
         </Reveal>
 
-        <div className={screen ? "mt-7 sm:mt-8" : "mt-12 sm:mt-16"}>{children}</div>
+        <div className={hideTitle ? "" : fill ? "mt-5" : compact ? "mt-7 sm:mt-8" : "mt-12 sm:mt-16"}>
+          {children}
+        </div>
       </div>
     </section>
   );

@@ -36,6 +36,8 @@ import { buttonTargetOf, WEBSITE_LABEL } from "@/packages/shared/card-button";
 import { directionsUrl } from "@/packages/shared/directions";
 import { SAMPLE_PLACE } from "@/lib/card/sample-place";
 
+import { useGalleryLightbox } from "./gallery-lightbox";
+
 /**
  * One block of a location card, in React.
  *
@@ -549,10 +551,12 @@ function Gallery({
   sampleImageUrl?: string | null;
   onSampleImage?: (file: File) => void;
 }) {
-  const photo = place.photoUrls[0] ?? place.photoUrl ?? sampleImageUrl;
+  const openLightbox = useGalleryLightbox();
+  const photos = place.photoUrls.length > 0 ? place.photoUrls : place.photoUrl ? [place.photoUrl] : [];
+  const photo = photos[0] ?? sampleImageUrl;
 
   if (photo) {
-    return (
+    const image = (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={photo}
@@ -562,6 +566,23 @@ function Gallery({
         className="h-full w-full [object-fit:var(--card-fit,cover)]"
       />
     );
+    // Only a real location's photos open, and only where a host asked for it
+    // (`GalleryLightboxContext`): the designer's sample image is not a gallery.
+    // No photo count, the embed's twin (`buildGallery`) draws none either.
+    if (openLightbox && photos.length > 0) {
+      return (
+        <button
+          type="button"
+          aria-label="View photos"
+          onClick={() => openLightbox(photos)}
+          className="block h-full w-full cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+        >
+          {image}
+        </button>
+      );
+    }
+
+    return image;
   }
 
   /*

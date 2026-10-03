@@ -10,6 +10,7 @@ import { DeletePlaceDialog } from "../delete-place-dialog";
 import { PlaceListEmpty } from "../place-list-empty";
 import { PlaceTableHead } from "./place-table-head";
 import { PlaceTableRow } from "./place-table-row";
+import type { PinColorMenu } from "@/components/places/pin-color/place-row-menu";
 
 /**
  * The Locations list, on a screen wide enough to be a table.
@@ -41,6 +42,7 @@ export function PlaceTable({
   onSelect,
   onEdit,
   onRetryAddress,
+  pinColorMenuFor,
 }: {
   mapId: string;
   places: Place[];
@@ -60,6 +62,8 @@ export function PlaceTable({
   onSelect: (placeId: string) => void;
   onEdit: (placeId: string) => void;
   onRetryAddress?: (placeId: string) => void;
+  /** Pin colour for a row's menu, or undefined to leave it out. */
+  pinColorMenuFor?: (place: Place) => PinColorMenu | undefined;
 }) {
   const deletePlace = useDeletePlace(mapId);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -101,6 +105,7 @@ export function PlaceTable({
                 onRetryAddress={
                   onRetryAddress ? () => onRetryAddress(place.id) : undefined
                 }
+                pinColorMenu={pinColorMenuFor?.(place)}
                 onDelete={() => setPendingDeleteId(place.id)}
               />
             ))}

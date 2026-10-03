@@ -151,6 +151,32 @@ describe("groupColorIndex", () => {
       expect(index.forPlace(colored)).toBe("#1c7ed6");
       expect(index.forPlace(place("p1", { tags: ["t1"], color: "" }))).toBe("#e03131");
     });
+
+    // Joining a group clears the colour, so one that is set was picked after —
+    // and Pin colour on a grouped location has to do something.
+    it("puts the location's own colour over its group's", () => {
+      const index = groupColorIndex({
+        groups: [group("g1", "#2f9e44")],
+        shapes: [],
+        tagGroups: TAGS,
+      });
+      const colored = place("p1", { groupId: "g1", tags: ["t1"], color: "#1c7ed6" });
+
+      expect(index.forPlace(colored)).toBe("#1c7ed6");
+      // A custom pin with a colour of its own still beats it, grouped or not.
+      expect(index.forPlace(colored, "#f08c00")).toBe("#f08c00");
+      expect(index.forPlace({ ...colored, color: "" })).toBe("#2f9e44");
+    });
+
+    it("puts the location's own colour over a grouped route's", () => {
+      const index = groupColorIndex({
+        groups: [group("g1", "#2f9e44")],
+        shapes: [route("r1", ["p1"], "g1")],
+      });
+
+      expect(index.forPlace(place("p1", { color: "#1c7ed6" }))).toBe("#1c7ed6");
+      expect(index.forPlace(place("p1"))).toBe("#2f9e44");
+    });
   });
 
   describe("a route lends its group's colour to its stops", () => {

@@ -1,7 +1,4 @@
-import { CreditCard, UserPlus } from "lucide-react";
-import Link from "next/link";
-
-import { EmptyState } from "@/components/ui/empty-state";
+import { LinkButton } from "@/components/ui/link-button";
 import { MARKETING_PLANS } from "@/lib/marketing/plans";
 
 /**
@@ -12,14 +9,38 @@ import { MARKETING_PLANS } from "@/lib/marketing/plans";
  * chosen — a page that says "sign up to continue" without saying what you were
  * buying reads as having lost it, and the commonest reason people abandon here is
  * suspecting exactly that.
+ *
+ * **One title, one sentence, two buttons, on the page's own ground.** These
+ * used to sit inside a marketing section (an eyebrow, a second title above the
+ * real one) and a grey panel with grey buttons, which made a one-step page read
+ * like a form that had failed to load.
  */
 
 function nameOf(plan: string): string {
   return MARKETING_PLANS.find((entry) => entry.id === plan)?.name ?? plan;
 }
 
-const ACTION =
-  "rounded-lg px-3 py-2 text-sm font-medium transition-colors";
+function Notice({
+  title,
+  children,
+  actions,
+}: {
+  title: string;
+  children: React.ReactNode;
+  actions: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-1 items-center justify-center px-5 py-16 sm:px-8">
+      <div className="flex max-w-md flex-col items-center text-center">
+        <h1 className="mk-display text-3xl text-foreground sm:text-4xl">{title}</h1>
+        <p className="mt-3 text-pretty text-muted">{children}</p>
+        <div className="mt-7 flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-center">
+          {actions}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Signed out, with a plan picked.
@@ -33,30 +54,28 @@ const ACTION =
  * redirect target in a query string, and a redirect target in a query string is
  * an open-redirect waiting to be got wrong — a real risk for a saving of one
  * click. The plans are one link away from everywhere.
+ *
+ * A discount code from a share link is not carried either, for the same
+ * reason — so it is *named*, which is what keeps it from reading as lost: open
+ * the link again once signed in, or type the code at the checkout.
  */
-export function UpgradeSignedOut({ plan }: { plan: string }) {
+export function UpgradeSignedOut({ plan, code }: { plan: string; code?: string }) {
   return (
-    <EmptyState
-      icon={UserPlus}
+    <Notice
       title={`Start on ${nameOf(plan)}`}
-      description="You'll need an account first. It takes a minute, and you can pick your plan straight afterwards."
-      action={
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Link
-            href="/signup"
-            className={`${ACTION} bg-accent text-accent-foreground`}
-          >
-            Create an account
-          </Link>
-          <Link
-            href="/login"
-            className={`${ACTION} bg-surface-secondary text-foreground`}
-          >
+      actions={
+        <>
+          <LinkButton href="/signup">Create an account</LinkButton>
+          <LinkButton href="/login" variant="outline">
             I already have one
-          </Link>
-        </div>
+          </LinkButton>
+        </>
       }
-    />
+    >
+      {code
+        ? `You'll need an account first. Your discount code is ${code}: open this link again once you're signed in, or enter the code at the checkout.`
+        : "You'll need an account first. It takes a minute, and you can pick your plan straight afterwards."}
+    </Notice>
   );
 }
 
@@ -71,34 +90,31 @@ export function UpgradeSignedOut({ plan }: { plan: string }) {
 export function UpgradeFailed({
   plan,
   cadence,
+  code,
   message,
 }: {
   plan: string;
   /** Carried into Try again, or a failed yearly checkout retries as monthly. */
   cadence: string;
+  /** Carried into Try again too, so a retry keeps the discount. */
+  code?: string;
   message: string;
 }) {
   return (
-    <EmptyState
-      icon={CreditCard}
+    <Notice
       title="Couldn't open the checkout"
-      description={`${message} Nothing has been charged.`}
-      action={
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Link
-            href={`/upgrade?plan=${plan}&cadence=${cadence}`}
-            className={`${ACTION} bg-accent text-accent-foreground`}
-          >
+      actions={
+        <>
+          <LinkButton href={`/upgrade?plan=${plan}&cadence=${cadence}${code ? `&code=${code}` : ""}`}>
             Try again
-          </Link>
-          <Link
-            href="/pricing"
-            className={`${ACTION} bg-surface-secondary text-foreground`}
-          >
+          </LinkButton>
+          <LinkButton href="/pricing" variant="outline">
             Back to plans
-          </Link>
-        </div>
+          </LinkButton>
+        </>
       }
-    />
+    >
+      {message} Nothing has been charged.
+    </Notice>
   );
 }

@@ -19,7 +19,8 @@ type Line = { left: number; top: number; width: number; height: number };
  * underline the width of its words.
  *
  * The line height is opened up from `.mk-display`'s 0.96, which leaves no gap
- * for an underline between two lines; inline, because `.mk-display` is
+ * for an underline between two lines — to 1.5, because the note-sized underline
+ * is a taller box than the hero's (see `HeroUnderline`); inline, because `.mk-display` is
  * unlayered and a `leading-*` utility would lose to it silently.
  */
 export function UnderlinedTitle({ title }: { title: string }) {
@@ -53,8 +54,8 @@ export function UnderlinedTitle({ title }: { title: string }) {
   return (
     <p
       ref={titleRef}
-      style={{ lineHeight: 1.3 }}
-      className="mk-display relative pb-[0.2em] text-xl text-balance text-accent sm:text-3xl"
+      style={{ lineHeight: 1.5 }}
+      className="mk-display relative pb-[0.3em] text-xl text-balance text-accent sm:text-3xl"
     >
       <span ref={textRef}>{title}</span>
       {lines.map((line, index) => (
@@ -64,7 +65,7 @@ export function UnderlinedTitle({ title }: { title: string }) {
           className="pointer-events-none absolute"
           style={line}
         >
-          <HeroUnderline />
+          <HeroUnderline size="note" />
         </span>
       ))}
     </p>

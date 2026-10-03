@@ -531,6 +531,36 @@ describe("createCheckout", () => {
     // The only link between a payment and an account — see the webhook reader.
     expect(body.data.attributes.checkout_data.custom.user_id).toBe("user-1");
   });
+
+  it("pre-fills a discount code only when one is given", async () => {
+    const fetchMock = mockCheckout();
+    const { createLemonProvider } = await lemon();
+
+    await createLemonProvider().createCheckout({
+      plan: "pro",
+      cadence: "monthly",
+      email: "buyer@example.test",
+      userId: "user-1",
+      discountCode: "SPRING20",
+    });
+    await createLemonProvider().createCheckout({
+      plan: "pro",
+      cadence: "monthly",
+      email: "buyer@example.test",
+      userId: "user-1",
+    });
+
+    const bodies = (fetchMock.mock.calls as unknown as [string, RequestInit][]).map(
+      ([, init]) =>
+        JSON.parse(String(init.body)) as {
+          data: { attributes: { checkout_data: Record<string, unknown> } };
+        },
+    );
+
+    expect(bodies[0].data.attributes.checkout_data.discount_code).toBe("SPRING20");
+    // Absent, not empty: a checkout without a code is exactly what it was before.
+    expect(bodies[1].data.attributes.checkout_data).not.toHaveProperty("discount_code");
+  });
 });
 
 /**

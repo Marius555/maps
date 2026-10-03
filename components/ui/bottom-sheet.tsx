@@ -38,9 +38,9 @@ import { useSheetDrag } from "./use-sheet-drag";
  *    owns are the `--sheet-peek` strip along the bottom.
  *
  * That strip sits over the bottom of whatever it is parked on, so the caller owes
- * it the room — `--map-chrome-inset` in the editor, a `max-lg:pb-*` on the card
- * canvas and on the publish preview. Attribution that is covered is attribution
- * that is absent (§12).
+ * it the room — `--map-chrome-inset` in the editor (zoom buttons only; its ⓘ is
+ * kept under the panel on purpose), a `max-lg:pb-*` on the card canvas and on
+ * the publish preview, where the embed's attribution must stay uncovered (§12).
  *
  * `inert` on the content while shut is the one piece of JavaScript-side
  * responsiveness left, and it has to be: a sheet translated off the bottom of the

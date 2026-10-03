@@ -451,6 +451,12 @@ export type MapDailyRow = Models.Row & {
   totals?: string | null;
 };
 
+export type PromotionRow = Models.Row & {
+  discountId: string;
+  code: string;
+  featuredAt: string;
+};
+
 export type NotificationRow = Models.Row & {
   title: string;
   body: string;

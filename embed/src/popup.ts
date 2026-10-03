@@ -46,6 +46,7 @@ import type {
 import { pinColorOfChips, type TagChip } from "@/packages/shared/tags";
 
 import { button, el, icon, link } from "./dom";
+import { openLightbox } from "./lightbox";
 import { lang, t } from "./i18n";
 
 /**
@@ -804,20 +805,20 @@ function wrapRow(
 }
 
 /**
- * The gallery, as one image the visitor steps through.
+ * The gallery: the first photo, which opens all of them full screen.
  *
- * **No counter.** There was a `2 / 3` over the picture, on the argument that a
- * strip of thumbnails would say the same thing and cost forty pixels of a card
- * this rework exists to shorten. Both are answers to a question nobody asked: a
- * visitor looking at a shop's photos is not counting them, and the chevrons
- * already say there are more. It was also the one thing on the card the studio
- * never drew — `Gallery` in components/card/card-block.tsx shows the first photo
- * and nothing else — so removing it narrows the drift between the twins.
+ * **Not a carousel on the card any more.** There were chevrons over the picture,
+ * stepping through photos at the size of a card — a shop's interior at 320px
+ * wide is not a look at it. The card is the preview; a press is the look
+ * (`openLightbox`). So the whole picture is one button, and the chevrons live
+ * in the lightbox where there is room for them.
  *
- * Only the current `src` is ever assigned. A place with eight photos would
- * otherwise start eight downloads the moment its pin is clicked, on a visitor's
- * phone, for seven pictures they may never look at — `loading="lazy"` does not
- * help, because by then the image is on screen.
+ * **No count, on the card or in the lightbox.** A `1/3` badge was tried here
+ * and taken out on request ("we don't need counter"); the pointer cursor is
+ * what says the picture is pressable. `Gallery` in
+ * components/card/card-block.tsx draws the same bare picture — the twin rule.
+ *
+ * Only the first `src` is assigned, so eight photos start one download.
  */
 function buildGallery(photos: string[]): HTMLElement {
   /*
@@ -833,45 +834,22 @@ function buildGallery(photos: string[]): HTMLElement {
     return el("div", "lm-popup__gallery lm-popup__gallery--empty");
   }
 
-  const root = el("div", "lm-popup__gallery");
+  const root = button("lm-popup__gallery", "");
   const image = el("img", "lm-popup__photo");
 
-  // The name is the caption right below it; repeating it as alt text makes a
-  // screen reader read it twice.
+  // The name is the caption right below it, so the picture says nothing and
+  // the button says what it does.
   image.alt = "";
   image.loading = "lazy";
   image.src = photos[0];
+  root.setAttribute("aria-label", t("viewPhotos"));
   root.append(image);
 
-  if (photos.length === 1) return root;
-
-  let at = 0;
-
-  const show = (next: number) => {
-    // Wraps, so back from the first photo reaches the last rather than
-    // dead-ending on a control that looks live.
-    at = (next + photos.length) % photos.length;
-    image.src = photos[at];
-  };
-
-  const step = (delta: number, side: string, path: string) => {
-    const control = button("lm-popup__step lm-popup__step--" + side, "");
-    const name = delta < 0 ? t("previousPhoto") : t("nextPhoto");
-
-    control.setAttribute("aria-label", name);
-    control.title = name;
-    control.append(icon([path]));
-    control.addEventListener("click", (event) => {
-      // The card sits over the map, and a click that reaches the canvas pans it.
-      event.stopPropagation();
-      show(at + delta);
-    });
-
-    return control;
-  };
-
-  show(0);
-  root.append(step(-1, "back", "M15 18 9 12l6-6"), step(1, "on", "m9 18 6-6-6-6"));
+  root.addEventListener("click", (event) => {
+    // The card sits over the map, and a click that reaches the canvas pans it.
+    event.stopPropagation();
+    openLightbox(photos, root.closest(".lm-root") ?? document.body);
+  });
 
   return root;
 }

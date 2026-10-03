@@ -39,6 +39,7 @@ export const EMBED_STRINGS = {
   closed: "Closed",
   previousPhoto: "Previous photo",
   nextPhoto: "Next photo",
+  viewPhotos: "View photos",
   dismiss: "Dismiss",
 } as const;
 

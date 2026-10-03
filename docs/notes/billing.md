@@ -4,8 +4,9 @@
 `app/api/webhooks/billing/**`, `app/api/account/subscription/**`, `app/(marketing)/upgrade/**`,
 `app/(dashboard)/settings/billing/**` (and `/account`, now a redirect to it),
 `app/api/account/{invoices,subscription/resume}/**`, `components/marketing/plans/**`,
-`components/account/**`, `components/user-settings/billing/**`. The page itself is
-described in `docs/notes/settings.md`.
+`components/account/**`, `components/user-settings/billing/**`, and the discount codes:
+`app/admin/discounts/**`, `app/api/admin/discounts/**`, `components/admin/sections/discounts/**`.
+The page itself is described in `docs/notes/settings.md`.
 
 ## Invariants
 
@@ -99,6 +100,35 @@ described in `docs/notes/settings.md`.
   *checkout*. That is how the first test "switch" bought a second subscription.
   Link a test purchase with `npm run billing:replay -- subscription_created
   --subscription <its id> --plan … --email …` before testing a change.
+- **Discounts live at the provider and nowhere else.** `/admin/discounts` creates,
+  lists and deletes them through `lib/billing/lemon-discounts.ts` and reads them
+  live on every visit; there is no Appwrite table. A copy would be a second answer
+  that could disagree with the one that charges cards — the same reason
+  `subscriptions` holds only the provider's own answer.
+- **A discount cannot be edited.** The provider's API has create, read and delete
+  and no update. The console offers Duplicate instead; do not build an "edit" that
+  deletes and recreates behind the operator's back, because the redemption history
+  belongs to the old id and would vanish from the console.
+- **A share link carries a code, never an amount or a variant.** It opens
+  `/pricing?code=…`; the cards' buttons then go to `/upgrade?plan=…&cadence=…&code=…`
+  → `checkout_data.discount_code`, and the provider decides again what the code is
+  worth. A malformed code is dropped by `checkoutSchema`, not refused — the buyer
+  still reaches the checkout, whose own code box is there.
+- **/pricing learns about discounts after it arrives, from `GET /api/pricing/offer`.**
+  The page stays static (see above); the endpoint is public, rate-limited per address
+  (`pricingOffer`), and **caches everything for a minute** (`lib/billing/public-offer.ts`)
+  — the discount list, the promotion, each capped code's count — so a busy page is
+  not a provider request per visitor. Never cache a failure there. It answers only
+  `PublicDiscount`: never a discount's name, cap or use count.
+- **One promotion at most, in `promotions`**, set from the console's row menu (Show
+  on pricing page). The row names a discount id and nothing else is trusted from it:
+  the lookup re-checks the discount at the provider, so an expired or deleted promo
+  just stops showing. Deleting a discount clears its promotion. The repository is
+  `lib/repositories/promotions.repository.ts`, not under `admin/`, because the public
+  lookup reads it.
+- **A code is for a checkout only.** A subscriber's plan changes are made in place
+  (`PATCH /subscriptions`), which takes no code, and `/upgrade` sends a subscriber
+  to Settings → Billing. So existing customers cannot redeem one; the form says so.
 
 ---
 
@@ -394,6 +424,64 @@ the switch; the local row was missing. See the invariant above.
 
 ---
 
+## Discounts
+
+Made at `/admin/discounts`: a name, a code, a percentage or a euro amount, which
+payments it covers (the first, the first N months, or every one), a cap on uses, a
+start and an expiry, and optionally the plans it is limited to. Each field maps to
+one of the provider's discount attributes, as of its API docs read 2026-10-03:
+
+| Form | Provider |
+|---|---|
+| Percentage / euros off | `amount_type`, `amount` (**cents** when fixed) |
+| First payment / first N months / every payment | `duration` `once` / `repeating` + `duration_in_months` / `forever` |
+| Uses | `is_limited_redemptions` + `max_redemptions` — **total, across every buyer**; the provider has no per-customer cap |
+| Starts / Expires | `starts_at` / `expires_at` |
+| Plans | `is_limited_to_products` + a `variants` relationship, through `LEMON_VARIANT_*` |
+
+Anything not chosen is left out of the request rather than sent as its default.
+
+**Reading them costs one request per discount.** A discount object carries no use
+count, so the list asks `discount-redemptions?filter[discount_id]=…&page[size]=1`
+for each and reads `meta.page.total`, eight at a time to stay well inside the
+provider's 300 requests a minute. A count that fails is a "—" in its row, not a
+page that fails. "Who used it" asks for the redemptions with `include=order` for
+the buyer's address, and fetches any order the reply did not include, at most a
+page (25) of them.
+
+**Seen against the real API (2026-10-03):** `include=variants` on the list does
+fill in `relationships.variants.data` — a code limited to Pro monthly came back
+naming it. **Not yet seen:** whether `include=order` is honoured on redemptions
+(the per-order fallback covers it either way), and whether a discount made with a
+test-mode key comes back `test_mode: true` on its own (nothing sends the flag).
+The console draws a Test chip from whatever the provider answers.
+
+**On the pricing page** a discount lowers a card only when it covers that plan at
+that cadence (`discountAppliesTo`); the price is crossed out beside the new one,
+and the reserved line under it says what it does ("30% off your first month").
+A yearly plan is one payment, so anything short of "every payment" is phrased as
+its first year. The discounted figure is drawn in the accent colour.
+
+**An applied code is shown on the prices and nowhere else.** The row beside the
+toggle is only ever "Have a discount code?" or the field (unfocused on open, apply
+as an icon inside its end) — no "SPRING20 applied" line and no Remove, both taken
+out at the owner's request on 2026-10-03: nobody wants to take a discount off.
+**The recommended ring follows the discount** (`lib/marketing/recommended-plan.ts`):
+one paid plan covered at the cadence on screen → that plan; several → the dearest;
+every paid plan, or none → Starter, unchanged.
+
+**The answer is remembered for the tab, and the cards wait for it.** A reload
+within five minutes asks nobody (`use-pricing-offer.ts`, `sessionStorage`): every
+reload used to re-check the remembered code, ran into `pricingOffer`'s 30-per-10-
+minutes limit, and printed "Couldn't check that code right now" at somebody who
+had typed nothing. Errors are shown only to whoever asked — a code typed now or
+in the link followed; a remembered code is re-checked silently, dropped if
+refused, kept if the check fails (`codeUnchecked` on the server's answer is what
+tells those apart). A refused typed code never takes off a code already applied.
+The cards stay `visibility: hidden` until the answer is in (at most 1.5s), so the
+ring and the prices paint once instead of jumping from the static HTML's Starter
+to the discounted plan.
+
 ## Setting up a store
 
 `npm run setup:lemon` — idempotent. It finds the store, matches variants to plans,
@@ -512,3 +600,10 @@ naming because it looks exactly like success.
    with *Keep Pro*, and the notice names the date. *Keep Pro*: back to Pro, still
    no invoice. Then flip to Yearly and *Switch to yearly billing*. Then open
    `/pricing` → *Start on Starter*: it must land on `/settings/billing`, not a checkout.
+8. **Discounts**, in test mode. `/admin/discounts` → *New discount*: `TEST20`, 20%,
+   2 uses, Pro yearly only, expiring next week. It must appear in the provider's
+   dashboard with those fields, and a second `TEST20` must be refused under the
+   Code field. *Share link* → open it signed in as a test customer: the checkout
+   opens on Pro yearly with the code applied. Pay with the test card; the row
+   reads 1 / 2 and *Who used it* names the buyer. *Delete*: the code is refused at
+   the checkout.

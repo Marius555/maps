@@ -174,6 +174,14 @@ async function render(
   const layout = el("div", "lm-layout");
   const canvas = el("div", "lm-canvas");
   const toolbar = el("div", "lm-toolbar");
+  /*
+   * Find-nearest's home when there is a results panel: a full-width button at
+   * the foot of it, below the list it re-sorts. It was a 36px glyph at the end
+   * of the search field, which read as part of the search rather than as the
+   * other way to find a location. Empty, and hidden by `:empty`, when Nearest
+   * is off.
+   */
+  const foot = el("div", "lm-panel__foot");
   const status = createStatus();
 
   /*
@@ -282,7 +290,88 @@ async function render(
     toolbar.classList.add("lm-toolbar--docked");
 
     const panel = el("div", "lm-panel");
-    panel.append(toolbar, list.element);
+    panel.append(toolbar, list.element, foot);
+
+    /*
+     * The panel folds away to its own edge, leaving a strip with this arrow in
+     * it — the side version of the phone's bottom sheet, for a map wide enough
+     * to have a side. Hidden below the drawer's width by the stylesheet, where
+     * the sheet's strip or the hamburger already does this job.
+     *
+     * An attribute on the root and nothing else: which way it slides, where the
+     * arrow sits and which way it points are all the stylesheet's, keyed off
+     * `data-lm-side`, so a side flipped in the designer needs nothing from here.
+     * Named "Locations", with `aria-expanded`, as the sheet's strip is — one
+     * control, one name, on every axis.
+     *
+     * `lm-button--icon` without `lm-button`, so it is a bare glyph: the
+     * toolbar's well rules all key off `lm-button`.
+     */
+    const fold = button("lm-button--icon lm-collapse", "");
+    const setShut = (shut: boolean) => {
+      fold.ariaExpanded = String(!root.toggleAttribute("data-lm-shut", shut));
+    };
+    fold.ariaLabel = t("locations");
+    fold.ariaExpanded = "true";
+    fold.append(icon(["M15 18 9 12l6-6"]));
+    fold.onclick = () => setShut(!root.hasAttribute("data-lm-shut"));
+    toolbar.append(fold);
+
+    /*
+     * ...and a horizontal swipe does the same, the side twin of dragging the
+     * phone's sheet: toward the panel's edge shuts it, back out opens it.
+     *
+     * **Touch and pen only.** A mouse drag across the list is somebody
+     * selecting an address, and the arrow is one click away for a mouse. Not in
+     * the field either, where a drag moves the caret. Wider than the drawer's
+     * width only — below it the sheet's own drag has the panel.
+     *
+     * Which way is "shut" is read off the screen, not the settings: a panel in
+     * the left half shuts leftwards. That is right for both sides and for an RTL
+     * host without a branch. A floating panel follows the finger the way the
+     * sheet does; a docked one cannot (its open width is unknown while shut), so
+     * it snaps on release. `touch-action: pan-y` in the stylesheet is what hands
+     * these moves to us while the list keeps scrolling.
+     */
+    panel.onpointerdown = (down) => {
+      if (
+        down.pointerType == "mouse" ||
+        root.clientWidth <= DRAWER_MAX_WIDTH ||
+        (down.target as Element).closest("input")
+      ) {
+        return;
+      }
+
+      const shut = root.hasAttribute("data-lm-shut");
+      const box = panel.getBoundingClientRect();
+      const frame = root.getBoundingClientRect();
+      const away = box.left + box.right < frame.left + frame.right ? -1 : 1;
+      const travel = panel.offsetWidth - 44;
+      const base = getComputedStyle(panel).transform;
+      const { style } = panel;
+      let dx = 0;
+
+      follow(
+        (move) => {
+          const x = move.clientX - down.clientX;
+          if (Math.abs(x) < SHEET_SLOP || Math.abs(x) < Math.abs(move.clientY - down.clientY)) return;
+
+          dx = x;
+          if (!root.hasAttribute("data-lm-float")) return;
+
+          // Toward the edge is positive, clamped to the travel this state has.
+          const along = Math.max(shut ? -travel : 0, Math.min(shut ? 0 : travel, dx * away));
+          style.transition = "none";
+          style.transform = (base == "none" ? "" : base) + " translateX(" + along * away + "px)";
+        },
+        () => {
+          // Cleared before the state changes, so CSS slides on from the finger.
+          style.transition = style.transform = "";
+          if (dx * away > SHEET_SNAP) setShut(true);
+          else if (dx * away < -SHEET_SNAP) setShut(false);
+        },
+      );
+    };
 
     /*
      * Both answers install a drawer and only the axis differs; **the key being
@@ -295,6 +384,7 @@ async function render(
         root,
         panel,
         list.element,
+        foot,
         toolbar,
         snapshot.settings.panelDrawer,
       );
@@ -352,6 +442,7 @@ async function render(
     map,
     snapshot,
     toolbar,
+    foot,
     status,
     list,
     onLocated: remember,
@@ -446,6 +537,28 @@ const SHEET_SLOP = 6;
 const SHEET_SNAP = 48;
 
 /**
+ * A drag's window listeners: every move to `onMove` until the pointer lifts or
+ * is cancelled, then `onEnd` once.
+ *
+ * Pointer events on the window rather than HTML5 drag, which does not fire on
+ * touch at all. Shared by the bottom sheet's drag and the side panel's swipe,
+ * so the plumbing is paid for once.
+ */
+function follow(onMove: (move: PointerEvent) => void, onEnd: () => void): void {
+  const bind = (op: typeof addEventListener) => {
+    op("pointermove", onMove);
+    op("pointerup", end);
+    op("pointercancel", end);
+  };
+  const end = () => {
+    bind(removeEventListener);
+    onEnd();
+  };
+
+  bind(addEventListener);
+}
+
+/**
  * The results panel as a drawer on a narrow map — parked at the bottom or off
  * the side, and the setting chooses which.
  *
@@ -499,6 +612,8 @@ function installDrawer(
   root: HTMLElement,
   panel: HTMLElement,
   list: HTMLElement,
+  /** Find-nearest's footer, parked with the list and unreachable with it. */
+  foot: HTMLElement,
   toolbar: HTMLElement,
   /** The owner's answer: a bottom sheet, or the side drawer. */
   sheet: boolean,
@@ -574,7 +689,7 @@ function installDrawer(
      * drawer**; parked downwards it is `scrollTop` instead. One trap, two axes,
      * one answer — which is why this line is not inside a branch.
      */
-    list.inert = !next;
+    list.inert = foot.inert = !next;
 
     if (next) root.setAttribute("data-lm-open", "1");
     else root.removeAttribute("data-lm-open");
@@ -620,15 +735,7 @@ function installDrawer(
       style.transform = `translateY(${String(travel - offset)}px)`;
     };
 
-    const bind = (op: typeof addEventListener) => {
-      op("pointermove", onMove);
-      op("pointerup", onEnd);
-      op("pointercancel", onEnd);
-    };
-
-    const onEnd = () => {
-      bind(removeEventListener);
-
+    follow(onMove, () => {
       /*
        * Both cleared *before* `setOpen`, in the same task, so the browser sees
        * one style change: it interpolates the stylesheet's resting transform
@@ -657,9 +764,7 @@ function installDrawer(
       const delta = offset - startOffset;
       if (delta > SHEET_SNAP) setOpen(true);
       else if (delta < -SHEET_SNAP) setOpen(false);
-    };
-
-    bind(addEventListener);
+    });
   });
 
   /*
@@ -732,7 +837,7 @@ function installDrawer(
       else toolbar.append(trigger);
       // Set here as well as in `setOpen`, which returns early when the state
       // has not changed — arriving narrow, the drawer is already shut.
-      list.inert = !open;
+      list.inert = foot.inert = !open;
       return;
     }
 
@@ -740,7 +845,7 @@ function installDrawer(
     trigger.remove();
     // Back in the flow and reachable again: `inert` belongs to the drawer, not
     // to the list.
-    list.inert = false;
+    list.inert = foot.inert = false;
     toolbar.classList.add("lm-toolbar--docked");
     panel.prepend(toolbar);
   }).observe(root);
@@ -846,6 +951,7 @@ function wireControls({
   map,
   snapshot,
   toolbar,
+  foot,
   status,
   list,
   onLocated,
@@ -854,6 +960,8 @@ function wireControls({
   map: MapHandle;
   snapshot: MapSnapshot;
   toolbar: HTMLElement;
+  /** The results panel's footer, where find-nearest goes when there is a panel. */
+  foot: HTMLElement;
   status: StatusHandle;
   list: ListHandle | null;
   track: Track;
@@ -976,10 +1084,12 @@ function wireControls({
         track("nearest");
         return goToNearest();
       },
-      // Inside the search field when there is one — see below. Left to its
-      // default, it is the toolbar control it has always been.
-      snapshot.settings.search ? "lm-search__action" : undefined,
+      // At the foot of the results panel when there is one; inside the search
+      // field when there is only a floating toolbar; otherwise the toolbar
+      // control it has always been.
+      list ? "lm-nearest" : snapshot.settings.search ? "lm-search__action" : undefined,
     );
+    if (list) foot.append(nearest);
   }
 
   if (snapshot.settings.search) {
@@ -1014,10 +1124,12 @@ function wireControls({
          * is now the field and the drawer's own trigger, rather than three
          * controls fighting over 370px.
          */
-        action: nearest ?? undefined,
+        // Only on a map with no results panel — with one, it is the panel's
+        // footer instead (above).
+        action: (!list && nearest) || undefined,
       }),
     );
-  } else if (nearest) {
+  } else if (nearest && !list) {
     // No field to sit in, so it is a control on the toolbar as it always was.
     toolbar.append(nearest);
   }

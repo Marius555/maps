@@ -26,6 +26,7 @@ export const FR: EmbedLanguage = {
     closed: "Fermé",
     previousPhoto: "Photo précédente",
     nextPhoto: "Photo suivante",
+    viewPhotos: "Voir les photos",
     dismiss: "Fermer",
   },
   badge: "Créé avec {brand}",

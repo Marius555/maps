@@ -52,6 +52,7 @@ export function PublishAction({ mapId }: { mapId: string }) {
       {publish.error ? <ErrorMessage error={publish.error} /> : null}
 
       <Button
+        className="w-full"
         onPress={onPress}
         isPending={publish.isPending}
         isDisabled={unverified}

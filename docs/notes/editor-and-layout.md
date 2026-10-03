@@ -32,6 +32,15 @@ rewritten; it is the record of why this area is shaped as it is.
   shell (`shellRouteKey`); only `SettingsPane` fades between them, so the nav just pressed
   stays still. Skipped under reduced motion. Reasoning under "Page transitions and the
   router cache" in Notes.
+- **Every part of the app fades, and only the document scroller may rise.**
+  `useRouteFade` runs on the dashboard's `PageMain`, the console's `AdminMain` (both
+  opacity only — they are scrollers), and the public site's `MarketingMain` and the
+  sign-in pages' `AuthPane` (opacity plus an 8px rise, cleared when it lands). It fades
+  on *mount* too once the document has committed (`documentSettled`), because crossing
+  route groups (/pricing → /login → /maps) mounts a new layout every time and that
+  was why no transition ever showed there. A nested fade passes `onMount: false`
+  (`SettingsPane`). The cleanup must not complete the fade: React's development
+  double-run would end every on-mount fade on its first frame under `next dev`.
 - **Visited pages are replayed from the client router cache for 30 seconds**
   (`staleTimes.dynamic` in `next.config.ts`), so server-rendered props can be stale on
   arrival. Every successful mutation flags this and the next navigation calls
@@ -74,12 +83,19 @@ rewritten; it is the record of why this area is shaped as it is.
   strip's own height, the `translate` that parks the sheet there
   (`calc(100% - var(--sheet-peek))`, a percentage of the sheet's own height, so nothing
   has to be measured), and whatever each caller moves out from under it: here
-  `--map-chrome-inset`, which lifts everything MapLibre stacks in a bottom corner clear of
-  it; on `/card` and `/publish` a `max-lg:pb-*`. Attribution that is covered is
-  attribution that is absent (§12), and the zoom buttons sit in the same corner. A
-  ResizeObserver instead would be one frame of the sheet in the wrong place on every load.
-  Measured after the rename, at 502x732: the zoom stack ends at y=644 and the attribution
-  at y=643, against a strip starting at 645.
+  `--map-chrome-inset`, which lifts the zoom stack (bottom-left) clear of it; on `/card`
+  and `/publish` a `max-lg:pb-*`, where the embed's attribution must stay uncovered (§12).
+  A ResizeObserver instead would be one frame of the sheet in the wrong place on every
+  load. Measured after the rename, at 502x732: the zoom stack ends at y=644, against a
+  strip starting at 645.
+- **The editor's attribution ⓘ is behind the locations panel at every width, on purpose —
+  a §12 override, the owner's call (2026-10-03).** It used to be lifted clear of the sheet
+  with the zoom stack and sat at the frame's bottom-right beside the column, which the
+  owner did not want next to the panel. Below `lg` the bottom-right corner is simply no
+  longer lifted, so the sheet covers it; at `lg` the column does not overlap the map, so
+  `data-attribution="under-panel"` on the frame hides it in `globals.css`. Editor only: the
+  embed, the publish preview and every published map keep their attribution. Do not
+  "fix" it back without asking.
 - **The editor row carries `max-lg:overflow-hidden`, and it is load-bearing.** Two thirds
   of the sheet hangs below the frame while it is shut; an absolutely positioned box past
   the bottom of the page grows the document and brings the window's scrollbar in with it.

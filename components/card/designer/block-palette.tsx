@@ -216,7 +216,7 @@ function PaletteTile({ type }: { type: CardBlockType }) {
             into the pill rather than drawn on it. */}
         <span
           aria-hidden="true"
-          className="grid size-6 shrink-0 place-items-center rounded-full bg-surface text-muted transition-colors group-hover/tile:bg-accent group-hover/tile:text-accent-foreground group-data-armed/tile:bg-accent group-data-armed/tile:text-accent-foreground"
+          className="grid size-6 shrink-0 place-items-center rounded-full bg-surface text-muted transition-colors group-data-armed/tile:bg-accent group-data-armed/tile:text-accent-foreground"
         >
           <Icon className="size-3.5" />
         </span>

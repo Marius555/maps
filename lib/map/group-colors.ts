@@ -39,6 +39,9 @@ export type GroupColorIndex = {
    * The group colour a location inherits, or undefined for one that inherits
    * none.
    *
+   * Ignores the location's own colour, which beats it — callers that publish
+   * check that first (`lib/snapshot/build.ts`).
+   *
    * Separate from `forPlace` because publishing needs exactly this and not the
    * rest: `SnapshotPlace.color` is written *only* when there is an override, so
    * a map with no groups publishes the same bytes it has always published and
@@ -46,13 +49,22 @@ export type GroupColorIndex = {
    */
   overrideForPlace: (place: Place) => string | undefined;
   /**
-   * A location's pin colour in full: the override, then the custom pin's own
-   * colour, then the location's own `color` (an imported file's colour column,
-   * or Edit location's Pin colour), then its first defined tag's.
+   * A location's pin colour in full.
    *
-   * The location's colour sits *under* a custom pin's so that choosing a
-   * coloured pin later is still a way to change it, and *over* the tags because
-   * it was said about this one row, where a tag's colour was said about many.
+   * With a colour of its own (an imported file's colour column, or the row
+   * menu's Pin colour): the custom pin's own colour, then that. Without one:
+   * the group override, then the custom pin's colour, then its first defined
+   * tag's.
+   *
+   * **Its own colour beats its group's.** It used to sit under it, which made
+   * Pin colour on a grouped location a control that saved and changed nothing.
+   * Joining a group clears the location's colour (`useAssignToGroup`), so a pin
+   * still takes its group's colour on the way in — and a colour picked after
+   * that is the later, more specific decision, and wins.
+   *
+   * It sits *under* a custom pin's so that choosing a coloured pin later is
+   * still a way to change it, and *over* the tags because it was said about this
+   * one row, where a tag's colour was said about many.
    *
    * `pinColor` is passed in because the marker layer has already resolved the
    * pin by the time it paints one, and resolving it twice per pin across 3,000
@@ -109,16 +121,20 @@ export function groupColorIndex({
   return {
     forShape: (shape) => byGroup.get(shape.groupId) ?? shape.color,
     overrideForPlace,
-    forPlace: (place, pinColor) =>
-      overrideForPlace(place) ??
-      pinColor ??
-      (place.color || undefined) ??
-      /*
-       * The location's **first** tag, which is what replaced its category when
-       * the two merged. Walked rather than read off `tags[0]` — `pinColorOfTags`
-       * skips ids the map no longer defines, so a pin does not lose its colour
-       * because of a tag deleted in Settings months ago.
-       */
-      pinColorOfTags(tagGroups, place.tags),
+    forPlace: (place, pinColor) => {
+      if (place.color) return pinColor ?? place.color;
+
+      return (
+        overrideForPlace(place) ??
+        pinColor ??
+        /*
+         * The location's **first** tag, which is what replaced its category
+         * when the two merged. Walked rather than read off `tags[0]` —
+         * `pinColorOfTags` skips ids the map no longer defines, so a pin does
+         * not lose its colour because of a tag deleted in Settings months ago.
+         */
+        pinColorOfTags(tagGroups, place.tags)
+      );
+    },
   };
 }

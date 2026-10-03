@@ -54,6 +54,12 @@ export const RATE_LIMITS = {
   authToken: { per: "ip", limit: 20, windowMs: 15 * MINUTE },
   /** A published map's visitor beacon. One request per visitor session. */
   collect: { per: "ip", limit: 120, windowMs: MINUTE },
+  /**
+   * The pricing page asking what a discount code is worth. Generous for a
+   * person (a page load, a few tries at a code), tight for a script guessing
+   * codes — every answer says whether a code exists.
+   */
+  pricingOffer: { per: "ip", limit: 30, windowMs: 10 * MINUTE },
   /** The operator console, per address and for everybody at once. */
   adminLogin: { per: "ip", limit: 5, windowMs: 15 * MINUTE },
   adminLoginAll: { per: "global", limit: 20, windowMs: 15 * MINUTE },

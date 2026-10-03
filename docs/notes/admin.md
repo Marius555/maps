@@ -1,8 +1,9 @@
 # Admin console — design notes
 
-The operator console at `/admin`: one configured account, seven pages (Overview, Users,
-APIs, Email, Billing, Maps & traffic, Notifications), read across every customer account.
-Notifications is the one page that writes — `docs/notes/notifications.md`.
+The operator console at `/admin`: one configured account, eight pages (Overview, Users,
+APIs, Email, Billing, Discounts, Maps & traffic, Notifications), read across every customer
+account. Two pages write: Notifications (`docs/notes/notifications.md`) and Discounts, which
+writes to the payment provider rather than to Appwrite (`docs/notes/billing.md`, "Discounts").
 
 ## Invariants
 
@@ -25,7 +26,7 @@ Notifications is the one page that writes — `docs/notes/notifications.md`.
   `requireAdminPage()` too. The loader check is the backstop: a page that forgets its own
   check still cannot read anything.
 - **Writes are `withAdmin` route handlers, never server actions** — `/api/admin/notifications`
-  is the only one besides login and logout. `withAdmin` passes the route's params as its
+  and `/api/admin/discounts` are the only ones besides login and logout. `withAdmin` passes the route's params as its
   second argument.
 - **`lib/repositories/admin/**` is deliberately not owner-scoped**, and must not be imported
   by a customer route. It is the only place in the app that reads across accounts.

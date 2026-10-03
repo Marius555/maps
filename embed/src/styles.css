@@ -297,8 +297,44 @@
   );
 }
 
-.lm-root--dark .maplibregl-popup-close-button {
-  color: var(--lm-muted);
+/*
+ * The card's close button, drawn rather than typed.
+ *
+ * MapLibre's is a bare `×` at whatever size the page's font happens to be —
+ * about 9px of glyph in a corner, which read as a stray character rather than a
+ * control — with a 5% grey box under the pointer. Here it is the twin of the
+ * studio's (place-card-chrome.tsx): an X of two 14px bars in the card's
+ * foreground, on no ground at all, in a 28px hit box. Asked for as "just a black
+ * X": no tile behind it and nothing on hover — the `:hover` rule below exists
+ * only to cancel MapLibre's own grey.
+ */
+.maplibregl-popup-close-button,
+.maplibregl-popup-close-button:hover {
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  color: var(--lm-foreground);
+  font-size: 0;
+}
+
+.maplibregl-popup-close-button::before,
+.maplibregl-popup-close-button::after {
+  position: absolute;
+  top: 13px;
+  left: 7px;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.maplibregl-popup-close-button::after {
+  transform: rotate(-45deg);
 }
 
 /*
@@ -538,15 +574,18 @@
    * real shape and there is no reason to leave it broken.
    */
   min-width: 0;
-  /* Room at the end for whatever sits inside the field — the magnifier, or the
-     find-nearest button, which is the wider of the two. **It has to stay at or
-     above that control's width**, now 36px with the button flush to the edge
-     rather than inset; 40px is that with 4px of air, the same slack this number
-     has carried through every resize. Flush was the state it was in once, and
-     the text ran under the glyph. */
-  padding: 7px 40px 7px 10px;
+  padding: 7px 10px;
   -webkit-appearance: none;
   appearance: none;
+}
+
+/* Room at the end for find-nearest when it sits inside the field. **It has to
+   stay at or above that control's width**, 36px flush to the edge; 40px is that
+   with 4px of air. Flush was the state it was in once, and the text ran under
+   the glyph. With nothing in the field — no magnifier any more — the text runs
+   to the field's own padding. */
+.lm-search:has(.lm-search__action) .lm-search__input {
+  padding-inline-end: 40px;
 }
 
 /*
@@ -580,28 +619,14 @@
 }
 
 /*
- * The trailing end of the field, which holds one of two things.
- *
- * `.lm-search__icon` is the magnifier: a picture, not a button. `pointer-events:
- * none` so the whole field stays clickable through it — the one thing that makes
- * an icon inside an input worse than no icon is a dead 16px patch at the end of
- * the box a visitor is trying to click into.
- *
- * `.lm-search__action` is find-nearest, drawn in the same place on a map that has
- * it. That one *is* a button and wants its presses, so the two share a position
- * and nothing else.
+ * The trailing end of the field: find-nearest, on a map with no results panel
+ * to put it in. The magnifier that used to share this slot is gone.
  */
-.lm-search__icon,
 .lm-search__action {
   position: absolute;
-  inset-inline-end: 8px;
   top: 50%;
   translate: 0 -50%;
   color: var(--lm-muted);
-}
-
-.lm-search__icon {
-  pointer-events: none;
 }
 
 /*
@@ -1247,35 +1272,96 @@
 }
 
 /*
- * On the picture rather than under it: a row of controls below the image is
- * another line of a card whose whole point is being short.
+ * The picture is one button: a press opens every photo full screen
+ * (embed/src/lightbox.ts). Nothing about it may look like a button but the
+ * cursor, so a host page's `button` rules are answered here as well as by the
+ * floor at the top of this file.
  */
-.lm-popup__step {
-  position: absolute;
-  top: 50%;
-  display: grid;
-  width: 26px;
-  height: 26px;
+button.lm-popup__gallery {
+  display: block;
+  width: 100%;
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  transform: translateY(-50%);
-  background: rgba(16, 18, 22, 0.55);
-  color: #ffffff;
+  background: none;
   cursor: pointer;
+}
+
+button.lm-popup__gallery:focus-visible {
+  outline: 2px solid var(--lm-focus);
+  outline-offset: -2px;
+}
+
+/*
+ * The photos full screen. The dialog itself is the dark around the picture —
+ * not `::backdrop` — so a press on it is a press on the dialog, which is how
+ * lightbox.ts tells "outside the photo" without measuring anything. One colour
+ * in both themes: this is a photo viewer, not a part of the card.
+ */
+.lm-lightbox[open] {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgba(10, 12, 16, 0.92);
+  color: #ffffff;
   place-items: center;
 }
 
-.lm-popup__step:hover {
-  background: rgba(16, 18, 22, 0.75);
+.lm-lightbox::backdrop {
+  background: none;
 }
 
-.lm-popup__step--back {
-  left: 6px;
+.lm-lightbox__photo {
+  max-width: 92vw;
+  max-height: 86vh;
+  border-radius: 6px;
+  object-fit: contain;
 }
 
-.lm-popup__step--on {
-  right: 6px;
+.lm-lightbox__button {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  cursor: pointer;
+  place-items: center;
+  transform: translateY(-50%);
+}
+
+.lm-lightbox__button:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.lm-lightbox__button svg {
+  width: 26px;
+  height: 26px;
+}
+
+.lm-lightbox__button--back {
+  left: 12px;
+}
+
+.lm-lightbox__button--on {
+  right: 12px;
+}
+
+/* The X wears no well, at rest or under the pointer — the same rule as the card's. */
+.lm-lightbox__button--close,
+.lm-lightbox__button--close:hover {
+  top: 12px;
+  right: 12px;
+  background: none;
+  transform: none;
 }
 
 /*
@@ -1932,41 +2018,21 @@
   border-bottom: 1px solid var(--lm-border);
 }
 
-/* Docked, the controls sit on the panel rather than over a map, so the shadow
-   that lifted them off the basemap is just noise. */
-.lm-toolbar--docked .lm-search__input,
-.lm-toolbar--docked .lm-button {
-  box-shadow: none;
-}
-
 /*
- * On a panel, a field is a well rather than a card.
+ * On a panel, the field is bare text on the panel's own ground: no shadow, no
+ * border, no well. It was a 6% foreground tint, and it was asked to go; the
+ * toolbar's bottom rule and the placeholder are what say "search here", and
+ * the focus rule higher up still draws a border for a keyboard visitor (§8).
  *
- * `--lm-surface` is a solid colour, so a field painted with it on a translucent
- * floating panel is an opaque patch sitting in a see-through box — the one place
- * the design visibly came apart. A tint of the foreground inherits whatever the
- * panel is letting through, and reads as an inset field on both themes without a
- * token of its own.
+ * **No `.lm-toolbar--docked .lm-button` rules any more**, and nothing is
+ * missing: find-nearest moved to the panel's foot and the fold arrow wears
+ * `lm-button--icon` without `lm-button`, so no docked control carries the
+ * class. The narrow drawer's hamburger rides an undocked toolbar.
  */
-.lm-toolbar--docked .lm-search__input,
-.lm-toolbar--docked .lm-button {
+.lm-toolbar--docked .lm-search__input {
   border-color: transparent;
-  background: color-mix(in oklab, var(--lm-foreground) 6%, transparent);
-}
-
-.lm-toolbar--docked .lm-button:hover {
-  border-color: transparent;
-  background: color-mix(in oklab, var(--lm-foreground) 11%, transparent);
-}
-
-/* Lit, on a panel — the well above tinted with the accent instead of the
-   foreground. Both selectors are needed: the two rules above are each one class
-   heavier than `.lm-button--on` and come after it. */
-.lm-toolbar--docked .lm-button--on,
-.lm-toolbar--docked .lm-button--on:hover {
-  border-color: transparent;
-  background: color-mix(in oklab, var(--lm-focus) 18%, transparent);
-  color: var(--lm-focus);
+  background: none;
+  box-shadow: none;
 }
 
 /*
@@ -2255,6 +2321,53 @@
 
 .lm-list__footer:empty {
   display: none;
+}
+
+/*
+ * Find-nearest's footer: one full-width button under the list it re-sorts
+ * (`foot` in embed/src/index.ts). Empty, and so gone, when Nearest is off.
+ */
+.lm-panel__foot {
+  flex: none;
+  padding: 8px 10px;
+  border-top: 1px solid var(--lm-border);
+}
+
+.lm-panel__foot:empty {
+  display: none;
+}
+
+/* The panel's own button skin, at a size a thumb finds. The hover repaints the
+   words and the glyph and nothing else, the rule every panel control keeps. */
+.lm-nearest {
+  display: flex;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--lm-border);
+  border-radius: 8px;
+  background: none;
+  color: var(--lm-foreground);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.lm-nearest:hover,
+.lm-collapse:hover {
+  color: var(--lm-focus);
+}
+
+/* Lit: measuring from the visitor, and a press stops it — the same tint the
+   in-field control wore. */
+.lm-nearest.lm-button--on {
+  border-color: color-mix(in oklab, var(--lm-focus) 45%, var(--lm-border));
+  background: color-mix(in oklab, var(--lm-focus) 12%, transparent);
+  color: var(--lm-focus);
 }
 
 /* Narrow ----------------------------------------------------------------- */
@@ -2819,4 +2932,161 @@
 }
 .lm-root .lm-badge:hover {
   color: var(--lm-foreground);
+}
+
+/*
+ * The side panel, folded to its own edge (`fold` in embed/src/index.ts).
+ *
+ * Only where the panel is a side column: below 769px the drawer's strip or the
+ * hamburger does this job, and a stacked panel has no side to fold to — so the
+ * arrow is hidden there and every shut rule is inside the wider query, which
+ * also means a map left shut and then narrowed draws its narrow layout intact.
+ *
+ * The arrow sits on the edge that faces the map — the end of the search row on
+ * a left panel, the start on a right one — so it is the part left on screen
+ * when the panel slides away. Shut, it is pinned into that 44px strip and
+ * everything else in the panel goes `visibility: hidden`, which takes it out of
+ * the tab order as well as out of sight; delayed by the slide, so the panel
+ * does not empty before it moves. Find-nearest stays too, as a bare glyph at the
+ * strip's foot — the two controls a shut panel still offers.
+ *
+ * The arrow is a bare glyph, no ground, and wears `lm-button--icon` without
+ * `lm-button` so none of the toolbar's well rules can reach it; the border and
+ * background here only cancel the UA's button chrome.
+ */
+.lm-collapse {
+  flex: none;
+  order: 1;
+  border: 0;
+  background: none;
+}
+
+.lm-root[data-lm-side="right"] .lm-collapse {
+  order: 0;
+}
+
+.lm-root[data-lm-side="right"] .lm-collapse svg,
+.lm-root[data-lm-shut] .lm-collapse svg {
+  transform: scaleX(-1);
+}
+
+.lm-root[data-lm-side="right"][data-lm-shut] .lm-collapse svg {
+  transform: none;
+}
+
+[dir="rtl"] .lm-collapse {
+  transform: scaleX(-1);
+}
+
+@container lm (max-width: 768px) {
+  .lm-root .lm-collapse {
+    display: none;
+  }
+}
+
+@container lm (min-width: 769px) {
+  /* Docked, it gives the map its width back. Not on a floating panel, which
+     is `position: absolute` — `relative` here once put it back in the flow. */
+  .lm-root:not([data-lm-float])[data-lm-shut] .lm-panel {
+    position: relative;
+    min-width: 0;
+    flex-basis: 44px;
+    overflow: hidden;
+  }
+
+  .lm-root[data-lm-shut] .lm-panel > :not(.lm-toolbar, .lm-panel__foot),
+  .lm-root[data-lm-shut] .lm-toolbar > :not(.lm-collapse) {
+    visibility: hidden;
+    transition: visibility 0s 180ms;
+  }
+
+  .lm-root[data-lm-shut] .lm-nearest span {
+    display: none;
+  }
+
+  .lm-root[data-lm-shut] .lm-collapse,
+  .lm-root[data-lm-shut] .lm-panel__foot {
+    position: absolute;
+    top: 7px;
+    inset-inline-end: 3px;
+    padding: 0;
+    border: 0;
+  }
+
+  .lm-root[data-lm-shut] .lm-panel__foot {
+    top: auto;
+    bottom: 7px;
+  }
+
+  .lm-root[data-lm-side="right"][data-lm-shut] .lm-collapse,
+  .lm-root[data-lm-side="right"][data-lm-shut] .lm-panel__foot {
+    inset-inline: 3px auto;
+  }
+
+  /* Shut, find-nearest is the arrow's twin: the same bare 36px glyph. The
+     label goes with the rest of the panel (above); the lit tint stays, because
+     that is the one thing that says measuring is on. */
+  .lm-root[data-lm-shut] .lm-nearest {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+  }
+
+  /*
+   * The map's own corners stand beside a floating panel, never on it (§12).
+   *
+   * MapLibre's corners and the panel are both `z-index: 2` and the canvas comes
+   * later, so the credit's ⓘ — and the badge and zoom buttons, if they share
+   * the corner — drew over the panel. Asked as "hide the attribution behind the
+   * sidebar"; hidden is what §12 forbids, so it moves out from under it instead.
+   *
+   * A margin on every corner, and only the ones anchored to the panel's edge
+   * move: a corner pinned `right: 0` ignores a left margin, and the reverse. So
+   * `margin-inline-*` picks the physical corners by itself, RTL included, with no
+   * per-corner or per-direction selectors. The percentage is the canvas's width,
+   * which floating is the root's — the panel's own `width` and `min-width`.
+   */
+  .lm-root[data-lm-float] .maplibregl-control-container > * {
+    margin-inline-start: calc(max(240px, var(--lm-panel-w, 40%)) + 10px);
+    transition: margin 180ms ease;
+  }
+
+  .lm-root[data-lm-float][data-lm-side="right"] .maplibregl-control-container > * {
+    margin-inline: 0 calc(max(240px, var(--lm-panel-w, 40%)) + 10px);
+  }
+
+  /* Shut: past the 44px strip and its gutter. The `:not` keeps this off a
+     right panel, where the rule below is the shut one. */
+  .lm-root[data-lm-float][data-lm-shut]:not([data-lm-side="right"]) .maplibregl-control-container > * {
+    margin-inline-start: 54px;
+  }
+
+  .lm-root[data-lm-float][data-lm-side="right"][data-lm-shut] .maplibregl-control-container > * {
+    margin-inline-end: 54px;
+  }
+
+  /* The side swipe (`fold` in index.ts) gets the horizontal moves; the list
+     keeps native vertical scrolling. `preventDefault()` could not do this. */
+  .lm-panel {
+    touch-action: pan-y;
+  }
+
+  /* Floating, it slides instead, by its own width less the strip. Each weight
+     is one attribute over the open rule it replaces. */
+  .lm-root[data-lm-float][data-lm-shut] .lm-panel {
+    transform: translateX(calc(34px - 100%));
+  }
+
+  .lm-root[data-lm-float][data-lm-side="right"][data-lm-shut] .lm-panel {
+    transform: translateX(calc(100cqw - 54px));
+  }
+
+  [dir="rtl"] .lm-root[data-lm-float][data-lm-shut] .lm-panel {
+    transform: translateX(calc(100% - 34px));
+  }
+
+  [dir="rtl"] .lm-root[data-lm-float][data-lm-side="right"][data-lm-shut] .lm-panel {
+    transform: translateX(calc(54px - 100cqw));
+  }
 }

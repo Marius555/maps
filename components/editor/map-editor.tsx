@@ -1333,13 +1333,13 @@ export function MapEditor({
        * mobile browser chrome would clip the canvas otherwise.
        */}
       {/*
-       * `--map-chrome-inset` lifts everything MapLibre stacks in a bottom corner
-       * — the zoom buttons and the attribution bar — clear of the sheet's peek
-       * strip, which sits directly on top of both. Attribution that is covered
-       * is attribution that is absent (§12). Zero at `lg`, where the panel is a
-       * column and the corner is empty again.
+       * `--map-chrome-inset` lifts the zoom buttons clear of the sheet's peek
+       * strip. Zero at `lg`, where the panel is a column. The attribution ⓘ is
+       * deliberately not lifted: `data-attribution="under-panel"` keeps it
+       * behind the locations panel at every width — see app/globals.css.
        */}
       <div
+        data-attribution="under-panel"
         /*
          * The frame is the *map's* colour context, not the dashboard's.
          *
@@ -1567,6 +1567,7 @@ export function MapEditor({
         groups={groups}
         tagGroups={map.tagGroups}
         pinIcons={map.pinIcons}
+        defaultPinColor={readEmbedSettings(map.settings).pinColor}
         placeLimit={placeLimit}
         selectedPlaceId={selectedPlaceId}
         selectedShapeId={selectedShapeId}

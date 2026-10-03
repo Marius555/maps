@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { AdminMobileNav } from "@/components/admin/shell/admin-mobile-nav";
 import { AdminSidebar } from "@/components/admin/shell/admin-sidebar";
+import { AdminMain } from "@/components/layout/page-transition/admin-main";
 import { requireAdminPage } from "@/lib/admin/auth/guard";
 import { env } from "@/lib/env";
 
@@ -34,11 +35,11 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <AdminMobileNav email={env.adminEmail} />
-        <main className="relative min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+        <AdminMain>
           <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
             {children}
           </div>
-        </main>
+        </AdminMain>
       </div>
     </div>
   );

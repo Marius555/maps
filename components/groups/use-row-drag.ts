@@ -441,6 +441,14 @@ export function useRowDragSource({
         return;
       }
 
+      /*
+       * Nor is one that started outside the row's own DOM. React bubbles a
+       * portal's events through the component tree, so a press inside a popover
+       * the row opened (its Pin colour picker) arrives here too — and `closest`
+       * above walks the DOM, where the popover is a child of the body.
+       */
+      if (!(event.currentTarget as Node).contains(event.target as Node)) return;
+
       const element = event.currentTarget as HTMLElement;
       const rect = element.getBoundingClientRect();
 

@@ -19,12 +19,20 @@ import type { PlanRow } from "@/lib/marketing/plan-rows";
 export function PlanRowList({
   rows,
   emphasise,
+  dense = false,
 }: {
   rows: PlanRow[];
   emphasise?: (row: PlanRow) => boolean;
+  /**
+   * Tighter rows, for /pricing, which has to hold three cards and everything
+   * around them in one screen. Spacing only; the rows are the same rows.
+   */
+  dense?: boolean;
 }) {
   return (
-    <dl className="space-y-2.5 border-t border-border pt-5 text-sm">
+    <dl
+      className={`border-t border-border text-sm ${dense ? "space-y-1.5 pt-4" : "space-y-2.5 pt-5"}`}
+    >
       {rows.map((row) => (
         <Row key={row.id} row={row} emphasised={emphasise?.(row) ?? false} />
       ))}

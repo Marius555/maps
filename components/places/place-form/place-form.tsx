@@ -113,7 +113,6 @@ export function PlaceForm({
       tags: place.tags,
       fields: place.fields,
       icon: place.icon,
-      color: place.color,
       description: place.description ?? "",
       phone: place.phone ?? "",
       email: place.email ?? "",
@@ -131,7 +130,6 @@ export function PlaceForm({
   const lng = useWatch({ control, name: "lng" });
   // Watched for the map above, which draws the draft rather than the saved row.
   const icon = useWatch({ control, name: "icon" });
-  const color = useWatch({ control, name: "color" });
   const tags = useWatch({ control, name: "tags" });
 
   /*
@@ -267,7 +265,6 @@ export function PlaceForm({
           lat={lat}
           lng={lng}
           icon={icon}
-          color={color}
           tags={tags}
           onMove={setPosition}
         />

@@ -10,6 +10,7 @@ import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import { DeletePlaceDialog } from "./delete-place-dialog";
 import { PlaceListEmpty } from "./place-list-empty";
 import { PlaceListItem } from "./place-list-item";
+import type { PinColorMenu } from "@/components/places/pin-color/place-row-menu";
 
 /**
  * The Locations tab's list: flat, search-filtered, no grouping.
@@ -36,6 +37,7 @@ export function PlaceList({
   onSelect,
   onEdit,
   onRetryAddress,
+  pinColorMenuFor,
 }: {
   mapId: string;
   places: Place[];
@@ -58,6 +60,8 @@ export function PlaceList({
   onSelect: (placeId: string) => void;
   onEdit: (placeId: string) => void;
   onRetryAddress?: (placeId: string) => void;
+  /** Pin colour for a row's menu, or undefined to leave it out. */
+  pinColorMenuFor?: (place: Place) => PinColorMenu | undefined;
 }) {
   const deletePlace = useDeletePlace(mapId);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -92,6 +96,7 @@ export function PlaceList({
               onRetryAddress={
                 onRetryAddress ? () => onRetryAddress(place.id) : undefined
               }
+              pinColorMenu={pinColorMenuFor?.(place)}
               onDelete={() => setPendingDeleteId(place.id)}
             />
           ))}

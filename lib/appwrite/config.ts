@@ -23,4 +23,5 @@ export const TABLES = {
   notifications: "notifications",
   apiCalls: "apiCalls",
   emailLog: "emailLog",
+  promotions: "promotions",
 } as const;

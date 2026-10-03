@@ -289,7 +289,11 @@ export function buildSnapshot(
           definedTags,
           definedFields,
           publishedLayout,
-          colors.overrideForPlace(place) ?? ownColor(place, map.pinIcons),
+          // Its own colour first, and then only the group's: the order
+          // `groupColorIndex.forPlace` paints by in the editor.
+          place.color
+            ? ownColor(place, map.pinIcons)
+            : colors.overrideForPlace(place),
         ),
       ),
       // Dropped entirely when empty, like every other optional field — and this
@@ -589,6 +593,11 @@ function usedFields(fields: MapField[], places: Place[]): SnapshotField[] {
  * custom pin. So a pin with a colour of its own publishes nothing here and the
  * embed resolves the pin itself, exactly as it does today. Absent for every
  * location without one, which is every location published before it existed.
+ *
+ * Asked before the group override, never after it: the location's own colour
+ * beats its group's (see `lib/map/group-colors.ts`), and a custom pin's colour
+ * beats both — which is why this answers "nothing" for one, rather than letting
+ * the group's colour through.
  */
 function ownColor(place: Place, pinIcons: AppMap["pinIcons"]): string | undefined {
   if (!place.color) return undefined;

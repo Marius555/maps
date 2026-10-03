@@ -2,6 +2,13 @@ import { Card } from "@heroui/react";
 
 import { LinkButton } from "@/components/ui/link-button";
 import { PlanRowList } from "@/components/ui/plan-row-list";
+import {
+  discountAppliesTo,
+  discountedEuros,
+  discountNote,
+  formatEuros,
+} from "@/lib/billing/discounts";
+import type { PublicDiscount } from "@/lib/billing/types";
 import { planRows } from "@/lib/marketing/plan-rows";
 import type { MarketingPlan, PlanCadence } from "@/lib/marketing/plans";
 
@@ -24,10 +31,13 @@ export function PlanCard({
   plan,
   recommended,
   cadence,
+  discount = null,
 }: {
   plan: MarketingPlan;
   recommended: boolean;
   cadence: PlanCadence;
+  /** The discount the page applied, if any — see `usePricingOffer`. */
+  discount?: PublicDiscount | null;
 }) {
   /*
    * Free has no year to buy, so it prints "€0" under either setting rather than
@@ -36,6 +46,22 @@ export function PlanCard({
   const yearly = cadence === "yearly" && plan.amountYearly !== undefined;
   const price = yearly ? plan.priceYearly : plan.price;
   const per = yearly ? "a year" : plan.cadence;
+
+  /*
+   * A discount lowers this card only if it covers this plan at this cadence.
+   * Free is never discounted, and a plan the code does not cover keeps its
+   * list price and gets no code on its button — the checkout would refuse it.
+   */
+  const shown = yearly ? "yearly" : "monthly";
+  const applies =
+    discount !== null &&
+    plan.id !== "free" &&
+    discountAppliesTo(discount, { plan: plan.id, cadence: shown });
+  const discounted =
+    applies && discount ? discountedEuros(yearly ? (plan.amountYearly ?? 0) : plan.amount, discount) : null;
+  const note = [yearly ? "Two months free" : null, applies && discount ? discountNote(discount, shown) : null]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <Card
@@ -60,7 +86,17 @@ export function PlanCard({
         </div>
 
         <p className="mk-display mt-2 text-4xl text-foreground">
-          {price}
+          {discounted !== null ? (
+            <>
+              <span className="text-accent">{formatEuros(discounted)}</span>
+              <s className="ml-2 font-sans text-base font-normal tracking-normal text-muted">
+                <span className="sr-only">was </span>
+                {price}
+              </s>
+            </>
+          ) : (
+            price
+          )}
           {per ? (
             <span className="ml-2 font-sans text-sm font-normal tracking-normal text-muted">
               {per}
@@ -69,21 +105,22 @@ export function PlanCard({
         </p>
 
         {/* The saving said as what it is rather than as a percentage, and held
-            in the layout either way so the toggle does not move the cards. */}
+            in the layout either way so the toggle — or a discount arriving
+            after the page has painted — does not move the cards. */}
         <p
-          className={`text-xs ${yearly ? "text-accent" : "invisible"}`}
-          aria-hidden={!yearly}
+          className={`text-xs ${note ? "text-accent" : "invisible"}`}
+          aria-hidden={!note}
         >
-          Two months free
+          {note || "Two months free"}
         </p>
 
         <Card.Description>{plan.pitch}</Card.Description>
       </Card.Header>
 
       <Card.Content>
-        <PlanRowList rows={planRows(plan)} />
+        <PlanRowList rows={planRows(plan)} dense />
 
-        <p className="mt-5 text-sm text-pretty text-foreground">
+        <p className="mt-4 text-sm text-pretty text-foreground">
           {plan.highlight}
         </p>
       </Card.Content>
@@ -100,7 +137,9 @@ export function PlanCard({
           href={
             plan.id === "free"
               ? "/signup"
-              : `/upgrade?plan=${plan.id}&cadence=${cadence}`
+              : `/upgrade?plan=${plan.id}&cadence=${cadence}${
+                  applies && discount ? `&code=${encodeURIComponent(discount.code)}` : ""
+                }`
           }
           fullWidth
           variant={recommended ? undefined : "secondary"}

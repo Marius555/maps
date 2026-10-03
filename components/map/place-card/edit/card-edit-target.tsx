@@ -37,7 +37,7 @@ import type { CardBlock } from "@/packages/shared/card-layout";
  * block is drawn rather than what is in it.
  *
  * **The card moves and the pointer stops it.** Every block breathes for as long
- * as edit mode is on -- a 1.2% swell on its own box, `.card-block-editable` in
+ * as edit mode is on -- a 3% swell on its own box, `.card-block-editable` in
  * app/globals.css -- because edit mode changes nothing else about the card, and
  * a card that looks identical in and out of the mode has to say which one it is
  * in somehow. The block under the pointer goes still and outlines itself in a

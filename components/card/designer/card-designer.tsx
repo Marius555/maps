@@ -711,7 +711,7 @@ export function CardDesigner({
               footer={
                 activeTab === "elements" ? (
                   <Button
-                    size="sm"
+                    className="w-full"
                     onPress={onSave}
                     isPending={updateCardDesign.isPending}
                     // Dead while there is nothing to save, which is also what

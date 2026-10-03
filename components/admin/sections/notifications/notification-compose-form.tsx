@@ -9,6 +9,7 @@ import { Controller, useForm } from "react-hook-form";
 import { FormDateTimeField } from "@/components/ui/form-date-time-field";
 import { FormTextArea, FormTextField } from "@/components/ui/form-field";
 import { SelectControl } from "@/components/ui/select-control";
+import { wallClockToIso } from "@/lib/format/wall-clock";
 import { useSendNotification } from "@/lib/query/admin";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { toastProblem } from "@/lib/query/toast-error";
@@ -44,10 +45,10 @@ export function NotificationComposeForm() {
   });
 
   const onSubmit = handleSubmit(async (values) => {
-    const publishedAt = toIso(values.publishedAt);
+    const publishedAt = wallClockToIso(values.publishedAt);
 
     try {
-      await send.mutateAsync({ ...values, publishedAt, expiresAt: toIso(values.expiresAt) });
+      await send.mutateAsync({ ...values, publishedAt, expiresAt: wallClockToIso(values.expiresAt) });
 
       toast.success("Sent", {
         description:
@@ -146,13 +147,6 @@ export function NotificationComposeForm() {
   );
 }
 
-/** A wall-clock date-time, read in the browser's zone, as ISO; "" stays "". */
-function toIso(local: string): string {
-  if (!local) return "";
-  const date = new Date(local);
-
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
-}
 
 function isFuture(iso: string): boolean {
   return iso !== "" && Date.parse(iso) > Date.now();

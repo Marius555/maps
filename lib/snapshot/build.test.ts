@@ -1814,7 +1814,7 @@ describe("buildSnapshot group colours", () => {
   });
 
   /*
-   * A location's own colour (an imported colour column, or Edit location's Pin
+   * A location's own colour (an imported colour column, or the row menu's Pin
    * colour). The embed reads `SnapshotPlace.color` above the custom pin, and the
    * editor puts the location's colour under it — so it is only published when
    * the pin has no colour of its own, or the two would disagree.
@@ -1825,9 +1825,25 @@ describe("buildSnapshot group colours", () => {
     expect(snapshot.places[0]?.color).toBe("#e03131");
   });
 
-  it("lets a group's colour beat the location's own", () => {
+  /*
+   * The other way round from how it shipped. Joining a group clears the
+   * location's colour, so one that is set on a grouped location was picked
+   * after — and it has to reach the visitor, or the row menu's Pin colour is a
+   * control that changes the editor and nothing else.
+   */
+  it("lets the location's own colour beat its group's", () => {
     const snapshot = build(
       [makePlace({ groupId: "group-1", color: "#e03131" })],
+      [],
+      [makeGroup()],
+    );
+
+    expect(snapshot.places[0]?.color).toBe("#e03131");
+  });
+
+  it("gives a grouped location with no colour of its own the group's", () => {
+    const snapshot = build(
+      [makePlace({ groupId: "group-1", color: "" })],
       [],
       [makeGroup()],
     );

@@ -4,8 +4,10 @@
  * one it is closing.
  *
  * - `maps`: the maps list, pointing at Create map.
- * - `editor`: an empty map's editor, pointing at the pin button and Locations.
- * - `card`: the editor once the map has a location, pointing at Card.
+ * - `editor`: the editor, pointing at the pin button and Locations. Always the
+ *   first one there, whether or not the map has locations yet.
+ * - `card`: the editor once `editor` is closed and the map has a location,
+ *   pointing at Card.
  * - `publish`: wherever the owner lands on leaving the card designer, pointing
  *   at Publish.
  */

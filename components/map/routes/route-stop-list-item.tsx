@@ -17,6 +17,10 @@ import {
   type DraggedObject,
 } from "@/components/groups/use-row-drag";
 import { PinPreview } from "@/components/map/pin-preview";
+import {
+  type PinColorMenu,
+  PlaceRowMenu,
+} from "@/components/places/pin-color/place-row-menu";
 import { PlaceRowLabel } from "@/components/places/place-row-label";
 import {
   insertLineMotion,
@@ -24,7 +28,7 @@ import {
   LIST_ROW_SURFACE_CLASS,
   listRowMotion,
 } from "@/components/ui/list-row-motion";
-import { RowMenu, type RowMenuItem } from "@/components/ui/row-menu";
+import type { RowMenuItem } from "@/components/ui/row-menu";
 import { TreeBranch, TreeRail } from "@/components/ui/tree-branch";
 import { moveStop } from "@/lib/map/route-order";
 import { canRemoveStop } from "@/lib/map/route-stops";
@@ -105,6 +109,7 @@ export function RouteStopListItem({
   pinIcons,
   groupColor,
   pinColor,
+  pinColorMenu,
   isAddressPending,
   hasAddressFailed,
   animateMoves = false,
@@ -138,12 +143,14 @@ export function RouteStopListItem({
    *
    * The sub-group rule: a route in a group lends its colour to the pins it
    * stops at, and this row has to draw the same answer the canvas paints. It
-   * beats the pin's own colour, exactly as it does on a grouped location's
-   * row.
+   * beats the custom pin's colour, but not a colour the location has of its
+   * own — exactly as on a grouped location's row.
    */
   groupColor?: string;
-  /** Its own first-tag colour, used only when no group decided. */
+  /** Its own colour, or its first tag's, used only when no group decided. */
   pinColor?: string;
+  /** Offers Pin colour for the location. Omitted for a waypoint. */
+  pinColorMenu?: PinColorMenu;
   /** Its reverse geocode is still out — see PlaceRowLabel. */
   isAddressPending?: boolean;
   /** That lookup came back with nothing, and the row has to say so. */
@@ -358,7 +365,8 @@ export function RouteStopListItem({
           <PinPreview
             icon={place?.icon ?? ""}
             pinIcons={pinIcons}
-            color={groupColor}
+            // A colour of its own beats the group's — lib/map/group-colors.ts.
+            color={place?.color ? undefined : groupColor}
             fallbackColor={pinColor}
             size="sm"
             className="shrink-0"
@@ -391,9 +399,15 @@ export function RouteStopListItem({
 
         {/* `NO_DRAG_PROPS` stops a press on the menu from also picking the row
             up — see useRowDragSource. */}
-        <div className="shrink-0" {...NO_DRAG_PROPS}>
-          <RowMenu label={`Actions for ${label} on ${routeName}`} items={items} />
-        </div>
+        <PlaceRowMenu
+          label={`Actions for ${label} on ${routeName}`}
+          items={items}
+          place={place}
+          pinIcons={pinIcons}
+          pinColorMenu={pinColorMenu}
+          className="shrink-0"
+          {...NO_DRAG_PROPS}
+        />
 
         {/* Declared last so they sit over the button, and inert until a stop of
             this route is in the air — `elementFromPoint` looks straight through

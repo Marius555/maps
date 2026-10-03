@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import { resolvePin } from "@/packages/shared/pin-icons";
 
 import { CardView } from "@/components/card/card-view";
+import { GalleryLightboxContext } from "@/components/card/gallery-lightbox";
+import { PhotoLightbox } from "@/components/ui/photo-lightbox/photo-lightbox";
 import { cardSlotOf } from "@/lib/card/card-slots";
 import type { AppMap, MapField, Place } from "@/lib/repositories/types";
 import type { CardBlock, CardLayout } from "@/packages/shared/card-layout";
@@ -183,6 +185,8 @@ export function PlaceCard({
    */
   const [editingCard, setEditingCard] = useState<string | null>(null);
   const isEditing = Boolean(place && editingCard === place.id);
+  /** The photos open full screen from the card's own photo, or null. */
+  const [lightbox, setLightbox] = useState<string[] | null>(null);
 
   /**
    * What this location's card is drawing *before* any of it has been saved.
@@ -405,42 +409,44 @@ export function PlaceCard({
               {/* `map-card` carries the height cap the anchor hook writes from
                   the map frame, and the floor beside it, so it belongs on the
                   element that actually is the card — see the note above. */}
-              <CardView
-                ref={cardRef}
-                layout={layout}
-                place={place}
-                fields={fields}
-                tagChips={tagChips}
-                pinColor={pinColor}
-                pinIcons={pinIcons}
-                className={`map-card relative border border-border${
-                  theme ? ` ${theme}` : ""
-                }`}
-                // The slots say it per block, and better — see the docblock on
-                // `renderEmptyState`.
-                renderEmptyState={slots ? undefined : renderEmptyState}
-                renderSlot={renderSlot}
-                blockOverrides={effectiveOverrides}
-                renderOverlay={renderOverlay}
-              >
-                <PlaceCardChrome
+              <GalleryLightboxContext value={setLightbox}>
+                <CardView
+                  ref={cardRef}
+                  layout={layout}
                   place={place}
-                  isEditing={isEditing}
-                  onToggleEdit={
-                    slots
-                      ? () => {
-                          // Leaving edit mode takes any open panel with it: the
-                          // popover is portalled, so it would otherwise stand
-                          // there with nothing on the card still marked.
-                          setOpenPanel(null);
-                          setEditingCard(isEditing ? null : place.id);
-                        }
-                      : undefined
-                  }
-                  onClose={onClose}
-                  onEdit={onEdit}
-                />
-              </CardView>
+                  fields={fields}
+                  tagChips={tagChips}
+                  pinColor={pinColor}
+                  pinIcons={pinIcons}
+                  className={`map-card relative border border-border${
+                    theme ? ` ${theme}` : ""
+                  }`}
+                  // The slots say it per block, and better — see the docblock on
+                  // `renderEmptyState`.
+                  renderEmptyState={slots ? undefined : renderEmptyState}
+                  renderSlot={renderSlot}
+                  blockOverrides={effectiveOverrides}
+                  renderOverlay={renderOverlay}
+                >
+                  <PlaceCardChrome
+                    place={place}
+                    isEditing={isEditing}
+                    onToggleEdit={
+                      slots
+                        ? () => {
+                            // Leaving edit mode takes any open panel with it: the
+                            // popover is portalled, so it would otherwise stand
+                            // there with nothing on the card still marked.
+                            setOpenPanel(null);
+                            setEditingCard(isEditing ? null : place.id);
+                          }
+                        : undefined
+                    }
+                    onClose={onClose}
+                    onEdit={onEdit}
+                  />
+                </CardView>
+              </GalleryLightboxContext>
 
               {/*
                 One panel, outside the layout, for whichever block is open.
@@ -474,6 +480,8 @@ export function PlaceCard({
           ) : null}
         </AnimatePresence>
       </div>
+
+      <PhotoLightbox photos={lightbox} onClose={() => setLightbox(null)} />
     </div>
   );
 }

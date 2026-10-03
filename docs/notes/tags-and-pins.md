@@ -129,14 +129,26 @@ rewritten; it is the record of why this area is shaped as it is.
   for a place the map says nothing about. The card's Logo block reaches the same colour
   through `--lm-pin` rather than through `colorOf`, because that one renderer is CSS and
   the other two are canvas.
-- **A location can carry its own colour (`places.color`), and it sits between the custom
-  pin and the tags**: group → custom pin's colour → `place.color` → first tag → theme.
-  `groupColorIndex.forPlace` is the statement of it. It arrives from an imported file's
-  **Pin colour** column (hex only, `parseHexColor`; a bad cell is a row warning, never a
-  lost row) or Edit location's Pin colour field, and a sheet sync owns it when the column
-  is mapped. Publish writes it as `SnapshotPlace.color` **only when the custom pin has no
-  colour of its own**, because the embed reads that field *above* the pin — which is how
-  it needed no embed change. `""` is none, as `groupId` spells it.
+- **A location can carry its own colour (`places.color`), and it beats its group's.**
+  Set: custom pin's colour → `place.color`. Unset: group (or grouped route) → custom pin's
+  colour → first tag → theme. `groupColorIndex.forPlace` is the statement of it. It
+  arrives from an imported file's **Pin colour** column (hex only, `parseHexColor`; a bad
+  cell is a row warning, never a lost row) or the location row's ⋯ → **Pin colour**
+  (`components/places/pin-color/`, on the editor sidebar's rows, route stops and the
+  Locations page), and a sheet sync owns it when the column is mapped. Publish writes it
+  as `SnapshotPlace.color` **only when the custom pin has no colour of its own**, because
+  the embed reads that field *above* the pin — which is how it needed no embed change.
+  `""` is none, as `groupId` spells it.
+- **Joining a group clears `place.color`** (`useAssignToGroup` sends `color: ""` with
+  the `groupId`), so a pin takes its group's colour on the way in and a colour picked
+  after that wins. Leaving a group leaves the colour alone. It used to be the other way
+  round — group above own colour — and that made the Pin colour field in Edit location
+  save and change nothing on any grouped pin; the owner's report was "Pin colour doesn't
+  work". The field is gone from Edit location (and from `placeFormSchema`, so that dialog
+  can never save the colour it opened with over one picked from the menu). The picker's
+  first swatch is the colour with none of its own (`pinThemeColor`) and pressing it
+  writes `""`, which replaced the "Use theme colour" button. Rows grouped *and* coloured
+  before this changed show their own colour now.
 - **Tags an import or a sheet sync creates take the map's theme pin colour**
   (`settings.pinColor`, the `newTagColor` argument of `resolveTags`), not the palette. An
   imported map used to come out in eight colours nobody chose, one per tag; the owner

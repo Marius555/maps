@@ -48,6 +48,12 @@ export type CheckoutRequest = {
    * whoever typed their address.
    */
   userId: string;
+  /**
+   * A discount code to pre-fill, from a share link. Upper-case letters and
+   * digits only, checked by `checkoutSchema`; the provider decides whether it is
+   * valid and what it is worth.
+   */
+  discountCode?: string;
 };
 
 /** Where to send the buyer. Nothing else about the checkout crosses out. */
@@ -191,6 +197,108 @@ export type InvoicePage = {
   lastPage: number;
 };
 
+/* ------------------------------------------------------------------ *
+ * Discounts
+ *
+ * The provider is the only record of these (docs/notes/billing.md,
+ * "Discounts"): created and deleted from the operator console, read live,
+ * never mirrored into Appwrite. Plans are named as ours — a plan and a
+ * cadence — never as the provider's variant ids.
+ * ------------------------------------------------------------------ */
+
+/** One thing that can be bought: a paid plan at one cadence. */
+export type PlanOffer = { plan: PaidPlanId; cadence: BillingCadence };
+
+/** A percentage off, or a fixed amount off in the store's currency. */
+export type DiscountAmountType = "percent" | "fixed";
+
+/**
+ * How many charges of a subscription it applies to: the first only, the first
+ * N months', or every one.
+ */
+export type DiscountDuration = "once" | "repeating" | "forever";
+
+export type DiscountInput = {
+  name: string;
+  /** Upper-case letters and digits. What a customer types at the checkout. */
+  code: string;
+  amountType: DiscountAmountType;
+  /** A whole percentage (1–100), or cents when `amountType` is `fixed`. */
+  amount: number;
+  duration: DiscountDuration;
+  /** Months, when `duration` is `repeating`; null otherwise. */
+  months: number | null;
+  /** How many times it may be redeemed in total, by anybody. Null is unlimited. */
+  maxUses: number | null;
+  /** ISO. Null starts it at once. */
+  startsAt: string | null;
+  /** ISO. Null never expires. */
+  expiresAt: string | null;
+  /** Which plans it applies to. Empty is every plan. */
+  plans: PlanOffer[];
+};
+
+export type Discount = DiscountInput & {
+  id: string;
+  createdAt: string;
+  /** Redemptions so far, or null when they could not be counted. */
+  uses: number | null;
+  /**
+   * Limited to at least one product that is none of our four plans — made in
+   * the provider's own dashboard, say. Shown so a list of plans that looks
+   * shorter than the truth says so.
+   */
+  otherProducts: boolean;
+  /** Only test-mode checkouts accept it. */
+  testMode: boolean;
+};
+
+/**
+ * A discount as a pricing-page visitor may see it: what it takes off and from
+ * what, and when it ends. Never its name, its cap or how often it has been
+ * used — those are the operator's business.
+ */
+export type PublicDiscount = Pick<
+  Discount,
+  "code" | "amountType" | "amount" | "duration" | "months" | "plans" | "expiresAt"
+>;
+
+/** What `/api/pricing/offer` answers. */
+export type PricingOffer = {
+  /** The promo the operator chose to show everybody, if it is live. */
+  featured: PublicDiscount | null;
+  /** The code that was asked about, if it is live. */
+  code: PublicDiscount | null;
+  /** Why the code that was asked about is not applied. Null when none was asked about, or it is. */
+  codeError: string | null;
+  /**
+   * True when the code could not be checked at all (the provider did not
+   * answer) — neither valid nor refused. The page then keeps what it last knew
+   * rather than forgetting a code it has no news about.
+   */
+  codeUnchecked?: boolean;
+};
+
+/** Where a discount stands right now. Decided by `discountStatus`. */
+export type DiscountStatus = "scheduled" | "active" | "expired" | "used_up";
+
+export type DiscountRedemption = {
+  id: string;
+  createdAt: string;
+  /** The buyer's address, from the order. Null when the order could not be read. */
+  email: string | null;
+  /** What it took off the order, in cents of `currency`. */
+  saved: number;
+  /** ISO 4217, from the order. Null when the order could not be read. */
+  currency: string | null;
+};
+
+export type DiscountRedemptionPage = {
+  redemptions: DiscountRedemption[];
+  page: number;
+  lastPage: number;
+};
+
 export type BillingProvider = {
   /** For error messages and logs. Never rendered to a customer. */
   readonly name: string;
@@ -232,4 +340,21 @@ export type BillingProvider = {
    * that did not happen has to be said out loud.
    */
   changePlan(request: PlanChangeRequest): Promise<Omit<SubscriptionState, "userId"> | null>;
+  /**
+   * The discount codes, newest first, each with its redemption count. The
+   * operator console's only reader; never in a customer's path.
+   */
+  listDiscounts(): Promise<Discount[]>;
+  /**
+   * Make a discount code at the provider. There is no edit: the provider can
+   * create and delete a discount but not change one.
+   */
+  createDiscount(input: DiscountInput): Promise<Discount>;
+  /** One page of who redeemed a discount, newest first. */
+  listDiscountRedemptions(discountId: string, page: number): Promise<DiscountRedemptionPage>;
+  /**
+   * Stop a code working at the checkout. Subscriptions that already redeemed it
+   * keep what they were given.
+   */
+  deleteDiscount(discountId: string): Promise<void>;
 };

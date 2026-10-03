@@ -26,6 +26,7 @@ export const LT: EmbedLanguage = {
     closed: "Uždaryta",
     previousPhoto: "Ankstesnė nuotrauka",
     nextPhoto: "Kita nuotrauka",
+    viewPhotos: "Peržiūrėti nuotraukas",
     dismiss: "Uždaryti",
   },
   badge: "Sukurta su {brand}",

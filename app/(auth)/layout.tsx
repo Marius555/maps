@@ -1,6 +1,7 @@
 import { AuthBackButton } from "@/components/auth/auth-back-button";
 import { AuthBrand } from "@/components/auth/auth-brand";
 import { AuthVisual } from "@/components/auth/auth-visual";
+import { AuthPane } from "@/components/layout/page-transition/auth-pane";
 
 /**
  * The split shell: drawing on the left, form on the right.
@@ -42,7 +43,7 @@ export default function AuthLayout({
           <AuthBrand />
         </div>
 
-        {children}
+        <AuthPane>{children}</AuthPane>
       </div>
     </div>
   );

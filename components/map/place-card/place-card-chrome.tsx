@@ -129,6 +129,9 @@ export function PlaceCardChrome({
           size="sm"
           variant="tertiary"
           onPress={onClose}
+          // The same tile as the pencil beside it, so the row reads as one set.
+          // The embed keeps its bare X (embed/src/popup.ts); this card is the
+          // editor's, and its X sits among the editor's own controls.
           className="size-7 min-w-0 rounded-lg bg-surface/80 text-muted backdrop-blur-sm hover:bg-default hover:text-foreground"
         >
           <X aria-hidden="true" className="size-4" />

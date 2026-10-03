@@ -173,7 +173,7 @@ export function createTracker(snapshot: MapSnapshot): Track {
  */
 export function trackLinks(root: HTMLElement, track: Track): void {
   /*
-   * **Capture, not bubble.** The gallery's own step buttons call
+   * **Capture, not bubble.** The gallery's photo button calls
    * `stopPropagation` — a click that reaches the canvas pans the map underneath
    * the card — so a bubble-phase listener on the root never sees them. Capture
    * visits the root on the way *down*, before any handler can stop anything,
@@ -184,7 +184,7 @@ export function trackLinks(root: HTMLElement, track: Track): void {
     "click",
     (event) => {
       const hit = (event.target as HTMLElement | null)?.closest<HTMLElement>(
-        'a[class^="lm-"], .lm-popup__step, summary[class^="lm-popup__"]',
+        'a[class^="lm-"], button.lm-popup__gallery, summary[class^="lm-popup__"]',
       );
 
       // Directions is excluded because ./directions.ts already reports it, off

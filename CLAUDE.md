@@ -337,7 +337,7 @@ Area-specific invariants live at the head of each file in the table below.
   it `retired` so it stops being offered and keeps being read.
 - **One writer per JSON blob column.** `updateMap` serialises `settings` whole, so two
   forms writing it is a lost update. `useEmbedDesign` is the only writer.
-- **The embed's own-code budget is 49.2KB and it currently sits at 47.1KB**, minified
+- **The embed's own-code budget is 49.2KB and it currently sits at 48.3KB**, minified
   since 2026-09-26. That is the binding number, and anything new has to be paid for by
   removing something. The **total** used to be the gate at 2 bytes; it is reported now and not
   enforced, because its stated job was catching MapLibre ballooning and it had become a
@@ -388,7 +388,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `components/auth/**`, `lib/auth/**`, `lib/email/**`, `app/(auth)/**`, `app/api/auth/**`, `proxy.ts` | `docs/notes/auth.md` |
 | `lib/sheet-sync/**`, `components/places/sheet-sync/**`, `app/api/**/sheet-link/**`, `app/api/cron/**`, `functions/**` | `docs/notes/sheet-sync.md` |
 | `app/(marketing)/**`, `components/marketing/**`, `lib/marketing/**` | `docs/notes/marketing.md` |
-| `lib/billing/**`, `lib/repositories/{subscriptions,usage,plan-limits}.repository.ts`, `app/api/webhooks/billing/**`, `app/(dashboard)/settings/billing/**`, `app/(marketing)/upgrade/**` | `docs/notes/billing.md` |
+| `lib/billing/**`, `lib/repositories/{subscriptions,usage,plan-limits}.repository.ts`, `app/api/webhooks/billing/**`, `app/(dashboard)/settings/billing/**`, `app/(marketing)/upgrade/**`, `app/api/admin/discounts/**`, `components/admin/sections/discounts/**` | `docs/notes/billing.md` |
 | `app/(dashboard)/settings/**`, `components/user-settings/**`, `lib/theme/**`, `lib/account-deletion/**`, `lib/auth/sessions.ts`, the `.steady` block in `globals.css` | `docs/notes/settings.md` |
 | `lib/notifications/**`, `components/notifications/**`, `app/api/notifications/**`, `lib/repositories/notifications.repository.ts` | `docs/notes/notifications.md` |
 | `documents/legal/**`, `lib/legal/**`, `components/legal/**`, the `legal` links in `brand.json` | `documents/legal/README.md` |
@@ -481,7 +481,7 @@ The embed must **never** import React, HeroUI, Motion, TanStack Query, Zustand, 
 
 Target: **under 250KB gzipped including MapLibre.** If a change pushes it over, flag it.
 
-**Measured, that target is unreachable with MapLibre v6** — its own dist files are 297.4KB gzipped at 6.11.2 (`maplibre-gl.mjs` 146.9 + `maplibre-gl-shared.mjs` 144.6 + the worker 6.0), minified already, with no slim build. Actual total is **344.6KB**, of which ours is 47.1KB (minified, loader and map chunk together). `npm run build:embed` enforces a **49.2KB budget on our code** and a **305KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 47.1KB.
+**Measured, that target is unreachable with MapLibre v6** — its own dist files are 297.4KB gzipped at 6.11.2 (`maplibre-gl.mjs` 146.9 + `maplibre-gl-shared.mjs` 144.6 + the worker 6.0), minified already, with no slim build. Actual total is **345.8KB**, of which ours is 48.3KB (minified, loader and map chunk together). `npm run build:embed` enforces a **49.2KB budget on our code** and a **305KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 48.3KB.
 
 The own-code budget has been raised six times — 42 → 46 → 47 → 48 → 48.1 → 49.2KB — and each raise is argued in `scripts/check-embed-size.mjs` rather than merely recorded. It **must not be raised to get past a binding budget**: a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam — the bottom-sheet drawer was built that way, clawed from 285 bytes over to 18 under without touching the number. The fourth raise is the counter-example and is labelled as one: carrying *both* narrow-screen drawers cost 162 bytes, four trims paid back 18 of them, and the remaining 144 was the owner's call taken with the numbers on the table rather than a conclusion the file reached. The fifth (split dots where dotted routes share a road) was the same kind of call: granted at 75 bytes over for a first design that failed, and its replacement costs ~163 bytes, 63 over the old 48KB. The sixth (routes sharing a road take turns, dot by dot and dash by dash) was granted by the owner in advance and cost ~990 bytes: MapLibre cannot alternate symbol dots across tile edges, so the embed places them itself. The bundle was **not minified** then (Vite library mode leaves ES output alone), which is why it cost that much. Minification was switched on afterwards (2026-09-26, `output.minify` in `embed/vite.config.mts`) and took ours from 49.1KB to 45.6KB; the embed's language table, badge and page events were paid for out of that without a seventh raise.
 
@@ -565,8 +565,9 @@ theme keys stay short.
 has, where they sit and in what order stay in `cardDesigns`, one row per account.
 
 `color` is this location's own pin colour (`#rrggbb`, `""` for none), from an imported
-file's colour column or Edit location. It ranks under a custom pin's colour and over the
-first tag's — `docs/notes/tags-and-pins.md`.
+file's colour column or the row menu's Pin colour. It ranks under a custom pin's colour
+and over its group's and first tag's; joining a group clears it —
+`docs/notes/tags-and-pins.md`.
 
 `logoId` is this location's own brand mark, as a storage file id — not the image
 on the map's custom pin, which is `pinIcons` and is shared by every location

@@ -42,7 +42,18 @@ import { useTutorialLayout } from "./use-tutorial-layout";
  * Portalled to the body because `fixed` is only fixed to the viewport when no
  * ancestor has a transform, and this renders inside the page's own tree.
  */
-export function Tutorial({ id }: { id: TutorialId }) {
+export function Tutorial({
+  id,
+  callouts = CALLOUTS[id],
+}: {
+  id: TutorialId;
+  /**
+   * What it points at, when this overlay has more than one wording — the
+   * editor's, on a map that already has locations. A module constant: it is an
+   * effect dependency below.
+   */
+  callouts?: readonly Callout[];
+}) {
   // The server snapshot says dismissed, so nothing is drawn until hydration.
   const isDismissed = useSyncExternalStore(
     subscribeTutorials,
@@ -77,7 +88,7 @@ export function Tutorial({ id }: { id: TutorialId }) {
   if (isDismissed || open !== id) return null;
 
   return createPortal(
-    <TutorialOverlay callouts={CALLOUTS[id]} onClose={close} onHideAll={hideAll} />,
+    <TutorialOverlay callouts={callouts} onClose={close} onHideAll={hideAll} />,
     document.body,
   );
 }

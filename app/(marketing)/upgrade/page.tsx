@@ -5,7 +5,6 @@ import {
   UpgradeFailed,
   UpgradeSignedOut,
 } from "@/components/billing/upgrade-notice";
-import { Section } from "@/components/marketing/section";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { BillingError, getBilling } from "@/lib/billing";
 import { billingStanding } from "@/lib/billing/standing";
@@ -41,6 +40,7 @@ export default async function UpgradePage(props: PageProps<"/upgrade">) {
   const parsed = checkoutSchema.safeParse({
     plan: search.plan,
     cadence: search.cadence,
+    code: search.code,
   });
 
   // A hand-typed or stale link. The plans are the only place to go from here.
@@ -49,11 +49,7 @@ export default async function UpgradePage(props: PageProps<"/upgrade">) {
   const user = await getCurrentUser();
 
   if (!user) {
-    return (
-      <Section eyebrow="Plans" headingLevel="h1" title="Nearly there">
-        <UpgradeSignedOut plan={parsed.data.plan} />
-      </Section>
-    );
+    return <UpgradeSignedOut plan={parsed.data.plan} code={parsed.data.code} />;
   }
 
   /*
@@ -80,6 +76,7 @@ export default async function UpgradePage(props: PageProps<"/upgrade">) {
       cadence: parsed.data.cadence,
       email: user.email,
       userId: user.id,
+      discountCode: parsed.data.code,
     });
 
     url = checkout.url;
@@ -92,13 +89,12 @@ export default async function UpgradePage(props: PageProps<"/upgrade">) {
      * text is written to be read by them.
      */
     return (
-      <Section eyebrow="Plans" headingLevel="h1" title="Something went wrong">
-        <UpgradeFailed
-          plan={parsed.data.plan}
-          cadence={parsed.data.cadence}
-          message={error.message}
-        />
-      </Section>
+      <UpgradeFailed
+        plan={parsed.data.plan}
+        cadence={parsed.data.cadence}
+        code={parsed.data.code}
+        message={error.message}
+      />
     );
   }
 

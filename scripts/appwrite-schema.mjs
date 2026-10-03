@@ -762,6 +762,24 @@ export const TABLES = [
       { key: "idx_emaillog_day", type: "key", columns: ["day"], orders: ["asc"] },
     ],
   },
+  {
+    // The discount the operator chose to show on /pricing for everybody — one
+    // row at most, replaced whole when another is chosen. The discount itself
+    // lives at the payment provider (docs/notes/billing.md, "Discounts"); this
+    // names it and nothing more, and the pricing lookup re-checks it there.
+    //
+    // No permission: the admin client is the only reader and writer.
+    id: "promotions",
+    name: "Promotions",
+    columns: [
+      varchar("discountId", 20, { required: true }),
+      varchar("code", 64, { required: true }),
+      datetime("featuredAt", { required: true }),
+    ],
+    indexes: [
+      { key: "idx_promotions_featured", type: "key", columns: ["featuredAt"], orders: ["desc"] },
+    ],
+  },
 ];
 
 /**

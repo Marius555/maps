@@ -97,9 +97,10 @@ const optionalUrl = z.union([z.url("Enter a valid URL, including https://"), z.l
  * This location's own pin colour, or "" for none.
  *
  * "" rather than null, on `groupId`'s terms: it is what the column holds for a
- * location that never had one, and what Edit location's "Use theme colour"
- * sends to clear it. Absent means what a pin did before the field existed — its
- * custom pin's colour, then its first tag's, then the theme's.
+ * location that never had one, and what the Pin colour picker's first swatch
+ * and joining a group send to clear it. Absent means what a pin did before the
+ * field existed — its group's, its custom pin's colour, its first tag's, then
+ * the theme's.
  */
 export const placeColorSchema = z.union([hexColorSchema, z.literal("")]);
 
@@ -206,7 +207,9 @@ export const placeFormSchema = z.object({
   tags: placeTagsSchema,
   fields: placeFieldsSchema,
   icon: pinIconRefSchema,
-  color: placeColorSchema,
+  // No `color`: the pin's colour is the row menu's (`components/places/pin-color`),
+  // and leaving it out of the form is what keeps a Save here from writing the
+  // value the dialog opened with over one picked there meanwhile.
   description: z.string().max(5000),
   phone: z.string().trim().max(32),
   email: optionalEmail,

@@ -525,6 +525,15 @@ export function createMap(
      */
     maxWidth: "none",
     offset: DOT_POPUP_OFFSET,
+    /*
+     * **Off, and the map's first click listener does the job instead** (load
+     * handler). MapLibre's own close-on-click is a listener `addTo` re-adds, and
+     * `fire` iterates a copy of the list taken before the pin's handler ran — so
+     * a second pin pressed with a card open re-registered it, the stale copy
+     * still held it, and it shut the card that had just opened. Every second pin
+     * took two presses.
+     */
+    closeOnClick: false,
   });
 
   let places = snapshot.places;
@@ -603,6 +612,10 @@ export function createMap(
     });
 
     addLayers(map, snapshot);
+    // First, so every click on the map shuts the open card *before* a pin's or
+    // a shape's handler opens the next one — the job `closeOnClick` was doing,
+    // without its re-entrancy (see the Popup above).
+    map.on("click", () => popup.remove());
     wireInteractions(map, (place) => showPopup(place), track);
     wireShapeInteractions(
       map,
@@ -660,6 +673,11 @@ export function createMap(
    * it before the camera moves, so the pass here only checks the landing.
    */
   const showPopup = (place: SnapshotPlace, fly?: boolean) => {
+    // Shut before the selection moves, as the bare branch of `focusPlace` does:
+    // `addTo` on an open popup fires its close event, which would clear the
+    // selection `setOpen` is about to make. A list row pressed with a card open
+    // was left unmarked by exactly that.
+    popup.remove();
     setOpen(place.id);
 
     /*

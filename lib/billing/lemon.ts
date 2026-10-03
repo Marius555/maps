@@ -3,6 +3,8 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { env } from "@/lib/env";
+import { assertNumericId, BillingError, send } from "./lemon-api";
+import { createDiscount, deleteDiscount, listDiscountRedemptions, listDiscounts } from "./lemon-discounts";
 import type {
   BillingCadence,
   BillingProvider,
@@ -26,6 +28,7 @@ import type {
  * `on_trial`, the JSON:API envelope — is translated at this boundary and nothing
  * outside `lib/billing/` sees any of it, which is what CLAUDE.md §7 asks of a
  * provider folder and what lets §6's provider-neutral column names stay honest.
+ * The HTTP plumbing is `lemon-api.ts`; discounts are `lemon-discounts.ts`.
  *
  * Test mode is decided by the **key**, not by a flag we send. A test key produces
  * test checkouts and test webhooks; a live key produces real ones. There is
@@ -33,28 +36,7 @@ import type {
  * could be left switched the wrong way on the day real money starts arriving.
  */
 
-const API = "https://api.lemonsqueezy.com/v1";
-
-/** JSON:API, which the provider requires on both headers rather than `application/json`. */
-const MEDIA_TYPE = "application/vnd.api+json";
-
-/**
- * Longer than a page would wait, shorter than the platform's own request cap.
- *
- * Appwrite Sites cuts every request off at 30 seconds (CLAUDE.md §12), so a
- * checkout that hangs must fail with a message rather than be killed without one.
- */
-const TIMEOUT_MS = 10_000;
-
-export class BillingError extends Error {
-  constructor(
-    message: string,
-    readonly status?: number,
-  ) {
-    super(message);
-    this.name = "BillingError";
-  }
-}
+export { BillingError };
 
 export function createLemonProvider(): BillingProvider {
   return {
@@ -65,96 +47,23 @@ export function createLemonProvider(): BillingProvider {
     cancelSubscription,
     resumeSubscription,
     changePlan,
+    createDiscount,
+    listDiscounts,
+    listDiscountRedemptions,
+    deleteDiscount,
   };
-}
-
-function apiKey(): string {
-  /*
-   * Read at call time, not at module load, and named in the failure.
-   *
-   * The same posture `lib/geoapify/client.ts` takes: a missing key should fail
-   * the one thing that needs it, with the variable's name in the message, rather
-   * than throw during import and take down every page in the dashboard including
-   * the ones that have nothing to do with billing.
-   */
-  if (!env.lemonApiKey) {
-    throw new BillingError(
-      "LEMON_API_KEY is not set, so checkout is unavailable. Add it to .env and restart.",
-    );
-  }
-
-  return env.lemonApiKey;
 }
 
 /**
  * The provider's subscription ids are integers, and anything else is refused
- * before it reaches a URL.
- *
- * The id comes from our own `subscriptions` row, which only the admin client may
- * write — but that was not always so (see `ownerPermissions`), and a value like
- * `../customers/1` spliced into `/subscriptions/${id}` would have sent the
- * store's API key to whichever endpoint it named. A 404 is the answer a bad id
- * deserves, so that is the status it carries.
+ * before it reaches a URL — see `assertNumericId`.
  */
 export function assertSubscriptionId(id: string): string {
-  if (!/^\d{1,20}$/.test(id)) {
-    throw new BillingError("That subscription id isn't one the payment provider issued.", 404);
-  }
-
-  return id;
+  return assertNumericId(id, "subscription id");
 }
 
 function subscriptionPath(id: string): string {
   return `/subscriptions/${assertSubscriptionId(id)}`;
-}
-
-async function send<T>(
-  path: string,
-  init: { method: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown },
-): Promise<T> {
-  const key = apiKey();
-
-  let response: Response;
-
-  try {
-    response = await fetch(`${API}${path}`, {
-      method: init.method,
-      headers: {
-        accept: MEDIA_TYPE,
-        "content-type": MEDIA_TYPE,
-        authorization: `Bearer ${key}`,
-      },
-      body: init.body ? JSON.stringify(init.body) : undefined,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-  } catch (error) {
-    // The cause is logged rather than carried: the route turns a BillingError
-    // into one sentence for the customer, and a DNS failure and a timeout read
-    // the same to them but not to us.
-    console.error("Lemon Squeezy is unreachable:", error);
-
-    throw new BillingError("Couldn't reach the payment provider.");
-  }
-
-  if (!response.ok) {
-    /*
-     * The body is logged and never returned. It can name the store, the variant
-     * and the key's own scopes, none of which is a customer's business — and the
-     * customer's next action is the same whatever it says.
-     */
-    console.error(
-      `Lemon Squeezy ${init.method} ${path} failed: ${String(response.status)} ${await response
-        .text()
-        .catch(() => "")}`,
-    );
-
-    throw new BillingError(
-      "The payment provider refused that. Try again in a moment.",
-      response.status,
-    );
-  }
-
-  return (await response.json()) as T;
 }
 
 function variantFor(plan: PaidPlanId, cadence: BillingCadence): string {
@@ -201,6 +110,13 @@ async function createCheckout(request: CheckoutRequest): Promise<Checkout> {
             user_id: request.userId,
             user_sig: checkoutUserSignature(request.userId),
           },
+          /*
+           * Pre-filled from a share link (`/upgrade?…&code=`). Only a code, never
+           * an amount: the provider looks the code up and decides what it is
+           * worth, so a hand-edited link can name a code but never a price.
+           * Absent, the checkout is exactly what it was before discounts.
+           */
+          ...(request.discountCode ? { discount_code: request.discountCode } : {}),
         },
         product_options: {
           /*

@@ -77,6 +77,21 @@ building the same card from the same functions in `packages/shared/`.
   constant is not somewhere to write.
 - The Links row's flags are spelled as the hidden state (`hidePhone`, `hideEmail`,
   `hideWebsite`, `hideDirections`) — `true` or absent, never `false`.
+- **The gallery is the first photo alone, with a pointer cursor, and a press opens every
+  photo full screen** (2026-10-03, replacing the in-card chevrons). **No counter in either
+  twin, on the card or in the lightbox** — a `1/N` badge and a `1 / N` heading were built and
+  taken out on request the same day; the position is only told to assistive tech (the
+  embed's image `alt`, the dashboard's `sr-only` live region). Not `zoom-in`: asked for the
+  plain hand. The embed opens `embed/src/lightbox.ts`; the dashboard opens
+  `components/ui/photo-lightbox/`, and **only where `GalleryLightboxContext` is provided**,
+  which is the editor map's place card alone. The designer canvas and its drag preview leave
+  it unset on purpose, so a press on the photo there still selects or picks up the block. In
+  card edit mode the overlay makes the photo inert, so the two never compete.
+- **The card's close is a bare X in the foreground colour, no tile and no hover state**, in
+  both twins (`.maplibregl-popup-close-button`, the Close button in `place-card-chrome.tsx`).
+  The embed's `:hover` selector exists only to cancel MapLibre's 5% grey, and the dashboard's
+  `hover:`/`data-[hovered]:` transparents cancel HeroUI's tertiary hover. "Black" is the
+  foreground: near-black on a light map, light on a dark one, so it never vanishes.
 
 ### Layout and blocks
 
@@ -636,7 +651,7 @@ more here than any amount of cleverness about contrast.
   card as it normally stands; edit mode changes how a block is *drawn*. The two used to
   share a block and could not both have its box.
 - **The mode moves, the pointer stops it.** Every block breathes
-  (`.card-block-editable`, `card-block-breathe`, 1.2% at 2.4s) for as long as edit mode is
+  (`.card-block-editable`, `card-block-breathe`, 3% at 2.4s — 1.2% could not be seen) for as long as edit mode is
   on; the block under the pointer drops the animation and outlines itself in dashed accent.
   Both halves are needed — the card is otherwise identical in and out of the mode, and an
   affordance that only appears under the pointer is one you have to already be on to see.
@@ -1731,7 +1746,7 @@ stands is where a location's *content* is filled in, and edit mode is where the
 pixels, which is what freed the box.
 
 **The card breathes while the mode is on, and the pointer is what stops one
-block.** `.card-block-editable` runs `card-block-breathe` — 1 to 1.012 and back,
+block.** `.card-block-editable` runs `card-block-breathe` — 1 to 1.03 and back (it was 1.012, which nobody could see),
 2.4s, ease-in-out, on every block the overlay covers — and the block under the
 pointer drops the animation and outlines itself in a dashed accent rectangle with
 an `--accent-soft` tint under it.

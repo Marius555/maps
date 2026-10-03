@@ -470,21 +470,37 @@ html:has([data-app-frame]) {
 }
 
 /*
- * Everything MapLibre stacks in a bottom corner, lifted clear of whatever the
- * page has parked there.
+ * The zoom stack, lifted clear of whatever the page has parked over the map.
  *
  * The editor's locations panel is a bottom sheet below `lg`, and its peek strip
- * sits over the map — directly on top of the zoom stack and the attribution bar
- * in the default corner. Attribution that is covered is attribution that is
- * absent (§12), so the frame raises both by exactly the height of the strip.
+ * sits over the bottom of the map, so the frame raises the zoom stack by exactly
+ * the height of the strip.
+ *
+ * **Only the left corner.** The attribution ⓘ in the right one is left where it
+ * is, under the sheet, on purpose: the owner's call that the editor's ⓘ belongs
+ * behind the locations panel, not beside it. Scoped to the editor, where
+ * `--map-chrome-inset` is set; the embed and the publish preview keep theirs in
+ * view (§12). See docs/notes/editor-and-layout.md.
  *
  * Two classes deep, because maplibre-gl.css declares `bottom: 0` on the single
  * class and rides in on map-canvas-impl's own dynamic chunk — injected *after*
  * this file, so equal specificity would lose.
  */
-[data-map-theme] .maplibregl-ctrl-bottom-left,
-[data-map-theme] .maplibregl-ctrl-bottom-right {
+[data-map-theme] .maplibregl-ctrl-bottom-left {
   bottom: var(--map-chrome-inset, 0px);
+}
+
+/*
+ * The same ⓘ at `lg`, where the panel is a column beside the map, not over it:
+ * the map stops short of the panel, so nothing can cover the corner, and the
+ * result the owner asked for (no ⓘ beside the panel) is drawn directly.
+ * Unlayered rather than a Tailwind `lg:` utility, because maplibre-gl.css is
+ * unlayered too and would beat anything in `@layer utilities`.
+ */
+@media (width >= 64rem) {
+  [data-attribution="under-panel"] .maplibregl-ctrl-attrib {
+    display: none;
+  }
 }
 
 /*
@@ -773,11 +789,13 @@ html:has([data-app-frame]) {
  * every pass. Transforming the box takes its clip with it, so what moves is the
  * whole block, picture and border and all.
  *
- * 1.2%, which on a 320px card is under four pixels at the top of the swell, and
- * 2.4s, which is slow enough to read as breathing rather than as a throb. Both
- * numbers are deliberately under what a corner badge cost: this runs on six
- * blocks at once for as long as the mode is on, so it is a movement you notice
- * and not one you have to look away from.
+ * 3%, which on a 320px card is about ten pixels at the top of the swell, and
+ * 2.4s, which is slow enough to read as breathing rather than as a throb. It
+ * was 1.2% — under four pixels — and that was too little to be seen at all,
+ * which left edit mode with nothing saying it had started. The slow period is
+ * what keeps the larger swell calm: this runs on six blocks at once for as long
+ * as the mode is on, so it has to be a movement you notice and not one you have
+ * to look away from.
  *
  * Transform-only, so it composites and never lays out — `blockContentStyle`'s
  * `zoom` is the one that changes a flex basis, and this is not that.
@@ -789,7 +807,7 @@ html:has([data-app-frame]) {
   }
 
   50% {
-    transform: scale(1.012);
+    transform: scale(1.03);
   }
 }
 
@@ -4193,9 +4211,25 @@ body.is-pin-dragging * {
  * published map, which draws its own ring in the *customer's* accent
  * (embed/src/styles.css) — a second ring over it would be our chrome leaking
  * onto their design.
+ *
+ * `:not(input):not(textarea)` because HeroUI rings its own fields: this outline
+ * on top of that ring drew /pricing's discount field with two borders.
  */
-.mk-site :focus-visible:not(.lm-root *) {
+.mk-site :focus-visible:not(.lm-root *):not(input):not(textarea) {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
   border-radius: 6px;
+}
+
+/*
+ * /pricing's cards, held back until the discount is known (`usePricingOffer`'s
+ * `settled`), so they paint once with the right ring and prices. Only where
+ * scripts run: with them off nothing would ever settle, and the cards show
+ * undiscounted, as they always did. `visibility` keeps their space, so the
+ * toggle row above does not move when they appear.
+ */
+@media (scripting: enabled) {
+  .pricing-pending {
+    visibility: hidden;
+  }
 }

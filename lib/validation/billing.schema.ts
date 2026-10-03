@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { DISCOUNT_CODE_PATTERN } from "./discount.schema";
+
 /**
  * What `/upgrade` may be asked to open a checkout for.
  *
@@ -15,12 +17,19 @@ import { z } from "zod";
  *
  * `free` is deliberately not in the enum. It is not something you buy, and
  * accepting it would mean a checkout that has to decide what a €0 purchase means.
+ *
+ * `code` is a discount code from a share link (docs/notes/billing.md,
+ * "Discounts") — a code, never an amount; the provider decides what it is
+ * worth. A malformed one is **dropped, not refused**: the buyer still gets the
+ * checkout, whose own code box is right there, rather than being bounced to
+ * `/pricing` over a typo in somebody else's link.
  */
 export const checkoutSchema = z.object({
   plan: z.enum(["starter", "pro"], {
     message: "Choose the Starter or Pro plan.",
   }),
   cadence: z.enum(["monthly", "yearly"]).default("monthly"),
+  code: z.string().trim().toUpperCase().regex(DISCOUNT_CODE_PATTERN).optional().catch(undefined),
 });
 
 export type CheckoutInput = z.output<typeof checkoutSchema>;

@@ -36,6 +36,24 @@ const MAPS: readonly Callout[] = [
   },
 ];
 
+const IMPORT: Callout = {
+  id: "import",
+  targets: [
+    {
+      selector: "locations-link",
+      side: "right",
+      title: "Have a list of locations?",
+      body: "CSV, Excel, XML or a Google Sheet.",
+    },
+    {
+      selector: "nav-menu",
+      side: "right",
+      title: "Import a list",
+      body: "Menu, then Locations. CSV, Excel, XML or a Google Sheet.",
+    },
+  ],
+};
+
 const EDITOR: readonly Callout[] = [
   {
     id: "add-location",
@@ -48,23 +66,27 @@ const EDITOR: readonly Callout[] = [
       },
     ],
   },
+  IMPORT,
+];
+
+/**
+ * The same overlay on a map that already has locations — imported from the
+ * Locations page before the editor was ever opened. "Your first" would be
+ * false there; the controls it points at are the same.
+ */
+export const EDITOR_WITH_PLACES: readonly Callout[] = [
   {
-    id: "import",
+    id: "add-location",
     targets: [
       {
-        selector: "locations-link",
-        side: "right",
-        title: "Have a list of locations?",
-        body: "CSV, Excel, XML or a Google Sheet.",
-      },
-      {
-        selector: "nav-menu",
-        side: "right",
-        title: "Import a list",
-        body: "Menu, then Locations. CSV, Excel, XML or a Google Sheet.",
+        selector: "add-location",
+        side: "below",
+        title: "Add a Location",
+        body: "Press the pin, then click the map.",
       },
     ],
   },
+  IMPORT,
 ];
 
 // The only arrow on screen, so it can afford to say what a card is for.

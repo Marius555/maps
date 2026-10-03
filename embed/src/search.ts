@@ -53,16 +53,9 @@ export type SearchFieldOptions = {
   gazetteer: Gazetteer;
   /**
    * A control to sit inside the field, at its trailing end — in practice
-   * find-nearest, when the map ships one.
-   *
-   * The slot it takes used to hold a magnifier that did nothing (`pointer-events:
-   * none`, a picture), while the one live control next to it spent a whole 34px
-   * of a toolbar that is short of room at exactly the widths the drawer exists
-   * for. A field that says "search" by having a search control in it says more
-   * than one that says it with a drawing.
-   *
-   * Absent, the magnifier is drawn instead: a map with Nearest switched off
-   * still has to read as a search box rather than a bare text input.
+   * find-nearest, on a map with no results panel to hold it. Absent, the field
+   * has nothing at its end: the magnifier that used to fill the slot was asked
+   * to go.
    */
   action?: HTMLElement;
 };
@@ -110,25 +103,15 @@ export function createSearchField({
   list.hidden = true;
 
   /*
-   * Inside the field, at the end of it — a control if the caller passed one,
-   * and otherwise a magnifier.
+   * Inside the field, at the end of it, when the caller passed a control — at
+   * the *end* rather than the start, because the placeholder is a sentence and
+   * a leading glyph pushes it far enough right that a narrow panel truncates it.
    *
-   * Either way it is at the *end* rather than the start, because the placeholder
-   * is a sentence and a leading glyph pushes it far enough right that a narrow
-   * panel truncates it.
-   *
-   * The magnifier is a picture, not a button: `pointer-events: none` in the
-   * stylesheet keeps the whole field clickable through it, since the one thing
-   * worse than no icon in an input is a dead patch at the end of the box
-   * somebody is trying to click into. A real control does not want that, which
-   * is why the two share a position and not a class.
+   * There is no magnifier any more, with or without one: it was asked to go,
+   * and the placeholder already says what the field is for.
    */
-  const trailing =
-    action ??
-    icon(["M21 21l-4.3-4.3", "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16"]);
-  if (!action) trailing.classList.add("lm-search__icon");
-
-  wrapper.append(label, input, trailing, list);
+  wrapper.append(label, input, list);
+  if (action) input.after(action);
 
   let hits: GazetteerHit[] = [];
   let active = -1;
@@ -307,7 +290,6 @@ export function createNearestButton(
 ): HTMLButtonElement {
   const control = button(variant, "");
 
-  setNearestOn(control, false);
   control.append(
     icon([
       "M2 12h3",
@@ -318,6 +300,10 @@ export function createNearestButton(
       "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
     ]),
   );
+  // At the foot of the results panel it is a full-width button, and a button
+  // that wide says its name rather than leaving a glyph alone in a bar.
+  if (variant === "lm-nearest") control.append(el("span"));
+  setNearestOn(control, false);
 
   control.addEventListener("click", () => {
     if (control.disabled) return;
@@ -347,6 +333,10 @@ export function setNearestOn(control: HTMLButtonElement, on: boolean): void {
 
   control.classList.toggle("lm-button--on", on);
   control.setAttribute("aria-pressed", String(on));
+  // The footer's visible word, which has to change with the state for the same
+  // reason the name does.
+  const word = control.querySelector("span");
+  if (word) word.textContent = label;
   control.setAttribute("aria-label", label);
   control.title = label;
 }

@@ -1,4 +1,5 @@
 import { SiteFooter } from "@/components/brand/site-footer";
+import { MarketingMain } from "@/components/layout/page-transition/marketing-main";
 import { SiteHeader } from "@/components/marketing/site-header";
 
 // Annotated explicitly rather than with LayoutProps<"/">: route groups are
@@ -16,7 +17,7 @@ export default function MarketingLayout({
           deliberate: one public site, one way in. */}
       <SiteHeader />
 
-      <main className="flex flex-1 flex-col">{children}</main>
+      <MarketingMain>{children}</MarketingMain>
 
       <SiteFooter />
     </div>

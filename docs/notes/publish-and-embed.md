@@ -396,7 +396,8 @@ rewritten; it is the record of why this area is shaped as it is.
   So it stays `transform` and every selector is weighed by hand. Check the built bundle,
   not the source, after touching any of it — verified this pass:
   `transform:translateY(calc(100% - 44px))` closed and `transform:translateY(0)` open,
-  and the only `translate:` left in the bundle is `.lm-search__icon`'s.
+  and the only `translate:` left in the bundle is `.lm-search__action`'s (the magnifier that
+  shared it is gone).
 - **The RTL selector survived the move to a bottom sheet, and it is no longer a
   mirror — it is a weight.** A sheet has nothing to mirror, so the instinct is to delete
   it. `[dir="rtl"] .lm-root[data-lm-float][data-lm-side="right"] .lm-panel` sits
@@ -469,18 +470,76 @@ rewritten; it is the record of why this area is shaped as it is.
   thinly supported by screen readers, and would cost the list a literal `id` that a
   second map on the page would collide with. The dashboard's sheet names one because its
   content is not a sibling.
-- **Find-nearest lives inside the search field.** The magnifier there was a picture
-  (`pointer-events: none`) while the one live control beside it spent 34px of a row
-  that runs out of width first on exactly the maps the drawer is for; at 390px the
-  floating toolbar is now the field and nothing else, the drawer's own trigger having
-  become the grab strip at the foot of the sheet. `createSearchField`
-  takes an `action`, and with none it draws the magnifier as before — a map with
-  Nearest switched off still has to read as a search box. **The in-field control
-  wears `lm-search__action` *instead of* `lm-button lm-button--icon`, not beside
-  it**: `.lm-toolbar--docked .lm-button` paints a 6% well at two classes from a
-  thousand lines further down, which one class cannot answer at any source
-  position. `setNearestOn` is unchanged, so the lit rule still has to out-weigh
-  `.lm-toolbar--docked .lm-button--on` and is scoped through `.lm-search` to do it.
+- **Find-nearest is a full-width button at the foot of the results panel** (`foot`,
+  `.lm-panel__foot`, the `"lm-nearest"` variant of `createNearestButton`), below the list it
+  re-sorts — asked for directly on 2026-10-03. It shows its word as well as the crosshair,
+  and `setNearestOn` keeps that word in step with the lit state. **It only lives there when
+  there is a panel**: with `list` off it is still the in-field `lm-search__action`, or the
+  toolbar control when search is off too, so those rules stay. The footer is parked with the
+  list in a drawer and made `inert` with it at the three sites that set `list.inert` — a
+  parked sheet's button must not be reachable by Tab. Empty, `:empty` hides the footer.
+  *Superseded:* it used to live inside the search field, where a magnifier that did nothing
+  had been; that was undone because a glyph at the end of the field read as part of search.
+- **The search row's arrow folds a side panel to its edge (`data-lm-shut`).** One button
+  (`fold`, `lm-collapse`) named "Locations" with `aria-expanded`, like the sheet's strip,
+  so no new string. It sits on the edge facing the map — first on a right panel, last on a
+  left one, by `order` — because that edge is the 44px left on screen when it folds. Docked,
+  the panel's `flex-basis` goes to 44px and MapLibre's own ResizeObserver widens the map;
+  floating, it slides by `translateX` its width less the strip, each rule one attribute over
+  the open one it replaces (RTL included). Shut, everything but the arrow is
+  `visibility: hidden` after the 180ms slide, which also takes it out of the tab order.
+  **Every shut rule is inside `@container lm (min-width: 769px)` and the arrow is hidden
+  below it**: under that width the drawer or the stacked layout has its own answer, and a
+  map left shut and then narrowed (the device toggle does this) must draw its narrow layout
+  untouched. **The docked rule must say `:not([data-lm-float])`** — it sets
+  `position: relative`, and on a floating panel that put it back in the flow (measured: a
+  44px panel translated off the edge, the map shrunk to make room for nothing).
+  **Shut, find-nearest stays too**, as the arrow's twin: the footer pins to the strip's
+  foot, its word `display: none`, the button a bare 36px glyph (the lit tint kept). **The
+  arrow is `lm-button--icon` without `lm-button`**, so it has no ground: every toolbar well
+  rule keys off `lm-button`. With the arrow and find-nearest both out of the docked toolbar,
+  the `.lm-toolbar--docked .lm-button*` rules were dead and are deleted; a docked field is
+  bare text too (no well, no shadow), asked for directly, focus still drawn as a border.
+- **A horizontal swipe folds and unfolds the side panel too** (`panel.onpointerdown` next
+  to `fold`, sharing `follow()` with the sheet's drag). **Touch and pen only** — a mouse drag
+  across the list is somebody selecting an address, and the arrow is one click away — never
+  from inside the field, and only above `DRAWER_MAX_WIDTH`, where the sheet has the gesture.
+  Which way "shut" is comes from the screen (panel centre against root centre), so sides and
+  RTL need no branch. Floating, the panel follows the finger by appending a `translateX` to
+  its computed transform; docked it cannot (its open width is unknown while shut) and snaps
+  on release past `SHEET_SNAP`. `touch-action: pan-y` on the panel, inside the wide query,
+  is what hands the horizontal moves over while the list keeps scrolling. Verified with
+  synthetic touch pointers: follows, shuts, opens, and ignores vertical, mouse and short moves.
+- **MapLibre's corners stand beside a floating panel, never on it (§12).** Both are
+  `z-index: 2` and the canvas comes later, so the attribution ⓘ (and a badge or zoom buttons
+  in that corner) drew over the panel. Asked as "hide the attribution behind the sidebar" —
+  hidden is what §12 forbids, so the owner chose moving it. A `margin-inline-*` of the
+  panel's width plus the gutter on every `.maplibregl-control-container > *`: a corner pinned
+  `right: 0` ignores a left margin, so only the corners on the panel's edge move, RTL
+  included, with no per-corner selectors. Shut, the margin is 54px (strip and gutter). Wide
+  query only, like the shut rules; measured 10px clear open and 20px clear shut.
+- **The search field has no magnifier, with or without find-nearest in it** — asked to go.
+  `createSearchField` appends `action` only when passed, and the input's end padding is 40px
+  only under `.lm-search:has(.lm-search__action)`.
+- **The popup is `closeOnClick: false`, and the map's first click listener shuts it
+  instead.** MapLibre's close-on-click is a listener `addTo` re-adds, and `fire` iterates a
+  copy taken before the pin's handler ran — so pressing a second pin with a card open shut
+  the card that had just opened, and every second pin took two presses. The replacement is
+  registered before the pin and shape handlers, so it runs first and they re-open. And
+  `showPopup` calls `popup.remove()` *before* `setOpen`, as `focusPlace`'s bare branch
+  already did: `addTo` on an open popup fires `close`, which cleared the selection just made
+  — a row pressed with a card open was left unmarked. Verified in the publish preview: pin A,
+  then pin B, opens B in one press with B's row marked; an empty-map press closes it.
+- **The card's photo opens a full-screen lightbox, a `<dialog>` with `showModal()`**
+  (`embed/src/lightbox.ts`). The top layer escapes a host page's `transform`, `overflow` and
+  `z-index`; Escape, the focus trap and focus returning to the photo are the browser's.
+  Appended to `.lm-root` so it inherits the type, styled only under `[open]` so a closed one
+  draws nothing, removed on `close`. The dialog itself is the dark field, so a press whose
+  target is the dialog is a press outside the photo. **A hidden tab never fires `close`** —
+  measured, a bare test dialog doesn't either — so a probe in a minimised window sees a closed
+  dialog still in the DOM; that is the tab, not the code. No visible counter — it was asked
+  to go; the position is the photo's `alt`. The in-card chevrons are gone and
+  `track.ts` now counts `button.lm-popup__gallery` as the `gallery` press.
 - **`pinColor` is structural for the same kind of reason, and the reason is
   rasters.** Map markers and results rows are canvas images cached per
   `pinImageId(icon, color)`, so a custom property cannot recolour them — only a

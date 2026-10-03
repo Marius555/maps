@@ -55,6 +55,7 @@ export function EditorSidebar({
   groups,
   tagGroups,
   pinIcons,
+  defaultPinColor,
   placeLimit,
   selectedPlaceId,
   selectedShapeId,
@@ -86,6 +87,8 @@ export function EditorSidebar({
   tagGroups: MapTagGroup[];
   /** The map's own pins, so a row can draw a `custom:<id>` one. */
   pinIcons: CustomPinIcon[];
+  /** What a pin nothing else colours is painted — a row's Pin colour needs it. */
+  defaultPinColor: string;
   placeLimit: number;
   selectedPlaceId: string | null;
   selectedShapeId: string | null;
@@ -180,6 +183,7 @@ export function EditorSidebar({
             shapes={shapes}
             tagGroups={tagGroups}
             pinIcons={pinIcons}
+            defaultPinColor={defaultPinColor}
             selectedPlaceId={selectedPlaceId}
             selectedShapeId={selectedShapeId}
             selectedPlaceIds={selectedPlaceIds}

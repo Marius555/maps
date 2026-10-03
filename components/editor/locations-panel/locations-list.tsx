@@ -11,6 +11,7 @@ import { UngroupDialog } from "@/components/groups/ungroup-dialog";
 import type { DraggedObject } from "@/components/groups/use-row-drag";
 import { DeletePlaceDialog } from "@/components/places/delete-place-dialog";
 import { PlaceListItem } from "@/components/places/place-list-item";
+import { pinThemeColor } from "@/components/places/pin-color/theme-color";
 import { DeleteShapeDialog } from "@/components/shapes/delete-shape-dialog";
 import { ShapeListItem } from "@/components/shapes/shape-list-item";
 import { RouteStopListItem } from "@/components/map/routes/route-stop-list-item";
@@ -100,6 +101,7 @@ export function LocationsList({
   shapes,
   tagGroups,
   pinIcons,
+  defaultPinColor,
   selectedPlaceId,
   selectedShapeId,
   selectedPlaceIds,
@@ -130,6 +132,8 @@ export function LocationsList({
   tagGroups: MapTagGroup[];
   /** The map's own pins, so a row can draw a `custom:<id>` one. */
   pinIcons: CustomPinIcon[];
+  /** The map's Default pin colour, the last thing a pin's Pin colour falls to. */
+  defaultPinColor: string;
   selectedPlaceId: string | null;
   selectedShapeId: string | null;
   /** Locations picked by the marquee or a group — lit like a selected row. */
@@ -386,6 +390,18 @@ export function LocationsList({
     onGroupObjects(action.objects[0], action.objects[1]);
   };
 
+  /** Pin colour for one location row — see `usePinColorMenu`. */
+  const pinColorMenuFor = (place: Place, groupColor: string | undefined) => ({
+    mapId,
+    themeColor: pinThemeColor({
+      groupColor,
+      tagGroups,
+      tags: place.tags,
+      defaultPinColor,
+    }),
+    isGrouped: Boolean(groupColor),
+  });
+
   /** Whether a row would do anything at all with what is in the air. */
   const accepts = (target: DropTargetRow) => (dragged: DraggedObject) =>
     dropAction(dragged, target, groupOf(dragged)) !== null;
@@ -513,6 +529,13 @@ export function LocationsList({
                   onRetryAddress={
                     onRetryAddress ? () => onRetryAddress(place.id) : undefined
                   }
+                  // Not on a row that exists only in the cache: its temporary
+                  // id is not one the server could PATCH.
+                  pinColorMenu={
+                    isOptimisticPlaceId(place.id)
+                      ? undefined
+                      : pinColorMenuFor(place, row.groupColor)
+                  }
                   /*
                    * Only offered where there is no group yet — and not on a row
                    * that exists only in the cache, whose temporary id the
@@ -588,6 +611,11 @@ export function LocationsList({
                     row.place
                       ? row.place.color ||
                         pinColorOfTags(tagGroups, row.place.tags)
+                      : undefined
+                  }
+                  pinColorMenu={
+                    row.place && !isOptimisticPlaceId(row.place.id)
+                      ? pinColorMenuFor(row.place, row.groupColor)
                       : undefined
                   }
                   // Same two windows a loose row uses, so a stop whose lookup is
