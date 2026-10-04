@@ -38,7 +38,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-5 sm:gap-7">
           {/*
-            Hidden below `sm` rather than folded into a menu. Three links do not
+            Hidden below `sm` rather than folded into a menu. Four links do not
             earn a hamburger, and the two that matter on a phone — the way in
             and the way to sign up — are the two that stay.
           */}
@@ -50,6 +50,9 @@ export function SiteHeader() {
           </NavLink>
           <NavLink href="/docs" className="hidden sm:inline">
             Documentation
+          </NavLink>
+          <NavLink href="/news" className="hidden sm:inline">
+            News
           </NavLink>
           <NavLink href="/login">Log in</NavLink>
 

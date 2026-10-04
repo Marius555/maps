@@ -1,5 +1,6 @@
 import type { ColumnMapping } from "@/lib/import/column-mapping";
 import { DEFAULT_MAP_STYLE, isMapStyleKey } from "@/lib/map/style";
+import { isNewsCategory, type NewsPost } from "@/lib/news/types";
 import {
   SHEET_SYNC_STATUSES,
   type SheetLink,
@@ -38,6 +39,7 @@ import {
   type MapSessionRow,
   type MapTagGroup,
   type MapRow,
+  type NewsRow,
   type NotificationRow,
   type Place,
   type PlaceRow,
@@ -387,5 +389,25 @@ export function toNotification(row: NotificationRow): AppNotification {
     linkLabel: linkUrl ? (row.linkLabel ?? null) : null,
     publishedAt: row.publishedAt,
     expiresAt: row.expiresAt || null,
+  };
+}
+
+/**
+ * A news post, with its cover's public URL composed here so the bucket id never
+ * reaches a client. A category no longer in the list reads as "announcements"
+ * rather than failing the page.
+ */
+export function toNewsPost(row: NewsRow): NewsPost {
+  return {
+    id: row.$id,
+    title: row.title,
+    slug: row.slug,
+    summary: row.summary,
+    body: row.body,
+    category: isNewsCategory(row.category) ? row.category : "announcements",
+    coverUrl: photoViewUrl(row.coverFileId),
+    coverAlt: row.coverAlt ?? "",
+    publishedAt: row.publishedAt || null,
+    updatedAt: row.$updatedAt,
   };
 }

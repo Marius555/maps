@@ -1,0 +1,8 @@
+{
+  "name": "sheet-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Runs the Google Sheets sync every 30 minutes by calling the dashboard's cron route, step by step.",
+  "type": "module",
+  "main": "src/main.js"
+}

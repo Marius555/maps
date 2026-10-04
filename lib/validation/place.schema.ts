@@ -91,7 +91,7 @@ export const openingHoursSchema = z
  * "" — which would fail every location saved without contact details.
  */
 const optionalEmail = z.union([z.email("Enter a valid email address."), z.literal("")]);
-const optionalUrl = z.union([z.url("Enter a valid URL, including https://"), z.literal("")]);
+const optionalUrl = z.union([z.url("Enter a valid web address, like acme.com"), z.literal("")]);
 
 /**
  * This location's own pin colour, or "" for none.

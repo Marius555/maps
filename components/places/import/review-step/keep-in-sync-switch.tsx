@@ -2,6 +2,7 @@
 
 import { Description, Switch } from "@heroui/react";
 
+import { AUTO_SYNC_EVERY } from "@/lib/sheet-sync/schedule";
 import { useImportStore } from "@/lib/stores/import-store";
 
 /**
@@ -41,7 +42,7 @@ export function KeepInSyncSwitch({ isAllowed }: { isAllowed: boolean }) {
       </Switch.Content>
       <Description className="text-pretty">
         {isAllowed
-          ? "Updated daily, or whenever you press Sync now. The sheet stays in charge: rows you edit or skip here come back as the sheet has them."
+          ? `Updated ${AUTO_SYNC_EVERY}, or whenever you press Sync now. The sheet stays in charge: rows you edit or skip here come back as the sheet has them.`
           : "Syncing with a sheet is included on the Starter and Pro plans."}
       </Description>
     </Switch>

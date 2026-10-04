@@ -48,7 +48,7 @@ const MAX_REPORTED_SKIPS = 5;
 /**
  * **The confirmed-address gate is not here, and must not be moved here.** It sits
  * in `app/api/maps/[id]/publish/route.ts`, where `withAuth` has a real Appwrite
- * user to read `emailVerified` from. This function's other caller is the nightly
+ * user to read `emailVerified` from. This function's other caller is the automatic
  * sheet sync, which republishes an already-live map from a cron with no session —
  * a check at this level would either break it or make every sync pay for a user
  * lookup. The route's docblock carries the full reasoning.
@@ -71,7 +71,7 @@ export async function publishMap(
    * Ownership is checked in the same batch as the reads, not ahead of them —
    * nothing below runs, and nothing is generated, unless `getMap` resolved.
    *
-   * The plan is the map's owner's rather than the caller's, because the nightly
+   * The plan is the map's owner's rather than the caller's, because the automatic
    * sheet sync republishes with no session — and the badge is the owner's
    * plan's answer. `ctx.userId` *is* the owner here: `getMap` refuses any map
    * whose `userId` differs, which is what lets this read join the batch rather
@@ -137,7 +137,7 @@ export async function publishMap(
  * Nothing is deleted and the live snapshot is left exactly as it was: the map on
  * the customer's site keeps working, and it is the next publish that waits until
  * the map fits or the plan does. Here rather than in the route because the
- * nightly sheet sync republishes through `publishMap` too, and must meet the
+ * automatic sheet sync republishes through `publishMap` too, and must meet the
  * same rule.
  */
 async function assertPublishable(

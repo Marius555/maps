@@ -1,8 +1,9 @@
 "use client";
 
-import { Input, Label, TextField } from "@heroui/react";
+import { Input, InputGroup, Label, TextField } from "@heroui/react";
 import { useState } from "react";
 
+import { linkForDisplay, linkForStorage } from "@/lib/card/button-link";
 import { useUpdatePlace } from "@/lib/query/places";
 import type { MapField, Place } from "@/lib/repositories/types";
 import { MAX_FIELD_VALUE_LENGTH } from "@/lib/validation/field.schema";
@@ -42,6 +43,8 @@ export function SlotFieldForm({
 }) {
   const updatePlace = useUpdatePlace(mapId);
   const [value, setValue] = useState(place.fields[field.id] ?? "");
+  // A link field shows `https://` beside the box, as the Website one does.
+  const isUrl = field.type === "url";
 
   const submit = async () => {
     try {
@@ -72,12 +75,19 @@ export function SlotFieldForm({
         fullWidth
         autoFocus
         type={INPUT_TYPES[field.type]}
-        value={value}
+        value={isUrl ? linkForDisplay(value) : value}
         maxLength={MAX_FIELD_VALUE_LENGTH}
-        onChange={setValue}
+        onChange={(typed) => setValue(isUrl ? linkForStorage(typed) : typed)}
       >
         <Label>{field.label}</Label>
-        <Input />
+        {isUrl ? (
+          <InputGroup fullWidth>
+            <InputGroup.Prefix className="pr-0 text-muted">https://</InputGroup.Prefix>
+            <InputGroup.Input placeholder="acme.com" />
+          </InputGroup>
+        ) : (
+          <Input />
+        )}
       </TextField>
     </SlotShell>
   );

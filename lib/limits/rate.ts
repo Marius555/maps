@@ -50,6 +50,12 @@ export const RATE_LIMITS = {
   authEmail: { per: "ip", limit: 10, windowMs: 15 * MINUTE },
   /** The same two, per address — three emails to one inbox per quarter hour. */
   authEmailAddress: { per: "email", limit: 3, windowMs: 15 * MINUTE },
+  /**
+   * ...and never two within a minute. What answers the button pressed twice, with
+   * a `Retry-After` its countdown reads. The durable half — one that survives a
+   * restart and a second instance — is `lib/auth/verify-throttle.ts`.
+   */
+  authEmailCooldown: { per: "email", limit: 1, windowMs: MINUTE },
   /** Links that arrive with a token: reset password, confirm address, Google return. */
   authToken: { per: "ip", limit: 20, windowMs: 15 * MINUTE },
   /** A published map's visitor beacon. One request per visitor session. */

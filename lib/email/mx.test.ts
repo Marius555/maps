@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { domainAcceptsMail, resetMxCache, type MailResolver } from "./mx";
+import { domainAcceptsMail, inspectMail, resetMxCache, type MailResolver } from "./mx";
 
 /**
  * **The assertion that matters most here is that we say yes when we don't know.**
@@ -179,5 +179,59 @@ describe("the cache", () => {
 
     expect(await domainAcceptsMail("", dns)).toBe(false);
     expect(dns.resolveMx).not.toHaveBeenCalled();
+  });
+});
+
+describe("the mail servers it names", () => {
+  it("returns the exchanges, normalised, for the throwaway check to read", async () => {
+    const dns = resolver({
+      resolveMx: vi.fn(async () => [
+        { exchange: "EM4.RejectHost.com.", priority: 10 },
+        { exchange: "srv4.rejecthost.com", priority: 20 },
+      ]),
+    });
+
+    expect(await inspectMail("burner.example", dns)).toEqual({
+      accepts: true,
+      exchanges: ["em4.rejecthost.com", "srv4.rejecthost.com"],
+    });
+  });
+
+  it("names the domain itself when its address record is the mail server", async () => {
+    const dns = resolver({ resolveMx: vi.fn(async () => []) });
+
+    expect(await inspectMail("example.com", dns)).toEqual({
+      accepts: true,
+      exchanges: ["example.com"],
+    });
+  });
+
+  it("treats an MX of localhost as nowhere to deliver", async () => {
+    const dns = resolver({
+      resolveMx: vi.fn(async () => [{ exchange: "localhost", priority: 0 }]),
+    });
+
+    expect(await inspectMail("parked.example", dns)).toEqual({
+      accepts: false,
+      exchanges: [],
+    });
+  });
+
+  it("names no servers when it could not tell, so nothing is judged on a blip", async () => {
+    const dns = resolver({
+      resolveMx: vi.fn(async () => {
+        throw dnsError("ESERVFAIL");
+      }),
+    });
+
+    expect(await inspectMail("example.com", dns)).toEqual({ accepts: true, exchanges: [] });
+  });
+
+  it("caches the servers with the answer", async () => {
+    const dns = resolver();
+
+    await inspectMail("example.com", dns);
+    expect((await inspectMail("example.com", dns)).exchanges).toEqual(["mx.example.com"]);
+    expect(dns.resolveMx).toHaveBeenCalledTimes(1);
   });
 });

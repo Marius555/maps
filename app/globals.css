@@ -17,6 +17,8 @@
      Tailwind's own stack. app/layout.tsx loads both. */
   --font-display: var(--font-archivo);
   --font-mono: var(--font-plex-mono);
+  /* The News pages' reading face — `font-serif`. app/layout.tsx loads it. */
+  --font-serif: var(--font-source-serif);
   /* Ours, not HeroUI's — see `--warning-ink` below. Without this line the
      variable exists but `text-warning-ink` is not a utility. */
   --color-warning-ink: var(--warning-ink);

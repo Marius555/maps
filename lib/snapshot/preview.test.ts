@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AppMap, Place } from "@/lib/repositories/types";
-import { buildPreviewSnapshot } from "./preview";
+import { buildPreviewSnapshot, unpublishedIds } from "./preview";
 
 const UPDATED_AT = "2026-08-08T10:00:00.000Z";
 
@@ -122,5 +122,55 @@ describe("buildPreviewSnapshot", () => {
 
     expect(snapshot.places).toHaveLength(1);
     expect(snapshot.places[0].id).toBe("place-1");
+  });
+
+  /**
+   * The preview ripples live pins and leaves the rest still, so it has to know
+   * which are which — and a publish must never carry the list.
+   */
+  it("names the locations added since the last publish", () => {
+    const places = [
+      makePlace({ id: "old", createdAt: "2026-08-01T00:00:00.000Z" }),
+      makePlace({ id: "new", createdAt: "2026-08-09T00:00:00.000Z" }),
+    ];
+    const snapshot = buildPreviewSnapshot(
+      makeMap({ publishedAt: "2026-08-05T00:00:00.000Z" }),
+      places,
+      [],
+    );
+
+    expect(snapshot.settings.pinPulse).toBe(true);
+    expect(snapshot.unpublished).toEqual(["new"]);
+  });
+
+  it("omits the list when nothing is waiting or the ripple is off", () => {
+    const published = makeMap({ publishedAt: "2026-08-09T00:00:00.000Z" });
+
+    expect(buildPreviewSnapshot(published, [makePlace()], []).unpublished)
+      .toBeUndefined();
+    expect(
+      buildPreviewSnapshot(makeMap({ settings: { pinPulse: false } }), [makePlace()], [])
+        .unpublished,
+    ).toBeUndefined();
+  });
+});
+
+describe("unpublishedIds", () => {
+  it("counts every location on a map never published", () => {
+    expect(unpublishedIds(null, [makePlace({ id: "a" }), makePlace({ id: "b" })]))
+      .toEqual(["a", "b"]);
+  });
+
+  it("counts a location edited since, but created before, as live", () => {
+    const place = makePlace({
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-20T00:00:00.000Z",
+    });
+
+    expect(unpublishedIds("2026-08-05T00:00:00.000Z", [place])).toEqual([]);
+  });
+
+  it("marks nothing when the publish time cannot be read", () => {
+    expect(unpublishedIds("not a date", [makePlace()])).toEqual([]);
   });
 });

@@ -45,36 +45,66 @@ const TTL_BAD_MS = 10 * 60 * 1000;
 /** Swept lazily past this, the same way `lib/rate-limit/limiter.ts` keeps its map bounded. */
 const MAX_TRACKED_KEYS = 5_000;
 
-const cache = new Map<string, { ok: boolean; expiresAt: number }>();
+/**
+ * What a lookup learned: whether the domain accepts mail, and the mail servers
+ * it named. `exchanges` is what `lib/email/disposable-mx.ts` reads — a throwaway
+ * service mints domains daily but points them all at the same few servers, so
+ * the server is what gives a domain nobody has listed yet away.
+ */
+export type MailAnswer = { accepts: boolean; exchanges: string[] };
+
+/** What an undecided lookup answers: accepts, and named no servers to judge. */
+const UNKNOWN: MailAnswer = { accepts: true, exchanges: [] };
+
+const cache = new Map<string, MailAnswer & { expiresAt: number }>();
 
 export async function domainAcceptsMail(
   domain: string,
   resolver: MailResolver = dns,
 ): Promise<boolean> {
+  return (await inspectMail(domain, resolver)).accepts;
+}
+
+export async function inspectMail(
+  domain: string,
+  resolver: MailResolver = dns,
+): Promise<MailAnswer> {
   const host = domain.trim().toLowerCase();
-  if (!host) return false;
+  if (!host) return { accepts: false, exchanges: [] };
 
   const now = Date.now();
   const hit = cache.get(host);
-  if (hit && hit.expiresAt > now) return hit.ok;
+  if (hit && hit.expiresAt > now) return { accepts: hit.accepts, exchanges: hit.exchanges };
 
   const answer = await withTimeout(lookup(host, resolver));
 
   // `null` is "we don't know" and is never cached: one blip must not vouch for a
   // domain for the next six hours, nor condemn one for the next ten minutes.
-  if (answer === null) return true;
+  if (answer === null) return UNKNOWN;
 
   if (cache.size > MAX_TRACKED_KEYS) sweep(now);
   cache.set(host, {
-    ok: answer,
-    expiresAt: now + (answer ? TTL_OK_MS : TTL_BAD_MS),
+    ...answer,
+    expiresAt: now + (answer.accepts ? TTL_OK_MS : TTL_BAD_MS),
   });
 
   return answer;
 }
 
-/** `true` accepts mail, `false` demonstrably does not, `null` we could not tell. */
-async function lookup(host: string, resolver: MailResolver): Promise<boolean | null> {
+/**
+ * A hostname that names nowhere a message can go: RFC 7505's `.`, and
+ * `localhost`, which parked and burnt domains publish to the same effect.
+ */
+function deliverable(host: string): boolean {
+  return host !== "" && host !== "localhost";
+}
+
+function normalizeHost(exchange: string): string {
+  return exchange.trim().toLowerCase().replace(/\.$/, "");
+}
+
+/** The answer, or `null` when we could not tell. */
+async function lookup(host: string, resolver: MailResolver): Promise<MailAnswer | null> {
   try {
     const records = await resolver.resolveMx(host);
 
@@ -82,11 +112,15 @@ async function lookup(host: string, resolver: MailResolver): Promise<boolean | n
       // RFC 7505: a single `.` exchange is a domain saying, explicitly, that it
       // receives no mail. That is an answer, not an absence, so it does not fall
       // through to the address records below.
-      return records.some((record) => record.exchange && record.exchange !== ".");
+      const exchanges = records
+        .map((record) => normalizeHost(record.exchange ?? ""))
+        .filter(deliverable);
+
+      return { accepts: exchanges.length > 0, exchanges };
     }
   } catch (error) {
     const code = errorCode(error);
-    if (code === "ENOTFOUND") return false;
+    if (code === "ENOTFOUND") return { accepts: false, exchanges: [] };
     if (code !== "ENODATA") return null;
   }
 
@@ -94,14 +128,17 @@ async function lookup(host: string, resolver: MailResolver): Promise<boolean | n
   // exchange, and plenty of small domains rely on exactly that.
   for (const resolve of [resolver.resolve4, resolver.resolve6] as const) {
     try {
-      if ((await resolve.call(resolver, host)).length > 0) return true;
+      if ((await resolve.call(resolver, host)).length > 0) {
+        // The domain is its own mail server, so that is the one to judge.
+        return { accepts: true, exchanges: [host] };
+      }
     } catch (error) {
       const code = errorCode(error);
       if (code !== "ENOTFOUND" && code !== "ENODATA") return null;
     }
   }
 
-  return false;
+  return { accepts: false, exchanges: [] };
 }
 
 function errorCode(error: unknown): string {
@@ -114,7 +151,7 @@ function errorCode(error: unknown): string {
  * `unref()` so a pending timer can never be the reason a process stays alive —
  * the losing half of the race is not cancelled, it is simply ignored.
  */
-function withTimeout(work: Promise<boolean | null>): Promise<boolean | null> {
+function withTimeout(work: Promise<MailAnswer | null>): Promise<MailAnswer | null> {
   return Promise.race([
     work.catch(() => null),
     new Promise<null>((resolve) => {

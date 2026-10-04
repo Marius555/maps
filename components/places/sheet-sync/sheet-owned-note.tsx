@@ -10,7 +10,7 @@ import { describeSheetOwnedFields } from "@/lib/sheet-sync/describe";
  * One line at the top of Edit location, for a location its sheet is in charge of.
  *
  * The sheet wins on every field a column feeds, and an edit here to one of those
- * lasts until the next sync — which is daily, so it would look like the app
+ * lasts until the next sync — at most half an hour away, so it would look like the app
  * losing work. Saying which fields, up front, turns that into a known rule.
  * Everything *not* named here is the app's to keep.
  *

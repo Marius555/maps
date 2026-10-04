@@ -64,7 +64,26 @@ emails.
   `domainAcceptsMail` returns `true` on a timeout, a SERVFAIL, a refused
   connection and an error it does not recognise. Only two answers are decisive:
   the domain does not exist, or it has published nowhere to deliver. The
-  alternative is a DNS wobble becoming a signup outage.
+  alternative is a DNS wobble becoming a signup outage. The live lookup
+  (`liveSaysDisposable`) keeps the same rule: a timeout or a bad answer is a pass.
+- **Mail servers are judged against a curated list, never the vendored one.**
+  `yandex.net` is on the vendored list; matching MX hosts against it would refuse
+  every business on Yandex 360, and Cloudflare Email Routing and Google Workspace
+  carry temp-mail domains too. `lib/email/disposable-mx.ts` names only servers
+  that nothing but throwaway domains point at.
+- **A throwaway refusal never says why.** "We can't create an account with this
+  email. Try a different one." Naming the check teaches the person to try the next
+  temp-mail service. The no-mail-server message stays specific, because its
+  audience is a real customer who mistyped `gmial.com`.
+- **The live lookup is handed the domain, never the address.** DeBounce asks for
+  an email; it gets `check@<domain>`.
+- **Resending a confirmation is throttled on the account, not only in memory.**
+  `verifyEmailSentAt` on the prefs (one a minute, five a day, stamped after a send
+  went) is what holds across a restart and a second instance; the in-memory
+  `authEmailCooldown` is what gives the button its 429 and countdown. Prefs are
+  merged, never written over.
+- **Signup asks for no name.** The account starts as the part of its address
+  before the `@` (`nameFromEmail`) and is renamed in Settings → General.
 - **`lib/email/disposable-domains.generated.ts` is a megabyte and must never
   reach a browser.** `lib/email/disposable.ts` is its only reader and carries
   `server-only`; `signupSchema` stays free of it so the signup form can keep
@@ -102,6 +121,15 @@ emails.
   would hand back the whole document without asking anyone. `"cache"` and not
   `"storage"`, which would take the theme, the sidebar width and the import
   wizard's IndexedDB store with it.
+
+- **Who a session belongs to is remembered for 60 seconds per instance, and
+  anything that changes the answer must say so.** `getCurrentUser()` checks
+  `lib/auth/identity-cache.ts` before calling `account.get()`. A change to an
+  `AuthUser`'s fields or to which sessions exist — a name, a confirmed address,
+  a password, a sign-out, a deleted account — calls `forgetUser(userId)` (or
+  `forgetSession(secret)` on logout) in the same function that made it. Miss
+  one and this instance shows the old value for up to a minute. See *The
+  session lookup is cached* below.
 
 ## The SameSite trap
 
@@ -466,7 +494,7 @@ because it is the only one whose visitor is signed in.
 
 ## The disposable check is friction, not a guarantee
 
-`lib/email/disposable.ts` holds 75,000 domains, vendored by
+`lib/email/disposable.ts` holds about 98,000 domains (re-vendored 2026-10-04), vendored by
 `npm run build:disposable-domains` from two lists — one CC0 and hand-curated, one
 MIT and regenerated daily. It is stale the day after it is generated, and the
 services on it mint new domains faster than anyone re-runs a script.
@@ -484,7 +512,26 @@ would otherwise become an account nobody can ever confirm. Its rule is in the
 Invariants above and is the one thing here not to touch without argument: every
 uncertain answer is a yes.
 
-Both run in `signupServerSchema` rather than in `registerUser`. §6's "enforce in
+**Two more layers since a fresh temp-mail domain walked straight through
+(2026-10-04).** A throwaway service registers new domains daily, and each has a
+real MX record, so the list and the mail-server check both passed it.
+
+- *Where the mail goes.* Those domains point at the same few servers. A survey of
+  MX records for 4,000 listed domains, counted by server, gave
+  `lib/email/disposable-mx.ts`: generator.email, emailfake, emltmp, the
+  `em4.`/`srv4.`/`mx4.` catch-all network behind typo domains like
+  `166gmail.com`, and so on. Hand-curated, because the same survey's next rows
+  are Cloudflare, Google, Yandex, Zoho and Hostinger.
+- *A list updated today.* `lib/email/disposable-live.ts` asks DeBounce's free
+  lookup, 1.5s cap, cached six hours. Against obscure throwaway domains it caught
+  three that Kickbox's equivalent missed. It is the only layer that can see a
+  service receiving through a mainstream host (temp-mail.org is on Cloudflare).
+
+The MX inspection and the live lookup run side by side, so the slower of the two
+is the whole wait. `EMAIL_DOMAIN_ALLOWLIST` overrides all of it
+(`isAllowlistedDomain`).
+
+All of it runs in `signupServerSchema` rather than in `registerUser`. §6's "enforce in
 the repositories" is about plan limits — quantities a client could otherwise talk
 us out of; this is validation, and expressed as a Zod schema it inherits the
 whole path that already exists: `parseBody` throws `ZodError`,
@@ -505,13 +552,46 @@ out at 2am. `KEEP` in `scripts/build-disposable-domains.mjs` is the durable one:
 a name there survives the next regeneration, which the environment variable's
 effect does not depend on but a colleague's memory does.
 
-## The throttle is friction, not a guarantee
+## The throttle is friction, not a guarantee — except on resend
 
 `lib/rate-limit/limiter.ts` counts in this process's memory. A second instance has its
-own counters and a restart forgets everything. It exists so one person holding
-down a button cannot turn our Resend quota into someone else's inbox problem, and
-for that it is enough. Keyed per address, because a global counter is a denial of
-service against everyone else the moment one person trips it.
+own counters and a restart forgets everything. Keyed per address, because a
+global counter is a denial of service against everyone else the moment one
+person trips it.
+
+**Resending a confirmation was where that stopped being enough.** "Send a new
+link" swapped itself for a confirmation line, a reload brought it back live, and
+a dev server's reload (or a second Appwrite Sites instance) forgot the count, so
+it could be pressed into somebody's inbox. Now there are three layers:
+
+- `authEmailCooldown`, one per minute per address, in memory: the 429 with a
+  `Retry-After` the button reads.
+- `lib/auth/verify-throttle.ts`, on the account's prefs: one a minute, five a
+  day, checked inside `after` and refused silently, because the 204 is already
+  written and must not differ by account. Signup stamps it too, and primes the
+  in-memory minute, so a press straight after signup gets a countdown rather
+  than a 204 for a link the prefs then drop.
+- The button itself: a disabled "Send again in 0:42" kept in `localStorage`
+  (`components/verify-email/resend-cooldown.ts`), so a reload does not hand it
+  back early.
+
+## The session lookup is cached
+
+Every dashboard page and every `withAuth` route starts with `requireUser()`,
+and the rest of its reads wait on it. React `cache()` dedupes inside one request
+only, and a sidebar navigation re-renders the page but not the layout — so
+before the cache every click paid one serial `account.get()` round trip to
+Appwrite, and every TanStack query the page then fired paid another, all asking
+the same question about the same secret.
+
+`account.get()` is still the right check; the cache only stops asking it twice
+a minute. It is keyed by a SHA-256 of the secret, stores successes only, and
+lives in process memory like the rate limiter — so the same caveat applies: a
+session revoked on *another* instance (or by Appwrite expiring it) stays
+accepted here until its entry runs out, at most `TTL_MS` (60 s). Logging out on
+the device itself is immediate, because the cookie goes with it. Plan, limits
+and every row are still read fresh; only identity is remembered. If the window
+ever has to shrink, it is one constant.
 
 ## The email templates hardcode their colours
 

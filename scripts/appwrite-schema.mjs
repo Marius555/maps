@@ -67,6 +67,8 @@ export const BILLING_CADENCES = ["monthly", "yearly"];
 // Hand-copied from lib/notifications/types.ts, on the same terms.
 export const NOTIFICATION_KINDS = ["info", "success", "warning"];
 export const NOTIFICATION_AUDIENCES = ["all", "plan", "user"];
+// Hand-copied from lib/news/categories.ts, on the same terms.
+export const NEWS_CATEGORIES = ["announcements", "product", "company"];
 
 export const TABLES = [
   {
@@ -778,6 +780,38 @@ export const TABLES = [
     ],
     indexes: [
       { key: "idx_promotions_featured", type: "key", columns: ["featuredAt"], orders: ["desc"] },
+    ],
+  },
+  {
+    // Posts on the public /news page. Written by the operator console through
+    // `news.repository.ts`, read by /news through a cached lookup.
+    // docs/notes/news.md.
+    //
+    // No permission: the admin client is the only reader and writer. `slug` is
+    // the post's address and a column, never the row id (CLAUDE.md, "never
+    // derive or reuse an id"). `publishedAt` absent is a draft; in the future,
+    // a scheduled post. `coverFileId` is a public-read file in the asset bucket.
+    id: "news",
+    name: "News",
+    columns: [
+      varchar("title", 160, { required: true }),
+      varchar("slug", 120, { required: true }),
+      varchar("summary", 300, { required: true }),
+      text("body", { required: true }),
+      enumeration("category", NEWS_CATEGORIES, { required: true }),
+      varchar("coverFileId", 36),
+      varchar("coverAlt", 200),
+      datetime("publishedAt"),
+    ],
+    indexes: [
+      { key: "idx_news_slug", type: "unique", columns: ["slug"], orders: ["asc"] },
+      { key: "idx_news_published", type: "key", columns: ["publishedAt"], orders: ["desc"] },
+      {
+        key: "idx_news_category_published",
+        type: "key",
+        columns: ["category", "publishedAt"],
+        orders: ["asc", "desc"],
+      },
     ],
   },
 ];

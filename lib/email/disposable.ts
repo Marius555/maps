@@ -38,16 +38,24 @@ export function emailDomain(email: string): string {
   return normalizeDomain(email.slice(at + 1));
 }
 
+/**
+ * The escape hatch that needs no redeploy: EMAIL_DOMAIN_ALLOWLIST wins over the
+ * list, the mail-server check and the live lookup alike. `isDomainAllowed`
+ * allows everything when the list is empty, which is the right answer for the
+ * embed and the wrong one here — so the emptiness is checked before it is
+ * consulted, not inside it.
+ */
+export function isAllowlistedDomain(domain: string): boolean {
+  const host = normalizeDomain(domain);
+  const allowed = env.emailDomainAllowlist;
+
+  return Boolean(host) && allowed.length > 0 && isDomainAllowed(host, allowed);
+}
+
 export function isDisposableDomain(domain: string): boolean {
   const host = normalizeDomain(domain);
   if (!host) return false;
-
-  // The escape hatch that needs no redeploy: EMAIL_DOMAIN_ALLOWLIST wins over
-  // the list outright. `isDomainAllowed` allows everything when the list is
-  // empty, which is the right answer for the embed and the wrong one here — so
-  // the emptiness is checked before it is consulted, not inside it.
-  const allowed = env.emailDomainAllowlist;
-  if (allowed.length > 0 && isDomainAllowed(host, allowed)) return false;
+  if (isAllowlistedDomain(host)) return false;
 
   const list = blocklist();
   const labels = host.split(".");

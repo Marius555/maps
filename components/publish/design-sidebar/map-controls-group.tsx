@@ -77,6 +77,14 @@ export function MapControlsGroup({ settings, set }: EmbedDesign) {
           isSelected={settings.card}
           onChange={(value) => set("card", value)}
         />
+        {/* The editor's drop ripple, looped on every live pin. The preview
+            leaves pins added since the last publish still, which is what the
+            note under these switches says. */}
+        <PropertySwitch
+          label="Ripple published pins"
+          isSelected={settings.pinPulse}
+          onChange={(value) => set("pinPulse", value)}
+        />
 
         {/* Search and Nearest are docked *inside* the results panel on a wide
             map with a list, and already on its surface; the arrangements where
@@ -108,6 +116,12 @@ export function MapControlsGroup({ settings, set }: EmbedDesign) {
             : "With the results panel off too, this map is pins and nothing else."}
         </p>
       )}
+
+      {settings.pinPulse ? (
+        <p className="text-xs text-muted">
+          In this preview, pins added since the last publish stay still.
+        </p>
+      ) : null}
     </div>
   );
 }

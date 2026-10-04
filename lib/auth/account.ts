@@ -7,6 +7,8 @@ import { isAppwriteException } from "@/lib/appwrite/errors";
 import { createSessionClient } from "@/lib/appwrite/session";
 import { ConflictError, UnauthorizedError } from "@/lib/repositories/errors";
 import { readsAsVerified } from "./email-gate";
+import { forgetUser } from "./identity-cache";
+import { nameFromEmail } from "./name-from-email";
 import { readSessionSecret } from "./session-cookie";
 import { revokeOtherSessions } from "./sessions";
 import { consumeToken } from "./tokens";
@@ -35,7 +37,6 @@ function toAuthUser(account: Models.User<Models.Preferences>): AuthUser {
  */
 export async function registerUser(
   input: {
-    name: string;
     email: string;
     password: string;
   },
@@ -48,7 +49,7 @@ export async function registerUser(
       userId: ID.unique(),
       email: input.email,
       password: input.password,
-      name: input.name,
+      name: nameFromEmail(input.email),
     });
   } catch (error) {
     if (isAppwriteException(error) && error.code === 409) {
@@ -149,6 +150,7 @@ export async function markEmailVerified(userId: string): Promise<AuthUser> {
     userId,
     emailVerification: true,
   });
+  forgetUser(userId);
 
   return toAuthUser(account);
 }
@@ -177,6 +179,7 @@ export async function resetPasswordForUser(
   await consumeToken(userId, input.secret);
 
   await admin.users.deleteSessions({ userId });
+  forgetUser(userId);
 
   const account = await admin.users.updatePassword({
     userId,
@@ -205,6 +208,7 @@ export async function revokeSession(secret: string): Promise<void> {
 /** The name on the account, as the person wants to be addressed. */
 export async function updateUserName(userId: string, name: string): Promise<AuthUser> {
   const account = await admin.users.updateName({ userId, name });
+  forgetUser(userId);
 
   return toAuthUser(account);
 }
@@ -315,9 +319,10 @@ export async function deleteUser(userId: string): Promise<void> {
   } catch (error) {
     // Already gone is the outcome that was asked for, so a retried final step
     // succeeds.
-    if (isAppwriteException(error) && error.code === 404) return;
-    throw error;
+    if (!(isAppwriteException(error) && error.code === 404)) throw error;
   }
+
+  forgetUser(userId);
 }
 
 /**

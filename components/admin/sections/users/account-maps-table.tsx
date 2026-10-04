@@ -87,7 +87,7 @@ const COLUMNS: DataColumn<AccountMapRow>[] = [
     secondary: true,
     sortValue: (row) => (row.sheetAutoSync === null ? 0 : row.sheetAutoSync ? 2 : 1),
     render: (row) =>
-      row.sheetAutoSync === null ? "—" : row.sheetAutoSync ? "Linked, daily" : "Linked",
+      row.sheetAutoSync === null ? "—" : row.sheetAutoSync ? "Linked, auto" : "Linked",
   },
 ];
 

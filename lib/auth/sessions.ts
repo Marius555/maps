@@ -5,6 +5,8 @@ import type { Models } from "node-appwrite";
 import { isAppwriteException } from "@/lib/appwrite/errors";
 import { createSessionClient } from "@/lib/appwrite/session";
 import { NotFoundError, UnauthorizedError } from "@/lib/repositories/errors";
+import { getCurrentUser } from "./current-user";
+import { forgetUser } from "./identity-cache";
 import { readSessionSecret } from "./session-cookie";
 
 /**
@@ -39,6 +41,16 @@ export type AccountSession = {
   provider: string;
   createdAt: string;
 };
+
+/**
+ * Drops this account's remembered identities, so a device signed out from here
+ * is refused by this instance at once rather than when its entry expires (see
+ * `identity-cache.ts` for what another instance does).
+ */
+async function forgetThisAccount(): Promise<void> {
+  const user = await getCurrentUser();
+  if (user) forgetUser(user.id);
+}
 
 async function sessionAccount() {
   const secret = await readSessionSecret();
@@ -102,9 +114,10 @@ export async function revokeAccountSession(sessionId: string): Promise<void> {
     await account.deleteSession({ sessionId });
   } catch (error) {
     // Expired between the list and the delete: signed out is signed out.
-    if (isAppwriteException(error) && error.code === 404) return;
-    throw error;
+    if (!(isAppwriteException(error) && error.code === 404)) throw error;
   }
+
+  await forgetThisAccount();
 }
 
 /** Every device but this one. Returns how many were signed out. */
@@ -116,6 +129,7 @@ export async function revokeOtherSessions(): Promise<number> {
   const results = await Promise.allSettled(
     others.map((session) => account.deleteSession({ sessionId: session.$id })),
   );
+  await forgetThisAccount();
 
   const failed = results.filter(
     (result) =>

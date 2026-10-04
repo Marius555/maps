@@ -90,8 +90,8 @@ Change one of these and change it everywhere it appears.
 | 1 | Appwrite's contracting entity, its own sub-processors, and the safeguard for any access from outside the EEA | Privacy §5; DPA Annex III | Download the DPA from Appwrite console → Organisation settings |
 | 2 | Appwrite backup region and retention on the plan actually in use (Pro: daily, 7 days) | Privacy §5; DPA Annex II | Appwrite console → Databases → Backups; appwrite.io/docs/products/databases/backups |
 | 3 | Encryption at rest of Appwrite's primary database and file storage | DPA Annex II | Appwrite DPA or security page |
-| 4 | Automatic deletion of visitor session records by Plan **is not implemented** — `retentionDays` is defined but nothing reads it | Privacy §6; DPA Annex I.B | See open code issue 1 |
-| 5 | Hosting provider for the dashboard and measurement endpoint, and its transfer safeguard | Privacy §5; DPA Annex III | Decide Appwrite Sites vs Vercel (`docs/notes/analytics.md`) |
+| 4 | ~~Automatic deletion of visitor session records by Plan~~ — **closed 2026-10-04**: built (`lib/analytics/retention.ts`), marker removed from both documents | Privacy §6; DPA Annex I.B | — |
+| 5 | Hosting provider for the dashboard and measurement endpoint, and its transfer safeguard | Privacy §5; DPA Annex III | Decided: Appwrite Sites, Frankfurt. Fill `hosting.*` in `lib/legal/values.ts` from the Appwrite DPA (same entity as item 1) |
 | 6 | Resend's contracting entity and how long it keeps delivery logs | Privacy §2, §5 | resend.com/legal/dpa and resend.com/legal/subprocessors |
 | 7 | Which cookies the Merchant of Record's checkout sets | Cookie §4 | The Merchant of Record's cookie policy, once chosen |
 | 8 | Whether a data protection officer is required (GDPR Art. 37(1)(b)) once visitor measurement runs at scale | Privacy §1 | Lawyer question 2 |
@@ -102,14 +102,15 @@ Change one of these and change it everywhere it appears.
 These are true of the codebase today, and the documents either describe them honestly or depend on
 them being fixed. Each needs a code change or a softer sentence before publishing.
 
-1. **Visitor session retention is not enforced.** `SESSION_LIMITS[plan].retentionDays` (30/180/365)
-   exists in `lib/repositories/plan-limits.ts`, but no code in `lib/`, `app/` or `components/` reads
-   it, and nothing deletes old `mapSessions` rows. The Privacy Policy and DPA promise those periods.
-   Build the purge, or change both documents to "until the map is deleted".
+1. ~~**Visitor session retention is not enforced.**~~ **Fixed 2026-10-04.** The scheduled function
+   (`functions/sheet-sync`) walks `/api/cron/session-retention` once a day, in the 03:00 UTC hour,
+   and `lib/analytics/retention.ts` deletes raw `mapSessions` past the owner's plan's
+   `retentionDays`, folding any day with no rollup into `mapDaily` first. It depends on the function
+   being deployed with the current code (`npm run setup:sheet-sync`) and on `CRON_SECRET`.
 2. **The daily rollups (`mapDaily`) are kept forever** and contain search text, referrers and page
    paths. The documents say so. If that is not acceptable, add a retention period for them too.
-3. **There is no self-service account deletion** (`lib/auth/account.ts` has none). The Privacy
-   Policy says deletion is by email request, which is lawful but slow at scale.
+3. ~~**There is no self-service account deletion.**~~ **Fixed.** Settings → Account → Delete account
+   (`lib/account-deletion/`) deletes everything at once; Privacy §9 now says so.
 4. **There is no data export.** Terms §13.3 promises export of all exportable data on request, which
    the Data Act requires. Until an export exists it is a manual job. CLAUDE.md §12 asks for an ODbL
    flag before building an export feature — Terms §10.4 puts ODbL compliance on the customer for data

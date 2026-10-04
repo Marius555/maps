@@ -1,8 +1,5 @@
-import { timingSafeEqual } from "node:crypto";
-
-import type { NextRequest } from "next/server";
-
-import { fail, ok } from "@/lib/api/responses";
+import { refuseUnlessCron } from "@/lib/api/cron-auth";
+import { ok } from "@/lib/api/responses";
 import { parseBody, withoutAuth } from "@/lib/api/route";
 import {
   findSheetLinkForMap,
@@ -11,15 +8,23 @@ import {
 import { runSheetSyncStep } from "@/lib/sheet-sync/run";
 import { cronSyncStepSchema } from "@/lib/validation/sheet-link.schema";
 
-/** How many linked maps one daily run is offered. The rest go first tomorrow. */
+/** How many linked maps one run is offered. The rest go first next run. */
 const MAX_LINKS_PER_RUN = 200;
 
 /**
- * The daily sync's two calls. docs/notes/sheet-sync.md.
+ * A map synced this recently is not due. Runs are 30 minutes apart, so this
+ * only ever skips a map its owner synced by hand moments ago — never one the
+ * previous run reached, which may have been as late as fourteen minutes into
+ * that run (the function stops starting steps at fourteen).
+ */
+const MIN_GAP_MS = 10 * 60_000;
+
+/**
+ * The automatic sync's two calls. docs/notes/sheet-sync.md.
  *
- * The schedule lives in an Appwrite Function (functions/sheet-sync-daily), not
- * here: Appwrite Sites has no cron, and no Sites request may run past 30
- * seconds. The function may run for fifteen minutes, so it asks this route
+ * The schedule — every 30 minutes — lives in an Appwrite Function
+ * (functions/sheet-sync), not here: Appwrite Sites has no cron, and no Sites
+ * request may run past 30 seconds. The function may run for fifteen minutes, so it asks this route
  * which maps are due, then walks each one step by step — the same bounded step
  * Sync now uses — until the map says there is no more.
  *
@@ -28,24 +33,27 @@ const MAX_LINKS_PER_RUN = 200;
  * and republish every linked map on demand.
  */
 
-/** Maps due a daily sync, least recently synced first. */
+/** Maps due an automatic sync, least recently synced first. */
 export const GET = withoutAuth(async (request) => {
-  const denied = refuse(request);
+  const denied = refuseUnlessCron(request);
   if (denied) return denied;
 
-  const links = await listDueSheetLinks(MAX_LINKS_PER_RUN);
+  const links = await listDueSheetLinks(
+    MAX_LINKS_PER_RUN,
+    new Date(Date.now() - MIN_GAP_MS),
+  );
 
   return ok({ mapIds: links.map((link) => link.mapId) });
 });
 
 /**
- * One step of one map's daily sync.
+ * One step of one map's automatic sync.
  *
  * Never confirms removals. A sheet that lost most of its rows overnight stops at
  * `needs_confirmation` and waits for its owner, which is the point of asking.
  */
 export const POST = withoutAuth(async (request) => {
-  const denied = refuse(request);
+  const denied = refuseUnlessCron(request);
   if (denied) return denied;
 
   const input = await parseBody(request, cronSyncStepSchema);
@@ -61,20 +69,3 @@ export const POST = withoutAuth(async (request) => {
     more: outcome.status === "busy" ? false : outcome.more,
   });
 });
-
-function refuse(request: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-
-  if (!secret || !authorized(request.headers.get("authorization"), secret)) {
-    return fail("unauthorized", "Not allowed.", 401);
-  }
-
-  return null;
-}
-
-function authorized(header: string | null, secret: string): boolean {
-  const expected = Buffer.from(`Bearer ${secret}`);
-  const actual = Buffer.from(header ?? "");
-
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
-}

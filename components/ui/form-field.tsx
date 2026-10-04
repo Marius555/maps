@@ -19,6 +19,8 @@ import {
   type FieldValues,
 } from "react-hook-form";
 
+import { linkForDisplay, linkForStorage } from "@/lib/card/button-link";
+
 /**
  * Form fields bound to react-hook-form through `Controller`.
  *
@@ -112,6 +114,59 @@ export function FormTextField<T extends FieldValues>({
               autoComplete={autoComplete}
               autoFocus={autoFocus}
             />
+            <FieldNote error={error} description={description} />
+          </TextField>
+        );
+      }}
+    />
+  );
+}
+
+/**
+ * A web address, with `https://` drawn as fixed furniture beside the box.
+ *
+ * Nobody types the scheme — asked for a website, people write `acme.com` — but
+ * what the form holds and the server stores is still a whole URL, so the scheme
+ * is added on the way in and hidden on the way out by the same two helpers the
+ * card designer's Link field uses (`lib/card/button-link.ts`). A stored
+ * `http://` stays visible, because somebody who wrote it meant it.
+ */
+export function FormUrlField<T extends FieldValues>({
+  control,
+  name,
+  label,
+  placeholder = "acme.com",
+  description,
+  isDisabled,
+  autoFocus,
+}: FieldProps<T>) {
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field, fieldState }) => {
+        const error = fieldState.error?.message;
+
+        return (
+          <TextField
+            fullWidth
+            type="url"
+            isDisabled={isDisabled}
+            isInvalid={Boolean(error)}
+            value={linkForDisplay(field.value ?? "")}
+            onChange={(typed) => field.onChange(linkForStorage(typed))}
+            onBlur={field.onBlur}
+          >
+            <Label>{label}</Label>
+            <InputGroup fullWidth>
+              <InputGroup.Prefix className="pr-0 text-muted">https://</InputGroup.Prefix>
+              <InputGroup.Input
+                ref={field.ref}
+                placeholder={placeholder}
+                autoComplete="url"
+                autoFocus={autoFocus}
+              />
+            </InputGroup>
             <FieldNote error={error} description={description} />
           </TextField>
         );

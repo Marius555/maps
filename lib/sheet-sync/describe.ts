@@ -37,7 +37,7 @@ export function describeSheetOwnedFields(mapping: ColumnMapping): string {
  *
  * Only the counts that are not zero, in the order a person reads a list — new
  * things, changed things, gone things. "Nothing changed" when all three are,
- * which is the answer an idle daily sync gives nearly every day.
+ * which is the answer an idle automatic sync gives nearly every time.
  */
 export function describeSyncCounts(report: SheetSyncReport): string {
   const parts = [

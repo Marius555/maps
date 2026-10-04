@@ -67,7 +67,7 @@ export function sheetOwnedFields(mapping: ColumnMapping) {
  * location's position changes only when its address text does. An unchanged
  * address keeps whatever position the location has — including a pin somebody
  * dragged by hand after the geocoder got it wrong, which a sync that re-geocoded
- * every row every night would quietly put back.
+ * every row each time would quietly put back.
  *
  * An empty patch means the row and the location agree, so an idle sync writes
  * nothing at all.

@@ -20,7 +20,7 @@ type Params = { id: string };
  * **The gate never belonged inside `publishMap`, and still doesn't.** `withAuth`
  * has already resolved a real Appwrite user, so `emailVerified` is a fact rather
  * than a cookie's claim — and the repository has no such user to read. Its other
- * caller is the nightly sheet sync (`lib/sheet-sync/run.ts`), which republishes
+ * caller is the automatic sheet sync (`lib/sheet-sync/run.ts`), which republishes
  * an already-live map for a paying customer from a cron with no session at all.
  * A check down that layer would either break that or make every sync pay for an
  * extra Appwrite lookup to answer a question settled at signup. See

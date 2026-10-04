@@ -52,7 +52,7 @@ export function usableSheetRows(drafts: readonly DraftPlace[]): {
  *
  * A sheet that comes back empty, or missing most of its rows, is far more often
  * an accident — a cleared tab, a filter view, the wrong tab after a rename — than
- * an owner closing two thirds of their stores overnight. The daily sync must not
+ * an owner closing two thirds of their stores overnight. The automatic sync must not
  * act on that alone, because by the time anyone looks the locations and every
  * photo on them are gone. So it stops and asks.
  *

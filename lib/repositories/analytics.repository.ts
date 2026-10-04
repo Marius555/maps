@@ -496,6 +496,15 @@ export async function listSessions(
   // Ownership first, exactly like every other read in this directory.
   await getMap(ctx, mapId);
 
+  return readSessions(mapId, fromDay, toDay);
+}
+
+/** `listSessions` past its ownership check, shared with the retention purge. */
+async function readSessions(
+  mapId: string,
+  fromDay: string,
+  toDay: string,
+): Promise<SessionPage> {
   const sessions: MapSession[] = [];
   let cursor: string | null = null;
 
@@ -641,6 +650,11 @@ export async function writeDailyRollup(
 ): Promise<void> {
   await getMap(ctx, mapId);
 
+  return insertDailyRollup(mapId, rollup);
+}
+
+/** `writeDailyRollup` past its ownership check, shared with the retention purge. */
+async function insertDailyRollup(mapId: string, rollup: DailyRollup): Promise<void> {
   try {
     await admin.tablesDB.createRow<MapDailyRow>({
       databaseId: env.databaseId,
@@ -662,6 +676,119 @@ export async function writeDailyRollup(
     // does not recognise straight back so the route layer makes it a 500.
     if (isConflict(error)) return;
 
+    throw toRepositoryError(error);
+  }
+}
+
+/* ------------------------------------------------------------------
+ * Retention. The second place in this file that runs on behalf of nobody.
+ *
+ * The Privacy Policy and the DPA promise that raw session rows are kept for
+ * the owner's plan's `SESSION_LIMITS.retentionDays` and no longer;
+ * lib/analytics/retention.ts keeps that promise, driven by the scheduled
+ * function through /api/cron/session-retention. The caller is a cron secret,
+ * not a signed-in owner, so these take no `RepoContext` — the same honest
+ * asymmetry `recordSession` names at the head of this file. The rollups in
+ * `mapDaily` are not personal data and are kept.
+ * ------------------------------------------------------------------ */
+
+export type RetentionMap = { id: string; ownerId: string };
+
+type RetentionMapRow = Models.Row & { userId: string };
+
+/** One page of every map, oldest first, so a cursor survives maps created meanwhile. */
+export async function listMapsForRetention(
+  cursor: string | null,
+  limit: number,
+): Promise<{ maps: RetentionMap[]; next: string | null }> {
+  try {
+    const result = await admin.tablesDB.listRows<RetentionMapRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.maps,
+      queries: [
+        Query.select(["$id", "userId"]),
+        Query.orderAsc("$createdAt"),
+        Query.limit(limit),
+        ...(cursor ? [Query.cursorAfter(cursor)] : []),
+      ],
+      total: false,
+    });
+
+    const maps = result.rows.map((row) => ({ id: row.$id, ownerId: row.userId }));
+
+    return {
+      maps,
+      next: result.rows.length < limit ? null : maps[maps.length - 1].id,
+    };
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+/** The earliest day before `cutoffDay` that still has raw sessions, or null. */
+export async function oldestExpiredDay(
+  mapId: string,
+  cutoffDay: string,
+): Promise<string | null> {
+  try {
+    const result = await admin.tablesDB.listRows<MapSessionRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.mapSessions,
+      queries: [
+        Query.equal("mapId", mapId),
+        Query.lessThan("day", cutoffDay),
+        Query.orderAsc("day"),
+        Query.select(["$id", "day"]),
+        Query.limit(1),
+      ],
+      total: false,
+    });
+
+    return result.rows[0]?.day ?? null;
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+export async function hasDailyRollup(mapId: string, day: string): Promise<boolean> {
+  try {
+    const result = await admin.tablesDB.listRows<MapDailyRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.mapDaily,
+      queries: [
+        Query.equal("mapId", mapId),
+        Query.equal("day", day),
+        Query.select(["$id"]),
+        Query.limit(1),
+      ],
+      total: false,
+    });
+
+    return result.rows.length > 0;
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+/** Every raw session of one day, for folding it before it goes. */
+export function readDaySessions(mapId: string, day: string): Promise<SessionPage> {
+  return readSessions(mapId, day, day);
+}
+
+/** The rollup the Analytics tab would have written, written by the purge instead. */
+export function storeDailyRollup(mapId: string, rollup: DailyRollup): Promise<void> {
+  return insertDailyRollup(mapId, rollup);
+}
+
+/** Delete one day's raw sessions for one map, in a single bulk call. */
+export async function deleteDaySessions(mapId: string, day: string): Promise<void> {
+  try {
+    await admin.tablesDB.deleteRows({
+      databaseId: env.databaseId,
+      tableId: TABLES.mapSessions,
+      queries: [Query.equal("mapId", mapId), Query.equal("day", day)],
+    });
+  } catch (error) {
     throw toRepositoryError(error);
   }
 }

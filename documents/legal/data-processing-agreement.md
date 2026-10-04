@@ -285,8 +285,8 @@ publish.
 - **Purpose:** to show Customer how Visitors use its maps.
 - **Frequency:** continuous while measurement is on, with one stored record per page view.
 - **Retention:**
-  - session records: 30 days on the Free Plan, 180 days on Starter, 365 days on Pro
-    [VERIFY: automatic deletion by Plan is not implemented yet];
+  - session records: 30 days on the Free Plan, 180 days on Starter, 365 days on Pro, then deleted
+    automatically, at most a day late;
   - daily statistics — counts per location, search text, suggestion, country, device, referring
     website and page, and positions rounded to one decimal place (about 11 km) — contain no IP
     addresses, and are kept until Customer deletes the map or the Agreement ends (§10).

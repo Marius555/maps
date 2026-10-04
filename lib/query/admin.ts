@@ -3,11 +3,13 @@
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 
 import type { Discount, DiscountRedemptionPage } from "@/lib/billing/types";
+import type { NewsPost } from "@/lib/news/types";
 import type { AppNotification } from "@/lib/notifications/types";
 import type { AdminLoginInput } from "@/lib/validation/admin.schema";
 import type { AdminDiscountForm } from "@/lib/validation/discount.schema";
+import type { AdminNewsForm } from "@/lib/validation/news.schema";
 import type { AdminNotificationForm } from "@/lib/validation/notification.schema";
-import { apiFetch } from "./fetcher";
+import { apiFetch, apiUpload } from "./fetcher";
 import { queryKeys } from "./keys";
 
 /**
@@ -96,6 +98,65 @@ export function useFeatureDiscount() {
         method: featured ? "PUT" : "DELETE",
         body: featured ? JSON.stringify({ code }) : undefined,
       }),
+    retry: false,
+  });
+}
+
+/**
+ * News posts. Like the rest of the console, the list is server-rendered, so
+ * each write ends in `router.refresh()` (or a navigation) rather than a cache
+ * update. docs/notes/news.md.
+ */
+
+const newsPath = (id: string) => `/api/admin/news/${encodeURIComponent(id)}`;
+
+export function useCreateNews() {
+  return useMutation({
+    mutationFn: (input: AdminNewsForm) =>
+      apiFetch<NewsPost>("/api/admin/news", { method: "POST", body: JSON.stringify(input) }),
+    retry: false,
+  });
+}
+
+export function useUpdateNews() {
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: AdminNewsForm }) =>
+      apiFetch<NewsPost>(newsPath(id), { method: "PATCH", body: JSON.stringify(input) }),
+    retry: false,
+  });
+}
+
+export function useDeleteNews() {
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<null>(newsPath(id), { method: "DELETE" }),
+    retry: false,
+  });
+}
+
+/** Publish now (`true`) or take off the site (`false`). */
+export function useSetNewsPublished() {
+  return useMutation({
+    mutationFn: ({ id, published }: { id: string; published: boolean }) =>
+      apiFetch<NewsPost>(`${newsPath(id)}/publish`, { method: published ? "PUT" : "DELETE" }),
+    retry: false,
+  });
+}
+
+export function useSetNewsCover() {
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => {
+      const body = new FormData();
+      body.append("cover", file);
+
+      return apiUpload<NewsPost>(`${newsPath(id)}/cover`, body, { method: "PUT" });
+    },
+    retry: false,
+  });
+}
+
+export function useClearNewsCover() {
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<NewsPost>(`${newsPath(id)}/cover`, { method: "DELETE" }),
     retry: false,
   });
 }

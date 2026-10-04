@@ -24,7 +24,7 @@ import type { SheetLinkRow } from "./types";
  * Two kinds of caller, and the split is on purpose. The dashboard's own reads
  * and writes take a `RepoContext` and prove ownership through `getMap`, like
  * every other repository. The sync's bookkeeping — the lock and the result —
- * takes a link id, because the daily job runs with no session at all; the link
+ * takes a link id, because the automatic job runs with no session at all; the link
  * it is handed came from `listDueSheetLinks`, and every write to a map it makes
  * afterwards goes through `repoContext(link.userId)` and the normal checks.
  */
@@ -58,10 +58,10 @@ export async function getSheetLink(
  *
  * One link per map, so importing a second sheet with sync on replaces the first
  * rather than adding a second source of truth — two sheets each insisting on
- * the map's contents would remove each other's rows every night.
+ * the map's contents would remove each other's rows on every sync.
  *
  * The plan is checked here as well as on every sync: this is the moment an
- * account starts committing to daily spend.
+ * account starts committing to recurring spend.
  */
 export async function saveSheetLink(
   ctx: RepoContext,
@@ -111,7 +111,7 @@ export async function saveSheetLink(
   }
 }
 
-/** The daily switch. Returns null when the map has no link to switch. */
+/** The automatic-sync switch. Returns null when the map has no link to switch. */
 export async function setSheetAutoSync(
   ctx: RepoContext,
   mapId: string,
@@ -120,8 +120,8 @@ export async function setSheetAutoSync(
   await getMap(ctx, mapId);
 
   // Switching it on is the plan decision; switching it off never is. Without
-  // this a downgraded account could turn its daily sync back on, and the cron
-  // would visit the link every night only for the step to refuse it.
+  // this a downgraded account could turn its automatic sync back on, and the cron
+  // would visit the link every run only for the step to refuse it.
   if (autoSync) await assertPlanFeature(ctx.userId, "sheetSync");
 
   try {
@@ -168,7 +168,7 @@ export async function deleteSheetLink(ctx: RepoContext, mapId: string): Promise<
  * ------------------------------------------------------------------ */
 
 /**
- * A map's link, for the daily job — which has no session and so no context.
+ * A map's link, for the automatic job — which has no session and so no context.
  * Whatever it then does to the map goes through `repoContext(link.userId)`.
  */
 export async function findSheetLinkForMap(mapId: string): Promise<SheetLink | null> {
@@ -181,18 +181,27 @@ export async function findSheetLinkForMap(mapId: string): Promise<SheetLink | nu
 }
 
 /**
- * Links the daily job should visit, least recently synced first.
+ * Links the automatic sync should visit: switched on, and not synced since
+ * `syncedBefore`. Least recently synced first.
  *
- * Oldest first is what makes a time-boxed job fair: whatever it does not reach
- * today is at the front tomorrow.
+ * Oldest first is what makes a time-boxed job fair: whatever one run does not
+ * reach is at the front of the next. The cutoff is what keeps a map somebody
+ * synced by hand five minutes ago from being read again for nothing.
  */
-export async function listDueSheetLinks(limit: number): Promise<SheetLink[]> {
+export async function listDueSheetLinks(
+  limit: number,
+  syncedBefore: Date,
+): Promise<SheetLink[]> {
   try {
     const result = await admin.tablesDB.listRows<SheetLinkRow>({
       databaseId: env.databaseId,
       tableId: TABLES.sheetLinks,
       queries: [
         Query.equal("autoSync", true),
+        Query.or([
+          Query.isNull("lastSyncedAt"),
+          Query.lessThan("lastSyncedAt", syncedBefore.toISOString()),
+        ]),
         Query.orderAsc("lastSyncedAt"),
         Query.limit(limit),
       ],
@@ -210,7 +219,7 @@ export async function listDueSheetLinks(limit: number): Promise<SheetLink[]> {
  * A soft lock — read, then write — because Appwrite has no conditional update.
  * The window it leaves is two syncs starting in the same few milliseconds, and
  * the worst that does is write the same rows twice; what it closes is the
- * common case, a second press of Sync now or the daily job arriving mid-sync.
+ * common case, a second press of Sync now or the automatic job arriving mid-sync.
  */
 export async function claimSheetLink(linkId: string, holdMs: number): Promise<boolean> {
   try {

@@ -469,3 +469,14 @@ export type NotificationRow = Models.Row & {
   publishedAt: string;
   expiresAt?: string | null;
 };
+
+export type NewsRow = Models.Row & {
+  title: string;
+  slug: string;
+  summary: string;
+  body: string;
+  category: string;
+  coverFileId?: string | null;
+  coverAlt?: string | null;
+  publishedAt?: string | null;
+};

@@ -36,7 +36,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   return ok({ link: toSheetLinkView(link) });
 });
 
-/** The daily switch. */
+/** The automatic-sync switch. */
 export const PATCH = withAuth<Params>(async ({ request, params, ctx }) => {
   const input = await parseBody(request, updateSheetLinkSchema);
   const link = await setSheetAutoSync(ctx, params.id, input.autoSync);

@@ -2,7 +2,7 @@
 
 import { useWatch, type Control } from "react-hook-form";
 
-import { FormTextField } from "@/components/ui/form-field";
+import { FormTextField, FormUrlField } from "@/components/ui/form-field";
 import type { PlaceFormValues } from "@/lib/validation/place.schema";
 import { FormSection, filledSummary } from "./form-section";
 
@@ -40,12 +40,7 @@ export function ContactSection({
         <FormTextField control={control} name="email" label="Email" type="email" />
       </div>
 
-      <FormTextField
-        control={control}
-        name="url"
-        label="Website"
-        type="url"
-      />
+      <FormUrlField control={control} name="url" label="Website" />
     </FormSection>
   );
 }

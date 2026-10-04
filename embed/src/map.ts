@@ -109,6 +109,8 @@ const CLUSTER_LAYER = "clusters";
 const CLUSTER_COUNT_LAYER = "cluster-count";
 const POINT_LAYER = "place-points";
 const PIN_LAYER = "place-pins";
+/** `+ 0` under the dots, `+ 1` under the icon pins — see `addPulse`. */
+const PULSE_LAYER = "place-pulse";
 
 const SHAPE_SOURCE_ID = "shapes";
 const SHAPE_FILL_LAYER = "shape-fills";
@@ -1163,6 +1165,9 @@ function addLayers(map: MapLibreMap, snapshot: MapSnapshot): void {
     addClusterIcon(map, snapshot);
   }
 
+  // Before the pins, so the ripple comes out from behind them.
+  if (snapshot.settings.pinPulse) addPulse(map);
+
   map.addLayer({
     id: POINT_LAYER,
     type: "circle",
@@ -1201,6 +1206,73 @@ function addLayers(map: MapLibreMap, snapshot: MapSnapshot): void {
       "icon-ignore-placement": true,
     },
   });
+}
+
+/**
+ * Every live location ripples, for as long as the map is up.
+ *
+ * The editor's drop ripple (`map-pin-drop` in app/globals.css) on the Edit
+ * location dialog's loop: 1.6s, ease-out, from 0.4x to 3.2x while fading from
+ * half opacity to none. The base radii are that CSS's too — 7px out from a dot,
+ * 12px out from an icon pin, whose halo has to clear a 36px shape.
+ *
+ * Canvas rather than CSS because the pins are. **Two layers and constant radii,
+ * and that is load-bearing**: a data-driven value handed to `setPaintProperty`
+ * re-lays-out every tile in the worker, which would be one worker round trip per
+ * frame. A constant one is a uniform and a repaint. The transitions are zeroed
+ * for the same reason — at MapLibre's default 300ms each frame would start
+ * easing towards a value the next frame has already moved past.
+ *
+ * Its cost is a repaint per frame on a customer's page while the tab is
+ * visible (rAF stops in a hidden one) — the owner's call, 2026-10-03, and the
+ * reason it is a switch. `q` is a location the Publish preview marks as not on
+ * the site yet (`MapSnapshot.unpublished`); a real snapshot has none.
+ *
+ * Reduced motion gets the still halo `.pulsing-pins` falls back to, because a
+ * state told only in motion is told to nobody.
+ */
+function addPulse(map: MapLibreMap): void {
+  const bases = [7, 12];
+  let gone = false;
+
+  bases.forEach((base, i) =>
+    map.addLayer({
+      id: PULSE_LAYER + i,
+      type: "circle",
+      source: SOURCE_ID,
+      filter: [
+        "all",
+        ["!", ["has", "point_count"]],
+        ["!", ["has", "q"]],
+        i ? ["has", "pin"] : ["!", ["has", "pin"]],
+      ],
+      paint: {
+        "circle-color": ["get", "color"],
+        "circle-radius": base * 2,
+        "circle-opacity": 0.3,
+        "circle-radius-transition": { duration: 0 },
+        "circle-opacity-transition": { duration: 0 },
+      },
+    }),
+  );
+
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  map.once("remove", () => (gone = true));
+
+  const frame = (now: number) => {
+    if (gone) return;
+
+    const p = 1 - (1 - (now % 1600) / 1600) ** 2;
+
+    bases.forEach((base, i) => {
+      map.setPaintProperty(PULSE_LAYER + i, "circle-radius", base * (0.4 + 2.8 * p));
+      map.setPaintProperty(PULSE_LAYER + i, "circle-opacity", 0.5 - p / 2);
+    });
+    requestAnimationFrame(frame);
+  };
+
+  requestAnimationFrame(frame);
 }
 
 /**
@@ -1858,6 +1930,7 @@ function toFeatureCollection(
 ): GeoJSON.FeatureCollection {
   const colors = colorsOf(snapshot);
   const pins = pinsOf(snapshot);
+  const unpublished = new Set(snapshot.unpublished);
 
   return {
     type: "FeatureCollection",
@@ -1873,6 +1946,8 @@ function toFeatureCollection(
           // console warning per feature per frame on a customer's site, and the
           // pin would be invisible either way — a dot is the better failure.
           ...(pin ? { pin } : {}),
+          // Kept still by the ripple — see `addPulse`. Preview only.
+          ...(unpublished.has(place.id) ? { q: 1 } : {}),
           place: JSON.stringify(place),
         },
       };

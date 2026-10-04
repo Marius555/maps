@@ -21,8 +21,12 @@ export const loginSchema = z.object({
 /** The name on an account. Signup and the profile form share it. */
 export const personName = z.string().trim().min(1, "Tell us your name.").max(128);
 
+/**
+ * No name: asking for one is a field between a stranger and their first map, and
+ * the account takes the part of the address before the `@` instead
+ * (`lib/auth/name-from-email.ts`) — changeable in Settings → General.
+ */
 export const signupSchema = z.object({
-  name: personName,
   email: z.email("Enter a valid email address."),
   password,
 });

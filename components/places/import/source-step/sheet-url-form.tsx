@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { parseSheetUrl, type SheetReference } from "@/lib/import/sheet-url";
 import { toastProblem } from "@/lib/query/toast-error";
+import { AUTO_SYNC_EVERY } from "@/lib/sheet-sync/schedule";
 
 /** How to make a sheet readable by link, one move per line. */
 const SHARE_STEPS: readonly { before: string; strong: string }[] = [
@@ -111,7 +112,7 @@ export function SheetUrlForm({
         </ol>
 
         <p className="pt-1 text-xs text-muted">
-          We read it now, and daily if you keep the map in sync.
+          We read it now, and {AUTO_SYNC_EVERY} if you keep the map in sync.
         </p>
       </div>
     </form>

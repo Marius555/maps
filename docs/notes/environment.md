@@ -118,7 +118,7 @@ this is why each one exists.
 - Optional, server-only: `EMAIL_DOMAIN_ALLOWLIST` — a comma-separated list of domains that may
   sign up whatever the disposable-address check thinks of them. **Unset is the normal state**
   and means the vendored list decides. It exists because
-  `lib/email/disposable-domains.generated.ts` is 75,000 domains somebody else maintains, and
+  `lib/email/disposable-domains.generated.ts` is ~98,000 domains somebody else maintains, and
   the day it is wrong about a real customer's domain is the day they are locked out at 2am —
   this un-blocks them in the time it takes to set a variable and redeploy. An entry covers its
   own subdomains, the same rule the embed's allowlist uses. The durable fix is `KEEP` in
@@ -134,14 +134,21 @@ this is why each one exists.
   mid-month makes every visitor read as new until the 1st. `docs/notes/analytics.md`.
 
 - Optional, server-only: `CRON_SECRET` and `SHEET_SYNC_STEP_MS` — Google Sheets sync
-  (`docs/notes/sheet-sync.md`). **`CRON_SECRET` gates the daily sync's route, and unset means
+  (`docs/notes/sheet-sync.md`). **`CRON_SECRET` gates the automatic sync's route, and unset means
   that route refuses everyone**, not that it is open: an unauthenticated trigger would let a
   stranger spend geocoding credit and republish every linked map. The same value goes on the
-  `sheet-sync-daily` Appwrite Function, which is what calls it. `SHEET_SYNC_STEP_MS` is how long
+  `googleSheetsUpdate` Appwrite Function (`functions/sheet-sync`), which calls it every 30
+  minutes; `npm run setup:sheet-sync` generates it into `.env` and puts it on the function and
+  the site. `SHEET_SYNC_STEP_MS` is how long
   one sync step may spend looking addresses up (default 5000). A step has to finish inside the
   Appwrite Sites timeout — 15s by default, 30s at most — so raise this to about 15000 only after
-  raising the site's timeout to 30s. Sync now works with neither set; the daily sync needs the
-  secret. `APP_URL` matters here too: a daily republish has no request to take an origin from.
+  raising the site's timeout to 30s. Sync now works with neither set; the automatic sync needs the
+  secret. `APP_URL` matters here too: an automatic republish has no request to take an origin from.
+- Setup only, **never on the site**: `CRON_GOOGLE_GOOGLE_SHEETS_UPDATE` (the `googleSheetsUpdate`
+  function's id), `SHEET_SYNC_APP_URL` (the origin that function calls, default
+  `https://maps-5sbu.appwrite.network` — never the local `APP_URL`, which is localhost and
+  unreachable from Appwrite's cloud) and `APPWRITE_SITE_ID` (optional while the project has one
+  site). Read by `npm run setup:sheet-sync` alone.
 
 - Optional, browser-safe: `NEXT_PUBLIC_EMBED_SCRIPT_URL` (`https://cdn.pinglide.com/embed/map.js`) and `NEXT_PUBLIC_GAZETTEER_URL` (`https://cdn.pinglide.com/gazetteer`). Unset, the snippet and the gazetteer point at the dashboard's own origin, which is what makes development and self-hosting work with no config — and in production is a mistake with a deadline: every visitor would download ~345KB from Appwrite Sites (metered, and in the visitor path §2 forbids), and the script URL in a pasted snippet can never be changed. `npm run deploy:cdn` (`scripts/upload-cdn.mjs`) uploads both into the snapshots bucket under `embed/` and `gazetteer/`, skipping any file whose R2 ETag already matches its MD5.
 - Build-time, optional: `UPLOAD_EMBED_ON_BUILD`. Set to `true` **on the Appwrite Site only**, and `postbuild` uploads the freshly built embed to the CDN on every deploy, so `map.js` can never lag the dashboard. It needs the R2 variables at build time too. Unset (every local build), the hook prints one line and does nothing. The gazetteer is gitignored, so the host never has it — upload it by hand with `npm run deploy:cdn` after `npm run build:gazetteer`.

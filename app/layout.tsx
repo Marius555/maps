@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Archivo, IBM_Plex_Mono, Instrument_Sans } from "next/font/google";
+import { Archivo, IBM_Plex_Mono, Instrument_Sans, Source_Serif_4 } from "next/font/google";
 
 import { AppProviders } from "@/components/providers/app-providers";
 import { ThemeScript } from "@/components/providers/theme-script";
@@ -44,6 +44,18 @@ const plexMono = IBM_Plex_Mono({
   display: "swap",
 });
 
+/**
+ * The News pages' reading face: summaries and article bodies (docs/notes/news.md).
+ * `preload: false` because only /news uses it — every other page would otherwise
+ * download a font it never draws.
+ */
+const sourceSerif = Source_Serif_4({
+  variable: "--font-source-serif",
+  subsets: ["latin"],
+  display: "swap",
+  preload: false,
+});
+
 export const metadata: Metadata = {
   applicationName: PRODUCT_NAME,
   title: {
@@ -62,7 +74,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${instrumentSans.variable} ${archivo.variable} ${plexMono.variable} h-full antialiased`}
+      className={`${instrumentSans.variable} ${archivo.variable} ${plexMono.variable} ${sourceSerif.variable} h-full antialiased`}
     >
       <head>
         {/* Applies the stored theme before the first paint; see the file for why

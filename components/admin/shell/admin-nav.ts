@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Mail,
   Map,
+  Newspaper,
   PlugZap,
   TicketPercent,
   Users,
@@ -28,4 +29,5 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/discounts", label: "Discounts", icon: TicketPercent },
   { href: "/admin/content", label: "Maps & traffic", icon: Map },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
+  { href: "/admin/news", label: "News", icon: Newspaper },
 ];

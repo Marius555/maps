@@ -656,9 +656,9 @@ describe("assertPlanFeature", () => {
   });
 
   /*
-   * Sheet sync re-reads a sheet daily and geocodes what changed, with nobody
+   * Sheet sync re-reads a sheet every 30 minutes and geocodes what changed, with nobody
    * pressing anything. A free account that slipped through would spend credits
-   * every night for as long as the link existed.
+   * on every run for as long as the link existed.
    */
   it("refuses sheet sync on the free plan and allows it on starter", async () => {
     const { assertPlanFeature } = await planLimits();

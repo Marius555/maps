@@ -6,6 +6,7 @@ import { findUserByEmail, markEmailVerified } from "@/lib/auth/account";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
 import { rateLimit } from "@/lib/rate-limit/limiter";
 import { consumeToken, createVerificationLink } from "@/lib/auth/tokens";
+import { mayResendVerification, stampVerificationSent } from "@/lib/auth/verify-throttle";
 import { greetingName } from "@/lib/email/greeting";
 import { sendEmail } from "@/lib/email/resend";
 import { verifyEmailMessage } from "@/lib/email/templates/verify-email";
@@ -92,6 +93,9 @@ export const GET = withoutAuth(async (request) => {
 export const POST = withoutAuth(async (request) => {
   const { email } = await parseBody(request, forgotPasswordSchema);
 
+  // The minute first: a second press inside it is refused without spending one
+  // of the quarter hour's three.
+  rateLimit("authEmailCooldown", `verify:${email.toLowerCase()}`);
   rateLimit("authEmailAddress", `verify:${email.toLowerCase()}`);
 
   // After the response, for the reason forgot-password documents at length: an
@@ -103,9 +107,14 @@ export const POST = withoutAuth(async (request) => {
       const account = await findUserByEmail(email);
       if (!account || account.emailVerification) return;
 
+      // The counters above live in memory; this one is on the account and holds
+      // across a restart and a second instance. Refused silently, because the
+      // 204 has already been written and must not differ by account anyway.
+      if (!mayResendVerification(account.prefs, new Date())) return;
+
       const link = await createVerificationLink(account.$id);
 
-      await sendEmail({
+      const { sent } = await sendEmail({
         template: "verify",
         to: account.email,
         ...verifyEmailMessage({
@@ -113,6 +122,8 @@ export const POST = withoutAuth(async (request) => {
           url: link,
         }),
       });
+
+      if (sent) await stampVerificationSent(account.$id);
     } catch (error) {
       console.error("Failed to resend a confirmation email:", error);
     }

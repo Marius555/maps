@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { FormTextArea, FormTextField } from "@/components/ui/form-field";
+import { FormTextArea, FormTextField, FormUrlField } from "@/components/ui/form-field";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { useUpdatePlace } from "@/lib/query/places";
 import type { Place } from "@/lib/repositories/types";
@@ -103,6 +103,14 @@ export function SlotTextForm({
             control={control}
             name={input.name}
             label={input.label}
+          />
+        ) : input.type === "url" ? (
+          <FormUrlField
+            key={input.name}
+            control={control}
+            name={input.name}
+            label={input.label}
+            autoFocus={index === 0}
           />
         ) : (
           <FormTextField

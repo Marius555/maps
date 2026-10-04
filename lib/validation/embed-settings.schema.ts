@@ -205,6 +205,13 @@ export const embedSettingsSchema = z.object({
    * `pinImageId(icon, color)`, so only a rebuild recolours them.
    */
   pinColor: hexColorSchema,
+  /*
+   * Whether every location ripples on a loop. Spelled as the ripple being on,
+   * so absent in a *snapshot* stays the still pins every live map draws
+   * (`packages/shared/snapshot.ts`) — while the default below is on, and a map
+   * whose stored settings predate it picks it up on its next publish.
+   */
+  pinPulse: z.boolean(),
 
   /*
    * What the map says to its visitors: one preset language, and the owner's own
@@ -328,6 +335,9 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   // drew the flat grey instead and the Publish tab showed a different map from
   // the one next door. Publishing the colour is what closes that.
   pinColor: DEFAULT_EMBED_ACCENT,
+  // On: the editor's drop ripple, looped, on every live pin. Off is one switch
+  // in Map controls for an owner who wants the pins still.
+  pinPulse: true,
 
   // English with nothing reworded publishes neither `lang` nor `strings`.
   language: DEFAULT_EMBED_LANGUAGE,
@@ -386,6 +396,7 @@ export function readEmbedSettings(
 
     colors: readColors(settings.colors),
     pinColor: readHex(settings.pinColor, d.pinColor),
+    pinPulse: readFlag(settings.pinPulse, d.pinPulse),
 
     language: readChoice(settings.language, EMBED_LANGUAGE_IDS, d.language),
     strings: readWords(settings.strings),

@@ -10,7 +10,7 @@ Project instructions. Read this fully before writing code.
 
 **Weeks 1–3 of §10 are done; Week 4 is most of the way through.** Of §5's layout, `/app`,
 `/lib`, `/components`, `/scripts`, `/embed`, `/packages/shared` and `/functions` (one
-function, the daily sheet sync) exist, and so now do `/lib/billing`, `/app/(dashboard)/settings`
+function: the sheet sync every 30 minutes, which also runs the daily visitor-session purge) exist, and so now do `/lib/billing`, `/app/(dashboard)/settings`
 (which `/account` now redirects to) and `/app/api/webhooks/billing`. Still absent, and correctly so — it belongs to the rest of
 Week 4: `/app/(marketing)/for/[platform]`.
 
@@ -42,7 +42,7 @@ filter on the Locations page. Full reasoning, and the five blockers it had to an
 **Google Sheets sync is the third call made against a rival (Atlist), and it bends §7.** An
 import from a Google Sheet can leave the map linked: rows in the sheet are its locations, and a
 sync adds, updates and removes them, then republishes a live map. Sync now on the Locations page,
-plus a daily Appwrite Function; Starter and Pro only. The §7 bend is that a sync geocodes with no
+plus an Appwrite Function every 30 minutes (`npm run setup:sheet-sync`); Starter and Pro only. The §7 bend is that a sync geocodes with no
 review step, and it is survivable because **only confident matches are written** — the rest are
 reported by sheet row number for the owner to fix in the sheet — and a sync that would remove
 most of the map stops and asks. **Hosting is Appwrite Sites, which cuts every request off at 30
@@ -50,12 +50,21 @@ seconds at most**, so a sync is a series of short idempotent steps, never one lo
 constraint applies to any future long job, too. Full reasoning and the function's setup in
 `docs/notes/sheet-sync.md`.
 
+**The embed's attribution ⓘ hides under a floating results panel, and that bends §12.** At
+≥769px, when a floating panel covers the bottom-right corner, the OSM / OpenFreeMap credit is
+not visible. That covers the publish preview too, and it holds while the panel is shut, because
+the strip still covers the corner. The other controls still move beside the panel. This is the
+owner's call, taken with the §12 cost on the table after the first request had been answered by
+moving the ⓘ beside the panel instead. Docked panels and narrow drawers are unchanged. The
+mechanics are in `docs/notes/publish-and-embed.md`.
+
 **Signup refuses throwaway addresses, and an unconfirmed account is read-only.**
-`signupServerSchema` checks the address against 75,000 vendored domains and then asks DNS
-whether the domain has a mail server at all; both refusals land under the Email field
-through the existing `ZodError` → 422 path. The list is `server-only` and must stay out of
-`signupSchema`, which the signup form imports. **Every uncertain DNS answer is a yes** — a
-resolver wobble may never become a signup outage. Then **`withAuth` 403s every non-GET from
+`signupServerSchema` checks the address against ~98,000 vendored domains, then asks DNS
+whether the domain has a mail server at all (and whether that server is a known throwaway
+one), and asks DeBounce's free lookup about the domain alone; every refusal lands under the
+Email field through the existing `ZodError` → 422 path. The list is `server-only` and must stay out of
+`signupSchema`, which the signup form imports. **Every uncertain answer, DNS or DeBounce, is a
+yes**: a resolver or upstream wobble may never become a signup outage. Then **`withAuth` 403s every non-GET from
 an account that has not confirmed its address** — one check covering every authenticated
 route, with no exemption list, because everything that must answer an unconfirmed account
 (signup, login, logout, resending the link) is `withoutAuth` already. Reads stay open so the
@@ -153,9 +162,10 @@ npm run setup:r2        # snapshot bucket: custom domain, CORS, zone cache + hea
 npm run deploy:cdn      # embed + gazetteer -> cdn.pinglide.com (skips unchanged files)
 npm run setup:lemon     # find the plan variants, write their ids to .env, configure the webhook
 npm run setup:lemon -- --verify  # check .env's ids against the store; non-zero if they disagree
+npm run setup:sheet-sync  # configure + deploy the googleSheetsUpdate function (every 30 min)
 npm run billing:replay -- <event> --email you@example.com  # signed webhook at a running server
 
-npm run build:disposable-domains # re-vendor the throwaway-email domain list (75k, ~1.2MB)
+npm run build:disposable-domains # re-vendor the throwaway-email domain list (98k, ~1.5MB)
 npm run admin:hash      # admin console password → ADMIN_PASSWORD_HASH + ADMIN_SESSION_SECRET (stdin)
 
 npm run build:tile-styles -- https://tiles.example.com   # our own five style documents
@@ -239,10 +249,13 @@ one exists: `docs/notes/environment.md`.
   (default `snapshots`). The R2 token is scoped to that one bucket, with **no IP filter** —
   Appwrite Sites has no fixed outbound IP.
 - Setup only, **never on the site**: `CLOUDFLARE_API_TOKEN`, read by `npm run setup:r2` alone.
-- Server-only, optional: `CRON_SECRET` (the daily sheet sync's route **refuses everyone**
-  while it is unset; the same value goes on the `sheet-sync-daily` function) and
-  `SHEET_SYNC_STEP_MS` (lookup time per sync step, default 5000 — raise only with the site
-  timeout).
+- Server-only, optional: `CRON_SECRET` (the automatic sheet sync's route **refuses everyone**
+  while it is unset; `npm run setup:sheet-sync` generates it and puts the same value on the
+  `googleSheetsUpdate` function) and `SHEET_SYNC_STEP_MS` (lookup time per sync step, default
+  5000 — raise only with the site timeout).
+- Setup only, **never on the site**: `CRON_GOOGLE_GOOGLE_SHEETS_UPDATE` (that function's id),
+  `SHEET_SYNC_APP_URL` (the origin it calls, default `https://maps-5sbu.appwrite.network`),
+  `APPWRITE_SITE_ID` (optional with one site) — read by `npm run setup:sheet-sync` alone.
 - Server-only, optional: `TUTORIAL_ALWAYS_PRESENT` — true draws the onboarding overlays (maps
   list, editor, card, publish) on every load; unset or false, each until the account closes
   it once (one user pref per overlay, written on close or on reaching the page it points at,
@@ -337,7 +350,7 @@ Area-specific invariants live at the head of each file in the table below.
   it `retired` so it stops being offered and keeps being read.
 - **One writer per JSON blob column.** `updateMap` serialises `settings` whole, so two
   forms writing it is a lost update. `useEmbedDesign` is the only writer.
-- **The embed's own-code budget is 49.2KB and it currently sits at 48.3KB**, minified
+- **The embed's own-code budget is 49.2KB and it currently sits at 48.6KB**, minified
   since 2026-09-26. That is the binding number, and anything new has to be paid for by
   removing something. The **total** used to be the gate at 2 bytes; it is reported now and not
   enforced, because its stated job was catching MapLibre ballooning and it had become a
@@ -391,6 +404,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `lib/billing/**`, `lib/repositories/{subscriptions,usage,plan-limits}.repository.ts`, `app/api/webhooks/billing/**`, `app/(dashboard)/settings/billing/**`, `app/(marketing)/upgrade/**`, `app/api/admin/discounts/**`, `components/admin/sections/discounts/**` | `docs/notes/billing.md` |
 | `app/(dashboard)/settings/**`, `components/user-settings/**`, `lib/theme/**`, `lib/account-deletion/**`, `lib/auth/sessions.ts`, the `.steady` block in `globals.css` | `docs/notes/settings.md` |
 | `lib/notifications/**`, `components/notifications/**`, `app/api/notifications/**`, `lib/repositories/notifications.repository.ts` | `docs/notes/notifications.md` |
+| `lib/news/**`, `components/news/**`, `app/(marketing)/news/**`, `app/admin/news/**`, `app/api/admin/news/**`, `components/admin/sections/news/**`, `lib/repositories/news.repository.ts` | `docs/notes/news.md` |
 | `documents/legal/**`, `lib/legal/**`, `components/legal/**`, the `legal` links in `brand.json` | `documents/legal/README.md` |
 | `lib/limits/**`, `lib/rate-limit/**`, `lib/api/route.ts`'s wrappers, `rollBackIfOverLimit`, `ownerPermissions`, `scripts/migrate-permissions.mjs` | `docs/notes/limits.md` |
 | `app/admin/**`, `app/(auth)/login/admin/**`, `app/api/admin/**`, `components/admin/**`, `lib/admin/**`, `lib/repositories/admin/**`, `lib/api-usage/**`, `lib/repositories/{api-calls,email-log}.repository.ts` | `docs/notes/admin.md` |
@@ -481,7 +495,7 @@ The embed must **never** import React, HeroUI, Motion, TanStack Query, Zustand, 
 
 Target: **under 250KB gzipped including MapLibre.** If a change pushes it over, flag it.
 
-**Measured, that target is unreachable with MapLibre v6** — its own dist files are 297.4KB gzipped at 6.11.2 (`maplibre-gl.mjs` 146.9 + `maplibre-gl-shared.mjs` 144.6 + the worker 6.0), minified already, with no slim build. Actual total is **345.8KB**, of which ours is 48.3KB (minified, loader and map chunk together). `npm run build:embed` enforces a **49.2KB budget on our code** and a **305KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 48.3KB.
+**Measured, that target is unreachable with MapLibre v6** — its own dist files are 297.4KB gzipped at 6.11.2 (`maplibre-gl.mjs` 146.9 + `maplibre-gl-shared.mjs` 144.6 + the worker 6.0), minified already, with no slim build. Actual total is **346.0KB**, of which ours is 48.6KB (minified, loader and map chunk together). `npm run build:embed` enforces a **49.2KB budget on our code** and a **305KB ceiling on MapLibre**, and reports the total without gating on it; it does not pretend 250KB is achievable. Getting under 250KB means changing the map library, which is a §3 decision — raise it rather than shaving our 48.6KB.
 
 The own-code budget has been raised six times — 42 → 46 → 47 → 48 → 48.1 → 49.2KB — and each raise is argued in `scripts/check-embed-size.mjs` rather than merely recorded. It **must not be raised to get past a binding budget**: a budget that moves whenever it binds is not one. Trim, or keep the addition on the dashboard side of the seam — the bottom-sheet drawer was built that way, clawed from 285 bytes over to 18 under without touching the number. The fourth raise is the counter-example and is labelled as one: carrying *both* narrow-screen drawers cost 162 bytes, four trims paid back 18 of them, and the remaining 144 was the owner's call taken with the numbers on the table rather than a conclusion the file reached. The fifth (split dots where dotted routes share a road) was the same kind of call: granted at 75 bytes over for a first design that failed, and its replacement costs ~163 bytes, 63 over the old 48KB. The sixth (routes sharing a road take turns, dot by dot and dash by dash) was granted by the owner in advance and cost ~990 bytes: MapLibre cannot alternate symbol dots across tile edges, so the embed places them itself. The bundle was **not minified** then (Vite library mode leaves ES output alone), which is why it cost that much. Minification was switched on afterwards (2026-09-26, `output.minify` in `embed/vite.config.mts`) and took ours from 49.1KB to 45.6KB; the embed's language table, badge and page events were paid for out of that without a seventh raise.
 
@@ -602,7 +616,7 @@ write path takes no `RepoContext` and cannot — see the head of
 `userId` · `mapId` (unique) · `sheetId` · `gid` · `published` · `mapping` (JSON) · `headerRowIndex` · `autoSync` · `lastSyncedAt` · `lastStatus` · `lastReport` (JSON) · `failedLookups` (JSON) · `syncingUntil`
 
 A map's link to a Google Sheet, one row at most. A table rather than JSON on `maps` because
-three things write it (the linking import, the daily switch, the sync), and `maps` JSON columns
+three things write it (the linking import, the automatic-sync switch, the sync), and `maps` JSON columns
 have one writer each. `places.sourceKey` is the other half: which sheet row a location is, and
 absent for every location a sync must never touch. `docs/notes/sheet-sync.md`.
 

@@ -4,7 +4,9 @@ import { created } from "@/lib/api/responses";
 import { parseBody, withoutAuth } from "@/lib/api/route";
 import { registerUser } from "@/lib/auth/account";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
+import { rateLimit } from "@/lib/rate-limit/limiter";
 import { createVerificationLink } from "@/lib/auth/tokens";
+import { stampVerificationSent } from "@/lib/auth/verify-throttle";
 import { greetingName } from "@/lib/email/greeting";
 import { sendEmail } from "@/lib/email/resend";
 import { verifyEmailMessage } from "@/lib/email/templates/verify-email";
@@ -18,6 +20,17 @@ export const POST = withoutAuth(async (request) => {
   );
 
   await setSessionCookie(session);
+
+  // The confirmation below is this address's link for the minute, so a press of
+  // "Send a new link" straight after is answered with a 429 and a countdown
+  // rather than a 204 the account's own throttle then quietly drops. Never
+  // allowed to throw: the account exists, and a window somebody else opened for
+  // this address a moment ago is no reason to answer a successful signup with 429.
+  try {
+    rateLimit("authEmailCooldown", `verify:${user.email.toLowerCase()}`);
+  } catch {
+    // Already counting, which is all this line wanted.
+  }
 
   /**
    * The account exists and the cookie is written; from here nothing may fail the
@@ -51,11 +64,15 @@ export const POST = withoutAuth(async (request) => {
     try {
       const link = await createVerificationLink(user.id);
 
-      await sendEmail({
+      const { sent } = await sendEmail({
         template: "verify",
         to: user.email,
         ...verifyEmailMessage({ name: greetingName(user.name, user.email), url: link }),
       });
+
+      // Counted, so "Send a new link" pressed the moment the check-your-inbox
+      // page appears is a second email inside the minute, and refused.
+      if (sent) await stampVerificationSent(user.id);
     } catch (error) {
       console.error("Signup succeeded but the confirmation email did not send:", error);
     }

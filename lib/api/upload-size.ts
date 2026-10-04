@@ -25,6 +25,7 @@ const FRAMING_BYTES = 64 * 1024;
 export const MAX_UPLOAD_BYTES = {
   photos: MAX_PHOTOS_PER_PLACE * MAX_PHOTO_BYTES + FRAMING_BYTES,
   logo: MAX_LOGO_BYTES + FRAMING_BYTES,
+  cover: MAX_PHOTO_BYTES + FRAMING_BYTES,
 } as const;
 
 export function assertUploadSize(request: Request, kind: keyof typeof MAX_UPLOAD_BYTES): void {
@@ -43,7 +44,9 @@ export function assertUploadSize(request: Request, kind: keyof typeof MAX_UPLOAD
       "validation_failed",
       kind === "logo"
         ? "That logo is too large. Choose one under 512KB."
-        : `That's more than a location can hold. Add up to ${String(MAX_PHOTOS_PER_PLACE)} photos of 5MB or less.`,
+        : kind === "cover"
+          ? "That cover image is too large. Choose one under 5MB."
+          : `That's more than a location can hold. Add up to ${String(MAX_PHOTOS_PER_PLACE)} photos of 5MB or less.`,
       413,
     );
   }

@@ -8,8 +8,9 @@ import { requireUser } from "@/lib/auth/current-user";
 export const metadata: Metadata = { title: "General settings" };
 
 /**
- * Who you are and how the dashboard looks. `requireUser` is the dashboard
- * layout's own cached read, so this page costs no request of its own.
+ * Who you are and how the dashboard looks. `requireUser` is usually answered
+ * from memory (`lib/auth/identity-cache.ts`), so this page rarely costs a
+ * request of its own.
  */
 export default async function GeneralSettingsPage() {
   const user = await requireUser();

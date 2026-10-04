@@ -71,7 +71,7 @@ export type SheetSyncStepOutcome =
  * default, 30 at most — and a sheet that gained two hundred addresses is
  * minutes of work at a public geocoder's pace. So each step does a bounded
  * slice and says whether there is more; Sync now repeats it from the browser,
- * the daily Appwrite Function repeats it from there (functions/sheet-sync-daily).
+ * the Appwrite Function repeats it every 30 minutes (functions/sheet-sync).
  *
  * The rest of a step — reading the sheet, listing the map, writing, maybe
  * republishing — is a few seconds on top, which is why the default is small.
@@ -90,7 +90,7 @@ const MAX_CREATES_PER_STEP = 200;
 /**
  * One step of a map's sync against its linked sheet. docs/notes/sheet-sync.md.
  *
- * Runs on our server, from Sync now or the daily job — never in a visitor's
+ * Runs on our server, from Sync now or the automatic job — never in a visitor's
  * path (§2). Every read and write of the map goes through the same repositories
  * the dashboard uses, as the link's owner, so plan limits and ownership are
  * checked exactly as they are for a press in the editor.
@@ -468,7 +468,7 @@ async function step(
       report: {
         ...report,
         message:
-          "Not every change from the sheet is in yet. Sync again to finish, or the daily sync will.",
+          "Not every change from the sheet is in yet. Sync again to finish, or the next automatic sync will.",
       },
     };
   }
@@ -480,7 +480,7 @@ async function step(
 
   if (map.publishedAt && reportChangedMap(report)) {
     try {
-      // The configured origin: the daily job has no request to read one from.
+      // The configured origin: the automatic job has no request to read one from.
       await publishMap(ctx, map.id, env.appUrl);
       report.republished = true;
     } catch (error) {
@@ -555,10 +555,10 @@ type LookupOutcome = {
  * so a sheet with twenty rows at one retail park costs one request. An address
  * in `failedLookups` is answered from there without asking, and a new failure
  * is added to it — which is what stops one unfindable address costing a request
- * on every step of every day.
+ * on every step of every run.
  *
  * **Metered as `background`, which is the whole reason the spend classes exist.**
- * Nobody is watching a nightly sync, and a "Sync now" press is somebody watching a
+ * Nobody is watching an automatic sync, and a "Sync now" press is somebody watching a
  * job they know is long — neither is owed the last of the day's shared budget
  * ahead of a person typing an address into a form. So this stands aside at the
  * reserve, and the step ends the way it already ends when the geocoder goes quiet:

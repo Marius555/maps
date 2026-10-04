@@ -106,7 +106,7 @@ export const LOOKUP_LIMITS = {
  * the engine rather than only hidden in the toolbar.
  *
  * Sheet sync is here on the same argument. Importing a sheet once is free on
- * every plan; keeping a map linked to one re-reads it every day and geocodes
+ * every plan; keeping a map linked to one re-reads it every 30 minutes and geocodes
  * whatever changed, which is spend nobody pressed a button for. Enforced where
  * the link is created and again on every sync, so a downgraded account's links
  * go quiet rather than keep spending.

@@ -305,9 +305,11 @@ function isPermutation(a: readonly string[], b: readonly string[]): boolean {
 const UPLOAD_KINDS = {
   photo: { noun: "photo", maxBytes: MAX_PHOTO_BYTES, maxLabel: "5MB" },
   logo: { noun: "logo", maxBytes: MAX_LOGO_BYTES, maxLabel: "512KB" },
+  // A news post's cover — news.repository.ts.
+  cover: { noun: "cover image", maxBytes: MAX_PHOTO_BYTES, maxLabel: "5MB" },
 } as const;
 
-function assertUploadable(
+export function assertUploadable(
   file: File,
   kind: keyof typeof UPLOAD_KINDS = "photo",
 ): void {
@@ -342,7 +344,7 @@ function assertUploadable(
  * Best effort. A file we failed to delete is wasted storage, not a broken place,
  * so it must never turn a successful save into an error the user sees.
  */
-async function removeFiles(fileIds: readonly string[]): Promise<void> {
+export async function removeFiles(fileIds: readonly string[]): Promise<void> {
   for (const fileId of fileIds) {
     if (!fileId) continue;
 

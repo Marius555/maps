@@ -52,6 +52,16 @@ rewritten; it is the record of why this area is shaped as it is.
   re-applies it on `styledata` when the image is missing, because `setStyle` drops images
   that `carry-style.ts` does not carry. `maps.clusterIcon` has one writer: the cluster icon
   dialog.
+- **`settings.pinPulse` ripples every live pin forever, and `unpublished` is preview-only.**
+  Absent is still pins, as every map published before 2026-10-03 draws; the dashboard
+  default is on. The embed draws it as two circle layers under the pins (`addPulse` in
+  `embed/src/map.ts`) animated by `requestAnimationFrame` — **constant radii, one layer per
+  base size, transitions zeroed**, because a data-driven value through `setPaintProperty`
+  re-lays-out every tile in the worker, once per frame. The repaint per frame on a
+  customer's page is the owner's accepted cost and the reason it is a switch. The Publish
+  preview leaves locations created after `publishedAt` still (`unpublishedIds` in
+  `lib/snapshot/preview.ts`, carried as `MapSnapshot.unpublished` → feature property `q`),
+  which is how an owner tells live pins from waiting ones; `buildSnapshot` never writes it.
 - **`maps.settings` is one JSON blob with exactly one writer** (`useEmbedDesign`).
   `updateMap` serialises it whole, so two forms writing it is a lost update.
   `readEmbedSettings` resolves one fully-populated object feeding both the controls and
@@ -510,14 +520,31 @@ rewritten; it is the record of why this area is shaped as it is.
   on release past `SHEET_SNAP`. `touch-action: pan-y` on the panel, inside the wide query,
   is what hands the horizontal moves over while the list keeps scrolling. Verified with
   synthetic touch pointers: follows, shuts, opens, and ignores vertical, mouse and short moves.
-- **MapLibre's corners stand beside a floating panel, never on it (§12).** Both are
-  `z-index: 2` and the canvas comes later, so the attribution ⓘ (and a badge or zoom buttons
-  in that corner) drew over the panel. Asked as "hide the attribution behind the sidebar" —
-  hidden is what §12 forbids, so the owner chose moving it. A `margin-inline-*` of the
-  panel's width plus the gutter on every `.maplibregl-control-container > *`: a corner pinned
-  `right: 0` ignores a left margin, so only the corners on the panel's edge move, RTL
-  included, with no per-corner selectors. Shut, the margin is 54px (strip and gutter). Wide
-  query only, like the shut rules; measured 10px clear open and 20px clear shut.
+- **MapLibre's controls stand beside a floating panel, but the attribution ⓘ stays under
+  it, and that is an owner override of §12** (recorded in CLAUDE.md §0). The first time this
+  was asked for ("hide the attribution behind the sidebar"), the ⓘ was moved beside the panel
+  instead. Asked a second time, with the §12 cost spelled out, the owner chose hiding it. So
+  wherever a floating panel covers the bottom-right corner (a right panel, or a left one on an
+  RTL page), the credit is not visible at ≥769px. That includes the shut state, because the
+  strip covers the corner too.
+
+  How it works:
+  - **The margin is on each `.maplibregl-ctrl:not(.maplibregl-ctrl-attrib)`, not on the
+    corner,** so that the ⓘ can opt out of it. The margin is the panel's width plus 20px:
+    10px for the gutter, plus 10px to replace MapLibre's own control margin. Shut, it is 64px.
+  - **The corners are made full-width (`left: 0; right: 0`) while floating, and this is what
+    makes that work.** `--lm-panel-w` is a percentage, and a margin's percentage resolves
+    against the corner. A shrink-to-fit corner would make the percentage meaningless; a
+    full-width corner is the canvas, which is what the panel's own `%` reads.
+  - The corners are `pointer-events: none`, so the wider box swallows no drags (checked:
+    `elementFromPoint` across the bottom strip returns the canvas).
+  - A control floated right ignores a left margin, and the reverse, so `margin-inline-*`
+    still picks out the panel's edge on its own, RTL included.
+  - **The bottom-right corner drops to `z-index: 1`**, under the panel's 2. Before, they tied
+    at 2 and the canvas came later in the DOM, which is how the ⓘ drew on top of the panel.
+
+  Measured: controls 10px clear of the panel when open and 20px clear when shut, on both sides;
+  the ⓘ's centre hits the panel on a right panel, open and shut; a left panel's ⓘ is unchanged.
 - **The search field has no magnifier, with or without find-nearest in it** — asked to go.
   `createSearchField` appends `action` only when passed, and the input's end padding is 40px
   only under `.lm-search:has(.lm-search__action)`.

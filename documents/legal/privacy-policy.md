@@ -105,8 +105,8 @@ Plan; and from your browser, when you use our website and dashboard.
 
   No identifier is stored on your device. Each page view gets a new random identifier that exists
   only inside that page.
-- Individual records are kept for 30, 180 or 365 days, depending on the website owner's Plan.
-  [VERIFY: automatic deletion by Plan is not implemented yet.] Daily statistics made from them —
+- Individual records are kept for 30, 180 or 365 days, depending on the website owner's Plan, and
+  are then deleted automatically, at most a day late. Daily statistics made from them —
   counts per location, search term, country, device, referring website and page, with positions
   rounded to about 11 km — contain no IP addresses, and are kept until the owner deletes the map or
   their account.
@@ -147,7 +147,9 @@ tell us how to confirm who you are. We answer within one month. For complex or n
 may take up to two further months, and will tell you if we do. It is free, unless a request is
 manifestly unfounded or excessive.
 
-There is no button to delete your account yet. Write to us, and we delete it as set out in §8.
+You can delete your account yourself, in Settings → Account → Delete account. That deletes your
+account data and Customer Content straight away rather than after the periods in §8, and backup
+copies expire as §8 says. You can also write to us, and we delete it as set out in §8.
 
 You also have the right to complain to a supervisory authority. In Lithuania that is the **State
 Data Protection Inspectorate** (*Valstybinė duomenų apsaugos inspekcija*), L. Sapiegos g. 17, 10312

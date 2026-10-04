@@ -43,7 +43,7 @@ import { LOOKUP_LIMITS, getUserPlan, type PlanId } from "./plan-limits";
  *
  * ## Interactive spend outranks background spend
  *
- * The daily budget is not one queue. A person watching a spinner and a nightly
+ * The daily budget is not one queue. A person watching a spinner and an automatic
  * sheet sync are not owed the same service, so background work stops at
  * `BACKGROUND_RESERVE` and leaves the rest for somebody who is actually waiting.
  * Without that split the first import of the morning takes the day's budget and

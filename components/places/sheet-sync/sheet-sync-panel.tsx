@@ -6,13 +6,14 @@ import { ExternalLink } from "lucide-react";
 
 import { useSetSheetAutoSync, useUnlinkSheet } from "@/lib/query/sheet-link";
 import { toastProblem } from "@/lib/query/toast-error";
+import { AUTO_SYNC_EVERY } from "@/lib/sheet-sync/schedule";
 import { sheetUrl, type SheetLinkView } from "@/lib/sheet-sync/types";
 import { SyncReport } from "./sync-report";
 
 /**
  * Everything about a map's linked sheet, in the popover the toolbar opens.
  *
- * Sync now is the primary action and comes first; the daily switch and Unlink
+ * Sync now is the primary action and comes first; the automatic-sync switch and Unlink
  * are settings you change once, so they sit under the report. The sync itself is
  * owned by the button that opened this (`SheetSyncButton`), because it has to
  * keep running and report back if the popover is closed half way through.
@@ -81,7 +82,7 @@ export function SheetSyncPanel({
           isDisabled={setAutoSync.isPending}
           onChange={(autoSync) =>
             setAutoSync.mutate(autoSync, {
-              onError: (error) => toastProblem("Couldn't change daily sync", error),
+              onError: (error) => toastProblem("Couldn't change automatic sync", error),
             })
           }
         >
@@ -89,7 +90,7 @@ export function SheetSyncPanel({
             <Switch.Control>
               <Switch.Thumb />
             </Switch.Control>
-            <span className="text-sm">Sync every day</span>
+            <span className="text-sm">Sync {AUTO_SYNC_EVERY}</span>
           </Switch.Content>
         </Switch>
 

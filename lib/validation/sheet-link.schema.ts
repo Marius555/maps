@@ -40,7 +40,7 @@ export const syncSheetSchema = z.object({
   continuing: z.boolean().default(false),
 });
 
-/** The daily job's step request. It never confirms removals. */
+/** The automatic job's step request. It never confirms removals. */
 export const cronSyncStepSchema = z.object({
   mapId: z.string().trim().min(1).max(36),
   continuing: z.boolean().default(false),

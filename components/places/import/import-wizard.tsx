@@ -28,6 +28,7 @@ import { useSaveSheetLink } from "@/lib/query/sheet-link";
 import { toastProblem } from "@/lib/query/toast-error";
 import { mappingForLink } from "@/lib/sheet-sync/link-mapping";
 import { sourceKeysFor } from "@/lib/sheet-sync/row-key";
+import { AUTO_SYNC_EVERY } from "@/lib/sheet-sync/schedule";
 import type { CreatePlaceInput } from "@/lib/validation/place.schema";
 import type { AppMap } from "@/lib/repositories/types";
 import { useImportStore } from "@/lib/stores/import-store";
@@ -347,7 +348,7 @@ export function ImportWizard({
       saved,
       drafts.length,
       addedTags,
-      linked ? "It's linked to your sheet and syncs daily." : undefined,
+      linked ? `It's linked to your sheet and syncs ${AUTO_SYNC_EVERY}.` : undefined,
     );
   };
 

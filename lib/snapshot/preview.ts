@@ -12,7 +12,7 @@ import { buildSnapshot } from "./build";
  * embed bundle. That is the whole point: the preview is not a reimplementation
  * of the embed, it is the embed, and so it cannot drift from what ships.
  *
- * Three deliberate differences from the published article:
+ * Four deliberate differences from the published article:
  *
  * `allowedDomains` is cleared. The list exists to stop the snippet working on
  * sites that aren't the customer's — and the dashboard is one of those sites.
@@ -34,6 +34,9 @@ import { buildSnapshot } from "./build";
  * real embed bundle running inside the dashboard, and a preview that reported
  * would file the owner's own clicks on their own map as a visitor's. The switch
  * still shows its state in the designer; only the measurement is withheld.
+ *
+ * `unpublished` is added, naming the locations the last publish did not carry
+ * — see `unpublishedIds` below.
  */
 export function buildPreviewSnapshot(
   map: AppMap,
@@ -72,5 +75,39 @@ export function buildPreviewSnapshot(
     badge,
   );
 
-  return { ...snapshot, allowedDomains: [] };
+  const unpublished = snapshot.settings.pinPulse
+    ? unpublishedIds(map.publishedAt, places)
+    : [];
+
+  return {
+    ...snapshot,
+    ...(unpublished.length > 0 ? { unpublished } : {}),
+    allowedDomains: [],
+  };
+}
+
+/**
+ * The locations a publish has not carried to the customer's site yet — every
+ * one of them on a map never published, and otherwise those created after the
+ * last publish. The preview leaves these still while the rest ripple, which is
+ * the fourth deliberate difference from the published article: it is how an
+ * owner tells what is live from what is waiting for Publish.
+ *
+ * Creation and not the last edit: a location moved or renamed since is still
+ * on the site, only out of date, and `hasUnpublishedChanges` already says that.
+ * A timestamp that cannot be read counts as live, for that function's reason —
+ * a mark nothing can clear is worse than one missed.
+ */
+export function unpublishedIds(
+  publishedAt: string | null,
+  places: readonly Place[],
+): string[] {
+  if (!publishedAt) return places.map((place) => place.id);
+
+  const at = Date.parse(publishedAt);
+  if (Number.isNaN(at)) return [];
+
+  return places
+    .filter((place) => Date.parse(place.createdAt) > at)
+    .map((place) => place.id);
 }

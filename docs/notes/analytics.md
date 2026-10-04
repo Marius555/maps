@@ -173,6 +173,29 @@ and the five blockers this file raised are answered below rather than removed.
 - **Only three fields of a location cross to the client** — id, name and
   coordinates — for the table's names and the interaction heatmap's points.
 
+### Retention
+
+- **Raw sessions are deleted after the owner's plan's `retentionDays`**
+  (30 / 180 / 365, `SESSION_LIMITS`) — a promise the Privacy Policy §6 and the
+  DPA Annex I.B make in as many words, so this is a legal duty, not tidying.
+  `lib/analytics/retention.ts`, called a step at a time through
+  `POST /api/cron/session-retention` by the scheduled function
+  (`functions/sheet-sync`) on its 03:00 UTC runs. A day expires when it is
+  older than `today − retentionDays`, so a session lives between N and N+1 days.
+- **A day is folded before it is deleted.** Rollups are lazy (written on the
+  first Analytics read of a range), so an unvisited map has days with no
+  `mapDaily` row; the purge writes the row the tab would have, then deletes.
+  The exception is a day too big to read whole (`truncated`), which the tab
+  refuses to fold too — its raw rows go regardless, because the retention
+  period is the promise and the chart is not.
+- **The plan is the owner's current plan.** A downgrade shortens retention at
+  the next purge; that is what "depending on the Plan" means.
+- **`mapDaily` is kept.** It holds no IP address or visitor key, and the
+  documents say it lasts until the map or account is deleted.
+- **The retention reads and writes take no `RepoContext`** — the caller is the
+  cron secret, as `recordSession`'s is a visitor. They sit in their own section
+  at the foot of `analytics.repository.ts`.
+
 ## The §2 override, and the arithmetic that makes it survivable
 
 CLAUDE.md §2 is the business model: nothing we pay for per request may run in the

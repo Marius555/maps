@@ -14,17 +14,26 @@ process.env.STORAGE_ID ||= "test-storage";
  * form, renders at the top of the page pointing at nothing (`applyFieldErrors`
  * skips `_form`), and nothing about that shows up in a type check.
  */
-const acceptsMail = vi.hoisted(() => vi.fn(async () => true));
+const inspectMail = vi.hoisted(() =>
+  vi.fn(async (): Promise<{ accepts: boolean; exchanges: string[] }> => ({
+    accepts: true,
+    exchanges: ["mx.example.com"],
+  })),
+);
+const liveSaysDisposable = vi.hoisted(() => vi.fn(async () => false));
 
-vi.mock("@/lib/email/mx", () => ({ domainAcceptsMail: acceptsMail }));
+vi.mock("@/lib/email/mx", () => ({ inspectMail }));
+vi.mock("@/lib/email/disposable-live", () => ({ liveSaysDisposable }));
 
-const VALID = { name: "Ada", email: "ada@example.com", password: "a-good-password" };
+const VALID = { email: "ada@example.com", password: "a-good-password" };
 
 let signupServerSchema: typeof import("./auth.server.schema").signupServerSchema;
 
 beforeEach(async () => {
-  acceptsMail.mockClear();
-  acceptsMail.mockResolvedValue(true);
+  inspectMail.mockClear();
+  inspectMail.mockResolvedValue({ accepts: true, exchanges: ["mx.example.com"] });
+  liveSaysDisposable.mockClear();
+  liveSaysDisposable.mockResolvedValue(false);
   ({ signupServerSchema } = await import("./auth.server.schema"));
 });
 
@@ -46,11 +55,11 @@ describe("signupServerSchema", () => {
   it("refuses a throwaway address, on the email field", async () => {
     const fields = await fieldsFor({ ...VALID, email: "ada@mailinator.com" });
 
-    expect(fields?.email?.[0]).toMatch(/temporary email address/i);
+    expect(fields?.email?.[0]).toMatch(/can't create an account with this email/i);
   });
 
   it("refuses an address whose domain receives no mail, on the email field", async () => {
-    acceptsMail.mockResolvedValue(false);
+    inspectMail.mockResolvedValue({ accepts: false, exchanges: [] });
 
     const fields = await fieldsFor({ ...VALID, email: "ada@gmial.invalid" });
 
@@ -60,11 +69,37 @@ describe("signupServerSchema", () => {
   it("does not pay for a lookup about a domain already on the list", async () => {
     await fieldsFor({ ...VALID, email: "ada@mailinator.com" });
 
-    expect(acceptsMail).not.toHaveBeenCalled();
+    expect(inspectMail).not.toHaveBeenCalled();
+    expect(liveSaysDisposable).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unlisted domain whose mail goes to a throwaway server", async () => {
+    inspectMail.mockResolvedValue({ accepts: true, exchanges: ["em4.rejecthost.com"] });
+
+    const fields = await fieldsFor({ ...VALID, email: "ada@brand-new-burner.com" });
+
+    expect(fields?.email?.[0]).toMatch(/can't create an account with this email/i);
+  });
+
+  it("does not refuse a domain for receiving through a mainstream host", async () => {
+    // yandex.net is on the vendored list; a business on Yandex 360 is not a burner.
+    inspectMail.mockResolvedValue({ accepts: true, exchanges: ["mx.yandex.net"] });
+
+    await expect(
+      signupServerSchema.parseAsync({ ...VALID, email: "ada@shop.ru" }),
+    ).resolves.toMatchObject({ email: "ada@shop.ru" });
+  });
+
+  it("refuses what the live lookup knows and the vendored list does not", async () => {
+    liveSaysDisposable.mockResolvedValue(true);
+
+    const fields = await fieldsFor({ ...VALID, email: "ada@fresh-temp.xyz" });
+
+    expect(fields?.email?.[0]).toMatch(/can't create an account with this email/i);
   });
 
   it("says one thing at a time — a throwaway is not also a typo", async () => {
-    acceptsMail.mockResolvedValue(false);
+    inspectMail.mockResolvedValue({ accepts: false, exchanges: [] });
 
     const fields = await fieldsFor({ ...VALID, email: "ada@mailinator.com" });
 
@@ -72,9 +107,8 @@ describe("signupServerSchema", () => {
   });
 
   it("still enforces everything the shared schema did", async () => {
-    const fields = await fieldsFor({ name: "", email: "not-an-address", password: "x" });
+    const fields = await fieldsFor({ email: "not-an-address", password: "x" });
 
-    expect(fields?.name?.[0]).toBe("Tell us your name.");
     expect(fields?.email?.[0]).toBe("Enter a valid email address.");
     expect(fields?.password?.[0]).toBe("Use at least 8 characters.");
   });
@@ -82,6 +116,32 @@ describe("signupServerSchema", () => {
   it("asks nothing of a resolver when the address is not one", async () => {
     await fieldsFor({ ...VALID, email: "not-an-address" });
 
-    expect(acceptsMail).not.toHaveBeenCalled();
+    expect(inspectMail).not.toHaveBeenCalled();
+    expect(liveSaysDisposable).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unlisted domain whose mail goes to a throwaway server", async () => {
+    inspectMail.mockResolvedValue({ accepts: true, exchanges: ["em4.rejecthost.com"] });
+
+    const fields = await fieldsFor({ ...VALID, email: "ada@brand-new-burner.com" });
+
+    expect(fields?.email?.[0]).toMatch(/can't create an account with this email/i);
+  });
+
+  it("does not refuse a domain for receiving through a mainstream host", async () => {
+    // yandex.net is on the vendored list; a business on Yandex 360 is not a burner.
+    inspectMail.mockResolvedValue({ accepts: true, exchanges: ["mx.yandex.net"] });
+
+    await expect(
+      signupServerSchema.parseAsync({ ...VALID, email: "ada@shop.ru" }),
+    ).resolves.toMatchObject({ email: "ada@shop.ru" });
+  });
+
+  it("refuses what the live lookup knows and the vendored list does not", async () => {
+    liveSaysDisposable.mockResolvedValue(true);
+
+    const fields = await fieldsFor({ ...VALID, email: "ada@fresh-temp.xyz" });
+
+    expect(fields?.email?.[0]).toMatch(/can't create an account with this email/i);
   });
 });

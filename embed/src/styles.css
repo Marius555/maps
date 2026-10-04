@@ -3034,36 +3034,57 @@ button.lm-popup__gallery:focus-visible {
   }
 
   /*
-   * The map's own corners stand beside a floating panel, never on it (§12).
+   * The map's controls stand beside a floating panel — all but the credit's ⓘ,
+   * which stays in its corner, *under* the panel.
    *
-   * MapLibre's corners and the panel are both `z-index: 2` and the canvas comes
-   * later, so the credit's ⓘ — and the badge and zoom buttons, if they share
-   * the corner — drew over the panel. Asked as "hide the attribution behind the
-   * sidebar"; hidden is what §12 forbids, so it moves out from under it instead.
+   * **That is an owner override of §12, taken knowingly** (CLAUDE.md §0): asked
+   * twice as "hide the attribution behind the sidebar", the first time moved
+   * beside it instead. Wherever a floating panel covers the bottom-right corner —
+   * a right panel, or a left one on an RTL page — the OSM credit is not visible
+   * at this width, shut included, because the strip still covers the corner.
    *
-   * A margin on every corner, and only the ones anchored to the panel's edge
-   * move: a corner pinned `right: 0` ignores a left margin, and the reverse. So
-   * `margin-inline-*` picks the physical corners by itself, RTL included, with no
-   * per-corner or per-direction selectors. The percentage is the canvas's width,
-   * which floating is the root's — the panel's own `width` and `min-width`.
+   * The margin is on each control rather than the corner, so the ⓘ can opt out.
+   * That needs the corner full-width: `--lm-panel-w` is a percentage, a margin's
+   * percentage is its containing block's width, and a shrink-to-fit corner would
+   * make it meaningless — a full-width one is the canvas, which floating is the
+   * root, which is what the panel's own `%` reads. Corners are
+   * `pointer-events: none` in maplibre-gl.css, so the wider box eats no drags.
+   * A control floated right ignores a left margin and the reverse, so
+   * `margin-inline-*` still picks the panel's edge by itself, RTL included. The
+   * +20px replaces MapLibre's own 10px control margin, plus the 10px gutter.
+   *
+   * The ⓘ's corner drops to 1 under the panel's 2 — they tie and the canvas came
+   * later, which is how it drew over the panel. Its other controls are beside
+   * the panel, so lowering them changes nothing visible.
    */
   .lm-root[data-lm-float] .maplibregl-control-container > * {
-    margin-inline-start: calc(max(240px, var(--lm-panel-w, 40%)) + 10px);
+    left: 0;
+    right: 0;
+  }
+
+  .lm-root[data-lm-float] .maplibregl-ctrl-bottom-right {
+    z-index: 1;
+  }
+
+  .lm-root[data-lm-float] .maplibregl-ctrl:not(.maplibregl-ctrl-attrib) {
     transition: margin 180ms ease;
   }
 
-  .lm-root[data-lm-float][data-lm-side="right"] .maplibregl-control-container > * {
-    margin-inline: 0 calc(max(240px, var(--lm-panel-w, 40%)) + 10px);
+  .lm-root[data-lm-float]:not([data-lm-side="right"]) .maplibregl-ctrl:not(.maplibregl-ctrl-attrib) {
+    margin-inline-start: calc(max(240px, var(--lm-panel-w, 40%)) + 20px);
   }
 
-  /* Shut: past the 44px strip and its gutter. The `:not` keeps this off a
-     right panel, where the rule below is the shut one. */
-  .lm-root[data-lm-float][data-lm-shut]:not([data-lm-side="right"]) .maplibregl-control-container > * {
-    margin-inline-start: 54px;
+  .lm-root[data-lm-float][data-lm-side="right"] .maplibregl-ctrl:not(.maplibregl-ctrl-attrib) {
+    margin-inline-end: calc(max(240px, var(--lm-panel-w, 40%)) + 20px);
   }
 
-  .lm-root[data-lm-float][data-lm-side="right"][data-lm-shut] .maplibregl-control-container > * {
-    margin-inline-end: 54px;
+  /* Shut: past the 44px strip, its gutter and the control's own 10px. */
+  .lm-root[data-lm-float][data-lm-shut]:not([data-lm-side="right"]) .maplibregl-ctrl:not(.maplibregl-ctrl-attrib) {
+    margin-inline-start: 64px;
+  }
+
+  .lm-root[data-lm-float][data-lm-side="right"][data-lm-shut] .maplibregl-ctrl:not(.maplibregl-ctrl-attrib) {
+    margin-inline-end: 64px;
   }
 
   /* The side swipe (`fold` in index.ts) gets the horizontal moves; the list

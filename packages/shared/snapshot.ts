@@ -564,6 +564,17 @@ export type SnapshotSettings = {
    */
   pinColor?: string;
 
+  /**
+   * Whether every location ripples on a loop — the editor's drop ripple, said
+   * forever, so a visitor's eye is drawn to the pins and an owner can tell in
+   * the Publish preview which of them are live (`MapSnapshot.unpublished`).
+   *
+   * Absent means still, which is what every map published before this drew.
+   * Spelled as the ripple being on for that reason: a flag whose absence meant
+   * rippling would start animating every live map on the next `/embed` deploy.
+   */
+  pinPulse?: boolean;
+
   /* Measurement. */
 
   /**
@@ -812,6 +823,15 @@ export type MapSnapshot = {
    * plan change reaches a live map on its next publish, never by itself.
    */
   badge?: SnapshotBadge;
+  /**
+   * **Preview only — a publish never writes this.** The ids of locations added
+   * since the map was last published, which the Publish preview leaves still
+   * while `settings.pinPulse` ripples the rest: the difference is how an owner
+   * tells which pins are on their site and which are waiting for Publish.
+   * Written by `buildPreviewSnapshot` alone, and absent on every real snapshot,
+   * where every location is live by definition.
+   */
+  unpublished?: string[];
   /**
    * Hostnames allowed to embed this map. Empty means "anywhere".
    * Anti-abuse, not security — anyone can copy the snapshot URL (§7).

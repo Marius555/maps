@@ -46,29 +46,18 @@ describe("loginSchema", () => {
 });
 
 describe("signupSchema", () => {
-  it("trims the name", () => {
+  it("asks for no name", () => {
     const result = signupSchema.parse({
-      name: "  Ada  ",
+      name: "Ada",
       email: "ada@example.com",
       password: "12345678",
     });
 
-    expect(result.name).toBe("Ada");
-  });
-
-  it("rejects a name that is only whitespace", () => {
-    const result = signupSchema.safeParse({
-      name: "   ",
-      email: "ada@example.com",
-      password: "12345678",
-    });
-
-    expect(result.success).toBe(false);
+    expect(result).toEqual({ email: "ada@example.com", password: "12345678" });
   });
 
   it("holds the password to Appwrite's own minimum of 8", () => {
     const short = signupSchema.safeParse({
-      name: "Ada",
       email: "ada@example.com",
       password: "1234567",
     });

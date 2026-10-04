@@ -24,4 +24,5 @@ export const TABLES = {
   apiCalls: "apiCalls",
   emailLog: "emailLog",
   promotions: "promotions",
+  news: "news",
 } as const;

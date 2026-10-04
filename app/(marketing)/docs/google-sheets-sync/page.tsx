@@ -7,6 +7,7 @@ import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
 import { findArticle } from "@/lib/docs/articles";
+import { AUTO_SYNC_EVERY } from "@/lib/sheet-sync/schedule";
 
 const ARTICLE = findArticle("google-sheets-sync");
 
@@ -64,7 +65,7 @@ export default function GoogleSheetsSyncPage() {
             <p>
               On the Review step, <strong>Keep in sync with the sheet</strong> is
               on already. Press <strong>Import N locations</strong>; the toast
-              confirms the map is linked and syncs daily.
+              confirms the map is linked and syncs {AUTO_SYNC_EVERY}.
             </p>
           </DocsStep>
         </DocsSteps>
@@ -90,8 +91,8 @@ export default function GoogleSheetsSyncPage() {
               "Syncs straight away. You can close the panel — the sync carries on.",
             ],
             [
-              "Sync every day",
-              "Syncs by itself every day at 03:00 UTC.",
+              `Sync ${AUTO_SYNC_EVERY}`,
+              `Syncs by itself ${AUTO_SYNC_EVERY}.`,
             ],
             ["Open the sheet", "Opens the linked sheet in Google Sheets."],
             [
@@ -201,7 +202,7 @@ export default function GoogleSheetsSyncPage() {
 
         <p>
           If a sync says not every change is in yet, press{" "}
-          <strong>Sync now</strong> again, or leave it to the daily sync.
+          <strong>Sync now</strong> again, or leave it to the next automatic sync.
         </p>
       </DocsSection>
 
@@ -216,7 +217,7 @@ export default function GoogleSheetsSyncPage() {
         <p>
           The panel says how many would go. If that’s what you meant, press{" "}
           <strong>Remove N and sync</strong>. If not, fix the sheet and sync again.
-          The daily sync never confirms this by itself.
+          The automatic sync never confirms this by itself.
         </p>
       </DocsSection>
 

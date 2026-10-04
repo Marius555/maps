@@ -9,6 +9,7 @@ import { AuthDivider } from "@/components/auth/auth-divider";
 import { GoogleButton } from "@/components/auth/google-button";
 import { LegalConsentNotice } from "@/components/brand/legal-consent-notice";
 import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
+import { startResendCooldown } from "@/components/verify-email/resend-cooldown";
 import { useSignup } from "@/lib/query/auth";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { toastProblem } from "@/lib/query/toast-error";
@@ -25,7 +26,7 @@ export function SignupForm() {
     formState: { isSubmitting },
   } = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { name: "", email: "", password: "" },
+    defaultValues: { email: "", password: "" },
   });
 
   /**
@@ -45,6 +46,9 @@ export function SignupForm() {
   const onSubmit = handleSubmit(async (values) => {
     try {
       await signup.mutateAsync(values);
+      // The first link is already on its way, so the next screen's "Send a new
+      // link" starts on the server's minute rather than live.
+      startResendCooldown(values.email, 60_000);
       router.replace("/verify-email?status=sent");
       router.refresh();
     } catch (error) {
@@ -67,13 +71,6 @@ export function SignupForm() {
       <AuthDivider />
 
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <FormTextField
-          control={control}
-          name="name"
-          label="Name"
-          autoComplete="name"
-        />
-
         <FormTextField
           control={control}
           name="email"
