@@ -11,3 +11,9 @@ declare module "*.css?inline" {
   const css: string;
   export default css;
 }
+
+/**
+ * The folder MapLibre's files sit in beside map.js, e.g. "maplibre-6.11.2".
+ * Replaced at build time by Vite's `define` (embed/vite.config.mts).
+ */
+declare const __MAPLIBRE_DIR__: string;

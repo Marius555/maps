@@ -31,7 +31,7 @@
 
 import { gzipSync } from "node:zlib";
 import { readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 const OUT_DIR = join(process.cwd(), "public", "embed");
 /** Vite's `publicDir`. Whatever is in here is copied to OUT_DIR and never ships. */
@@ -227,7 +227,18 @@ const OWN_BUDGET_BYTES = Math.round(49.2 * 1024);
  */
 const VENDOR_CEILING_BYTES = 305 * 1024;
 
-const isVendor = (name) => name.startsWith("maplibre-gl");
+/*
+ * MapLibre's files sit in a folder named after its version (maplibre-6.11.2/,
+ * see embed/channel.mjs). The prefix still matches a flat maplibre-gl*.mjs left
+ * over from before that change, so nothing of MapLibre is ever counted as ours.
+ */
+const isVendor = (name) => name.startsWith("maplibre-");
+
+/**
+ * Written after this check by write-embed-version.mjs. A visitor never fetches
+ * it, and running this script again on its own would otherwise count it as ours.
+ */
+const NOT_SHIPPED = new Set(["version.json"]);
 
 /**
  * The manual harness (embed/dev/, copied in by Vite's publicDir) shares the
@@ -263,7 +274,13 @@ async function main() {
   let entries;
 
   try {
-    entries = await readdir(OUT_DIR);
+    // Recursive, for the versioned MapLibre folder; separators normalised so the
+    // names read the same on Windows.
+    entries = (await readdir(OUT_DIR, { recursive: true, withFileTypes: true }))
+      .filter((entry) => entry.isFile())
+      .map((entry) =>
+        join(entry.parentPath, entry.name).slice(OUT_DIR.length + 1).split(sep).join("/"),
+      );
   } catch {
     console.error('No build output in public/embed. Run "npm run build:embed".');
     process.exit(1);
@@ -272,7 +289,7 @@ async function main() {
   const harness = await harnessNames();
 
   const files = entries
-    .filter((name) => !name.endsWith(".map") && !harness.has(name))
+    .filter((name) => !name.endsWith(".map") && !harness.has(name) && !NOT_SHIPPED.has(name))
     .sort();
 
   if (files.length === 0) {
@@ -292,7 +309,7 @@ async function main() {
     else own += size;
 
     console.log(
-      `  ${name.padEnd(26)} ${kb(size).padStart(9)}  ${isVendor(name) ? "maplibre" : "ours"}`,
+      `  ${name.padEnd(42)} ${kb(size).padStart(9)}  ${isVendor(name) ? "maplibre" : "ours"}`,
     );
   }
 

@@ -6,12 +6,14 @@ rewritten; it is the record of why this area is shaped as it is.
 ## Invariants
 
 - **The embed is served from `cdn.pinglide.com`, not the dashboard.** `map.js`, MapLibre's
-  three files and the gazetteer live in the snapshots bucket under `embed/` and `gazetteer/`
+  three files and the gazetteer live in the snapshots bucket under `embed/v1/` and `gazetteer/`
   (`npm run deploy:cdn`, and `postbuild` with `UPLOAD_EMBED_ON_BUILD=true`). A pasted
   script URL is permanent, and served from Appwrite Sites it would be metered bandwidth in
   the visitor path. Files are uploaded with explicit JavaScript/JSON content types — a module
   script served as anything else refuses to run — and `map.js` goes up **last**, because it
-  imports `./maplibre-gl.mjs` by relative URL. R2's ETags are weak (`W/"…"`); compare the
+  imports `./maplibre-<version>/maplibre-gl.mjs` by relative URL. `v1` is the embed's channel
+  and MapLibre's folder is named after its version, so nothing a cached `map.js` imports is
+  ever overwritten — `docs/notes/versioning.md`. R2's ETags are weak (`W/"…"`); compare the
   hash inside them.
 - **`map.js` is a ~1KB loader, and the map is `map-[hash].js`** (`embed/src/boot.ts` →
   `embed/src/index.ts`). A module runs nothing until its whole static graph has arrived, so

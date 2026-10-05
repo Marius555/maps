@@ -31,7 +31,7 @@ import { fetchSnapshot } from "./snapshot";
  * so the bundler leaves it alone; resolved against this module, so it is the
  * same URL the main file resolves and the browser fetches and runs it once.
  */
-const SHARED_FILE = "./maplibre-gl-shared.mjs";
+const SHARED_FILE = `./${__MAPLIBRE_DIR__}/maplibre-gl-shared.mjs`;
 
 function boot(): void {
   const scripts = document.querySelectorAll<HTMLScriptElement>(

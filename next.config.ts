@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
 
+import { buildInfo } from "./scripts/build-info.mjs";
+
+/** Read once per build, and given to lib/version.ts (docs/notes/versioning.md). */
+const build = buildInfo();
+
 /**
  * The embed is served from here in development and from a CDN in production.
  * Either way it is fetched by pages on domains that are not ours, and two things
@@ -29,6 +34,12 @@ const adminHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_APP_VERSION: build.version,
+    NEXT_PUBLIC_APP_COMMIT: build.commit,
+    NEXT_PUBLIC_BUILT_AT: build.builtAt,
+  },
+
   /*
    * Origins the **dev server** will serve its own assets to. Ignored in a
    * production build.

@@ -9,6 +9,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { AdminAccountMenu } from "./admin-account-menu";
 import { AdminBadge } from "./admin-badge";
 import { AdminNavList } from "./admin-nav-list";
+import { AdminVersion } from "./admin-version";
 
 /**
  * Below `md`: the customer shell's mobile header and left drawer
@@ -55,6 +56,7 @@ export function AdminMobileNav({ email }: { email: string }) {
               <Button slot="close" variant="tertiary" size="sm">
                 Close
               </Button>
+              <AdminVersion />
             </Drawer.Footer>
           </Drawer.Dialog>
         </Drawer.Content>

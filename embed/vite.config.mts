@@ -1,5 +1,20 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
+
+import { maplibreDir } from "./channel.mjs";
+
+/**
+ * The installed MapLibre's folder, e.g. 'maplibre-6.11.2'. A new version gets a
+ * new folder rather than overwriting the old files, so a cached map.js from the
+ * last release keeps loading the MapLibre it was built against (embed/channel.mjs).
+ */
+const MAPLIBRE_DIR = maplibreDir(
+  JSON.parse(
+    readFileSync(createRequire(import.meta.url).resolve("maplibre-gl/package.json"), "utf8"),
+  ).version,
+);
 
 /**
  * The embed build target (CLAUDE.md §4).
@@ -30,6 +45,8 @@ import { defineConfig } from "vite";
  */
 export default defineConfig({
   root: resolve(import.meta.dirname),
+  // Read by boot.ts and worker.ts, which name the other two MapLibre files.
+  define: { __MAPLIBRE_DIR__: JSON.stringify(MAPLIBRE_DIR) },
   /**
    * The manual test harness (embed/dev/) is copied into the build output, so it
    * sits next to map.js: /embed/live.html points the real bundle at a real
@@ -73,9 +90,9 @@ export default defineConfig({
       // share a chunk with.
       external: ["maplibre-gl"],
       output: {
-        // Rewrites the bare specifier to a sibling file, resolved relative to
+        // Rewrites the bare specifier to a file in the versioned folder beside
         // map.js on our origin. scripts/copy-maplibre-worker.mjs puts it there.
-        paths: { "maplibre-gl": "./maplibre-gl.mjs" },
+        paths: { "maplibre-gl": `./${MAPLIBRE_DIR}/maplibre-gl.mjs` },
         /*
          * The map chunk the loader imports. Hashed, so a new build never meets a
          * cached copy of the old one, and old ones stay valid for any visitor

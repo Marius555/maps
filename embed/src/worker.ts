@@ -41,7 +41,8 @@ import { Protocol } from "pmtiles";
 // Held in a variable so the bundler treats the URL as runtime-resolved rather
 // than a build-time asset reference — the file is copied in after the build,
 // and inlining it would defeat the point of sharing one copy with the worker.
-const WORKER_FILE = "./maplibre-gl-worker.mjs";
+// In MapLibre's versioned folder beside this chunk (embed/channel.mjs).
+const WORKER_FILE = `./${__MAPLIBRE_DIR__}/maplibre-gl-worker.mjs`;
 
 config.WORKER_URL = new URL(WORKER_FILE, import.meta.url).href;
 

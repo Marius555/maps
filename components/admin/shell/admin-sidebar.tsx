@@ -6,6 +6,7 @@ import { BrandLogo } from "@/components/brand/brand-logo";
 import { AdminAccountMenu } from "./admin-account-menu";
 import { AdminBadge } from "./admin-badge";
 import { AdminNavList } from "./admin-nav-list";
+import { AdminVersion } from "./admin-version";
 
 /**
  * The console's rail from `md` up; `AdminMobileNav` below it.
@@ -36,6 +37,7 @@ export function AdminSidebar({ email }: { email: string }) {
 
       <div className="p-2">
         <AdminAccountMenu email={email} />
+        <AdminVersion />
       </div>
     </aside>
   );

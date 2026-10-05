@@ -156,7 +156,8 @@ npm run check        # typecheck + lint + tests — run this before calling work
 npm run typecheck    # next typegen && tsc --noEmit
 npm run lint         # eslint
 npm run test         # vitest run
-npm run build:embed  # vite build → public/embed, copy MapLibre runtime, check size
+npm run build:embed  # vite build → public/embed, copy MapLibre runtime, check size, write version.json
+npm run release -- patch|minor|major  # bump, CHANGELOG, commit + tag (never pushes) — docs/notes/versioning.md
 npm run setup:appwrite  # create missing tables/columns/indexes from scripts/appwrite-schema.mjs
 npm run setup:r2        # snapshot bucket: custom domain, CORS, zone cache + header rules
 npm run deploy:cdn      # embed + gazetteer -> cdn.pinglide.com (skips unchanged files)
@@ -272,7 +273,8 @@ one exists: `docs/notes/environment.md`.
   `npm run migrate:style-host` moves maps already published) and
   `NEXT_PUBLIC_EMBED_SCRIPT_URL` / `NEXT_PUBLIC_GAZETTEER_URL` (unset, the snippet and the
   gazetteer point at the dashboard's own origin). **Set both to `cdn.pinglide.com` before the
-  first customer pastes a snippet** — unset, every visitor downloads ~345KB from Appwrite
+  first customer pastes a snippet** — the script URL is `https://cdn.pinglide.com/embed/v1/map.js`,
+  the `v1` being the embed's channel (`docs/notes/versioning.md`) — unset, every visitor downloads ~345KB from Appwrite
   Sites, which is metered bandwidth in the visitor path (§2), and a pasted URL is permanent.
   `npm run deploy:cdn` puts the files there; `UPLOAD_EMBED_ON_BUILD=true` on the site makes
   `postbuild` upload the embed on every deploy. The gazetteer is gitignored, so it is only
@@ -358,6 +360,11 @@ Area-specific invariants live at the head of each file in the table below.
   instead. Run `npm run build:embed` after any change under `/embed` or
   `/packages/shared` — `npm run check` does not. Do not raise the own-code budget to get
   past it (§4).
+- **Never overwrite or delete a file a published `map.js` can import.** The embed ships
+  under a channel (`/embed/v1/`), its chunk is hashed and MapLibre sits in a folder named
+  after its version, so a visitor's cached older `map.js` still finds what it was built
+  against. A change old snippets cannot survive is a new channel, never an edit to `v1` —
+  `docs/notes/versioning.md`.
 - **Adding to `EditorMode` something that is not a `ShapeKind` means auditing every
   `drawMode` read.** Five of them were silently wrong for the whole length of a route
   gesture, and the symptom was "clicking a pin does nothing".
@@ -407,6 +414,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `lib/news/**`, `components/news/**`, `app/(marketing)/news/**`, `app/admin/news/**`, `app/api/admin/news/**`, `components/admin/sections/news/**`, `lib/repositories/news.repository.ts` | `docs/notes/news.md` |
 | `documents/legal/**`, `lib/legal/**`, `components/legal/**`, the `legal` links in `brand.json` | `documents/legal/README.md` |
 | `lib/limits/**`, `lib/rate-limit/**`, `lib/api/route.ts`'s wrappers, `rollBackIfOverLimit`, `ownerPermissions`, `scripts/migrate-permissions.mjs` | `docs/notes/limits.md` |
+| `scripts/release.mjs`, `scripts/upload-cdn.mjs`, `scripts/build-info.mjs`, `embed/channel.mjs`, `lib/version.ts`, `app/api/version/**`, `CHANGELOG.md` | `docs/notes/versioning.md` |
 | `app/admin/**`, `app/(auth)/login/admin/**`, `app/api/admin/**`, `components/admin/**`, `lib/admin/**`, `lib/repositories/admin/**`, `lib/api-usage/**`, `lib/repositories/{api-calls,email-log}.repository.ts` | `docs/notes/admin.md` |
 
 Self-hosting runbooks, unchanged: `docs/self-hosting-geocoding.md`,

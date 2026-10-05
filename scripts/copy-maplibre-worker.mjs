@@ -32,6 +32,8 @@ import { copyFile, mkdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
+import { maplibreDir } from "../embed/channel.mjs";
+
 /** What the dashboard needs: the worker and the chunk it imports. */
 const WORKER_FILES = ["maplibre-gl-worker.mjs", "maplibre-gl-shared.mjs"];
 
@@ -47,14 +49,21 @@ const EMBED_FILES = [...WORKER_FILES, "maplibre-gl.mjs"];
  * Two destinations, for two build targets:
  * - public/maplibre  — the dashboard, which points config.WORKER_URL at a fixed
  *   path (lib/map/worker.ts).
- * - public/embed     — the embed, which resolves the worker relative to its own
- *   bundle URL, so the files have to sit beside map.js. The embed runs on other
- *   people's domains; a shared path on ours is the only thing it can rely on.
+ * - public/embed/maplibre-<version>  — the embed, which resolves the worker
+ *   relative to its own bundle URL, so the files have to sit beside map.js. The
+ *   embed runs on other people's domains; a shared path on ours is the only
+ *   thing it can rely on. The folder is named after the version so an upgrade
+ *   never overwrites files a cached older map.js still imports (embed/channel.mjs).
  */
-const TARGETS = [
-  { dir: join(process.cwd(), "public", "maplibre"), files: WORKER_FILES },
-  { dir: join(process.cwd(), "public", "embed"), files: EMBED_FILES },
-];
+function targets(version) {
+  return [
+    { dir: join(process.cwd(), "public", "maplibre"), files: WORKER_FILES },
+    {
+      dir: join(process.cwd(), "public", "embed", maplibreDir(version)),
+      files: EMBED_FILES,
+    },
+  ];
+}
 
 const require = createRequire(import.meta.url);
 
@@ -63,7 +72,11 @@ async function main() {
   // this keeps working under pnpm/yarn layouts and in a monorepo.
   const distDir = dirname(require.resolve("maplibre-gl/dist/maplibre-gl.mjs"));
 
-  for (const target of TARGETS) {
+  const { version } = JSON.parse(
+    await readFile(require.resolve("maplibre-gl/package.json"), "utf8"),
+  );
+
+  for (const target of targets(version)) {
     await mkdir(target.dir, { recursive: true });
 
     for (const file of target.files) {
@@ -71,13 +84,9 @@ async function main() {
     }
   }
 
-  const { version } = JSON.parse(
-    await readFile(require.resolve("maplibre-gl/package.json"), "utf8"),
-  );
-
   console.log(
     `Copied MapLibre ${version} runtime files to public/maplibre/ ` +
-      `(${WORKER_FILES.length}) and public/embed/ (${EMBED_FILES.length})`,
+      `(${WORKER_FILES.length}) and public/embed/${maplibreDir(version)}/ (${EMBED_FILES.length})`,
   );
 }
 
