@@ -26,9 +26,12 @@ import { SourceFacts } from "./source-facts";
 export function SourceStep({
   mapId,
   headroom,
+  isReady,
 }: {
   mapId: string;
   headroom: { plan: string; limit: number; used: number };
+  /** False until the wizard's persisted run has loaded; see `ImportWizard`. */
+  isReady: boolean;
 }) {
   const setSource = useImportStore((state) => state.setSource);
 
@@ -117,9 +120,17 @@ export function SourceStep({
       <SourceChoice
         current={tab}
         onChange={setTab}
-        filePanel={<FileDrop isBusy={isBusy} onPick={onPickFile} />}
+        filePanel={<FileDrop
+            isBusy={isBusy}
+            isDisabled={!isReady}
+            onPick={onPickFile}
+          />}
         sheetPanel={
-          <SheetUrlForm isBusy={isBusy} onSubmit={onPickGoogleSheet} />
+          <SheetUrlForm
+            isBusy={isBusy}
+            isDisabled={!isReady}
+            onSubmit={onPickGoogleSheet}
+          />
         }
       />
 

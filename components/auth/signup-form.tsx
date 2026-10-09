@@ -10,6 +10,7 @@ import { GoogleButton } from "@/components/auth/google-button";
 import { LegalConsentNotice } from "@/components/brand/legal-consent-notice";
 import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
 import { startResendCooldown } from "@/components/verify-email/resend-cooldown";
+import { track } from "@/lib/posthog/client";
 import { useSignup } from "@/lib/query/auth";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { toastProblem } from "@/lib/query/toast-error";
@@ -46,6 +47,7 @@ export function SignupForm() {
   const onSubmit = handleSubmit(async (values) => {
     try {
       await signup.mutateAsync(values);
+      track("user_signed_up");
       // The first link is already on its way, so the next screen's "Send a new
       // link" starts on the server's minute rather than live.
       startResendCooldown(values.email, 60_000);

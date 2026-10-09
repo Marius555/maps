@@ -151,6 +151,9 @@ export function AddLocationButton({
         <Button
           size="sm"
           variant={isAdding ? "primary" : "tertiary"}
+          // The visible label is gone, so the name has to be stated: an icon
+          // alone gives screen readers (and the e2e tests) nothing to call it.
+          aria-label={isAdding ? "Stop adding" : "Add location"}
           aria-pressed={isAdding}
           isPending={isBusy}
           // The dragging half is left to `body.is-pin-dragging`, which paints

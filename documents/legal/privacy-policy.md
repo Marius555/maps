@@ -33,13 +33,15 @@ measurement for customers runs at scale.]
 | **Bill paid Plans** | The Merchant of Record handles payment details — we never see card numbers. We receive: name, email address, company name, billing country and address, VAT number, Plan, amounts and subscription status | (b) contract; (c) accounting and tax law | Accounting records for 10 years, as Lithuanian accounting law requires; the rest for the life of your account |
 | **Answer support requests** | Your messages, and anything you tell us in them | (b) contract; (f) our legitimate interest in helping users | 24 months after the last message |
 | **Operate our servers** | Technical request logs: IP address, address requested, time, browser, error details | (f) our legitimate interest in running, securing and fixing the Service | As kept by our hosting provider, and no more than 12 months where we control it |
-| **Improve the Service** | How the dashboard is used, in anonymous and aggregated form | (f) our legitimate interest in improving the Service | Anonymous data is not personal data |
+| **Improve the Service** | How our website and the dashboard are used: pages viewed, buttons pressed, errors, and the steps you take (signing up, creating a map, adding locations, publishing, paying), with browser, device type and approximate location derived from the IP address. Once you sign in, this is linked to your account identifier, name and email address | (f) our legitimate interest in understanding and improving the Service | [VERIFY: PostHog event retention on our plan] |
 | **Protect our legal position** | Any of the above that is relevant to a claim, dispute or request from an authority | (c) legal obligation; (f) our legitimate interest in establishing, exercising or defending legal claims | As long as needed, up to the end of the applicable limitation period |
 | **Tell customers about product news** | Name, email address | (f) our legitimate interest, for existing customers about similar services — or your consent. You can opt out in every email | Until you opt out |
 
-We do **not** currently use any third-party analytics, advertising or tracking tools on our website or
-dashboard. If we add any, we will update this policy first, and ask for your consent where the law
-requires it.
+We measure how our website and dashboard are used with PostHog, hosted in the European Union. It
+stores **nothing on your device** — no cookies, no local storage — so it forgets you when you reload a
+page, and only knows who you are while you are signed in. We use no advertising or cross-site
+tracking tools. **Maps published on our customers' websites never load PostHog**; what they measure,
+if the website owner switches it on, is described in §6.
 
 We do not sell personal data. We do not make decisions about you based solely on automated
 processing that produce legal effects or similarly significantly affect you.
@@ -63,6 +65,7 @@ Plan; and from your browser, when you use our website and dashboard.
 | Appwrite [VERIFY: contracting entity, from the DPA in the Appwrite console] | Database, file storage, sign-in, backups | European Union — Frankfurt, Germany. Backups are kept in a separate region [VERIFY: backup region and retention on our Appwrite plan] | EU hosting [VERIFY: safeguard for any access from outside the EEA] |
 | {{hosting.provider}} | Runs our website, the dashboard, and the endpoint that receives visitor measurement | {{hosting.region}} | [VERIFY: once the host is chosen] |
 | Resend [VERIFY: contracting entity] | Sending service emails | United States | EU Standard Contractual Clauses and the EU-US Data Privacy Framework |
+| PostHog [VERIFY: contracting entity and DPA] | Measuring how our website and dashboard are used, and reporting errors | European Union — Frankfurt, Germany | EU hosting [VERIFY: safeguard for any access from outside the EEA] |
 | Geoapify GmbH [REMOVE IF UNUSED] | Placing addresses you import on the map, and calculating routes you draw | Germany and Finland | European Economic Area |
 | Cloudflare, Inc. | Storing and delivering published map files | Global network; United States company | EU Standard Contractual Clauses and the EU-US Data Privacy Framework |
 

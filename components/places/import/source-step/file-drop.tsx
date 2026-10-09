@@ -16,9 +16,12 @@ const FORMATS = ["CSV", "XLSX", "XML"] as const;
  */
 export function FileDrop({
   isBusy,
+  isDisabled,
   onPick,
 }: {
   isBusy: boolean;
+  /** Nothing may be picked or dropped yet — see `ImportWizard`'s `isReady`. */
+  isDisabled: boolean;
   onPick: (file: File) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -46,6 +49,7 @@ export function FileDrop({
       onDrop={(event) => {
         event.preventDefault();
         setIsOver(false);
+        if (isDisabled) return;
 
         const file = event.dataTransfer.files?.[0];
         if (file) onPick(file);
@@ -63,6 +67,7 @@ export function FileDrop({
         type="file"
         className="sr-only"
         accept={FILE_ACCEPT}
+        disabled={isDisabled}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) onPick(file);
@@ -78,7 +83,11 @@ export function FileDrop({
 
         <div className="flex items-center justify-center gap-3 text-xs text-muted">
           <span>or</span>
-          <Button isPending={isBusy} onPress={() => input.current?.click()}>
+          <Button
+            isPending={isBusy}
+            isDisabled={isDisabled}
+            onPress={() => input.current?.click()}
+          >
             Choose file
           </Button>
         </div>

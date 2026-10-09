@@ -96,6 +96,7 @@ Change one of these and change it everywhere it appears.
 | 7 | Which cookies the Merchant of Record's checkout sets | Cookie §4 | The Merchant of Record's cookie policy, once chosen |
 | 8 | Whether a data protection officer is required (GDPR Art. 37(1)(b)) once visitor measurement runs at scale | Privacy §1 | Lawyer question 2 |
 | 9 | Whether Data Act Art. 26(b) is met by describing export formats on request, or needs a published register | Terms §13.3 | Lawyer question 8 |
+| 10 | PostHog's contracting entity, DPA, event retention, and the safeguard for any access from outside the EEA | Privacy §2, §5 | posthog.com/dpa and the project's data retention settings (EU cloud) |
 
 ## Open issues in the code
 
@@ -147,6 +148,11 @@ them being fixed. Each needs a code change or a softer sentence before publishin
    (it stores customer content and disseminates it to the public)? If a platform, the micro and small
    enterprise exemption in DSA Art. 19 applies until we outgrow it — the Terms already cover Arts. 11,
    12, 14, 16, 17 and 18 either way.
+10. **Usage measurement without storage.** PostHog runs on our website and dashboard with
+    `persistence: "memory"`: nothing stored on the device, no banner. EDPB Guidelines 2/2023 say a
+    script that makes a device send information can still need consent under Art. 61 even without
+    storage. Is legitimate interest without a banner defensible for first-party product analytics, or
+    is a consent banner needed — at least on the public website?
 
 ## Legal checks performed
 

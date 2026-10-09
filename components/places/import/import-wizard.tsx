@@ -20,6 +20,7 @@ import {
   normalizeLabel,
   resolveTags,
 } from "@/lib/import/resolve-tags";
+import { track } from "@/lib/posthog/client";
 import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { ApiError } from "@/lib/query/fetcher";
 import { useBulkCreatePlaces } from "@/lib/query/import";
@@ -92,6 +93,18 @@ export function ImportWizard({
   const isResumed = useImportStore((state) => state.isResumed);
 
   const hydrated = useHasHydrated();
+  const attachedMapId = useImportStore((state) => state.mapId);
+
+  /*
+   * Whether a source may be chosen yet: the persisted run has loaded and
+   * `attachTo` has claimed the store for this map. Before that, a file read
+   * into the store is discarded — `attachTo` sees a run with no map and resets
+   * it, and a restored run would be merged over it besides. The window is a few
+   * milliseconds, but a cold dev server and an automated test both land in it.
+   * `attachTo` always leaves `mapId` equal to this map, whether it kept the run
+   * or not, which is what makes the comparison the signal.
+   */
+  const isReady = hydrated && attachedMapId === map.id;
 
   /**
    * Throw the run away, on disk as well as in memory.
@@ -339,6 +352,12 @@ export function ImportWizard({
       }
     }
 
+    track("locations_imported", {
+      location_count: saved,
+      source_kind: store.sourceKind,
+      linked_to_google_sheet: linked,
+    });
+
     // Only a run that got all the way through throws the wizard away. A partial
     // one keeps its remaining rows so the user can press Import again. Through
     // `startOver` rather than `reset`, because `finish` navigates immediately and
@@ -446,7 +465,11 @@ export function ImportWizard({
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.div key={step} {...stepMotion()}>
             {step === "source" ? (
-              <SourceStep mapId={map.id} headroom={headroom} />
+              <SourceStep
+                mapId={map.id}
+                headroom={headroom}
+                isReady={isReady}
+              />
             ) : null}
 
             {step === "mapping" ? (

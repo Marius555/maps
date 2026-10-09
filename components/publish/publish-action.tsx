@@ -8,6 +8,7 @@ import {
   useEmailUnverified,
   VerifyEmailNotice,
 } from "@/components/verify-email/verify-email-notice";
+import { track } from "@/lib/posthog/client";
 import { usePublishMap } from "@/lib/query/publish";
 import type { PublishResult } from "@/lib/repositories/publish.repository";
 
@@ -41,6 +42,10 @@ export function PublishAction({ mapId }: { mapId: string }) {
   const onPress = async () => {
     try {
       const result = await publish.mutateAsync();
+      track("map_published", {
+        published_location_count: result.publishedCount,
+        skipped_location_count: result.skippedCount,
+      });
       toast.success("Published", { description: describe(result) });
     } catch {
       // Rendered below. A toast as well would say the same thing twice.

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { AuthUser } from "@/lib/auth/types";
+import { identifyUser, resetUser } from "@/lib/posthog/client";
 import type {
   ForgotPasswordInput,
   LoginInput,
@@ -48,7 +49,10 @@ export function useLogin() {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    onSuccess: ({ user }) => queryClient.setQueryData(queryKeys.me, { user }),
+    onSuccess: ({ user }) => {
+      identifyUser(user);
+      queryClient.setQueryData(queryKeys.me, { user });
+    },
   });
 }
 
@@ -61,7 +65,10 @@ export function useSignup() {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    onSuccess: ({ user }) => queryClient.setQueryData(queryKeys.me, { user }),
+    onSuccess: ({ user }) => {
+      identifyUser(user);
+      queryClient.setQueryData(queryKeys.me, { user });
+    },
   });
 }
 
@@ -120,7 +127,10 @@ export function useResetPassword() {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    onSuccess: ({ user }) => queryClient.setQueryData(queryKeys.me, { user }),
+    onSuccess: ({ user }) => {
+      identifyUser(user);
+      queryClient.setQueryData(queryKeys.me, { user });
+    },
     retry: false,
   });
 }
@@ -142,6 +152,9 @@ export function useLogout() {
     mutationFn: () => apiFetch<void>("/api/auth/logout", { method: "POST" }),
     // Wipe every cached query: the next user on this browser must not see the
     // previous one's maps flash on screen.
-    onSuccess: () => queryClient.clear(),
+    onSuccess: () => {
+      resetUser();
+      queryClient.clear();
+    },
   });
 }

@@ -30,9 +30,11 @@ const SHARE_STEPS: readonly { before: string; strong: string }[] = [
  */
 export function SheetUrlForm({
   isBusy,
+  isDisabled,
   onSubmit,
 }: {
   isBusy: boolean;
+  isDisabled: boolean;
   onSubmit: (reference: SheetReference) => void;
 }) {
   const [url, setUrl] = useState("");
@@ -80,7 +82,7 @@ export function SheetUrlForm({
           type="submit"
           className="shrink-0"
           isPending={isBusy}
-          isDisabled={!url.trim()}
+          isDisabled={isDisabled || !url.trim()}
         >
           Read sheet
         </Button>

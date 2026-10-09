@@ -8,6 +8,7 @@ import { z } from "zod";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { FormTextField } from "@/components/ui/form-field";
+import { track } from "@/lib/posthog/client";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { useUpdateMap } from "@/lib/query/maps";
 
@@ -78,6 +79,7 @@ function RenameForm({
   const onSubmit = handleSubmit(async (values) => {
     try {
       await updateMap.mutateAsync(values);
+      track("map_renamed");
       onDone();
     } catch (error) {
       applyFieldErrors(error, setError);

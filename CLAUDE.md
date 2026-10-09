@@ -142,8 +142,9 @@ Installed since the original scaffold: `zod`, `@tanstack/react-query`, `zustand`
 it unzips .xlsx), `resend`, `recharts` (asked for and granted; the landing page and the Analytics tab, and
 it brings Redux Toolkit transitively, so it is loaded with `next/dynamic`), `aws4fetch` (asked
 for and granted; signs R2's S3 requests, server-only), and `jsdom` as a
-devDependency only. Still not installed, from §3's
-"Add these": biome, playwright, sentry, posthog, and `@react-email/components` — three
+devDependency only, plus `posthog-js` from §3 (dashboard and
+marketing only, never the embed), and `@playwright/test` from §3 (e2e, `e2e/README.md`). Still
+not installed, from §3's "Add these": biome, sentry, and `@react-email/components` — three
 transactional emails do not earn a React renderer, so the templates are plain TS returning
 `{ subject, html, text }`.
 
@@ -156,6 +157,7 @@ npm run check        # typecheck + lint + tests — run this before calling work
 npm run typecheck    # next typegen && tsc --noEmit
 npm run lint         # eslint
 npm run test         # vitest run
+npm run e2e          # playwright, against next dev as the E2E_EMAIL account — e2e/README.md
 npm run build:embed  # vite build → public/embed, copy MapLibre runtime, check size, write version.json
 npm run release -- patch|minor|major  # bump, CHANGELOG, commit + tag (never pushes) — docs/notes/versioning.md
 npm run setup:appwrite  # create missing tables/columns/indexes from scripts/appwrite-schema.mjs
@@ -177,7 +179,8 @@ npm run migrate:tags            # fold categories into tags (--dry-run first)
 npm run migrate:permissions     # strip owner permissions from rows/files (--dry-run first; --verify-subscriptions)
 ```
 
-`npm run check` does **not** build the embed. After changing anything under `/embed`, run `npm run build:embed` too — that is where the size budget is enforced.
+`npm run check` does **not** build the embed, and does not run `npm run e2e` either (it needs a
+test account and a dev server). After changing anything under `/embed`, run `npm run build:embed` too — that is where the size budget is enforced.
 
 **Testing the embed by hand:** `npm run build:embed`, start the dev server, and use the
 Publish page — its preview runs the real bundle against the map as it is in the editor, and
@@ -268,6 +271,11 @@ one exists: `docs/notes/environment.md`.
   self-hosting work with no config. **Absolute, always**: the embed runs on a customer's
   page, so a relative path would post to *their* server. Nothing is written into a snapshot
   unless the owner has also switched measurement on.
+- Browser-safe, optional: `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`, `NEXT_PUBLIC_POSTHOG_HOST` —
+  product analytics, both or none. **Dashboard and marketing only, never the embed (§2)**;
+  `persistence: "memory"` because the cookie policy promises no analytics cookies; `/admin`
+  and `/dev` dropped. Capture through `track()` in `lib/posthog/client.ts`.
+  `NEXT_PUBLIC_DISABLE_POSTHOG=true` switches it off with both still set.
 - Browser-safe, optional: `NEXT_PUBLIC_TILES_URL` (**unset means OpenFreeMap and is the
   current state**; it moves `STYLE_URLS` and the attribution together, and
   `npm run migrate:style-host` moves maps already published) and

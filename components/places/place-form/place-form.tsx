@@ -6,6 +6,7 @@ import { useState, type ComponentType, type ReactNode } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { ErrorMessage } from "@/components/ui/error-message";
+import { track } from "@/lib/posthog/client";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { useSavePlaceLogo, useSavePlacePhotos } from "@/lib/query/photo";
 import { useUpdatePlace } from "@/lib/query/places";
@@ -196,6 +197,9 @@ export function PlaceForm({
       // file at once, so a retry sends nothing twice.
       if (written) setLogo(logoOf(written));
 
+      track("location_updated", {
+        coordinates_changed: values.lat !== place.lat || values.lng !== place.lng,
+      });
       onSaved?.();
     } catch (error) {
       applyFieldErrors(error, setError);

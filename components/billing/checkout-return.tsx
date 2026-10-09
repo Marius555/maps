@@ -7,6 +7,7 @@ import { useEffect, useRef } from "react";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
+import { track } from "@/lib/posthog/client";
 
 /**
  * The hop from the provider's domain back into the dashboard.
@@ -44,6 +45,7 @@ export function CheckoutReturn() {
     if (moved.current) return;
     moved.current = true;
 
+    track("checkout_completed");
     router.replace("/settings/billing?checkout=done");
     router.refresh();
   }, [router]);

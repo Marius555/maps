@@ -28,6 +28,7 @@ import type { PlanHeadroom } from "@/lib/map/plan-headroom";
 import { recentPinIcons } from "@/lib/map/recent-pins";
 import { selectionBounds } from "@/lib/map/selection-bounds";
 import { nextPlaceDefaults } from "@/lib/places/next-place-defaults";
+import { track } from "@/lib/posthog/client";
 import {
   isOptimisticGroupId,
   useAssignToGroup,
@@ -623,6 +624,7 @@ export function MapEditor({
         });
 
         created = place.id;
+        track("location_created");
       } catch (error) {
         /*
          * A plan limit is the case that matters, and it now says so out here.

@@ -10,6 +10,7 @@ import { AuthDivider } from "@/components/auth/auth-divider";
 import { GoogleButton } from "@/components/auth/google-button";
 import { LegalConsentNotice } from "@/components/brand/legal-consent-notice";
 import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
+import { track } from "@/lib/posthog/client";
 import { useLogin } from "@/lib/query/auth";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import { toastProblem } from "@/lib/query/toast-error";
@@ -32,6 +33,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
   const onSubmit = handleSubmit(async (values) => {
     try {
       await login.mutateAsync(values);
+      track("user_logged_in");
       router.replace(redirectTo);
       // The dashboard is server-rendered, so the new session has to reach the
       // server before the redirect paints.

@@ -53,3 +53,11 @@ next-env.d.ts
 # copies of the basemap styles, fonts, sprites and the Natural Earth raster.
 # Mirrored assets and generated documents, not source; see docs/self-hosting-tiles.md
 /public/tiles/
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

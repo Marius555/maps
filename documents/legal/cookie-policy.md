@@ -51,8 +51,9 @@ necessary to provide a service you have asked for. Everything above is either ne
 dashboard, or records a choice you have just made to change how the dashboard looks for you. That is
 why there is no consent banner.
 
-If we ever add anything that falls outside that — analytics, for example — we will ask first, and it
-will not be set until you agree.
+Our usage measurement (PostHog, §4) stores nothing on your device at all, so it adds nothing to the
+list above. If we ever add anything that does fall outside that — an analytics cookie, for example —
+we will ask first, and it will not be set until you agree.
 
 ## 4. Third parties
 
@@ -63,6 +64,9 @@ will not be set until you agree.
   [VERIFY: which cookies the checkout sets, once the Merchant of Record is chosen.]
 - **OpenFreeMap.** The map tiles in the dashboard are downloaded from OpenFreeMap, which sets no
   cookies.
+- **PostHog.** Measures how our website and dashboard are used. It is configured to keep its
+  identifier in the page's memory only, so it sets **no cookies and no local storage**, and forgets
+  you on every reload. It never runs in maps published on our customers' websites.
 
 ## 5. Maps published on our customers' websites
 

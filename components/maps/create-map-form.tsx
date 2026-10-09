@@ -11,6 +11,7 @@ import { DEFAULT_CENTER } from "@/lib/config";
 // `auto` is the default, so a new map already follows whoever is looking at it —
 // there is no theme to read here any more.
 import { DEFAULT_MAP_STYLE } from "@/lib/map/style";
+import { track } from "@/lib/posthog/client";
 import { useCreateMap } from "@/lib/query/maps";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import {
@@ -46,6 +47,7 @@ export function CreateMapForm({ onCreated }: { onCreated?: () => void }) {
   const onSubmit = handleSubmit(async (values) => {
     try {
       const map = await createMap.mutateAsync(values);
+      track("map_created", { default_style: values.style });
       onCreated?.();
       router.push(`/maps/${map.id}`);
     } catch (error) {

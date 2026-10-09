@@ -95,6 +95,10 @@ const eslintConfig = defineConfig([
     // `npm run build:disposable-domains`. `tsc` still covers it; ESLint has
     // nothing to say about a megabyte of data and takes a while to say it.
     "lib/email/disposable-domains.generated.ts",
+    // Written by `npm run e2e`: the HTML report bundles Playwright's minified
+    // trace viewer, which otherwise fails `npm run check` after every e2e run.
+    "playwright-report/**",
+    "test-results/**",
   ]),
 ]);
 

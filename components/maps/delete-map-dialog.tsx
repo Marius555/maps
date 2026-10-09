@@ -4,6 +4,7 @@ import { Button } from "@heroui/react";
 
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { ErrorMessage } from "@/components/ui/error-message";
+import { track } from "@/lib/posthog/client";
 import { useDeleteMap } from "@/lib/query/maps";
 
 /**
@@ -53,6 +54,7 @@ export function DeleteMapDialog({
           isPending={deleteMap.isPending}
           onPress={async () => {
             await deleteMap.mutateAsync(mapId);
+            track("map_deleted");
             onOpenChange(false);
             onDeleted?.();
           }}

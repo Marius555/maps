@@ -127,19 +127,12 @@ export function ShapeToolsButton({
         size="sm"
         variant={isDrawing ? "primary" : "tertiary"}
         aria-pressed={isDrawing}
+        // Icon-only, so the name has to be given: without it a screen reader
+        // announces a bare "button" and nothing can find it by role.
+        aria-label={isDrawing ? "Stop drawing" : "Draw"}
         isPending={isBusy}
       >
         <Shapes aria-hidden="true" className="size-4" />
-
-        {/*
-         * Folds away when the search opens, exactly as the add control's label
-         * does and for the same reason: the two cannot both have the width on a
-         * narrow map. The text stays in the DOM so the button keeps its
-         * accessible name, and `max-width` is what animates cleanly from an
-         * auto-sized flex child. The negative margin cancels the Button's `gap-2`,
-         * which would otherwise leave a gap where the label used to be.
-         */}
-        
       </Button>
 
       <Popover.Content placement="bottom start">

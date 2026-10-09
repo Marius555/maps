@@ -6,6 +6,7 @@ import type { PlanId } from "@/lib/repositories/plan-limits";
 import { MobileHeader } from "./mobile-header";
 import { MobileHeaderSlotProvider } from "./mobile-header-slot";
 import { PageMain } from "./page-transition/page-main";
+import { PostHogIdentify } from "./posthog-identify";
 import { Sidebar } from "./sidebar/sidebar";
 import { SidebarProvider } from "./sidebar/sidebar-context";
 import { SidebarMobile } from "./sidebar/sidebar-mobile";
@@ -97,6 +98,7 @@ export function AppShell({
       {/* In the shell because "back from the card designer" can land on any
           page, and the shell is the one thing that sees every navigation. */}
       <TutorialRouteWatcher pending={tutorials} />
+      <PostHogIdentify user={user} />
     </SidebarProvider>
   );
 }

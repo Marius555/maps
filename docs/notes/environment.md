@@ -38,6 +38,13 @@ this is why each one exists.
   "nothing will save" above a dashboard where everything saves. It warns once per process,
   and **it is inert when `NODE_ENV` is `production`**, for the reason above it.
 
+- **Tests only: `E2E_EMAIL`, `E2E_PASSWORD`.** The account `npm run e2e` signs in as. Read by
+  `playwright.config.ts` from `.env` and never by the app. A dedicated account, not anybody's
+  own: every test creates maps on it, and teardown deletes every map whose name starts
+  `e2e-`. It must have a confirmed address (writes are refused otherwise), and needs either
+  Pro or `DISABLE_ALL_PLAN=true`, because Free allows one map. Optional `E2E_BASE_URL`
+  points the suite somewhere other than `http://localhost:3000`. `e2e/README.md`.
+
 - Optional, server-only: `TUTORIAL_ALWAYS_PRESENT`. Set to `1`/`true`/`yes`, the four
   onboarding overlays (`components/onboarding/`) are drawn on every load, dismissed or not:
   the maps list's arrow at Create map; the editor's two at the pin button and Locations on an
@@ -101,6 +108,12 @@ this is why each one exists.
   hold, which is why the app has its own narrow R2 token instead. It can expire once setup
   prints only `ok`.
 - Optional, browser-safe: `NEXT_PUBLIC_TILES_URL`. Where the basemaps are served from. **Unset means OpenFreeMap and is the current state**; setting it moves `STYLE_URLS` *and* the attribution together, because both come from one pair in `lib/map/style.ts`. Changing it does not move maps that are already published — `styleUrl` is baked into each snapshot at publish time, which is what makes the switch a republish rather than a redeploy of every customer's embed. `npm run migrate:style-host` is what moves them, in either direction.
+- Optional, browser-safe: `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` and `NEXT_PUBLIC_POSTHOG_HOST` (`https://eu.i.posthog.com`) — product analytics for the funnel §3 names: signup → first location → publish → paid. **Both or nothing**: unset, `instrumentation-client.ts` never calls `init` and every helper in `lib/posthog/client.ts` is a no-op, so development needs neither. `NEXT_PUBLIC_DISABLE_POSTHOG=true` does the same with both still set — for a local `.env` whose requests an ad blocker kills, which `debug: true` otherwise logs on every retry. Four things must hold:
+  - **Dashboard and marketing only, never the embed.** PostHog bills per event and a published map's traffic is unbounded (§2). Next injects `instrumentation-client.ts` into its own pages only; the embed, the snapshots, the static `/embed/*.html` harness pages and the publish preview (a `srcdoc` iframe) never load it.
+  - **`persistence: "memory"` is what the cookie policy says.** No `ph_*` cookie and no local storage, so no consent banner. The cost is that PostHog forgets everyone on a full reload, which is why `components/layout/posthog-identify.tsx` re-identifies on every dashboard load — remove it and every reload is a new anonymous person. Anonymous marketing visitors are a new id per document. EDPB Guidelines 2/2023 hold that a script-triggered send can need consent even without storage, so this is the defensible middle ground, not a guarantee (`documents/legal/README.md`, lawyer question 10).
+  - **`/admin`, `/login/admin` and `/dev` are dropped in `before_send`**, so the operator never lands in the customer funnel.
+  - **Capture through `track()`, never `posthog.capture` directly**, so the env check lives in one place. Events are client-side, after the mutation resolves; `checkout_completed` fires on `/checkout/done`, so it is "returned from a paid checkout", not a webhook-confirmed payment.
+  The wizard's server-side OpenTelemetry log export was removed on 2026-10-06: it imported its provider from `@/instrumentation`, which Next bundles as its own entry, so the route saw a second module instance where `register()` never ran and nothing was ever sent.
 - Optional, server-only: `RESEND_API_KEY`, `RESEND_FROM` and `APP_URL` — transactional email.
   **All three are optional and the app boots without any of them**, which is not laziness:
   every message we send is on the tail of something that has already succeeded, so a missing
