@@ -49,23 +49,17 @@ export default function PlansAndBillingPage() {
         />
 
         <p>
-          Paying yearly gets you two months free. Views are unlimited on every
-          plan, the free one included — nobody is counting how often your map is
-          opened, and nothing is charged for it.
-        </p>
-
-        <p>
-          A map on the free plan carries a small <strong>Made with {BRAND.name}</strong>{" "}
-          link in its corner. On Starter and Pro it goes away the next time you
+          Yearly billing gets two months free. Views are unlimited and free on
+          every plan. On Starter and Pro the{" "}
+          <strong>Made with {BRAND.name}</strong> link goes the next time you
           publish.
         </p>
       </DocsSection>
 
       <DocsSection id="lookups" title="What counts as a lookup">
         <p>
-          A lookup is one address turned into a point on the map, or one point
-          turned back into an address. They are counted per account and reset on
-          the 1st of each month.
+          A lookup turns one address into a point, or one point into an address.
+          They are counted per account and reset on the 1st of each month.
         </p>
 
         <DocsTable
@@ -75,11 +69,11 @@ export default function PlansAndBillingPage() {
             ["Search for an address", "One lookup per search."],
             [
               "Drop or drag a pin",
-              "One lookup, to fill in its street address.",
+              "One, to fill in its street address.",
             ],
             [
               "Import a file",
-              "One per distinct address. Rows with latitude and longitude use none, and rows sharing an address share one.",
+              "One per distinct address; rows with latitude and longitude use none.",
             ],
             [
               "Sync a Google Sheet",
@@ -93,33 +87,26 @@ export default function PlansAndBillingPage() {
         />
 
         <p>
-          Lookups that fail on our side aren’t counted. Visitors to your published
-          map never use any — their searches run against the locations already on
-          it.
+          Lookups that fail on our side aren’t counted, and visitors to your map
+          never use any.
         </p>
 
         <DocsCallout>
           <p>
-            Used them all? Searches and imports stop with a message saying so
-            until the 1st — or upgrade and carry on straight away. If you see{" "}
-            <strong>Address lookups are busy right now</strong>, that isn’t your
-            allowance: wait a few minutes and try again. Nothing was lost.
+            Used them all? Searches and imports stop until the 1st, or upgrade to
+            carry on. <strong>Address lookups are busy right now</strong> isn’t
+            your allowance — try again in a few minutes.
           </p>
         </DocsCallout>
       </DocsSection>
 
       <DocsSection id="usage" title="Seeing what you’ve used">
         <p>
-          <strong>Settings → Usage</strong> shows four meters against what your
-          plan allows: <strong>Maps</strong>, <strong>Locations</strong> (your
-          fullest map), <strong>Areas and routes</strong> and{" "}
-          <strong>Address lookups</strong>. A meter turns amber at 75% and red at
-          90%.
-        </p>
-
-        <p>
-          Limits are checked whenever you save, so going over isn’t possible.
-          Anything that would is refused with a message naming the limit.
+          <strong>Settings → Usage</strong> meters <strong>Maps</strong>,{" "}
+          <strong>Locations</strong> (your fullest map),{" "}
+          <strong>Areas and routes</strong> and <strong>Address lookups</strong>{" "}
+          against your plan — amber at 75%, red at 90%. Anything that would go
+          over is refused with a message naming the limit.
         </p>
       </DocsSection>
 
@@ -137,15 +124,13 @@ export default function PlansAndBillingPage() {
 
           <DocsStep title="Pay">
             <p>
-              Checkout is run by our payment provider, who handle the payment,
-              VAT and receipts.
+              Our payment provider handles the payment, VAT and receipts.
             </p>
           </DocsStep>
 
           <DocsStep title="Wait a few seconds">
             <p>
-              You come back to <strong>Activating your plan</strong>. It usually
-              takes a few seconds, and then everything in your new plan is open.
+              <strong>Activating your plan</strong> usually takes a few seconds.
             </p>
           </DocsStep>
         </DocsSteps>
@@ -153,8 +138,8 @@ export default function PlansAndBillingPage() {
 
       <DocsSection id="changing" title="Changing plan or billing period">
         <p>
-          Already paying? Change plan from the same <strong>Plans</strong> list
-          in Settings → Billing — never through a second checkout.
+          Already paying? Change plan from the <strong>Plans</strong> list in
+          Settings → Billing, not a second checkout.
         </p>
 
         <DocsTable
@@ -167,7 +152,7 @@ export default function PlansAndBillingPage() {
             ],
             [
               "Downgrade",
-              "At your next renewal. You keep the plan you paid for until then, and Keep Pro (or Starter) cancels the change.",
+              "At your next renewal. Keep Pro (or Starter) cancels the change.",
             ],
             [
               "Monthly to yearly, or back",
@@ -183,23 +168,16 @@ export default function PlansAndBillingPage() {
 
       <DocsSection id="cancelling" title="Cancelling and resuming">
         <p>
-          Press <strong>Cancel plan</strong>, then <strong>Cancel plan</strong>{" "}
-          again to confirm. You keep your plan until the end of the period you
-          paid for, and aren’t charged again. After that the account moves to
-          Free.
-        </p>
-
-        <p>
-          Changed your mind? Press <strong>Resume plan</strong> any time before
-          that date and it renews as normal.
+          Press <strong>Cancel plan</strong> twice. You keep your plan to the end
+          of the paid period, then move to Free. <strong>Resume plan</strong>{" "}
+          before then undoes it.
         </p>
 
         <DocsCallout tone="warning">
           <p>
-            On Free, the Free limits apply to what you already have. Nothing is
-            deleted and your published maps keep working, but maps, locations and
-            shapes over the limit can’t be added to, routes can’t be drawn, sheet
-            syncs stop and analytics stops recording.
+            On Free, nothing is deleted and published maps keep working, but you
+            can’t add past the Free limits, draw routes, sync sheets or record
+            analytics.
           </p>
         </DocsCallout>
       </DocsSection>
@@ -208,12 +186,11 @@ export default function PlansAndBillingPage() {
         <ul>
           <li>
             <strong>Payment method</strong> → <strong>Update</strong> changes the
-            card. If a payment didn’t go through, update it here first, then
-            change plan.
+            card — do this first if a payment failed.
           </li>
           <li>
-            <strong>Billing details</strong> → <strong>Edit</strong> changes your
-            billing address, tax ID and the email receipts go to.
+            <strong>Billing details</strong> → <strong>Edit</strong> changes the
+            billing address, tax ID and receipt email.
           </li>
           <li>
             <strong>Invoices</strong> lists every charge with a{" "}

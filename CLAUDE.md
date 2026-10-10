@@ -11,8 +11,8 @@ Project instructions. Read this fully before writing code.
 **Weeks 1–3 of §10 are done; Week 4 is most of the way through.** Of §5's layout, `/app`,
 `/lib`, `/components`, `/scripts`, `/embed`, `/packages/shared` and `/functions` (one
 function: the sheet sync every 30 minutes, which also runs the daily visitor-session purge) exist, and so now do `/lib/billing`, `/app/(dashboard)/settings`
-(which `/account` now redirects to) and `/app/api/webhooks/billing`. Still absent, and correctly so — it belongs to the rest of
-Week 4: `/app/(marketing)/for/[platform]`.
+(which `/account` now redirects to), `/app/api/webhooks/billing` and `/app/(marketing)/for/` —
+one static folder per platform, WordPress the only one so far.
 
 Working end to end: email auth, map CRUD, the MapLibre editor, the locations list with
 search and tag filters, per-location editing with search-on-submit geocoding and photo
@@ -125,8 +125,19 @@ is why `lib/repositories/admin/**` is the one place allowed to skip `RepoContext
 two new things: upstream requests (`apiCalls`, batched in memory) and email sends (`emailLog`,
 recipient masked). `docs/notes/admin.md`.
 
-**Not built yet, and next — the rest of Week 4:** landing page, one platform page (Webflow
-first), docs with screenshots. Plus the two upstreams §12 says are forced before anyone pays
+**Distribution has started, with WordPress.** `/distribution/wordpress/pinglide` is a plugin
+with no build step: a **Pinglide map** block whose **Set up this map** opens
+`/connect/wordpress`, where the owner signs up or logs in and picks or creates a map, and is
+sent back to wp-admin with it — no API key, nothing to paste. The plugin stores only the
+map's public snapshot URL, so the visitor path is exactly a pasted snippet's (§2); a nonce,
+not a secret, guards the return trip. Ships as `/downloads/pinglide-wordpress.zip`
+(`npm run build:wordpress`, also on `prebuild`); a wordpress.org listing needs an account
+and is not done. Signup and Google sign-in now honour `?next=` for it. Its public page is
+`/for/wordpress`, reached from the navbar's **Integrations** menu, which lists
+`lib/marketing/integrations.ts`. `docs/notes/distribution.md`.
+
+**Not built yet, and next — the rest of Week 4:** landing page, docs with screenshots. (The
+one platform page §10 asked for is WordPress's, not Webflow's.) Plus the two upstreams §12 says are forced before anyone pays
 us, which are now a switch rather than two machines: `GEOCODER_PROVIDER=geoapify` and
 `ROUTING_PROVIDER=geoapify`, both currently set. What is owed there is a plan decision and
 one small change — Geoapify's free tier requires its attribution, and a route drawn on it is
@@ -158,6 +169,7 @@ npm run typecheck    # next typegen && tsc --noEmit
 npm run lint         # eslint
 npm run test         # vitest run
 npm run e2e          # playwright, against next dev as the E2E_EMAIL account — e2e/README.md
+npm run build:wordpress  # zip distribution/wordpress/pinglide -> public/downloads (also on prebuild)
 npm run build:embed  # vite build → public/embed, copy MapLibre runtime, check size, write version.json
 npm run release -- patch|minor|major  # bump, CHANGELOG, commit + tag (never pushes) — docs/notes/versioning.md
 npm run setup:appwrite  # create missing tables/columns/indexes from scripts/appwrite-schema.mjs
@@ -423,6 +435,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `documents/legal/**`, `lib/legal/**`, `components/legal/**`, the `legal` links in `brand.json` | `documents/legal/README.md` |
 | `lib/limits/**`, `lib/rate-limit/**`, `lib/api/route.ts`'s wrappers, `rollBackIfOverLimit`, `ownerPermissions`, `scripts/migrate-permissions.mjs` | `docs/notes/limits.md` |
 | `scripts/release.mjs`, `scripts/upload-cdn.mjs`, `scripts/build-info.mjs`, `embed/channel.mjs`, `lib/version.ts`, `app/api/version/**`, `CHANGELOG.md` | `docs/notes/versioning.md` |
+| `distribution/**`, `lib/connect/**`, `components/connect/**`, `app/(auth)/connect/**`, `app/api/connect/**`, `lib/auth/oauth-next.ts` | `docs/notes/distribution.md` |
 | `app/admin/**`, `app/(auth)/login/admin/**`, `app/api/admin/**`, `components/admin/**`, `lib/admin/**`, `lib/repositories/admin/**`, `lib/api-usage/**`, `lib/repositories/{api-calls,email-log}.repository.ts` | `docs/notes/admin.md` |
 
 Self-hosting runbooks, unchanged: `docs/self-hosting-geocoding.md`,
@@ -745,7 +758,7 @@ Do not start a phase before the previous one works end to end.
 
 One deviation worth knowing: **the embed's search does not geocode.** It filters the places already in the snapshot by name and address. Geocoding a visitor's typed query would be a metered call in the visitor's path, which §2 forbids outright — the geocoder runs at import time and never again. "Find nearest" uses the browser's own geolocation, which is free and more accurate than resolving a typed address anyway.
 
-**Week 4 — Business layer. ← in progress.** Auth (split-screen login/signup, Google OAuth2), transactional email, the pricing page, plan limits and the MoR integration + webhook are **done** — see §0. Still owed: landing page, one platform page (Webflow first), docs with screenshots. **Our own geocoding and routing instances belong here too and are the two that are actually forced** — the public Photon and OSRM endpoints both forbid what a paying customer would make us do with them (§12). Own PMTiles on R2 is *not* on this list any more: OpenFreeMap permits commercial use, so that one is insurance to buy when it suits, not a gate to pass.
+**Week 4 — Business layer. ← in progress.** Auth (split-screen login/signup, Google OAuth2), transactional email, the pricing page, plan limits and the MoR integration + webhook are **done** — see §0. Still owed: landing page, docs with screenshots — the one platform page is done, for WordPress rather than Webflow. **Our own geocoding and routing instances belong here too and are the two that are actually forced** — the public Photon and OSRM endpoints both forbid what a paying customer would make us do with them (§12). Own PMTiles on R2 is *not* on this list any more: OpenFreeMap permits commercial use, so that one is insurance to buy when it suits, not a gate to pass.
 
 **Then stop building and go get ten customers.** What they ask for decides Phase 2 — not this file.
 

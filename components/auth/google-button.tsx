@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { ErrorMessage } from "@/components/ui/error-message";
 import { startGoogleSignIn } from "@/lib/appwrite/browser";
+import { rememberOAuthNext } from "@/lib/auth/oauth-next";
 
 /**
  * Google sign-in, first half.
@@ -28,7 +29,14 @@ import { startGoogleSignIn } from "@/lib/appwrite/browser";
  * costs. `window.location.origin` is read inside the handler rather than at
  * module scope, so this component still renders on the server.
  */
-export function GoogleButton({ label = "Sign in with Google" }: { label?: string }) {
+export function GoogleButton({
+  label = "Sign in with Google",
+  redirectTo,
+}: {
+  label?: string;
+  /** Where to land after Google, instead of `/maps` — `lib/auth/oauth-next.ts`. */
+  redirectTo?: string;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +45,7 @@ export function GoogleButton({ label = "Sign in with Google" }: { label?: string
     setBusy(true);
 
     try {
+      rememberOAuthNext(redirectTo);
       startGoogleSignIn(window.location.origin);
     } catch {
       // Reached only if the SDK refuses before navigating — a misconfigured

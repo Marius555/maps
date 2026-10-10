@@ -53,7 +53,8 @@ export function Section({
   id?: string;
   /** Optional: /pricing is one screen of plans and needs no label above its title. */
   eyebrow?: string;
-  title: string;
+  /** A node, so a page can set one word of it in the accent. */
+  title: React.ReactNode;
   lede?: string;
   /** `h1` when the section *is* the page — /pricing is one section long. */
   headingLevel?: "h1" | "h2";

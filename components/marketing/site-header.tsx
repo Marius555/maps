@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
+import { IntegrationsMenu } from "@/components/marketing/integrations/integrations-menu";
 
 /**
  * The public site's header.
@@ -38,13 +39,14 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-5 sm:gap-7">
           {/*
-            Hidden below `sm` rather than folded into a menu. Four links do not
+            Hidden below `sm` rather than folded into a menu. Five items do not
             earn a hamburger, and the two that matter on a phone — the way in
             and the way to sign up — are the two that stay.
           */}
           <NavLink href="/#features" className="hidden sm:inline">
             Features
           </NavLink>
+          <IntegrationsMenu className="hidden sm:inline-flex" />
           <NavLink href="/pricing" className="hidden sm:inline">
             Pricing
           </NavLink>

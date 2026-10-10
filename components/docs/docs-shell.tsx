@@ -1,3 +1,5 @@
+import { DocsPane } from "@/components/layout/page-transition/docs-pane";
+
 import { DocsNav } from "./docs-nav";
 
 /**
@@ -21,7 +23,7 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
           <DocsNav />
         </div>
 
-        {children}
+        <DocsPane>{children}</DocsPane>
       </div>
     </div>
   );

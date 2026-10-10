@@ -50,7 +50,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
     <div className="space-y-5">
       {/* Above the form, because for anyone who has one it is the shorter path
           and putting it underneath makes it the thing you find after failing. */}
-      <GoogleButton />
+      <GoogleButton redirectTo={redirectTo} />
 
       <AuthDivider />
 
@@ -79,7 +79,11 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
             <span>
               No account yet?{" "}
               <Link
-                href="/signup"
+                href={
+                  redirectTo === "/maps"
+                    ? "/signup"
+                    : `/signup?next=${encodeURIComponent(redirectTo)}`
+                }
                 className="underline transition-colors hover:text-foreground"
               >
                 Sign up

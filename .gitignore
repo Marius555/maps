@@ -46,6 +46,9 @@ next-env.d.ts
 # built by `npm run build:embed` from /embed — build output, not vendored
 /public/embed/
 
+# built by `npm run build:wordpress` from /distribution/wordpress/pinglide
+/public/downloads/
+
 # built by `npm run build:gazetteer` from GeoNames dumps — data, not source
 /public/gazetteer/
 

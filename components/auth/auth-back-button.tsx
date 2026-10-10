@@ -5,8 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { IconButton } from "@/components/ui/icon-button";
 
-/** The two front doors. Every other auth screen is a step off `/login`. */
-const HOME_FROM = new Set(["/login", "/signup"]);
+/**
+ * The front doors. Every other auth screen is a step off `/login`. The connect
+ * page is a door too — it is opened from somebody's WordPress, not from here.
+ */
+const HOME_FROM = new Set(["/login", "/signup", "/connect/wordpress"]);
 
 /**
  * Back out of an auth screen, to a destination this file decides.

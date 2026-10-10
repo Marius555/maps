@@ -32,7 +32,7 @@ export default function ShapesAndRoutesPage() {
       <DocsSection id="draw-menu" title="The drawing tools">
         <p>
           On the Map tab, press the shapes button, second from the left in the
-          toolbar. It offers:
+          toolbar:
         </p>
 
         <DocsTable
@@ -51,8 +51,7 @@ export default function ShapesAndRoutesPage() {
         />
 
         <p>
-          Press Esc, or the shapes button again, to put a tool away. While
-          drawing, Backspace removes the last point you placed.
+          Esc puts a tool away; Backspace removes the last point placed.
         </p>
       </DocsSection>
 
@@ -60,22 +59,20 @@ export default function ShapesAndRoutesPage() {
         <DocsSteps>
           <DocsStep title="Circle">
             <p>
-              Press where the centre goes and drag outwards until the circle is
-              the size you want. The smallest radius is 10 metres.
+              Press at the centre and drag outwards. The smallest radius is 10
+              metres.
             </p>
           </DocsStep>
 
           <DocsStep title="Polygon">
             <p>
-              Click each corner in turn. Click the first point again, or press
-              Enter, to close it.
+              Click each corner, then the first point again or Enter to close it.
             </p>
           </DocsStep>
 
           <DocsStep title="Line">
             <p>
-              Click each point and press Enter to finish. A point clicked near one
-              of your locations snaps onto it.
+              Click each point, then Enter. A point near a location snaps onto it.
             </p>
           </DocsStep>
         </DocsSteps>
@@ -88,21 +85,11 @@ export default function ShapesAndRoutesPage() {
 
       <DocsSection id="editing" title="Changing a shape">
         <p>
-          Click a shape to select it. Its card shows what it is — a circle’s
-          radius, a polygon’s points, a line’s length.
+          Click a shape to select it. On the map, drag a circle’s handles to move
+          or resize it; drag a polygon’s points to reshape it, its centre to move
+          it, or the handle mid-edge to add a point. Changes save when you let
+          go. For its details, press <strong>Edit shape</strong>:
         </p>
-
-        <ul>
-          <li>
-            <strong>On the map:</strong> drag a circle’s handles to move or resize
-            it. Drag a polygon’s points to reshape it, its centre to move it, and
-            the small handle halfway along an edge to add a point there. Each
-            change saves when you let go.
-          </li>
-          <li>
-            <strong>Its details:</strong> press <strong>Edit shape</strong>.
-          </li>
-        </ul>
 
         <DocsTable
           caption="Edit shape settings"
@@ -115,39 +102,37 @@ export default function ShapesAndRoutesPage() {
             ["Line style", "Solid, Dashed or Dotted."],
             [
               "Fill",
-              "How strongly the inside is filled, from 0 to 100%. Not on lines.",
+              "How strongly the inside is filled, 0–100%. Not on lines.",
             ],
           ]}
         />
 
         <p>
-          To delete a shape, open its menu in the list and choose{" "}
-          <strong>Delete</strong>, then <strong>Delete shape</strong>. On a
-          published map it stays visible until you publish again.
+          To delete a shape, choose <strong>Delete</strong> from its menu in the
+          list, then <strong>Delete shape</strong>. Visitors see it until you
+          publish again.
+        </p>
+
+        <p>
+          A map holds 3 shapes on Free, 50 on Starter and 250 on Pro, routes
+          included. At the limit the drawing tools turn grey.
         </p>
       </DocsSection>
 
       <DocsSection id="import" title="Importing shapes">
-        <p>
-          Delivery zones and sales territories often already exist in a GIS tool.
-          Bring them in rather than tracing them.
-        </p>
-
         <DocsSteps>
           <DocsStep title="Choose the file">
             <p>
-              Pick <strong>Import shapes</strong> from the drawing tools, then
-              press <strong>Choose file</strong> or drag the file in. It has to be
-              GeoJSON, TopoJSON or ArcGIS JSON, under 5MB. It is read in your
-              browser and nothing is saved until you confirm.
+              Pick <strong>Import shapes</strong>, then{" "}
+              <strong>Choose file</strong> or drag in a GeoJSON, TopoJSON or
+              ArcGIS JSON file under 5MB. Nothing is saved until you confirm.
             </p>
           </DocsStep>
 
           <DocsStep title="Check what was found">
             <p>
-              The dialog says how many shapes it found. If the coordinates could
-              be read either way round, a <strong>Latitude is written first</strong>{" "}
-              switch lets you say which.
+              The dialog counts the shapes found. If the coordinates could be
+              either way round, use <strong>Latitude is written first</strong>.
             </p>
           </DocsStep>
 
@@ -164,7 +149,7 @@ export default function ShapesAndRoutesPage() {
           rows={[
             [
               "The file isn’t valid JSON",
-              "Export it again from your GIS tool — the file is damaged or isn’t JSON.",
+              "Export it again from your GIS tool.",
             ],
             [
               "The file has points and no areas or lines",
@@ -175,80 +160,58 @@ export default function ShapesAndRoutesPage() {
             ],
             [
               "Those coordinates aren’t latitude and longitude",
-              "Re-export it as WGS84 (EPSG:4326) and try again.",
+              "Re-export it as WGS84 (EPSG:4326).",
             ],
             [
               "The file is over 5MB",
-              "Simplify it in your GIS tool and try again.",
+              "Simplify it in your GIS tool.",
             ],
             [
               "A shape was simplified",
-              "A shape can have up to 500 points; bigger ones are simplified to fit.",
+              "Shapes over 500 points are simplified to fit.",
             ],
           ]}
         />
-      </DocsSection>
-
-      <DocsSection id="limits" title="How many shapes you can have">
-        <DocsTable
-          caption="Shapes allowed per map"
-          head={["Plan", "Shapes and routes per map"]}
-          rows={[
-            ["Free", "3"],
-            ["Starter", "50"],
-            ["Pro", "250"],
-          ]}
-        />
-
-        <p>
-          Routes count as shapes. At the limit the drawing tools turn grey, and an
-          import that wouldn’t fit says how many more your plan has room for.
-        </p>
       </DocsSection>
 
       <DocsSection id="routes" title="Drawing a route">
         <p>
-          A route is a driving line between your locations, drawn along the
-          roads, with its distance and drive time. Routes are on the Starter and
-          Pro plans.
+          A route is a driving line between your locations along the roads, with
+          its distance and drive time. Starter and Pro only.
         </p>
 
         <DocsSteps>
           <DocsStep title="Choose Route">
             <p>
-              Pick <strong>Route</strong> from the drawing tools. The map checks
-              which of your locations are near a road; any it can’t reach turn
-              grey and can’t be picked.
+              Pick <strong>Route</strong>. Locations no road reaches turn grey and
+              can’t be picked.
             </p>
           </DocsStep>
 
           <DocsStep title="Click the stops in order">
             <p>
-              Click the location to start from, then each one after it. Only
-              locations can be stops — a click on open ground adds nothing. A
-              route can have up to 25 stops.
+              Click the starting location, then each one after it — up to 25
+              stops. Only locations can be stops.
             </p>
           </DocsStep>
 
           <DocsStep title="Press Enter">
             <p>
-              The route is worked out along the roads and drawn. Its card reads
-              like <strong>Route · 12 km · 19 min</strong>.
+              The route is drawn along the roads. Its card reads like{" "}
+              <strong>Route · 12 km · 19 min</strong>.
             </p>
           </DocsStep>
         </DocsSteps>
 
         <p>
-          Routes are for driving. They are a line and a time, not turn-by-turn
-          directions — the <strong>Directions</strong> link on each location’s
-          card opens the visitor’s own maps app for that.
+          Routes are a line and a time, not turn-by-turn directions — for those,
+          a card’s <strong>Directions</strong> link opens the visitor’s maps app.
         </p>
 
         <DocsCallout>
           <p>
-            Checking which locations are reachable uses address lookups from your
-            monthly allowance — up to one per location on the map when the Route
-            tool opens. See{" "}
+            Opening the Route tool uses up to one lookup per location on the map,
+            from your monthly allowance. See{" "}
             <Link href="/docs/plans-and-billing#lookups">
               What counts as a lookup
             </Link>
@@ -259,29 +222,23 @@ export default function ShapesAndRoutesPage() {
 
       <DocsSection id="changing-routes" title="Changing a route">
         <p>
-          A route’s stops are listed under it in the Map tab’s sidebar. Each
-          stop’s menu offers <strong>Move up</strong>,{" "}
+          A route’s stops are listed under it in the Map tab’s sidebar, each with
+          a menu: <strong>Move up</strong>,{" "}
           <strong>Move down</strong>, <strong>Make this the start</strong>,{" "}
           <strong>Make this the end</strong> and{" "}
           <strong>Remove from route</strong>.
         </p>
 
         <p>
-          If you move a location that is a stop, the route keeps its old line and
-          says{" "}
-          <strong>
-            A stop has moved. The route still follows the old roads until you
-            work it out again.
-          </strong>{" "}
-          Press <strong>Recalculate</strong>.
+          Move a stop’s location and the route keeps its old line until you press{" "}
+          <strong>Recalculate</strong>.
         </p>
 
         <p>
-          Routes take the same <strong>Line style</strong> and{" "}
-          <strong>Colour</strong> as any line, from <strong>Edit shape</strong>.
-          Put a route in a{" "}
-          <Link href="/docs/tags-pins-and-groups#groups">group</Link> with a
-          colour and its stops take that colour too.
+          <strong>Edit shape</strong> sets a route’s <strong>Line style</strong>{" "}
+          and <strong>Colour</strong>. In a coloured{" "}
+          <Link href="/docs/tags-pins-and-groups#groups">group</Link>, its stops
+          take that colour too.
         </p>
       </DocsSection>
 
@@ -292,7 +249,7 @@ export default function ShapesAndRoutesPage() {
           rows={[
             [
               "{name} can’t be a stop",
-              "There’s no road near that location. Move its pin closer to a road, or pick a different location.",
+              "No road is near it. Move its pin closer to a road, or pick another location.",
             ],
             [
               "Click a location to add a stop",
@@ -300,15 +257,15 @@ export default function ShapesAndRoutesPage() {
             ],
             [
               "That location is still saving",
-              "Wait a second for a new location to finish saving, then click it again.",
+              "Wait a second, then click it again.",
             ],
             [
               "No route between those stops",
-              "There’s no drivable way between them — an island, say. Move a stop nearer a road and try again.",
+              "No drivable way between them — an island, say. Move a stop nearer a road.",
             ],
             [
               "Couldn’t work out the route",
-              "The routing service was slow or busy. Press Enter again in a moment.",
+              "The routing service was busy. Press Enter again in a moment.",
             ],
             [
               "Routes aren’t included on the free plan",

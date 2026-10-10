@@ -6,6 +6,7 @@ import { DocsCallout } from "@/components/docs/docs-callout";
 import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
+import { CodeBlock } from "@/components/marketing/integrations/code-block";
 import { findArticle } from "@/lib/docs/articles";
 import { BRAND } from "@/lib/brand";
 
@@ -22,8 +23,9 @@ export const metadata: Metadata = {
  *
  * Labels are quoted as `components/publish/**` draws them; the snippet's
  * attributes are the ones `embed/src/config.ts` reads. Pasting is described
- * generically on purpose — per-platform pages (`/for/[platform]`) are not built
- * yet, and a guessed Webflow walkthrough is worse than none.
+ * generically on purpose — a platform gets its own page under `/for/` once
+ * there is something true to say about it (WordPress so far), and a guessed
+ * Webflow walkthrough is worse than none.
  */
 export default function PublishingAndEmbeddingPage() {
   return (
@@ -33,23 +35,22 @@ export default function PublishingAndEmbeddingPage() {
     >
       <DocsSection id="publish-tab" title="The Publish tab">
         <p>
-          Open <strong>Publish</strong> in your map’s sidebar. The design settings
-          are on the left and a live preview of your published map fills the
-          rest. On a phone the settings open from a <strong>Design</strong> sheet
-          at the bottom.
+          Open <strong>Publish</strong> in your map’s sidebar: design settings on
+          the left, a live preview of the published map beside them. On a phone
+          the settings open from a <strong>Design</strong> sheet at the bottom.
         </p>
 
         <p>
-          Above the settings, the preview-width buttons — <strong>Desktop</strong>,{" "}
-          <strong>Tablet</strong> and <strong>Phone</strong> — show the map at
-          each size. They change the preview only. <strong>Reset</strong> puts
-          every design setting back to its default.
+          <strong>Desktop</strong>, <strong>Tablet</strong> and{" "}
+          <strong>Phone</strong> change the preview’s width only.{" "}
+          <strong>Reset</strong> puts every design setting back to its default.
         </p>
 
         <DocsCallout>
           <p>
-            Design changes save by themselves as you make them. They reach your
-            website when you press <strong>Publish</strong>.
+            Design changes save as you make them, and reach your website when you
+            press <strong>Publish</strong>. Until then visitors see the last
+            version you published.
           </p>
         </DocsCallout>
       </DocsSection>
@@ -63,11 +64,11 @@ export default function PublishingAndEmbeddingPage() {
           rows={[
             [
               "Results panel",
-              "Show the results panel — the list of locations beside the map. Its Side (Left or Right), Placement (Over the map or Beside it) and Width (Slim to Half). Whether clicking a row opens its card, and whether the list shows a scrollbar.",
+              "Show the results panel — the list beside the map — with its Side, Placement (Over the map or Beside it) and Width. Whether a row opens its card, and whether the list shows a scrollbar.",
             ],
             [
               "Panel surface",
-              "For a panel over the map: its Transparency (Solid to Glass), Blur behind and Corners.",
+              "For a panel over the map: Transparency, Blur behind and Corners.",
             ],
             [
               "Result rows",
@@ -75,7 +76,7 @@ export default function PublishingAndEmbeddingPage() {
             ],
             [
               "On a phone",
-              "Use a bottom drawer that visitors pull up, or, switched off, a side drawer behind a menu button.",
+              "A bottom drawer visitors pull up, or, switched off, a side drawer behind a menu button.",
             ],
             [
               "Map controls",
@@ -87,7 +88,7 @@ export default function PublishingAndEmbeddingPage() {
             ],
             [
               "Language",
-              "The language your visitors read the map in — English, Lietuvių, Deutsch, Français or Español — and Edit wording, to change any phrase in your own words.",
+              "English, Lietuvių, Deutsch, Français or Español, and Edit wording to change any phrase.",
             ],
             [
               "Visitor analytics",
@@ -100,22 +101,19 @@ export default function PublishingAndEmbeddingPage() {
         />
 
         <p>
-          <strong>Zoom with the scroll wheel</strong> starts off, so a visitor
-          scrolling down your page scrolls past the map instead of getting stuck
-          zooming it. <strong>Group nearby pins</strong> starts on; it keeps a map
-          of hundreds of locations readable when zoomed out.
+          <strong>Zoom with the scroll wheel</strong> starts off, so visitors
+          scroll past the map rather than getting stuck zooming it.{" "}
+          <strong>Group nearby pins</strong> starts on.
         </p>
       </DocsSection>
 
       <DocsSection id="publishing" title="Publishing">
         <p>
           Press <strong>Publish</strong> at the foot of the settings. The toast
-          reads <strong>Published</strong> with the number of locations now live.
-          Any location without a usable position is left out, and the toast names
-          it.
+          reads <strong>Published</strong> with the number of locations now live,
+          and names any left out for having no usable position. The line above
+          the button says where things stand:
         </p>
-
-        <p>The line above the button says where things stand:</p>
 
         <ul>
           <li>
@@ -130,14 +128,6 @@ export default function PublishingAndEmbeddingPage() {
             — edits to locations, shapes, the card or the design are waiting.
           </li>
         </ul>
-
-        <DocsCallout>
-          <p>
-            Nothing you change reaches your website until you publish. That works
-            both ways: you can rework a map for as long as you like, and visitors
-            see the finished version all at once.
-          </p>
-        </DocsCallout>
       </DocsSection>
 
       <DocsSection id="embed-code" title="Putting the map on your site">
@@ -152,30 +142,30 @@ export default function PublishingAndEmbeddingPage() {
 
           <DocsStep title="Add an HTML block to your page">
             <p>
-              In your website builder, add the block that accepts your own code
-              where the map should appear. It is usually called Embed, Custom
-              code, Code or HTML.
+              Where the map should appear, add your website builder’s block for
+              your own code — usually Embed, Custom code, Code or HTML.
             </p>
           </DocsStep>
 
           <DocsStep title="Paste and save">
-            <p>
-              Paste the line in and publish your page. The map appears where the
-              block is.
-            </p>
+            <p>Paste the line in and publish your page.</p>
           </DocsStep>
         </DocsSteps>
 
         <DocsCallout>
           <p>
-            You paste it once. The code keeps pointing at your latest publish, so
-            publishing again updates your site without touching it.
+            You paste it once. The code always shows your latest publish.
           </p>
         </DocsCallout>
 
         <p>
-          The code is a single <code>&lt;script&gt;</code> tag. A few attributes
-          on it change how the map is placed:
+          On WordPress there is nothing to paste — see{" "}
+          <Link href="/for/wordpress">Maps for WordPress</Link>.
+        </p>
+
+        <p>
+          The code is one <code>&lt;script&gt;</code> tag. These attributes change
+          how the map is placed:
         </p>
 
         <DocsTable
@@ -188,87 +178,72 @@ export default function PublishingAndEmbeddingPage() {
             ],
             [
               <code key="t">data-target</code>,
-              "A CSS selector for an element to draw the map into, when you can’t put the script where the map should go.",
+              "A CSS selector to draw the map into, when the script can’t sit where the map goes.",
             ],
             [
               <code key="e">data-eager</code>,
-              "Loads the map straight away. Without it, the map loads as a visitor scrolls near it, which keeps your page fast.",
+              "Loads the map at once. Without it, the map loads as a visitor scrolls near it.",
             ],
             [
               <code key="g">data-tags</code>,
-              "Shows only locations with these tags. Pick them under Show only in the embed code window rather than typing them — the code uses each tag’s id.",
+              "Shows only locations with these tags. Pick them under Show only in the embed code window — the code uses tag ids.",
             ],
           ]}
         />
 
         <p>
-          To open the map on one location, link to your page with{" "}
-          <code>?place=</code> and the location’s id at the end of the address.
-        </p>
-
-        <p>
-          <strong>Open test page</strong> shows the map you last published on a
-          page of its own, the way a visitor sees it. Use it to check a publish
-          before looking at your site.
+          To open the map on one location, add <code>?place=</code> and the
+          location’s id to your page’s address.{" "}
+          <strong>Open test page</strong> shows your last publish on a page of
+          its own, as a visitor sees it.
         </p>
       </DocsSection>
 
       <DocsSection id="your-analytics" title="Sending map activity to your own analytics">
         <p>
-          Everything a visitor does on the map — opening a location, pressing
-          Directions, searching, using Nearest to me — is announced on your page
-          as a <code>pinglide</code> event. This works on every plan, whether or
-          not Visitor analytics is switched on, and nothing is sent anywhere
-          unless you send it. To pass them on to Google Analytics, add this
-          below the embed code:
+          Everything a visitor does on the map — opening a location, Directions,
+          searching, Nearest to me — fires a <code>pinglide</code> event on your
+          page, on every plan. Nothing is sent anywhere unless you send it. To
+          pass them to Google Analytics, add this below the embed code:
         </p>
 
-        <pre className="overflow-x-auto rounded-xl bg-surface-secondary p-3 text-xs">
-          <code>{`<script>
+        <CodeBlock
+          label="HTML"
+          code={`<script>
   document.addEventListener("pinglide", function (event) {
     gtag("event", "map_" + event.detail.type, event.detail);
   });
-</script>`}</code>
-        </pre>
+</script>`}
+        />
 
         <p>
-          <code>event.detail.type</code> says what happened —{" "}
-          <code>open</code>, <code>directions</code>, <code>search</code>,{" "}
-          <code>nearest</code> and so on — and <code>event.detail.map</code> says
-          which map, for a page with more than one.
+          <code>event.detail.type</code> says what happened (<code>open</code>,{" "}
+          <code>directions</code>, <code>search</code>, <code>nearest</code>…) and{" "}
+          <code>event.detail.map</code> which map.
         </p>
       </DocsSection>
 
       <DocsSection id="domains" title="Allowed domains">
         <p>
           Under <strong>Allowed domains</strong>, list the websites your map may
-          appear on, one per line, then press <strong>Save changes</strong>.
-          Leave it empty to allow the map anywhere.
+          appear on, one per line, and press <strong>Save changes</strong>. Empty
+          allows anywhere. On any other site the map doesn’t appear — include
+          your staging or preview site too.
         </p>
 
         <ul>
+          <li>Up to 20 domains; commas work as separators too.</li>
           <li>
-            Up to 20 domains. Commas work as separators too.
-          </li>
-          <li>
-            Subdomains are included, so <code>example.com</code> also covers{" "}
+            Subdomains are included: <code>example.com</code> covers{" "}
             <code>www.example.com</code>.
           </li>
-          <li>
-            Paste a full address if that’s easier — it is trimmed to the domain.
-          </li>
+          <li>A full address is trimmed to its domain.</li>
         </ul>
-
-        <p>
-          On a site that isn’t on the list, the map doesn’t appear. Remember to
-          add the domain of any staging or preview site you test on, too.
-        </p>
 
         <DocsCallout tone="warning">
           <p>
-            This discourages somebody copying your code onto their own site. It
-            isn’t a security control — the published map is a public file. Don’t
-            publish anything on a map you wouldn’t put on your website.
+            This discourages copying, but isn’t security — the published map is a
+            public file. Don’t publish anything you wouldn’t put on your website.
           </p>
         </DocsCallout>
       </DocsSection>
@@ -280,11 +255,11 @@ export default function PublishingAndEmbeddingPage() {
           rows={[
             [
               "Search",
-              "Search locations or a postcode filters the list as they type. Picking a town or postcode from the suggestions measures distances from there instead.",
+              "Filters the list as they type. Picking a town or postcode from the suggestions measures distances from there.",
             ],
             [
               "Nearest to me",
-              "Asks the browser for the visitor’s location, sorts the list by distance and opens the closest one.",
+              "Uses the browser’s location, sorts by distance and opens the closest.",
             ],
             [
               "Grouped pins",
@@ -292,7 +267,7 @@ export default function PublishingAndEmbeddingPage() {
             ],
             [
               "Cards",
-              "Clicking a pin opens the card you designed, with Directions to open their own maps app.",
+              "A pin opens the card you designed, with Directions to their own maps app.",
             ],
             [
               "Results list",
@@ -306,10 +281,10 @@ export default function PublishingAndEmbeddingPage() {
         />
 
         <p>
-          Every published map is credited to OpenStreetMap and the map provider
-          in a corner. That credit is required and can’t be switched off. Maps
-          on the free plan also show a small <strong>Made with {BRAND.name}</strong>{" "}
-          link; see <Link href="/docs/plans-and-billing">Plans and billing</Link>.
+          Every map credits OpenStreetMap and the map provider in a corner; that
+          can’t be switched off. Free maps also show a small{" "}
+          <strong>Made with {BRAND.name}</strong> link — see{" "}
+          <Link href="/docs/plans-and-billing">Plans and billing</Link>.
         </p>
       </DocsSection>
 
@@ -320,19 +295,19 @@ export default function PublishingAndEmbeddingPage() {
           rows={[
             [
               "Nothing where the map should be",
-              "Check the site’s domain is under Allowed domains, or empty the list. Then check the block really holds the script — some builders strip code from text blocks.",
+              "Check the domain is under Allowed domains, or empty the list. Then check the block still holds the script — some builders strip code from text blocks.",
             ],
             [
               "An old version of the map",
-              "Press Publish again. Changes only go live when you publish.",
+              "Press Publish again.",
             ],
             [
               "A location is missing",
-              "It had no usable position when you published. Place it on the Locations tab, then publish.",
+              "It had no usable position. Place it on the Locations tab, then publish.",
             ],
             [
               "Nearest to me says location is off",
-              "The visitor has blocked location for your site in their browser. They can allow it there and try again.",
+              "The visitor blocked location for your site in their browser, and can allow it there.",
             ],
           ]}
         />

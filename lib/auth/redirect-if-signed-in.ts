@@ -30,12 +30,16 @@ import { getCurrentUser } from "./current-user";
  * network call when there is no cookie to read, which is every real visit to
  * these two pages.
  *
+ * `target` is the page's own `?next=`, already through `safeRedirect`: someone
+ * sent here from `/connect/wordpress` who turns out to be signed in belongs back
+ * there, not on the maps list.
+ *
  * **Not in `(auth)/layout.tsx`.** The other pages in that group are exactly the
  * ones that must render *with* a session visible — `/auth/success` and
  * `/verify-email` are where a cross-site landing arrives precisely so that it is
  * not server-redirected to `/maps`. See *The SameSite trap* in
  * `docs/notes/auth.md`.
  */
-export async function redirectIfSignedIn(): Promise<void> {
-  if (await getCurrentUser()) redirect("/maps");
+export async function redirectIfSignedIn(target = "/maps"): Promise<void> {
+  if (await getCurrentUser()) redirect(target);
 }

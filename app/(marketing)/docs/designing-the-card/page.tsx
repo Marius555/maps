@@ -30,9 +30,9 @@ export default function DesigningTheCardPage() {
     >
       <DocsSection id="what" title="What the card is">
         <p>
-          The card is what opens when a visitor clicks a pin or a row in the
-          results list: the location’s name, address, photos, opening hours and
-          buttons, laid out however you like.
+          The card opens when a visitor clicks a pin or a results row: the
+          location’s name, address, photos, hours and buttons, laid out as you
+          like.
         </p>
 
         <DocsCallout>
@@ -46,9 +46,9 @@ export default function DesigningTheCardPage() {
 
       <DocsSection id="layout" title="Finding your way around">
         <p>
-          Open <strong>Card</strong> in your map’s sidebar. The card sits in the
-          middle, drawn with one of your real locations — or an example one if
-          the map is still empty. The panel beside it has two tabs:
+          Open <strong>Card</strong> in your map’s sidebar. The card is drawn
+          with one of your locations (or an example), beside a panel with two
+          tabs:
         </p>
 
         <ul>
@@ -57,16 +57,14 @@ export default function DesigningTheCardPage() {
             <strong>Save changes</strong> at the foot.
           </li>
           <li>
-            <strong>Modify</strong> — the settings of whatever is selected: a
-            block, or the card itself when nothing is.
+            <strong>Modify</strong> — settings for the selected block, or the
+            card when nothing is selected.
           </li>
         </ul>
 
         <p>
-          A dot on <strong>Blocks</strong> means there are unsaved changes. Press{" "}
-          <strong>Save changes</strong> and the toast confirms every map in your
-          account now uses it. <strong>Reset card</strong> starts again from an
-          empty card.
+          A dot on <strong>Blocks</strong> means unsaved changes.{" "}
+          <strong>Reset card</strong> starts again from an empty card.
         </p>
       </DocsSection>
 
@@ -101,25 +99,22 @@ export default function DesigningTheCardPage() {
           ]}
         />
 
-        <p>
-          Button, Divider and Space can be used as often as you like; every other
-          block once.
-        </p>
+        <p>Button, Divider and Space can repeat; every other block is used once.</p>
       </DocsSection>
 
       <DocsSection id="building" title="Adding, moving and removing blocks">
         <DocsSteps>
           <DocsStep title="Add">
             <p>
-              Drag a block from the <strong>Blocks</strong> tab onto the card. Or
-              click it, then click one of the places that light up.
+              Drag a block from <strong>Blocks</strong> onto the card, or click
+              it and then a highlighted spot.
             </p>
           </DocsStep>
 
           <DocsStep title="Move and resize">
             <p>
-              Drag a placed block to move it. Drag its <strong>Height</strong> or{" "}
-              <strong>Size</strong> handle to resize it — arrow keys work too.
+              Drag a block to move it, and its <strong>Height</strong> or{" "}
+              <strong>Size</strong> handle (or arrow keys) to resize it.
             </p>
           </DocsStep>
 
@@ -131,17 +126,12 @@ export default function DesigningTheCardPage() {
         </DocsSteps>
 
         <p>
-          If a block won’t drop, the card is full. Make the card taller under{" "}
-          <strong>Size</strong> on the Modify tab, or remove something.
+          A block that won’t drop means the card is full: make it taller under{" "}
+          <strong>Size</strong>, or remove something.
         </p>
       </DocsSection>
 
       <DocsSection id="card-settings" title="The card itself">
-        <p>
-          With nothing selected, <strong>Modify</strong> shows the card’s own
-          settings.
-        </p>
-
         <DocsTable
           caption="Card settings"
           head={["Section", "Settings"]}
@@ -157,11 +147,6 @@ export default function DesigningTheCardPage() {
       </DocsSection>
 
       <DocsSection id="block-settings" title="A block’s settings">
-        <p>
-          Click a block and <strong>Modify</strong> shows the sections that apply
-          to it.
-        </p>
-
         <DocsTable
           caption="Block settings"
           head={["Section", "Settings"]}
@@ -193,7 +178,7 @@ export default function DesigningTheCardPage() {
           rows={[
             [
               "Button",
-              "Action — Directions or Link. For a link, Link to picks the Website or one of your extra fields. Label is its text.",
+              "Action — Directions or Link. Link to picks the Website or an extra field. Label is its text.",
             ],
             [
               "Links",
@@ -201,7 +186,7 @@ export default function DesigningTheCardPage() {
             ],
             [
               "Logo",
-              "Show — Pin, Mixed or Logo. Mixed draws the pin for locations with no logo, instead of an empty space. Corners — Square, Rounded or Round.",
+              "Show — Pin, Mixed (the pin where there’s no logo) or Logo. Corners — Square, Rounded or Round.",
             ],
             [
               "Description",
@@ -215,24 +200,18 @@ export default function DesigningTheCardPage() {
         />
 
         <p>
-          A button’s <strong>Colour</strong> left unset follows each location’s
-          pin colour, so a map with colour-coded tags gets colour-coded buttons.
-          To give every location its own button link, add an{" "}
+          A button with no <strong>Colour</strong> follows each location’s pin
+          colour. For a per-location button link, add an{" "}
           <Link href="/docs/managing-locations#extra-fields">extra field</Link>{" "}
-          of type Link first, then pick it under <strong>Link to</strong>.
-        </p>
-
-        <p>
-          The <strong>Preview</strong> section only changes what you see while
-          designing — how many tag chips the example shows, and what pin colour
-          it wears. Real cards always use each location’s own.
+          of type Link, then pick it under <strong>Link to</strong>.{" "}
+          <strong>Preview</strong> settings only change the example you design
+          with.
         </p>
       </DocsSection>
 
       <DocsSection id="one-location" title="Changing one location’s card">
         <p>
-          A flagship store might want a different button, or a larger photo.
-          Change it on that location alone:
+          A flagship store might want a different button or a larger photo:
         </p>
 
         <DocsSteps>
@@ -241,17 +220,14 @@ export default function DesigningTheCardPage() {
           </DocsStep>
 
           <DocsStep title="Press Edit this card">
-            <p>
-              The button in the card’s top-left corner. Every block pulses
-              gently.
-            </p>
+            <p>It’s in the card’s top-left corner.</p>
           </DocsStep>
 
           <DocsStep title="Click a block and change it">
             <p>
-              A panel opens with the same settings as the designer. A Button
-              here can also use <strong>A link I’ll type</strong> — a web
-              address for this location only. Changes save by themselves.
+              The designer’s settings open, and save by themselves. A Button
+              can also use <strong>A link I’ll type</strong>, for this location
+              only.
             </p>
           </DocsStep>
 
@@ -264,8 +240,8 @@ export default function DesigningTheCardPage() {
         </DocsSteps>
 
         <p>
-          A location can change what a block looks like and says, but not which
-          blocks the card has or their order — those stay the same everywhere.
+          A location can change how a block looks and what it says, but not
+          which blocks the card has or their order.
         </p>
       </DocsSection>
     </DocsArticle>

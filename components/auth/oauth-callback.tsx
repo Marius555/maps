@@ -9,6 +9,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { LinkButton } from "@/components/ui/link-button";
 import { identifyUser } from "@/lib/posthog/client";
+import { takeOAuthNext } from "@/lib/auth/oauth-next";
 import { exchangeOAuthToken } from "@/lib/query/auth";
 import { queryKeys } from "@/lib/query/keys";
 
@@ -70,7 +71,7 @@ export function OAuthCallback() {
       .then(({ user }) => {
         identifyUser(user);
         queryClient.setQueryData(queryKeys.me, { user });
-        router.replace("/maps");
+        router.replace(takeOAuthNext());
         // The dashboard is server-rendered, so the new cookie has to reach the
         // server before the redirect paints — same reason as the login form.
         router.refresh();

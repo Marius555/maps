@@ -45,7 +45,7 @@ export default function TagsPinsAndGroupsPage() {
             ],
             [
               "Groups",
-              "Keeping your own list tidy while you work, colouring many pins at once, and changing their pins together.",
+              "Keeping your list tidy, and colouring or changing many pins at once.",
               "Only as the colour of the pins and shapes in it",
             ],
           ]}
@@ -54,22 +54,21 @@ export default function TagsPinsAndGroupsPage() {
 
       <DocsSection id="tags" title="Setting up tags">
         <p>
-          Tags are what visitors filter your map by — “Bikes”, “Open Sundays”.
-          Each one has a colour, and a location’s first tag colours its pin.
+          Visitors filter your map by tags. Each has a colour, and a location’s
+          first tag colours its pin.
         </p>
 
         <DocsSteps>
           <DocsStep title="Open Tags & fields">
             <p>
-              On Locations, press <strong>Tags &amp; fields</strong> and stay on
-              the <strong>Tags</strong> tab.
+              On Locations, press <strong>Tags &amp; fields</strong>.
             </p>
           </DocsStep>
 
           <DocsStep title="Add your tags">
             <p>
-              Press <strong>Add tag</strong> and type its name. Each new tag
-              takes the next unused colour; press its swatch to change it.
+              Press <strong>Add tag</strong> and name it. Press its swatch to
+              change the colour.
             </p>
           </DocsStep>
 
@@ -81,40 +80,26 @@ export default function TagsPinsAndGroupsPage() {
         </DocsSteps>
 
         <p>
-          Beside each tag in use, a count such as <strong>3 locations</strong>{" "}
-          lists the locations wearing it. Press one to open it in Edit location.
-        </p>
-
-        <p>
-          To show each tag in its own colour on the card, open the card
-          designer, select the <strong>Tags</strong> block and turn on{" "}
-          <strong>Use tag colours</strong>.
+          A count such as <strong>3 locations</strong> beside a tag lists who
+          wears it. For tag colours on the card, select the card designer’s{" "}
+          <strong>Tags</strong> block and turn on{" "}
+          <strong>Use tag colours</strong>. A map holds up to 60 tags, a
+          location 20, and a name 64 characters.
         </p>
 
         <DocsCallout>
           <p>
-            Removing a tag hides it from your published map. Locations keep it
-            until you change them, so adding it back brings everything back.
+            Removing a tag hides it from your published map, but locations keep
+            it — adding it back restores everything.
           </p>
         </DocsCallout>
-
-        <DocsTable
-          caption="Tag limits"
-          head={["Limit", "Allowed"]}
-          rows={[
-            ["Tags per map", "60"],
-            ["Tags per location", "20"],
-            ["Length of a name", "64 characters"],
-          ]}
-        />
       </DocsSection>
 
       <DocsSection id="tagging" title="Tagging locations">
         <p>
           In <Link href="/docs/managing-locations#edit">Edit location</Link>,
-          open <strong>Tags</strong> and pick from the list. Need one that
-          doesn’t exist yet? Choose <strong>New tag</strong>, name it, pick a
-          colour and press <strong>Add tag</strong>.
+          pick from <strong>Tags</strong>, or choose <strong>New tag</strong> to
+          make one there.
         </p>
 
         <DocsCallout tone="warning">
@@ -127,17 +112,15 @@ export default function TagsPinsAndGroupsPage() {
 
         <p>
           To tag many at once, use <strong>Select several</strong> on the Map
-          tab, press <strong>Tag</strong> in the bar, choose add or remove, then
-          pick the tag.
+          tab, then <strong>Tag</strong>.
         </p>
       </DocsSection>
 
       <DocsSection id="pins" title="Custom pins">
         <p>
-          Press the pin button at the left of the Map tab’s toolbar and choose{" "}
-          <strong>New</strong> (<strong>Make a new pin</strong>). Or start from
-          one of the built-in pins: Shop, Restaurant, Café, Hotel, Office and
-          Landmark.
+          Press the pin button in the Map tab’s toolbar and choose{" "}
+          <strong>New</strong>, or start from a built-in pin: Shop, Restaurant,
+          Café, Hotel, Office or Landmark.
         </p>
 
         <DocsTable
@@ -156,31 +139,25 @@ export default function TagsPinsAndGroupsPage() {
             ],
             [
               "Upload an image",
-              "Your logo in place of an icon — PNG, JPG, WebP or SVG. Flat colours work best.",
+              "Your logo instead of an icon — PNG, JPG, WebP or SVG.",
             ],
           ]}
         />
 
         <p>
-          Press <strong>Use pin</strong>. It is saved to{" "}
-          <strong>Your pins</strong> and the pin button is ready to drop it. An
-          account can have up to 8 custom pins.
-        </p>
-
-        <p>
-          Deleting a pin that locations are wearing puts them back on a plain pin
-          — the button says how many before you press it.
+          Press <strong>Use pin</strong> to save it to <strong>Your pins</strong>{" "}
+          — up to 8 per account. Deleting a pin puts the locations wearing it
+          back on a plain pin.
         </p>
       </DocsSection>
 
       <DocsSection id="pin-colour" title="What colour a pin ends up">
-        <p>When more than one thing could colour a pin, the first that applies wins:</p>
+        <p>The first of these that applies wins:</p>
 
         <ol className="list-decimal space-y-2 pl-5 marker:text-muted">
           <li>The colour of the group the location is in, if it has one.</li>
           <li>
-            The colour of the group a route belongs to, for a location that is a
-            stop on that route and in no group of its own.
+            For a route stop in no group: the route’s group colour.
           </li>
           <li>The custom pin’s own fill.</li>
           <li>The colour of the location’s first tag.</li>
@@ -193,14 +170,10 @@ export default function TagsPinsAndGroupsPage() {
 
       <DocsSection id="groups" title="Groups">
         <p>
-          Groups gather locations and shapes in the Map tab’s list so a long map
-          stays manageable. Visitors never see a group as such — no heading, no
-          filter — but they do see its colour: give a group a colour and every
-          location and shape in it is drawn in that colour, on your published
-          map too.
+          Groups gather locations and shapes in the Map tab’s list. Visitors
+          don’t see groups, but they do see a group’s colour on everything in
+          it. To make one:
         </p>
-
-        <p>Three ways to make one:</p>
 
         <ul>
           <li>
@@ -221,11 +194,11 @@ export default function TagsPinsAndGroupsPage() {
             ["Rename", "Change its name and its colour."],
             [
               "Change pins",
-              "Gives every location in it the same pin. Change individual ones afterwards if they should differ.",
+              "Gives every location in it the same pin.",
             ],
             [
               "Ungroup",
-              "Moves everything back to the main list. Nothing on the published map changes.",
+              "Moves everything back to the main list.",
             ],
             [
               "Delete group and contents",
@@ -235,9 +208,8 @@ export default function TagsPinsAndGroupsPage() {
         />
 
         <p>
-          To take one location out, use its menu’s{" "}
-          <strong>Remove from group</strong>, or drag it onto the{" "}
-          <strong>Remove from group</strong> strip.
+          To take one out, use <strong>Remove from group</strong> in its menu,
+          or drag it onto that strip.
         </p>
       </DocsSection>
     </DocsArticle>

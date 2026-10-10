@@ -91,6 +91,9 @@ const eslintConfig = defineConfig([
     // Built by `npm run build:embed` from /embed. Linting minified output of our
     // own build produces thousands of meaningless warnings.
     "public/embed/**",
+    // The WordPress plugin: WordPress's own globals and conventions, shipped as
+    // written with no build step. Not part of either of our build targets.
+    "distribution/**",
     // 75,000 domains in one string literal, written by
     // `npm run build:disposable-domains`. `tsc` still covers it; ESLint has
     // nothing to say about a megabyte of data and takes a while to say it.

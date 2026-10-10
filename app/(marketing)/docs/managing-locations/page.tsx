@@ -31,12 +31,10 @@ export default function ManagingLocationsPage() {
     >
       <DocsSection id="locations-page" title="The Locations page">
         <p>
-          Open <strong>Locations</strong> in your map’s sidebar. Every location
-          on the map is listed here — as a table on a wide screen, as stacked rows
-          on a phone. Click a row, or its name, to edit it.
+          Open <strong>Locations</strong> in your map’s sidebar to see every
+          location — a table on a wide screen, rows on a phone. Click one to edit
+          it. Along the top:
         </p>
-
-        <p>Along the top:</p>
 
         <ul>
           <li>
@@ -56,16 +54,16 @@ export default function ManagingLocationsPage() {
         </ul>
 
         <p>
-          Locations are added one at a time on the Map tab, not here — see{" "}
+          Single locations are added on the Map tab — see{" "}
           <Link href="/docs/map-editor#adding">Adding locations</Link>.
         </p>
       </DocsSection>
 
       <DocsSection id="finding" title="Finding a location">
         <p>
-          Type into <strong>Search locations</strong> to match on name or address.
-          The <strong>Show</strong> menu narrows the list to the locations that
-          want something from you:
+          <strong>Search locations</strong> matches name or address. The{" "}
+          <strong>Show</strong> menu narrows the list to locations that need
+          something:
         </p>
 
         <DocsTable
@@ -79,15 +77,15 @@ export default function ManagingLocationsPage() {
             ],
             [
               "Not placed",
-              "Locations we couldn’t find an address for. They aren’t on the map yet.",
+              "No address found, so not on the map yet.",
             ],
             [
               "Rough match",
-              "Found, but only as far as a street or a town. Worth checking the pin.",
+              "Found only as far as a street or town. Check the pin.",
             ],
             [
               "Approximate address",
-              "Matched to the street rather than the building. Adding the house number usually fixes it.",
+              "Matched to the street, not the building. Adding the house number usually fixes it.",
             ],
             [
               "Missing details",
@@ -97,9 +95,8 @@ export default function ManagingLocationsPage() {
         />
 
         <p>
-          The <strong>Tags</strong> button filters by tag. Choosing several
-          shows the locations wearing any of them, and{" "}
-          <strong>Untagged</strong> finds the locations wearing none.{" "}
+          <strong>Tags</strong> filters by tag — several shows locations with any
+          of them, <strong>Untagged</strong> those with none.{" "}
           <strong>Clear tags</strong> resets it.
         </p>
       </DocsSection>
@@ -112,7 +109,7 @@ export default function ManagingLocationsPage() {
             ["Name", "What the location is called. Click it to edit."],
             [
               "Address",
-              "The stored address. Couldn’t find an address means the lookup failed; bare coordinates mean it was never looked up.",
+              "Couldn’t find an address means the lookup failed; bare coordinates mean it was never looked up.",
             ],
             [
               "Tags",
@@ -130,24 +127,23 @@ export default function ManagingLocationsPage() {
         />
 
         <p>
-          The count under the list reads <strong>N of M locations</strong> — how
-          many this map has against what your plan allows.
+          <strong>N of M locations</strong> under the list is this map’s count
+          against your plan’s limit.
         </p>
       </DocsSection>
 
       <DocsSection id="edit" title="Editing a location">
         <p>
           Opening a location brings up <strong>Edit location</strong>. Nothing is
-          saved until you press <strong>Save changes</strong> —{" "}
-          <strong>Cancel</strong> throws every change away, photos included.
+          saved until <strong>Save changes</strong>; <strong>Cancel</strong>{" "}
+          discards everything, photos included.
         </p>
 
         <DocsSteps>
           <DocsStep title="Move the pin">
             <p>
-              The small map at the top says{" "}
-              <strong>Drag the pin to move this location.</strong> A pin you move
-              by hand is kept exactly where you put it.
+              Drag the pin on the small map at the top. A pin moved by hand stays
+              exactly where you put it.
             </p>
           </DocsStep>
 
@@ -160,29 +156,25 @@ export default function ManagingLocationsPage() {
           <DocsStep title="Find a new address">
             <p>
               Type the full address into <strong>Find New Location</strong> and
-              press Enter, or the magnifier. Nothing is looked up while you type.
-              You get up to five matches under <strong>Address matches</strong>;
-              pick one and the address and pin both move to it. Nothing changes
-              until you pick.
-            </p>
-            <p>
-              No matches? Add a city or postcode, or drag the pin instead.
+              press Enter. Pick one of up to five{" "}
+              <strong>Address matches</strong> to move the address and pin. No
+              matches? Add a city or postcode, or drag the pin.
             </p>
           </DocsStep>
 
           <DocsStep title="Tag it and choose a pin">
             <p>
-              <strong>Tags</strong> — the first tag colours the pin, and you drag
-              a tag to reorder them. <strong>Pin</strong> picks one of your own
-              pins or a built-in one. See{" "}
+              The first of the <strong>Tags</strong> colours the pin; drag to
+              reorder. <strong>Pin</strong> picks your own pin or a built-in one.
+              See{" "}
               <Link href="/docs/tags-pins-and-groups">Tags, pins and groups</Link>.
             </p>
           </DocsStep>
         </DocsSteps>
 
         <p>
-          The rest is in folds below, which start shut and open one at a time.
-          Each shows what it holds on the right, or <strong>Not set</strong>.
+          The rest is in folds below, each showing what it holds or{" "}
+          <strong>Not set</strong>.
         </p>
 
         <DocsTable
@@ -191,11 +183,11 @@ export default function ManagingLocationsPage() {
           rows={[
             [
               "Coordinates",
-              "Latitude and Longitude, for when the address search can’t find the place. Dragging the pin writes these too.",
+              "Latitude and Longitude, for when the address search can’t find the place.",
             ],
             [
               "Contact",
-              "Phone, Email and Website. A website needs its https:// at the front.",
+              "Phone, Email and Website (with its https://).",
             ],
             [
               "Extra fields",
@@ -204,7 +196,7 @@ export default function ManagingLocationsPage() {
             ["Opening hours", "The week, one day at a time. See below."],
             [
               "Description, logo and photos",
-              "A description of up to 5,000 characters, the location’s own logo, and up to 8 photos.",
+              "Up to 5,000 characters, the location’s own logo, and up to 8 photos.",
             ],
           ]}
         />
@@ -214,39 +206,31 @@ export default function ManagingLocationsPage() {
         <DocsSteps>
           <DocsStep title="Open or close a day">
             <p>
-              Press a day to open it or close it. A closed day reads{" "}
-              <strong>Closed</strong>. A day you open for the first time starts at
-              09:00–17:00; one you reopen gets its last times back.
+              Press a day to open or close it. A newly opened day starts at
+              09:00–17:00; a reopened one gets its last times back.
             </p>
           </DocsStep>
 
           <DocsStep title="Set the times">
             <p>
-              Type them as 24-hour times, like <code>09:00</code>, or press the
-              clock beside the day and pick from <strong>Opens</strong> and{" "}
-              <strong>Closes</strong> in half-hour steps.
+              Type 24-hour times like <code>09:00</code>, or press the clock and
+              pick <strong>Opens</strong> and <strong>Closes</strong>.
             </p>
           </DocsStep>
         </DocsSteps>
 
         <p>
-          Times are the location’s own local time. A closing time earlier than the
-          opening time means the location is open past midnight — 18:00 to 02:00
-          works as you’d expect.
+          Times are the location’s local time; 18:00 to 02:00 runs past midnight.
+          Visitors’ cards show <strong>Open now</strong> or{" "}
+          <strong>Closed now</strong>.
         </p>
 
         <DocsCallout tone="warning">
           <p>
-            Each day holds one opening period. A location that closes for lunch
-            can’t be shown as two periods yet — use its full opening and closing
-            times, and mention the break in the description.
+            Each day holds one opening period. For a lunch break, use the full
+            day’s times and mention the break in the description.
           </p>
         </DocsCallout>
-
-        <p>
-          On a visitor’s card, opening hours show <strong>Open now</strong> or{" "}
-          <strong>Closed now</strong>.
-        </p>
       </DocsSection>
 
       <DocsSection id="photos" title="Photos and logo">
@@ -261,17 +245,15 @@ export default function ManagingLocationsPage() {
         />
 
         <p>
-          Press <strong>Add photos</strong> and pick as many as you like at once.
-          The first photo is the <strong>Cover</strong>; press the star on another
-          to make it the cover instead. Photos and the logo upload when you press{" "}
-          <strong>Save changes</strong>.
+          Press <strong>Add photos</strong> to pick several at once. The first is
+          the <strong>Cover</strong>; press the star on another to change it.
+          Everything uploads on <strong>Save changes</strong>.
         </p>
 
         <p>
-          The logo is this location’s own brand mark — a stockist’s logo, say —
-          shown on its card. It is not the image on a pin; that is a{" "}
-          <Link href="/docs/tags-pins-and-groups#pins">custom pin</Link>, shared
-          by every location wearing it.
+          The logo is this location’s own brand mark, shown on its card — not the
+          image on a pin, which is a{" "}
+          <Link href="/docs/tags-pins-and-groups#pins">custom pin</Link>.
         </p>
       </DocsSection>
 
@@ -284,47 +266,38 @@ export default function ManagingLocationsPage() {
         <DocsSteps>
           <DocsStep title="Define the field once, for the map">
             <p>
-              On Locations, press <strong>Tags &amp; fields</strong>, open the{" "}
-              <strong>Extra fields</strong> tab and press{" "}
-              <strong>Add field</strong>. Give it a name, a{" "}
-              <strong>Type</strong> — Text, Link, Phone or Email — and choose{" "}
-              <strong>Show as</strong>: a <strong>Detail row</strong> or a{" "}
-              <strong>Button</strong>. Press <strong>Save changes</strong>.
+              Press <strong>Tags &amp; fields</strong> →{" "}
+              <strong>Extra fields</strong> → <strong>Add field</strong>. Give it
+              a name, a <strong>Type</strong> (Text, Link, Phone or Email) and{" "}
+              <strong>Show as</strong> a <strong>Detail row</strong> or{" "}
+              <strong>Button</strong>, then <strong>Save changes</strong>.
             </p>
           </DocsStep>
 
           <DocsStep title="Fill it in per location">
             <p>
-              The field now appears under <strong>Extra fields</strong> in Edit
-              location. Leave it empty on locations it doesn’t apply to.
+              It appears under <strong>Extra fields</strong> in Edit location;
+              leave it empty where it doesn’t apply. A map can have up to 10.
             </p>
           </DocsStep>
         </DocsSteps>
-
-        <p>A map can have up to 10 extra fields.</p>
       </DocsSection>
 
       <DocsSection id="from-the-card" title="Filling in details from the map">
         <p>
-          On the Map tab, click a pin to open its card. Anything the location
-          doesn’t have yet shows as a dashed <strong>+</strong> —{" "}
-          <strong>Add a description</strong>, <strong>Add opening hours</strong>,{" "}
-          <strong>Add photos</strong> and so on. Fill it in and press{" "}
-          <strong>Add</strong>. It’s the quickest way to finish a location while
-          you’re looking at it.
+          On the Map tab, click a pin to open its card. Anything missing shows as
+          a dashed <strong>+</strong> — <strong>Add a description</strong>,{" "}
+          <strong>Add opening hours</strong>, <strong>Add photos</strong> and so
+          on. Fill it in and press <strong>Add</strong>.
         </p>
       </DocsSection>
 
       <DocsSection id="deleting" title="Deleting a location">
         <p>
-          Open the row’s menu (⋯) and choose <strong>Delete</strong>, then{" "}
-          <strong>Delete location</strong>. If the map is published, the location
-          stays visible to visitors until you publish again.
-        </p>
-
-        <p>
-          The same menu offers <strong>Find address again</strong> on a location
-          whose lookup failed.
+          In the row’s menu (⋯), choose <strong>Delete</strong>, then{" "}
+          <strong>Delete location</strong>. Visitors still see it until you
+          publish again. The same menu offers <strong>Find address again</strong>{" "}
+          when a lookup failed.
         </p>
       </DocsSection>
     </DocsArticle>

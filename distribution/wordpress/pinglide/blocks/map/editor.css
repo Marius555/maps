@@ -1,0 +1,14 @@
+.wp-block-pinglide-map .components-placeholder {
+	min-height: 240px;
+}
+
+.wp-block-pinglide-map .pinglide-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.wp-block-pinglide-map .pinglide-hint {
+	margin: 0 0 12px;
+	max-width: 42em;
+}

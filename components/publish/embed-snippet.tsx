@@ -4,11 +4,13 @@ import { Button, toast } from "@heroui/react";
 import { Copy } from "lucide-react";
 import { useState } from "react";
 
+import { HighlightedCode } from "@/components/ui/highlighted-code";
 import { embedScriptUrl, embedSnippet } from "@/lib/embed/snippet";
 import type { MapTagGroup, Place } from "@/lib/repositories/types";
 import { SnippetTagFilter } from "./snippet-tag-filter";
 import { TestPageLink } from "./share-dialog/test-page-link";
 import { useOrigin } from "./use-origin";
+import { WordPressHint } from "./wordpress-hint/wordpress-hint";
 
 /**
  * The one line the customer pastes into their site.
@@ -77,10 +79,12 @@ export function EmbedSnippet({
         onChange={setTags}
       />
 
-      <pre className="overflow-x-auto rounded-xl bg-surface-secondary p-3 text-xs text-foreground">
-        <code className="whitespace-pre">
-          {snippet ?? "Loading the snippet…"}
-        </code>
+      <pre className="code-surface overflow-x-auto rounded-xl p-3 text-xs">
+        {snippet ? (
+          <HighlightedCode code={snippet} lang="html" className="whitespace-pre" />
+        ) : (
+          <code className="whitespace-pre">Loading the snippet…</code>
+        )}
       </pre>
 
       {/* Wraps rather than shrinks: two buttons and a line of prose do not fit
@@ -102,6 +106,8 @@ export function EmbedSnippet({
           isMeasuring={isMeasuring}
         />
       </div>
+
+      <WordPressHint />
     </div>
   );
 }

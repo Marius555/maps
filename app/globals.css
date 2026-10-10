@@ -3124,6 +3124,13 @@ body.is-pin-dragging * {
  *   same. It wins by being unlayered: HeroUI's rules sit in
  *   `@layer components`, and any unlayered rule beats every layered one,
  *   whatever the specificity.
+ * - **`will-change: auto` with it.** HeroUI's pressed button also sets
+ *   `will-change: transform`, which lifts it onto a layer of its own for the
+ *   length of the press. Its box does not move — measured, the navbar's
+ *   Integrations trigger stays at x 803.78 through press, open and close — but
+ *   the label is re-rasterised on that layer at its fractional x and visibly
+ *   snaps sideways, then back on release. Nothing here animates a transform,
+ *   so the hint only ever bought the jump.
  * - **`scale: none` as well as `transform: none`, in a rule of its own.** The
  *   radio control is shrunk by Tailwind's `scale-95`, which writes the separate
  *   `scale` property. `transform: none` leaves that untouched, and `scale-100`
@@ -3163,6 +3170,7 @@ body.is-pin-dragging * {
     .drawer__trigger
   ) {
   transform: none;
+  will-change: auto;
 }
 
 .steady .radio .radio__control {
@@ -4224,6 +4232,39 @@ body.is-pin-dragging * {
 }
 
 /*
+ * The navbar's Integrations popover (`IntegrationsMenu`): a plain dropdown.
+ *
+ * HeroUI's popover zooms in from 90% and out to 95%; the owner asked for no
+ * scale at all, so the two scale variables are put back to 1 and the fade and
+ * the 4px drop from the trigger are what is left. Unlayered, so it beats the
+ * `@layer components` rule that sets them — the mechanism `.steady` relies on.
+ *
+ * **The corners are concentric: outer radius = row radius + padding.** 16px
+ * here, 6px of padding (`p-1.5`), 10px on a row. HeroUI's own radius,
+ * `min(32px, --radius-3xl)`, put a 12px hover inside a near-pill and the two
+ * read as different shapes.
+ *
+ * It portals out of `.mk-site`, so the site's focus ring is restated for its
+ * rows, inset so it follows the row's own corners.
+ */
+.mk-nav-popover {
+  border-radius: 1rem;
+}
+
+.mk-nav-popover[data-entering="true"] {
+  --tw-enter-scale: 1;
+}
+
+.mk-nav-popover[data-exiting="true"] {
+  --tw-exit-scale: 1;
+}
+
+.mk-nav-popover a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/*
  * /pricing's cards, held back until the discount is known (`usePricingOffer`'s
  * `settled`), so they paint once with the right ring and prices. Only where
  * scripts run: with them off nothing would ever settle, and the cards show
@@ -4234,4 +4275,60 @@ body.is-pin-dragging * {
   .pricing-pending {
     visibility: hidden;
   }
+}
+
+/*
+ * Code, coloured: `CodeBlock` on the public site and the embed snippet on the
+ * Publish tab, through `components/ui/highlighted-code.tsx`.
+ *
+ * **One dark ground in both themes**, so there is one palette to keep legible
+ * rather than two. It is the light theme's `--foreground`, which is what the
+ * code block was drawn on before it had colours; in the dark theme the hairline
+ * is what separates it from a page only seven points darker.
+ *
+ * Every token colour clears 4.5:1 against `--code-ground` — measured in the
+ * browser, comment grey included, since a comment is still something to read.
+ * Move the ground and re-measure them all.
+ */
+.code-surface {
+  --code-ground: oklch(21% 0.012 265);
+  --code-ink: oklch(92% 0.006 265);
+  --code-dim: oklch(70% 0.012 265);
+
+  background: var(--code-ground);
+  color: var(--code-ink);
+  box-shadow: inset 0 0 0 1px oklch(100% 0 0 / 0.08);
+}
+
+.code-tok-tag {
+  color: oklch(74% 0.15 36);
+}
+
+.code-tok-attr {
+  color: oklch(79% 0.1 235);
+}
+
+.code-tok-string {
+  color: oklch(81% 0.13 140);
+}
+
+.code-tok-keyword {
+  color: oklch(77% 0.13 305);
+}
+
+.code-tok-fn {
+  color: oklch(86% 0.12 90);
+}
+
+.code-tok-number {
+  color: oklch(81% 0.12 60);
+}
+
+.code-tok-comment {
+  color: var(--code-dim);
+  font-style: italic;
+}
+
+.code-tok-punct {
+  color: var(--code-dim);
 }

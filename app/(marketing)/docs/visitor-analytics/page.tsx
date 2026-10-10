@@ -30,17 +30,11 @@ export default function VisitorAnalyticsPage() {
       summary="See what visitors to your published map search for, which locations they open and where they come from."
     >
       <DocsSection id="turning-on" title="Turning it on">
-        <p>
-          Analytics is off until you switch it on, and is on the Starter and Pro
-          plans. Four things have to be true before figures appear:
-        </p>
+        <p>Figures appear once all four are true:</p>
 
         <DocsSteps>
           <DocsStep title="You’re on Starter or Pro">
-            <p>
-              Free maps aren’t measured, so figures start from the day you
-              upgrade.
-            </p>
+            <p>Free maps aren’t measured.</p>
           </DocsStep>
 
           <DocsStep title="Measurement is switched on">
@@ -51,10 +45,7 @@ export default function VisitorAnalyticsPage() {
           </DocsStep>
 
           <DocsStep title="You’ve published since">
-            <p>
-              Press <strong>Publish</strong>. Measuring starts with the next
-              publish, not the moment you flip the switch.
-            </p>
+            <p>Measuring starts with the next publish.</p>
           </DocsStep>
 
           <DocsStep title="The map is on your site">
@@ -68,24 +59,20 @@ export default function VisitorAnalyticsPage() {
           </DocsStep>
         </DocsSteps>
 
-        <p>
-          Switching measurement off stops collection straight away — no publish
-          needed.
-        </p>
+        <p>Switching it off stops collection at once, without publishing.</p>
       </DocsSection>
 
       <DocsSection id="what-is-recorded" title="What is recorded">
         <p>
-          What visitors search for, which locations they open, and which buttons
-          they press — along with their country, device, IP address and the page
-          your map is on. There are no cookies, and nothing follows anyone between
-          sites.
+          Searches, locations opened and buttons pressed, with country, device,
+          IP address and the page your map is on. No cookies, and nothing follows
+          anyone between sites.
         </p>
 
         <DocsCallout tone="warning">
           <p>
-            Telling your own visitors is your job. Mention the map’s measurement
-            in your site’s privacy policy before you switch it on.
+            Mention the map’s measurement in your site’s privacy policy before
+            switching it on.
           </p>
         </DocsCallout>
       </DocsSection>
@@ -93,8 +80,7 @@ export default function VisitorAnalyticsPage() {
       <DocsSection id="reports" title="Reading the reports">
         <p>
           Open <strong>Analytics</strong> in your map’s sidebar and choose a{" "}
-          <strong>Period</strong>: <strong>Last 7 days</strong>,{" "}
-          <strong>Last 30 days</strong> or <strong>Last 90 days</strong>.
+          <strong>Period</strong> of 7, 30 or 90 days.
         </p>
 
         <DocsTable
@@ -107,28 +93,28 @@ export default function VisitorAnalyticsPage() {
             ],
             [
               "How well it is working",
-              "Loaded and left — visits where nothing was clicked, searched or opened. Searches that led somewhere — searches followed by a location being opened.",
+              "Loaded and left — visits where nothing happened. Searches that led somewhere — searches followed by an opened location.",
             ],
             ["Visits over time", "Visits per day across the period."],
             [
               "Where the attention is",
-              "A heat map. Where visitors are shows roughly where they were, to country or city, never precisely. Where they look shows your locations sized by how often they were opened.",
+              "A heat map. Where visitors are — to country or city, never precisely. Where they look — locations sized by how often they were opened.",
             ],
             [
               "Locations they opened",
-              "Each location with how often it was opened, and how often that led to directions, a call or a website visit.",
+              "How often each was opened, and how often that led to directions, a call or a website visit.",
             ],
             [
               "Opened, then nothing",
-              "Locations visitors looked at without calling, getting directions or visiting the website. Usually a missing phone number, hours that read as closed, or an address that looks wrong.",
+              "Looked at, with no call, directions or website visit. Often a missing phone number, closed-looking hours or a wrong-looking address.",
             ],
             [
               "What they searched for",
-              "Every search, with how many locations it found. Nothing found marks searches that came up empty — a gap in your coverage, or a name visitors use that you don’t.",
+              "Every search and how many locations it found. Nothing found marks a gap in coverage, or a name visitors use that you don’t.",
             ],
             [
               "Places they went to instead",
-              "Towns and postcodes visitors picked from the search box because none of your locations matched — where people want you to be.",
+              "Towns and postcodes picked because none of your locations matched — where people want you to be.",
             ],
             ["What they did", "Every control visitors pressed, counted."],
             [
@@ -141,7 +127,7 @@ export default function VisitorAnalyticsPage() {
             ],
             [
               "Recent visitors",
-              "The latest visits, one row each: when, where, device, where they came from, and what they did.",
+              "The latest visits: when, where, device, referrer and what they did.",
             ],
           ]}
         />
@@ -161,7 +147,7 @@ export default function VisitorAnalyticsPage() {
             ],
             [
               "Nothing to measure yet",
-              "The map isn’t published. Publish it and paste the code into your site.",
+              "Publish the map and paste the code into your site.",
             ],
             [
               "Measurement is off",
@@ -169,26 +155,18 @@ export default function VisitorAnalyticsPage() {
             ],
             [
               "No visits in the last 30 days",
-              "Everything is set up. Figures appear once somebody loads the map on your site.",
+              "All set up — figures appear once somebody loads the map.",
             ],
           ]}
         />
       </DocsSection>
 
       <DocsSection id="limits" title="How many visits are recorded">
-        <DocsTable
-          caption="Visits recorded per map each month"
-          head={["Plan", "Visits recorded per map, per month"]}
-          rows={[
-            ["Starter", "200,000"],
-            ["Pro", "2,000,000"],
-          ]}
-        />
-
         <p>
-          Past that, your map keeps working for every visitor as normal — only
-          the recording pauses, until the month turns. One visit is one person
-          loading the map, however much they do on it. Known bots aren’t counted.
+          Up to 200,000 visits per map a month on Starter and 2,000,000 on Pro.
+          Past that the map works as normal and only recording pauses until the
+          month turns. A visit is one person loading the map; known bots aren’t
+          counted.
         </p>
       </DocsSection>
     </DocsArticle>

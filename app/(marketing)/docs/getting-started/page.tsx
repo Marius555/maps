@@ -34,18 +34,16 @@ export default function GettingStartedPage() {
         <DocsSteps>
           <DocsStep title="Sign up">
             <p>
-              On the sign-up page, either press{" "}
-              <strong>Sign in with Google</strong>, or fill in{" "}
+              Press <strong>Sign in with Google</strong>, or fill in{" "}
               <strong>Name</strong>, <strong>Email</strong> and{" "}
-              <strong>Password</strong> (at least 8 characters) and press{" "}
+              <strong>Password</strong> (8+ characters) and press{" "}
               <strong>Create account</strong>.
             </p>
           </DocsStep>
 
           <DocsStep title="Confirm your email">
             <p>
-              We send a confirmation link to the address you signed up with. Open
-              it and you land on <strong>Email confirmed</strong> — press{" "}
+              Open the link we email you, then press{" "}
               <strong>Go to your maps</strong>.
             </p>
           </DocsStep>
@@ -53,11 +51,9 @@ export default function GettingStartedPage() {
 
         <DocsCallout>
           <p>
-            Until you confirm, you can look around but nothing saves. A banner
-            reading <strong>Confirm your email to start building</strong> stays at
-            the top of the dashboard. If the email never arrived, press{" "}
-            <strong>Send a new link</strong> in that banner. Links last 24 hours
-            and work once.
+            Until you confirm, nothing saves. No email? Press{" "}
+            <strong>Send a new link</strong> in the banner at the top of the
+            dashboard. Links last 24 hours and work once.
           </p>
         </DocsCallout>
       </DocsSection>
@@ -66,32 +62,28 @@ export default function GettingStartedPage() {
         <DocsSteps>
           <DocsStep title="Press Create map">
             <p>
-              On <strong>Maps</strong>, press <strong>Create map</strong>, type a
-              name in <strong>Map name</strong> and press{" "}
-              <strong>Create map</strong> again. The name is yours alone —
-              visitors never see it.
+              On <strong>Maps</strong>, press <strong>Create map</strong>, name
+              it and press <strong>Create map</strong> again. Visitors never see
+              the name.
             </p>
           </DocsStep>
 
           <DocsStep title="You land in the editor">
             <p>
-              The new map opens straight away, on the <strong>Auto</strong> map
-              style, which follows light or dark mode for whoever is looking.
+              It opens on the <strong>Auto</strong> style, light or dark to match
+              whoever is looking.
             </p>
           </DocsStep>
         </DocsSteps>
 
         <p>
-          The Free plan includes one map. See{" "}
-          <Link href="/docs/plans-and-billing">Plans and billing</Link> for what
-          the others include.
+          Free includes one map — see{" "}
+          <Link href="/docs/plans-and-billing">Plans and billing</Link>.
         </p>
       </DocsSection>
 
       <DocsSection id="tabs" title="Find your way around a map">
-        <p>
-          Every map has five tabs in the sidebar. Each one is a guide of its own.
-        </p>
+        <p>Every map has five tabs in the sidebar, each with its own guide.</p>
 
         <DocsTable
           caption="The five tabs of a map"
@@ -100,16 +92,15 @@ export default function GettingStartedPage() {
             [
               "Map",
               <>
-                Add, move and group locations, draw shapes and routes, and choose
-                how the map looks.{" "}
+                Add, move and group locations, draw shapes and routes, and set
+                the look.{" "}
                 <Link href="/docs/map-editor">The map editor</Link>
               </>,
             ],
             [
               "Locations",
               <>
-                Every location as a list you can search, filter, edit and import
-                into.{" "}
+                Search, filter, edit and import locations.{" "}
                 <Link href="/docs/managing-locations">Managing locations</Link>
               </>,
             ],
@@ -141,28 +132,26 @@ export default function GettingStartedPage() {
       </DocsSection>
 
       <DocsSection id="first-location" title="Add your first locations">
-        <p>You have two ways in, and you can mix them on the same map.</p>
+        <p>Two ways, which you can mix:</p>
 
         <ul>
           <li>
             <strong>One at a time.</strong> On the Map tab, press the pin button
-            at the left end of the toolbar, then click the map where the location
-            is. Or type an address into <strong>Find an address</strong> and
-            press <strong>Add a location here</strong> on the match. The street
-            address fills itself in. See{" "}
+            and click the map, or search with <strong>Find an address</strong>.
+            See{" "}
             <Link href="/docs/map-editor#adding">Adding locations</Link>.
           </li>
           <li>
-            <strong>All at once.</strong> On the Locations tab, press{" "}
-            <strong>Import locations</strong> and bring in a spreadsheet, an XML
-            feed or a Google Sheet. See{" "}
+            <strong>All at once.</strong> On the Locations tab,{" "}
+            <strong>Import locations</strong> from a spreadsheet, XML feed or
+            Google Sheet. See{" "}
             <Link href="/docs/importing-locations">Importing locations</Link>.
           </li>
         </ul>
 
         <p>
-          Then open any location to add its phone number, website, opening hours
-          and photos — <Link href="/docs/managing-locations#edit">Editing a location</Link>.
+          Then add phone numbers, hours and photos —{" "}
+          <Link href="/docs/managing-locations#edit">Editing a location</Link>.
         </p>
       </DocsSection>
 
@@ -170,9 +159,8 @@ export default function GettingStartedPage() {
         <DocsSteps>
           <DocsStep title="Publish">
             <p>
-              On the Publish tab, set up how the map behaves — the results panel,
-              search, colours — then press <strong>Publish</strong>. A toast says{" "}
-              <strong>Published</strong> and how many locations are live.
+              On the Publish tab, set up the results panel, search and colours,
+              then press <strong>Publish</strong>.
             </p>
           </DocsStep>
 
@@ -185,31 +173,24 @@ export default function GettingStartedPage() {
 
           <DocsStep title="Paste it into your page">
             <p>
-              Paste the line into your page’s HTML, where the map should appear.
-              Every website builder has a block for this — usually called Embed,
-              Custom code or HTML.
+              Paste it where the map should appear, using your website builder’s
+              Embed, Custom code or HTML block.
             </p>
           </DocsStep>
         </DocsSteps>
 
         <DocsCallout>
           <p>
-            You only paste once. When you change something later, press{" "}
-            <strong>Publish</strong> again and the map on your site updates by
-            itself.
+            You paste once. After changes, press <strong>Publish</strong> again
+            and your site updates by itself. Views are unlimited on every plan.
           </p>
         </DocsCallout>
-
-        <p>
-          Views are unlimited on every plan, including the free one — nothing is
-          counted or charged when somebody opens your map.
-        </p>
       </DocsSection>
 
       <DocsSection id="next" title="Where to go next">
         <ul>
           <li>
-            Colour-code your locations and let visitors narrow the map down —{" "}
+            Colour-code locations and add filters —{" "}
             <Link href="/docs/tags-pins-and-groups">Tags, pins and groups</Link>.
           </li>
           <li>
@@ -217,7 +198,7 @@ export default function GettingStartedPage() {
             <Link href="/docs/shapes-and-routes">Shapes and routes</Link>.
           </li>
           <li>
-            Keep the map in step with a spreadsheet you already maintain —{" "}
+            Keep the map in step with a spreadsheet —{" "}
             <Link href="/docs/google-sheets-sync">Google Sheets sync</Link>.
           </li>
         </ul>

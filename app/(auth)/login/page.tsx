@@ -8,13 +8,14 @@ import { safeRedirect } from "@/lib/utils/safe-redirect";
 export const metadata: Metadata = { title: "Log in" };
 
 export default async function LoginPage(props: PageProps<"/login">) {
-  await redirectIfSignedIn();
-
   const { next } = await props.searchParams;
+  const redirectTo = safeRedirect(next);
+
+  await redirectIfSignedIn(redirectTo);
 
   return (
     <AuthShell title="Log in">
-      <LoginForm redirectTo={safeRedirect(next)} />
+      <LoginForm redirectTo={redirectTo} />
     </AuthShell>
   );
 }

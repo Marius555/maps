@@ -1,0 +1,12 @@
+{
+	"$schema": "https://playground.wordpress.net/blueprint-schema.json",
+	"landingPage": "/wp-admin/post-new.php?post_type=page",
+	"login": true,
+	"steps": [
+		{
+			"step": "defineWpConfigConsts",
+			"consts": { "PINGLIDE_APP_URL": "http://localhost:3000" }
+		},
+		{ "step": "activatePlugin", "pluginPath": "pinglide/pinglide.php" }
+	]
+}

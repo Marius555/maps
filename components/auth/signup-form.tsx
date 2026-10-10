@@ -16,7 +16,7 @@ import { applyFieldErrors } from "@/lib/query/form-errors";
 import { toastProblem } from "@/lib/query/toast-error";
 import { signupSchema, type SignupInput } from "@/lib/validation/auth.schema";
 
-export function SignupForm() {
+export function SignupForm({ redirectTo = null }: { redirectTo?: string | null }) {
   const router = useRouter();
   const signup = useSignup();
 
@@ -51,7 +51,9 @@ export function SignupForm() {
       // The first link is already on its way, so the next screen's "Send a new
       // link" starts on the server's minute rather than live.
       startResendCooldown(values.email, 60_000);
-      router.replace("/verify-email?status=sent");
+      // Somewhere that asked to have them back — `/connect/wordpress` — shows its
+      // own "check your inbox" and carries on once they have.
+      router.replace(redirectTo ?? "/verify-email?status=sent");
       router.refresh();
     } catch (error) {
       // The login form's rule: what just failed is a toast, and a field-level
@@ -68,7 +70,7 @@ export function SignupForm() {
           keeps its name through the whole flow, and with Google there is no
           difference between signing in and signing up — the first press makes
           the account either way. */}
-      <GoogleButton />
+      <GoogleButton redirectTo={redirectTo ?? undefined} />
 
       <AuthDivider />
 

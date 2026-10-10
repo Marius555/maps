@@ -36,21 +36,16 @@ export default function ImportingLocationsPage() {
     >
       <DocsSection id="before-you-start" title="Before you start">
         <p>
-          Your file needs one row per location. Every row needs a name, and
-          something to put it on the map with — a street address, a town, a
-          postcode, or latitude and longitude if you already have them.
-        </p>
-
-        <p>
-          Everything else is optional. You can import a phone number, a website, a
-          description and your own tags in the same pass, or add them later.
+          Your file needs one row per location. Every row needs a name and
+          something to place it with — a street address, a town, a postcode, or
+          latitude and longitude. Phone, website, description and tags are
+          optional, now or later.
         </p>
 
         <DocsCallout>
           <p>
-            Nothing is saved to your map until you press Import on the last step.
-            You can go back, change your mind, or close the tab at any point
-            before that.
+            Nothing is saved until you press Import on the last step. Until then
+            you can go back or close the tab.
           </p>
         </DocsCallout>
       </DocsSection>
@@ -88,19 +83,17 @@ export default function ImportingLocationsPage() {
         </DocsCallout>
 
         <p>
-          GeoJSON and TopoJSON files hold areas, lines and circles rather than
-          locations. Those go through Import shapes in the map editor, not this
-          wizard.
+          GeoJSON and TopoJSON files hold areas and lines, not locations — use
+          Import shapes in the map editor for those.
         </p>
       </DocsSection>
 
       <DocsSection id="columns" title="Getting your columns ready">
         <p>
-          You do not have to rename anything first. We read both what a column is
-          called and what is actually in it, in English, German, French, Spanish,
-          Italian, Dutch and Polish, and accents make no difference. A file whose
-          columns are called <code>Column1</code> to <code>Column9</code> still
-          imports — we go by the values instead.
+          No renaming needed. We read each column’s name and its values, in
+          English, German, French, Spanish, Italian, Dutch and Polish. Columns
+          called <code>Column1</code> to <code>Column9</code> still import — we go
+          by the values.
         </p>
 
         <p>These are the fields a column can be mapped to:</p>
@@ -155,10 +148,9 @@ export default function ImportingLocationsPage() {
         />
 
         <p>
-          The five address fields are joined in the order above into the single
-          address we look up and store, so you can spread your addresses across as
-          many columns as your export happens to use. Each column can only feed
-          one field.
+          The five address fields are joined, in the order above, into one
+          address, so addresses can be spread across several columns. Each column
+          feeds one field only.
         </p>
       </DocsSection>
 
@@ -173,16 +165,15 @@ export default function ImportingLocationsPage() {
 
           <DocsStep title="Upload a file, or point us at a sheet">
             <p>
-              On the <strong>Upload a file</strong> tab, press{" "}
-              <strong>Choose file</strong> or drag the file onto the page. It is
-              read in your browser — no copy of it is sent anywhere.
+              On <strong>Upload a file</strong>, press <strong>Choose file</strong>{" "}
+              or drag the file onto the page. It is read in your browser, not
+              uploaded.
             </p>
             <p>
-              On the <strong>Google Sheet</strong> tab, paste the link into{" "}
+              On <strong>Google Sheet</strong>, paste the link into{" "}
               <strong>Google Sheets link</strong> and press{" "}
-              <strong>Read sheet</strong>. The sheet has to be shared first: in
-              Google Sheets, Share → General access → Anyone with the link →
-              Viewer. We read it once, then, and never again.
+              <strong>Read sheet</strong>. Share the sheet first: Share → General
+              access → Anyone with the link → Viewer.
             </p>
           </DocsStep>
 
@@ -197,16 +188,14 @@ export default function ImportingLocationsPage() {
 
       <DocsSection id="mapping" title="Step 2 — Columns">
         <p>
-          Your file is shown as a table with our reading of each column written
-          above it. Check that reading, correct anything we got wrong, and move
-          on.
+          Your file is shown as a table, with our reading of each column above
+          it. Correct anything we got wrong.
         </p>
 
         <DocsSteps>
           <DocsStep title="Check the header row">
             <p>
-              We do not assume your column names are on the first row — exports
-              often start with a title or a blank line. The step says{" "}
+              Exports often start with a title or a blank line, so the step says{" "}
               <strong>Using row N as your column names</strong>, or{" "}
               <strong>
                 No header row found — we named the columns ourselves
@@ -217,79 +206,62 @@ export default function ImportingLocationsPage() {
 
           <DocsStep title="Check each column">
             <p>
-              Every column carries a mark saying how sure we are:{" "}
-              <strong>Detected</strong>, <strong>Likely</strong>,{" "}
-              <strong>Guessed</strong> or <strong>No match</strong>. Open a
-              column’s picker to change it — the fields that actually fit that
-              column come first, under{" "}
-              <strong>Likely for this column</strong>, and{" "}
-              <strong>Don’t import</strong> is at the top for columns you want
-              left out.
-            </p>
-            <p>
-              You can edit any cell in place, and rename a column from the chevron
-              beside its name.
+              Each column is marked <strong>Detected</strong>,{" "}
+              <strong>Likely</strong>, <strong>Guessed</strong> or{" "}
+              <strong>No match</strong>. Open its picker to change it: fields that
+              fit come first under <strong>Likely for this column</strong>, and{" "}
+              <strong>Don’t import</strong> leaves it out. Edit any cell in place,
+              and rename a column from the chevron beside its name.
             </p>
           </DocsStep>
 
           <DocsStep title="Clear anything we flag">
             <p>
-              A banner reading <strong>One thing to sort out</strong> lists what
-              is still missing — usually a name column, or an address. Latitude
-              and longitude have to be mapped together, and each column can only
-              be used once.
+              A banner, <strong>One thing to sort out</strong>, lists what is
+              missing — usually a name or an address column.
             </p>
           </DocsStep>
 
           <DocsStep title="Press Continue">
             <p>
-              <strong>Continue</strong> sits above the table rather than below it,
-              so you are never scrolling three thousand rows to find it. It stays
-              disabled until the flagged problems are cleared.
+              <strong>Continue</strong> is above the table, and works once the
+              flagged problems are cleared.
             </p>
           </DocsStep>
         </DocsSteps>
 
         <DocsCallout tone="warning">
           <p>
-            If you see <strong>These columns look swapped</strong>, take it
-            seriously — it means your latitude column holds values past 90, which
-            only a longitude can. Left alone, every location lands in the wrong
-            place. Press <strong>Swap them</strong>.
+            <strong>These columns look swapped</strong> means your latitude
+            column holds values past 90, which only a longitude can. Press{" "}
+            <strong>Swap them</strong>, or every location lands in the wrong
+            place.
           </p>
         </DocsCallout>
 
         <p>
-          If one column holds both coordinates, we offer{" "}
-          <strong>Split into Latitude and Longitude</strong> and do it for you.
+          If one column holds both coordinates, press{" "}
+          <strong>Split into Latitude and Longitude</strong>.
         </p>
       </DocsSection>
 
       <DocsSection id="addresses" title="Step 3 — Addresses">
         <p>
-          Addresses are looked up once, here, and never again. That is why your
-          published map costs nothing per view however many people open it — there
-          is no lookup happening when a visitor loads the page.
-        </p>
-
-        <p>
-          Rows that already carried latitude and longitude are not looked up at
-          all, and rows sharing an identical address cost one lookup between them,
-          so the number of lookups is usually well below your row count.
+          Addresses are looked up once, here. Rows with latitude and longitude
+          are skipped, and identical addresses share one lookup, so lookups are
+          usually fewer than rows.
         </p>
 
         <p>
           The progress bar reads <strong>N of M addresses</strong>.{" "}
-          <strong>Skip the rest</strong> stops the run and keeps everything found
-          so far — you can place the remainder by hand on the next step.
+          <strong>Skip the rest</strong> stops and keeps what was found; place the
+          rest by hand on the next step.
         </p>
 
         <DocsCallout>
           <p>
-            A long import survives a reload. Come back and the wizard offers to
-            pick up where it stopped, and tells you plainly that nothing has been
-            added to your map yet. <strong>Start over</strong> throws the run
-            away.
+            A long import survives a reload: the wizard offers to pick up where
+            it stopped. <strong>Start over</strong> throws the run away.
           </p>
         </DocsCallout>
       </DocsSection>
@@ -297,22 +269,17 @@ export default function ImportingLocationsPage() {
       <DocsSection id="review" title="Step 4 — Review">
         <p>
           A map above your rows, and still nothing saved. The header says{" "}
-          <strong>N of M rows are ready</strong>, with three tallies underneath:
-          ready to import, need attention, and not placed.
-        </p>
-
-        <p>
-          <strong>Show only rows that need attention</strong> is switched on to
-          begin with, so you are looking at the rows that want a decision rather
-          than scrolling past the ones that are already fine.
+          <strong>N of M rows are ready</strong>, with tallies for ready, need
+          attention and not placed.{" "}
+          <strong>Show only rows that need attention</strong> starts on.
         </p>
 
         <p>For any row that needs work:</p>
 
         <ul>
           <li>
-            Drag its pin on the map. That is the fastest fix for a location that
-            landed on the right street but the wrong building.
+            Drag its pin on the map — fastest for the right street but the wrong
+            building.
           </li>
           <li>
             Press <strong>Fix</strong> to edit the address and search again, or to
@@ -355,41 +322,39 @@ export default function ImportingLocationsPage() {
         />
 
         <p>
-          Rows marked in red cannot be imported until they are fixed or removed.
-          Amber ones import as they are — they are a suggestion to look, not a
-          blocker.
+          Red rows can’t import until fixed or removed. Amber rows import as they
+          are.
         </p>
       </DocsSection>
 
       <DocsSection id="saving" title="Importing">
         <p>
-          Press <strong>Import N locations</strong>. Rows are saved in batches
-          with a progress bar, your tag columns become real tags on the map, and
-          the main tag is put first so it colours the pin. Then you land back on
-          your map with everything on it.
+          Press <strong>Import N locations</strong>. Tag columns become tags, the
+          main tag goes first so it colours the pin, and you land back on your
+          map.
         </p>
 
         <p>
-          Importing from a Google Sheet on the Starter or Pro plan? The Review
-          step also offers <strong>Keep in sync with the sheet</strong>, which
-          leaves the map linked so later edits in the sheet reach it too — see{" "}
+          From a Google Sheet on Starter or Pro, the Review step also offers{" "}
+          <strong>Keep in sync with the sheet</strong> — see{" "}
           <Link href="/docs/google-sheets-sync">Google Sheets sync</Link>.
+        </p>
+
+        <p>
+          A map holds up to 25 locations on Free, 300 on Starter and 3,000 on
+          Pro. The wizard checks the room left before writing anything, so an
+          import over the limit is stopped rather than half applied.
         </p>
       </DocsSection>
 
       <DocsSection id="fixing-later" title="Fixing locations later">
         <p>
-          You do not have to settle everything during the import. On the Locations
-          page, open the <strong>Show</strong> menu and choose{" "}
-          <strong>Needs attention</strong> to see every location we are unsure
-          about. The same menu narrows to <strong>Not placed</strong>,{" "}
+          On the Locations page, <strong>Show</strong> →{" "}
+          <strong>Needs attention</strong> lists every location we are unsure
+          about; the same menu offers <strong>Not placed</strong>,{" "}
           <strong>Rough match</strong>, <strong>Approximate address</strong> and{" "}
-          <strong>Missing details</strong>.
-        </p>
-
-        <p>
-          Open any location to edit its address and search again, or drag its pin
-          in the map editor.
+          <strong>Missing details</strong>. Open one to search its address again,
+          or drag its pin in the map editor.
         </p>
       </DocsSection>
 
@@ -400,15 +365,15 @@ export default function ImportingLocationsPage() {
           rows={[
             [
               "The file is too big",
-              "Files have to be under 5MB. Split it and import the parts one after another — locations add up across imports.",
+              "Files must be under 5MB. Split it and import the parts in turn — they add up.",
             ],
             [
               "Only some rows arrived",
-              "A single file imports at most 3,000 rows. Split it, or check whether you have reached your plan’s limit.",
+              "One file imports at most 3,000 rows. Split it, or check your plan’s limit.",
             ],
             [
               "Your plan is full",
-              "The wizard says how much room is left before it saves anything. Remove some locations, or move to a larger plan.",
+              "Remove some locations, or move to a larger plan.",
             ],
             [
               "That’s an older .xls file",
@@ -424,32 +389,14 @@ export default function ImportingLocationsPage() {
             ],
             [
               "Rows that repeated your column names were dropped",
-              "Normal for exports that stack several tables into one file. The count tells you how many, so you can check it against what you expected.",
+              "Normal for exports that stack several tables in one file. The count says how many.",
             ],
             [
               "A website or email is missing",
-              "The value could not be read as one, so it was left out and the rest of the row was imported. The row says so on the Review step.",
+              "It couldn’t be read as one, so it was left out and the rest of the row imported.",
             ],
           ]}
         />
-      </DocsSection>
-
-      <DocsSection id="limits" title="How many locations you can have">
-        <DocsTable
-          caption="Locations allowed per map on each plan"
-          head={["Plan", "Locations per map"]}
-          rows={[
-            ["Free", "25"],
-            ["Starter", "300"],
-            ["Pro", "3,000"],
-          ]}
-        />
-
-        <p>
-          The wizard checks your remaining room before it writes anything, so an
-          import that would take you past the limit is stopped rather than half
-          applied.
-        </p>
       </DocsSection>
     </DocsArticle>
   );

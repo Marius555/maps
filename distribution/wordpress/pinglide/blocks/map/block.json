@@ -1,0 +1,23 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "pinglide/map",
+	"version": "0.1.0",
+	"title": "Pinglide map",
+	"category": "embed",
+	"icon": "location-alt",
+	"description": "A map of your locations. Set it up on Pinglide once; add and edit locations there and this page updates by itself.",
+	"keywords": [ "map", "locations", "store locator", "stockists", "dealers" ],
+	"textdomain": "pinglide",
+	"attributes": {
+		"slot": { "type": "string", "default": "" },
+		"height": { "type": "number", "default": 520 }
+	},
+	"supports": {
+		"html": false,
+		"align": [ "wide", "full" ]
+	},
+	"editorScript": "file:./index.js",
+	"editorStyle": "file:./editor.css",
+	"render": "file:./render.php"
+}

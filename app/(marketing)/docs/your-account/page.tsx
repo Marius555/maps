@@ -27,28 +27,19 @@ export default function YourAccountPage() {
       title="Your account"
       summary="Change your name, theme and password, sign out other devices, reset a forgotten password or delete your account."
     >
-      <DocsSection id="settings" title="Settings">
-        <p>
-          Open <strong>Settings</strong> from the account menu. It has four
-          pages: <strong>General</strong>, <strong>Account</strong>,{" "}
-          <strong>Billing</strong> and <strong>Usage</strong>. The last two are
-          covered in{" "}
-          <Link href="/docs/plans-and-billing">Plans and billing</Link>.
-        </p>
-      </DocsSection>
-
       <DocsSection id="general" title="Name and theme">
         <p>
-          On <strong>General</strong>, change <strong>Full name</strong> and
-          press <strong>Save changes</strong>. It’s how the dashboard addresses
-          you; visitors to your maps never see it.
+          Open <strong>Settings</strong> from the account menu.{" "}
+          <strong>Billing</strong> and <strong>Usage</strong> are in{" "}
+          <Link href="/docs/plans-and-billing">Plans and billing</Link>.
         </p>
 
         <p>
-          <strong>Appearance</strong> sets the dashboard to{" "}
+          On <strong>General</strong>, change <strong>Full name</strong> and
+          press <strong>Save changes</strong>; visitors never see it.{" "}
+          <strong>Appearance</strong> sets this browser’s dashboard to{" "}
           <strong>Light</strong>, <strong>Dark</strong> or{" "}
-          <strong>Match system</strong>, in this browser. Your published maps
-          keep their own look.
+          <strong>Match system</strong>.
         </p>
       </DocsSection>
 
@@ -57,8 +48,7 @@ export default function YourAccountPage() {
           On <strong>Account</strong>, fill in <strong>Current password</strong>,{" "}
           <strong>New password</strong> (at least 8 characters) and{" "}
           <strong>Confirm new password</strong>, then press{" "}
-          <strong>Change password</strong>. Every other device is signed out;
-          this one stays signed in.
+          <strong>Change password</strong>. Other devices are signed out.
         </p>
 
         <DocsTable
@@ -67,7 +57,7 @@ export default function YourAccountPage() {
           rows={[
             [
               "That isn’t your current password",
-              "Check it and try again, or sign out and use Forgot password?.",
+              "Try again, or sign out and use Forgot password?.",
             ],
             [
               "You’ve used that password before on this account",
@@ -75,28 +65,23 @@ export default function YourAccountPage() {
             ],
             [
               "Leave your name and email out of the password",
-              "Choose one that doesn’t contain either.",
+              "Choose one without either.",
             ],
             [
               "That password isn’t allowed",
-              "It’s too common. Choose a longer or less common one.",
+              "It’s too common. Choose a longer or rarer one.",
             ],
           ]}
         />
 
-        <p>
-          Signed up with Google? There’s no password to change — you sign in
-          through Google.
-        </p>
+        <p>Signed up with Google? There’s no password to change.</p>
       </DocsSection>
 
       <DocsSection id="devices" title="Signed-in devices">
         <p>
-          <strong>Signed-in devices</strong> lists everywhere your account is
-          signed in. The one you’re using is marked <strong>This device</strong>.
+          <strong>Signed-in devices</strong> lists everywhere you’re signed in.
           Press <strong>Sign out</strong> beside any you don’t recognise, or{" "}
-          <strong>Sign out other devices</strong> for all of them — then change
-          your password.
+          <strong>Sign out other devices</strong> — then change your password.
         </p>
       </DocsSection>
 
@@ -119,18 +104,16 @@ export default function YourAccountPage() {
         </DocsSteps>
 
         <p>
-          The link works once and expires in an hour. If it says{" "}
-          <strong>That link is incomplete</strong>, press{" "}
+          The link works once and expires in an hour; if it fails, press{" "}
           <strong>Ask for a new link</strong>.
         </p>
       </DocsSection>
 
       <DocsSection id="confirming" title="Confirming your email">
         <p>
-          Until you confirm your address, you can look around but nothing saves,
-          and a banner says so. Press <strong>Send a new link</strong> in it if
-          the first email didn’t arrive — check your spam folder too. A link
-          lasts 24 hours and works once.
+          Until you confirm, nothing saves. No email? Check spam, or press{" "}
+          <strong>Send a new link</strong> in the banner. Links last 24 hours and
+          work once.
         </p>
       </DocsSection>
 
@@ -152,16 +135,14 @@ export default function YourAccountPage() {
 
           <DocsStep title="Confirm with your email">
             <p>
-              Type your email address into the box and press{" "}
-              <strong>Delete account</strong>. Keep the page open while it works
-              through your maps — it takes you to the home page when it’s done.
+              Type your email and press <strong>Delete account</strong>. Keep the
+              page open until it takes you to the home page.
             </p>
           </DocsStep>
         </DocsSteps>
 
         <p>
-          If it stops partway, press <strong>Try again</strong>; it carries on
-          from where it stopped.
+          If it stops partway, <strong>Try again</strong> carries on from there.
         </p>
       </DocsSection>
     </DocsArticle>

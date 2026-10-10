@@ -23,7 +23,10 @@
   every navigation (`components/layout/page-transition/`). It may transform because
   the document scrolls here, not `<main>`, and nothing inside it is
   `position: fixed`. Adding something fixed inside a marketing page breaks that
-  assumption for 240ms per navigation — portal it instead.
+  assumption for 240ms per navigation — portal it instead. **Every `/docs` path is
+  one key to it** (`marketingRouteKey`): between guides only the article fades, in
+  `DocsPane`, opacity only, so the guides' nav never moves under the click that
+  changed the page (owner, 2026-10-10 — the whole page lifting read as ugly).
 - **Every child of `.mk-snap` holds one screen, and that is a budget with a
   number.** The landing page's snap is mandatory, which is only honest while no
   section overflows. The tallest section needs **688px** of content (the scale
@@ -78,6 +81,36 @@
   can open Google Maps when pressed. Widen the wording and it stops being true.
 - **The Circulation copy says views are never *billed*, not never *counted*.**
   Analytics, when an owner switches it on, does count sessions.
+- **Platform pages live at `/for/<platform>`, and the navbar's Integrations menu
+  reads `lib/marketing/integrations.ts`.** Adding a platform is one entry there and
+  one static folder under `app/(marketing)/for/` (WordPress is the first, 2026-10-10).
+  The menu is a `Popover` of real `<Link>`s, not a `Dropdown`, so the rows are
+  links rather than menu actions. **Every claim on a platform page must be true of
+  what ships** — for WordPress, `distribution/wordpress/pinglide/readme.txt` and
+  the labels the plugin draws; change the plugin's wording and re-read the page.
+  Its drawings live in `components/marketing/integrations/**/art`, built from the
+  shared pieces in `integrations/art/` (cursor, window, map picker, placeholder
+  block, dropping pin). **Pins drop, they do not ripple** (`liftPins`/`dropPins`,
+  single targets only), and every drawing's server frame is its finished state.
+  Every section title on these pages carries one accent word (owner, 2026-10-10).
+  `/for/any-website` is the snippet's page (short on purpose: drawing, code, way
+  in). Code on the public site goes through `integrations/code-block.tsx` — copy
+  button, wraps rather than scrolls, syntax coloured by `lib/code/highlight.ts`
+  (no dependency; its tokens must join back to the input, which the test holds)
+  on `.code-surface`, one dark ground in both themes. The Publish tab's snippet
+  uses the same pair.
+- **The guides cap prose at `max-w-3xl` and spend the freed width, from `xl`, on
+  "On this page"** (`components/docs/docs-toc.tsx`, read from the article's own
+  `section[id]`s). Callouts are tinted — `--accent-soft` for a note, a `--warning`
+  wash for a warning — with body text kept `text-foreground`. The guides were cut
+  ~20% on 2026-10-10 at the owner's request: keep labels exact, keep every step,
+  limit and fix, and drop the why.
+- **The Integrations popover does not scale, and its corners are concentric.**
+  `.mk-nav-popover` (globals.css) resets HeroUI's zoom variables to 1 and sets
+  16px outside / 6px padding / 10px rows; the trigger sits in `.steady`, which
+  now also cancels HeroUI's pressed `will-change: transform` — that layer promotion
+  was what still made the label jump on click with its box measured motionless.
+  Change one of the three numbers and change the others with it.
 - **"You are here" sits in the emptiest part of the hero map, inside a phone's
   crop.** A 390px phone shows only the middle 22% of the picture's width
   (39–61%), which is narrower than the 32–68% band `HERO_TOUR` is tested
