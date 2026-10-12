@@ -14,10 +14,11 @@ type Box = { x: number; y: number; width: number; height: number };
 
 async function pickTool(page: Page, tool: "Circle" | "Polygon" | "Line") {
   await page.getByRole("button", { name: "Draw", exact: true }).click();
-  await page
-    .getByRole("dialog", { name: "Choose a drawing tool" })
-    .getByRole("button", { name: new RegExp(`^${tool}`) })
-    .click();
+  const menu = page.getByRole("dialog", { name: "Choose a drawing tool" });
+  await menu.getByRole("button", { name: new RegExp(`^${tool}`) }).click();
+  // Until the menu has finished closing, its underlay takes the clicks that
+  // follow: a polygon lost its first two corners that way and never finished.
+  await expect(menu).toBeHidden();
 }
 
 /** A point as a fraction of the map, clear of the toolbar along its top. */

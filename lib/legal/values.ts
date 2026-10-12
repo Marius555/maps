@@ -16,13 +16,20 @@ import type { PlaceholderValues } from "./placeholders";
  */
 export const LEGAL_DETAILS = {
   company: {
-    /** In words, e.g. "private limited liability company (UAB)". */
-    legalForm: "",
     /**
-     * For a Lithuanian company: "Register of Legal Entities of the Republic of
+     * In words. The service is run as an *individuali veikla* (VMI certificate
+     * FR0468, from 2026-10-11); were it ever a company, this would read
+     * "private limited liability company (UAB)".
+     */
+    legalForm:
+      "natural person carrying out individual activity (individuali veikla)",
+    /**
+     * Who keeps the registration. For an individuali veikla it is VMI; for a
+     * company it would be "Register of Legal Entities of the Republic of
      * Lithuania, kept by the State Enterprise Centre of Registers".
      */
-    register: "",
+    register:
+      "State Tax Inspectorate under the Ministry of Finance of the Republic of Lithuania (Valstybinė mokesčių inspekcija)",
   },
   contact: {
     legalEmail: "legal@pinglide.com",

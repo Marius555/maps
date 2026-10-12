@@ -121,18 +121,14 @@ export const SHAPE_DOT_STREAM_LAYER = "editor-shape-dot-stream";
  */
 export const SHAPE_DRAFT_LINE_LAYER = "editor-shape-draft-outlines";
 /**
- * The halo under the draft, and the leg hanging off the cursor.
+ * The legs already placed, beside the leg hanging off the cursor.
  *
- * Three layers rather than one, and each answers something the single dashed
- * line could not.
+ * Two layers rather than one. There used to be a third, a white casing under
+ * both, and it was removed at the owner's request: on screen it read as a white
+ * band behind the line rather than as a halo. The draft is the coloured line
+ * alone now, on every tool.
  *
- * The **casing** is what makes the band survive the basemap. A 2px coloured line
- * is legible over pale streets and disappears into a dark one, into a park, and
- * into anything it happens to run along — and this map has sixteen looks. A
- * light halo under a coloured stroke is what every road on every one of those
- * basemaps already does for the same reason.
- *
- * The **placed** layer is the other half, and the split is which end of the
+ * The **placed** layer is the split, and it is which end of the
  * band you are looking at. The legs already clicked out were drawn identically
  * to the leg hanging off the cursor, so the band said nothing about which part
  * of it was a decision and which part was the pointer — the one question a
@@ -144,13 +140,12 @@ export const SHAPE_DRAFT_LINE_LAYER = "editor-shape-draft-outlines";
  * the note above draws: a dash is a different shader, and only the part that has
  * to be dashed goes through it.
  */
-export const SHAPE_DRAFT_CASING_LAYER = "editor-shape-draft-casings";
 export const SHAPE_DRAFT_PLACED_LAYER = "editor-shape-draft-placed";
 
 /**
- * How heavy the thing being drawn is, before its casing.
+ * How heavy the thing being drawn is.
  *
- * Named because three layers and `draftFeatures` all have to agree about it. It
+ * Named because two layers and `draftFeatures` all have to agree about it. It
  * was 2, which is a hairline: the draft is the only thing on the map that does
  * not exist yet, and it was also the hardest thing on the map to see.
  */
@@ -627,43 +622,6 @@ export function addShapeLayers(map: MapLibreMap, data: ShapeFeatures = EMPTY): v
    * Dash lengths are multiples of the line width, so the 2px width below makes
    * this a 4px dash and a 4px gap. Change one and the other moves.
    */
-  /*
-   * The halo, under both of them.
-   *
-   * Added first so it sits at the bottom of the three — each `addLayer` with the
-   * same `beforeId` lands immediately before that layer, so add order is stacking
-   * order.
-   *
-   * White rather than a theme variable, matching the vertex dots' stroke a few
-   * layers down. This has to separate a coloured line from sixteen different
-   * basemaps, several of which are near-black and several near-white; white
-   * reads against every one of them, where a halo that followed the theme would
-   * vanish into the light basemaps it was meant to help with.
-   *
-   * Round cap and join, unlike the dashed stroke above it: the casing is one
-   * continuous shape, so there are no gaps for a round cap to close, and a butt
-   * cap would leave the coloured line poking out of its own halo at both ends.
-   */
-  if (!map.getLayer(SHAPE_DRAFT_CASING_LAYER)) {
-    map.addLayer(
-      {
-        id: SHAPE_DRAFT_CASING_LAYER,
-        type: "line",
-        source: SHAPE_SOURCE,
-        filter: ["get", "draft"],
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: {
-          "line-color": "#ffffff",
-          // Not 1: the draft is drawn over a map somebody is aiming at, and an
-          // opaque 7px band would hide the pin it is running towards.
-          "line-opacity": 0.85,
-          "line-width": DRAFT_LINE_WIDTH + 4,
-        },
-      },
-      beforeId,
-    );
-  }
-
   /*
    * The legs already clicked out: solid, and only the route tool produces them.
    *

@@ -9,7 +9,7 @@ export const SECOND_AUTH_FILE = "playwright/.auth/user-2.json";
 
 /**
  * The operator console's session. Saved once because its login allows five
- * tries per address per quarter hour. Absent when `E2E_ADMIN_PASSWORD` is unset.
+ * tries per address per quarter hour. Absent when no admin login is set (`DEV_ADMIN_*`).
  */
 export const ADMIN_AUTH_FILE = "playwright/.auth/admin.json";
 

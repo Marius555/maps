@@ -40,9 +40,10 @@ is buried in the detail below. Each one points to the full clause.
 
 ## 1. Who we are
 
-The Service is provided by **{{company.legalName}}**, a {{company.legalForm}} registered in the
-{{company.register}} under company code {{company.registrationNumber}}, VAT payer code
-{{company.vatNumber}}, with its registered office at {{company.address}}.
+The Service is provided by **{{company.legalName}}**, trading as {{name}}, a
+{{company.legalForm}} registered with the {{company.register}} under individual activity
+certificate No. {{company.registrationNumber}}, VAT payer code {{company.vatNumber}}, address
+{{company.address}}.
 
 - Email: {{contact.supportEmail}}
 - Website: {{website}}
@@ -576,5 +577,6 @@ rights under the Agreement.
 
 ---
 
-{{company.legalName}} · Company code {{company.registrationNumber}} · {{company.address}} ·
+{{company.legalName}} · Individual activity certificate No. {{company.registrationNumber}} ·
+{{company.address}} ·
 {{contact.supportEmail}}

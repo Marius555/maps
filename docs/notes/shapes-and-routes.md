@@ -119,13 +119,14 @@ rewritten; it is the record of why this area is shaped as it is.
 - Everything being drawn goes through one draft channel (`draw` in `use-shape-layers.ts`):
   `ShapeProperties.draft`, `SHAPE_LINE_LAYER` filters it out, and three layers of its own
   paint it. **Separate layers, not a `case`** — a `case` puts every feature including saved
-  shapes through the SDF line shader. The dashed one keeps `line-cap: butt`; the other two
-  are continuous and are round.
-- **The draft is three layers, and only the route tool uses the third.** A white casing
-  under everything (`SHAPE_DRAFT_CASING_LAYER`, `DRAFT_LINE_WIDTH + 4` at 0.85 opacity),
-  because a 2px coloured hairline disappears into several of the sixteen basemaps and the
-  draft was the hardest thing on the map to see; the dashed `SHAPE_DRAFT_LINE_LAYER`, which
-  still draws every other tool's whole gesture exactly as before; and
+  shapes through the SDF line shader. The dashed one keeps `line-cap: butt`; the placed one
+  is continuous and is round.
+- **The draft is two layers, and only the route tool uses the second.** There was a white
+  casing under both (`SHAPE_DRAFT_CASING_LAYER`, `DRAFT_LINE_WIDTH + 4` at 0.85 opacity),
+  removed on 2026-10-11 at the owner's request: it read as a white band behind the dashed
+  line, not as a halo. Don't bring it back. The draft is the coloured line alone, at
+  `DRAFT_LINE_WIDTH` 3. The two layers are the dashed `SHAPE_DRAFT_LINE_LAYER`, which still
+  draws every other tool's whole gesture exactly as before, and
   `SHAPE_DRAFT_PLACED_LAYER`, solid, for the run a route has actually clicked out.
   `draftFeatures`' `placed` argument is what splits them, and **a draft with no `placed` is
   never marked placed** — that is what keeps the circle, polygon and line tools on the

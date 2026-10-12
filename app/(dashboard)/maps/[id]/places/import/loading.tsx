@@ -12,7 +12,7 @@ import { Container } from "@/components/ui/container";
  *
  * The vertical centring is repeated here for the same reason the width is —
  * `flex flex-col` on the `Container` and `my-auto` on the column, matching
- * `page.tsx`, or the skeleton sits at the top and the real thing drops into the
+ * `page.tsx` and the wizard's narrow steps, or the skeleton sits at the top and the real thing drops into the
  * middle of the screen as it arrives.
  *
  * The blocks follow the real step top to bottom: the title and its line, the

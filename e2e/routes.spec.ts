@@ -16,10 +16,10 @@ function pin(page: Page, name: string) {
 
 async function drawRoute(page: Page, stops: string[]) {
   await page.getByRole("button", { name: "Draw", exact: true }).click();
-  await page
-    .getByRole("dialog", { name: "Choose a drawing tool" })
-    .getByRole("button", { name: /^Route/ })
-    .click();
+  const menu = page.getByRole("dialog", { name: "Choose a drawing tool" });
+  await menu.getByRole("button", { name: /^Route/ }).click();
+  // Until the menu has finished closing, its underlay takes the clicks below.
+  await expect(menu).toBeHidden();
   // While the tool is armed the pins let clicks through to the canvas, which
   // snaps each one to the location under it — so click where the pin is drawn.
   for (const stop of stops) {
@@ -96,7 +96,11 @@ test("delete a route from its row menu", async ({ page, request, testMap }) => {
   await twoStops(page, request, testMap.id, ["E2E Here", "E2E There"]);
   const [route] = await listShapes(request, testMap.id);
 
-  await page.getByRole("button", { name: `Actions for ${route.name}` }).click();
+  // For a moment there are two rows: the temporary one animating out while the
+  // saved one comes in. Wait for the swap to finish.
+  const actions = page.getByRole("button", { name: `Actions for ${route.name}` });
+  await expect(actions).toHaveCount(1);
+  await actions.click();
   await page.getByRole("menuitem", { name: /^Delete/ }).click();
   await page
     .getByRole("dialog", { name: `Delete ${route.name}?` })

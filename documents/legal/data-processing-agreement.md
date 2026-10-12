@@ -3,8 +3,8 @@
 **{{name}}** · Version {{legal.version}} · Effective {{legal.effectiveDate}}
 
 This Data Processing Agreement ("**DPA**") is between the customer that accepts the {{name}} Terms of
-Service ("**Customer**") and **{{company.legalName}}**, company code {{company.registrationNumber}},
-{{company.address}} ("**Provider**"). It forms part of the Terms of Service at {{legal.termsUrl}}
+Service ("**Customer**") and **{{company.legalName}}**, individual activity certificate No.
+{{company.registrationNumber}}, {{company.address}} ("**Provider**"). It forms part of the Terms of Service at {{legal.termsUrl}}
 ("**Terms**"), and sets out the terms required by Article 28(3) of the GDPR.
 
 ## 1. Formation and precedence
@@ -412,5 +412,6 @@ Applies only to transfers under §7.3.
 
 ---
 
-{{company.legalName}} · Company code {{company.registrationNumber}} · {{company.address}} ·
+{{company.legalName}} · Individual activity certificate No. {{company.registrationNumber}} ·
+{{company.address}} ·
 {{contact.privacyEmail}}

@@ -5,7 +5,21 @@
  */
 export const HAS_SECOND_ACCOUNT = !!(process.env.E2E_EMAIL_2 && process.env.E2E_PASSWORD_2);
 
-export const HAS_ADMIN = !!(process.env.ADMIN_EMAIL && process.env.E2E_ADMIN_PASSWORD);
+/**
+ * How the suite signs in to the operator console. The development admin
+ * (`DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD`) first: `next dev` accepts it and a
+ * production build ignores it (lib/admin/auth/config.ts). Against a production
+ * build or a deployed site, `ADMIN_EMAIL` + `E2E_ADMIN_PASSWORD` instead — the
+ * real admin's plain password, which is then on you to keep out of `.env`.
+ */
+export const ADMIN_LOGIN: { email: string; password: string } | null =
+  process.env.DEV_ADMIN_EMAIL && process.env.DEV_ADMIN_PASSWORD
+    ? { email: process.env.DEV_ADMIN_EMAIL, password: process.env.DEV_ADMIN_PASSWORD }
+    : process.env.ADMIN_EMAIL && process.env.E2E_ADMIN_PASSWORD
+      ? { email: process.env.ADMIN_EMAIL, password: process.env.E2E_ADMIN_PASSWORD }
+      : null;
+
+export const HAS_ADMIN = ADMIN_LOGIN !== null;
 
 /** Parsed the way the server parses them (lib/repositories/plan-limits.ts). */
 const on = (raw: string | undefined) => !!raw && /^(1|true|yes)$/i.test(raw.trim());

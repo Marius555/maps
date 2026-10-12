@@ -8,7 +8,7 @@ import {
   type BrowserContext,
 } from "@playwright/test";
 import { createMap, deleteMap, uniqueMapName } from "./support/api";
-import { HAS_ADMIN, HAS_SECOND_ACCOUNT } from "./support/env";
+import { ADMIN_LOGIN, HAS_SECOND_ACCOUNT } from "./support/env";
 import { ADMIN_AUTH_FILE, AUTH_FILE, SECOND_AUTH_FILE } from "./support/paths";
 
 /**
@@ -101,11 +101,11 @@ setup("log in as the second test account", async ({ request, baseURL }) => {
  * hour, so every admin spec shares this one.
  */
 setup("log in to the operator console", async ({ request, baseURL }) => {
-  setup.skip(!HAS_ADMIN, "ADMIN_EMAIL / E2E_ADMIN_PASSWORD are not set");
+  setup.skip(!ADMIN_LOGIN, "DEV_ADMIN_EMAIL / DEV_ADMIN_PASSWORD are not set");
   if (await reusable(baseURL, ADMIN_AUTH_FILE, adminSession)) return;
 
   const response = await request.post("/api/admin/login", {
-    data: { email: process.env.ADMIN_EMAIL, password: process.env.E2E_ADMIN_PASSWORD },
+    data: ADMIN_LOGIN,
   });
   expect(response.status(), await response.text()).toBe(204);
   await request.storageState({ path: ADMIN_AUTH_FILE });

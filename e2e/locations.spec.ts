@@ -90,11 +90,12 @@ test("delete a location from its row menu", async ({ page, request, testMap }) =
 
   await page.getByRole("button", { name: "Actions for E2E Doomed" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
-  await page
-    .getByRole("dialog", { name: "Delete E2E Doomed?" })
-    .getByRole("button", { name: "Delete location" })
-    .click();
+  const confirm = page.getByRole("dialog", { name: "Delete E2E Doomed?" });
+  await confirm.getByRole("button", { name: "Delete location" }).click();
   await expect(page.getByRole("button", { name: "Actions for E2E Doomed" })).toHaveCount(0);
+  // The row goes optimistically, before the DELETE lands; the dialog stays up
+  // until it has. Reloading sooner reads the list with the row still in it.
+  await expect(confirm).toBeHidden();
 
   await page.reload();
   await expect(page.getByRole("button", { name: "Actions for E2E Keep" })).toBeVisible();

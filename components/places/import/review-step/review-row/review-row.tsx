@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Input, Label, TextField } from "@heroui/react";
-import { Crosshair, X } from "lucide-react";
+import { Check, Crosshair, Wrench, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
 
@@ -160,9 +160,14 @@ export function ReviewRow({
         <RowStatus draft={draft} />
 
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
-          <Button size="sm" variant="tertiary" onPress={onToggleOpen}>
-            {isOpen ? "Done" : "Fix"}
-          </Button>
+          <IconButton
+            label={isOpen ? `Done with row ${draft.rowNumber}` : `Fix row ${draft.rowNumber}`}
+            icon={isOpen ? Check : Wrench}
+            iconClassName="size-3.5"
+            variant={isOpen ? "secondary" : "tertiary"}
+            aria-expanded={isOpen}
+            onPress={onToggleOpen}
+          />
 
           {isPlaced ? (
             <IconButton
@@ -220,13 +225,15 @@ export function ReviewRow({
                * was already using this exact `pl-8`, which is why that half
                * lined up and this half did not.
                *
-               * `max-w-3xl` because Review runs the full width of the page: a
-               * two-column grid of that gives Name and Address around 900px each
-               * on a wide monitor, which is a paragraph-length box for a shop
-               * name.
+               * Full width, and from `lg` one line: Name, Address, and the
+               * coordinates with the button that fills them from the map. It was
+               * `max-w-3xl` and stacked, which on a wide screen used half the row
+               * and made every open row tall enough to push the page past the
+               * viewport. The tracks are fractions, so Name and Address grow with
+               * the row and the coordinates keep the 17rem they need.
                */}
-              <div className="max-w-3xl space-y-3 pl-8 pr-1 pt-3">
-                <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-3 pl-8 pr-1 pt-3">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] lg:items-start">
                   <TextField
                     fullWidth
                     value={draft.name}
@@ -256,6 +263,35 @@ export function ReviewRow({
                       });
                     }}
                   />
+
+                  {/*
+                   * The two coordinate boxes and the button that fills them from
+                   * the map belong on one line — they are three ways of answering
+                   * the same question, and stacking them read as three unrelated
+                   * controls.
+                   *
+                   * The pair is sized to what it holds rather than to the row.
+                   * `-122.4194` is nine characters; it had a `flex-1` half of a
+                   * full-width table row, split two ways, to show them in.
+                   */}
+                  <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row sm:items-end lg:col-span-1">
+                    <CoordinateFields
+                      className="grid shrink-0 grid-cols-2 gap-2 sm:w-[17rem]"
+                      lat={draft.lat}
+                      lng={draft.lng}
+                      onChange={(coords) =>
+                        onChange({ ...coords, status: "manual" })
+                      }
+                    />
+
+                    <Button
+                      className="shrink-0"
+                      variant={isPlacing ? "secondary" : "tertiary"}
+                      onPress={onTogglePlacing}
+                    >
+                      {isPlacing ? "Click the map to place it" : "Place on map"}
+                    </Button>
+                  </div>
                 </div>
 
                 <RowIssues
@@ -277,36 +313,6 @@ export function ReviewRow({
                     })
                   }
                 />
-
-                {/*
-                 * The two coordinate boxes and the button that fills them from
-                 * the map belong on one line — they are three ways of answering
-                 * the same question, and stacking them read as three unrelated
-                 * controls.
-                 *
-                 * The pair is sized to what it holds rather than to the row.
-                 * `-122.4194` is nine characters; it had a `flex-1` half of a
-                 * full-width table row, split two ways, to show them in.
-                 */}
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                  <CoordinateFields
-                    className="grid shrink-0 grid-cols-2 gap-2 sm:w-[17rem]"
-                    lat={draft.lat}
-                    lng={draft.lng}
-                    onChange={(coords) =>
-                      onChange({ ...coords, status: "manual" })
-                    }
-                  />
-
-                  <Button
-                    className="shrink-0"
-                    variant={isPlacing ? "secondary" : "tertiary"}
-                    onPress={onTogglePlacing}
-                  >
-                    {isPlacing ? "Click the map to place it" : "Place on map"}
-                  </Button>
-                </div>
-
                 <RowIssues issues={contactIssues} />
               </div>
             </motion.div>

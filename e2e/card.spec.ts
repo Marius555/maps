@@ -48,7 +48,15 @@ test("a change in the card designer is saved for the account", async ({ page, re
     await page.getByRole("tab", { name: "Blocks" }).click();
     const save = page.getByRole("button", { name: "Save changes" });
     await expect(save).toBeEnabled();
+    // Wait for the response, not for the button: a pending Save is disabled too,
+    // so `toBeDisabled` passes the moment the request starts.
+    const saved = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        response.url().includes("/api/account/card-design"),
+    );
     await save.click();
+    expect((await saved).ok()).toBe(true);
     await expect(save).toBeDisabled();
 
     expect(await readDesign(request)).not.toEqual(before);

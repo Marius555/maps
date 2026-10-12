@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 
 import { UnauthorizedError } from "@/lib/repositories/errors";
-import { adminConfig } from "./config";
+import { adminAccounts } from "./config";
 import { readAdminCookie } from "./cookie";
 import { verifyAdminSession } from "./session";
 
@@ -20,17 +20,27 @@ import { verifyAdminSession } from "./session";
  * `withAuth` makes for customer routes.
  */
 
-/** Cached per request, so the layout, the page and its loader verify once. */
-export const isAdminSession = cache(async (): Promise<boolean> => {
-  const config = adminConfig();
-  if (!config) return false;
+/**
+ * The address of the account this request is signed in as, or `null`. Cached
+ * per request, so the layout, the page and its loader verify once.
+ */
+export const adminSessionEmail = cache(async (): Promise<string | null> => {
+  const accounts = adminAccounts();
+  if (accounts.length === 0) return null;
 
-  return verifyAdminSession(await readAdminCookie(), config);
+  const token = await readAdminCookie();
+
+  // A token names its account (`sub`), so at most one of these can accept it.
+  return accounts.find((account) => verifyAdminSession(token, account))?.email ?? null;
 });
+
+export async function isAdminSession(): Promise<boolean> {
+  return (await adminSessionEmail()) !== null;
+}
 
 /** Whether the console is configured at all. Unset, both pages 404. */
 export function adminConsoleExists(): boolean {
-  return adminConfig() !== null;
+  return adminAccounts().length > 0;
 }
 
 /** For route handlers and loaders: 401 unless this is the admin. */

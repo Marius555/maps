@@ -1,29 +1,21 @@
 import { BRAND } from "@/lib/brand";
 
 /**
- * Who runs the product: © line, registered details and a contact address.
+ * Who runs the product: © line and a contact address.
  *
- * The © line falls back to the product name, so it is never empty; every line
- * after it appears only once brand.json has a value for it.
+ * Deliberately not `brand.json`'s `company.*`. The service is run as an
+ * individuali veikla, so those fields are a person's name and certificate
+ * number, and the owner keeps them on the legal pages only — Terms §1 is what
+ * carries the details the law requires (`documents/company.md`).
  */
 export function CompanyDetails() {
-  const { company, contact, name } = BRAND;
+  const { contact, name } = BRAND;
 
   return (
     <div className="space-y-1">
       <p className="text-foreground">
-        © {new Date().getFullYear()} {company.legalName ?? name}
+        © {new Date().getFullYear()} {name}
       </p>
-
-      {company.address ? (
-        <p className="whitespace-pre-line">{company.address}</p>
-      ) : null}
-
-      {company.registrationNumber ? (
-        <p>Company no. {company.registrationNumber}</p>
-      ) : null}
-
-      {company.vatNumber ? <p>VAT {company.vatNumber}</p> : null}
 
       {contact.supportEmail ? (
         <p>

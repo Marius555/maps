@@ -88,6 +88,11 @@ export type MapHandle = {
   /** Eases to a place, zooming in if the current zoom is further out than `zoom`. */
   flyTo: (target: { lng: number; lat: number }, options?: { zoom?: number }) => void;
   /**
+   * Ripples a location's pin, the drop animation three times over, once any
+   * flight in progress has landed. Call it straight after `flyTo`.
+   */
+  ripple: (placeId: string) => void;
+  /**
    * Frames a box. What `flyTo` is to a pin, this is to an area: a shape has an
    * extent, and flying to its centre at a fixed zoom would show the middle of a
    * region without showing that it is one.
@@ -523,7 +528,7 @@ export default function MapCanvasImpl({
     pinIcons,
   });
 
-  const { setVisibleIds } = usePlaceMarkers({
+  const { setVisibleIds, ripple } = usePlaceMarkers({
     map,
     isReady,
     places,
@@ -849,8 +854,22 @@ export default function MapCanvasImpl({
           essential: true,
         });
       },
+
+      ripple: (placeId) => {
+        const instance = map.current;
+        if (!instance) return;
+
+        // After the flight rather than during it: a ripple spent while the map
+        // is still moving is over before the pin has stopped under the eye.
+        // `moveend` also fires for a flight the user interrupts by dragging.
+        if (instance.isMoving()) {
+          instance.once("moveend", () => ripple(placeId));
+        } else {
+          ripple(placeId);
+        }
+      },
     });
-  }, [isReady, onReady, map, prefersReducedMotion]);
+  }, [isReady, onReady, map, prefersReducedMotion, ripple]);
 
   return (
     /*

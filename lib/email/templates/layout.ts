@@ -106,21 +106,24 @@ function header(brand: Brand, origin: string | undefined): string {
 
 type Footer = {
   holder: string;
-  address?: string;
   supportEmail?: string;
   privacyUrl?: string;
 };
 
+/**
+ * The product name, not `brand.company.*`: the service is run as an
+ * individuali veikla, those fields are a person's name and certificate number,
+ * and the owner keeps them on the legal pages only (`documents/company.md`).
+ */
 function footer(brand: Brand, origin: string | undefined): Footer {
   return {
-    holder: brand.company.legalName ?? brand.name,
-    address: brand.company.address,
+    holder: brand.name,
     supportEmail: brand.contact.supportEmail,
     privacyUrl: resolveLink(brand.legal.privacyUrl, origin),
   };
 }
 
-function footerHtml({ holder, address, supportEmail, privacyUrl }: Footer): string {
+function footerHtml({ holder, supportEmail, privacyUrl }: Footer): string {
   const links = [
     supportEmail
       ? `<a href="mailto:${escapeHtml(supportEmail)}" style="color:${MUTED};">${escapeHtml(supportEmail)}</a>`
@@ -132,11 +135,7 @@ function footerHtml({ holder, address, supportEmail, privacyUrl }: Footer): stri
     .filter(Boolean)
     .join(" · ");
 
-  const lines = [
-    escapeHtml(holder),
-    address ? escapeHtml(address).replace(/\n/g, "<br />") : "",
-    links,
-  ].filter(Boolean);
+  const lines = [escapeHtml(holder), links].filter(Boolean);
 
   return `<p style="margin:20px 0 0;font-size:12px;line-height:1.6;color:${MUTED};">${lines.join("<br />")}</p>`;
 }
@@ -204,8 +203,7 @@ export function emailText(
   { title, intro, cta, outro }: EmailShellInput,
   brand: Brand = BRAND,
 ): string {
-  const { address, supportEmail, privacyUrl } = footer(brand, originOf(cta));
-  const { legalName } = brand.company;
+  const { supportEmail, privacyUrl } = footer(brand, originOf(cta));
 
   return [
     title,
@@ -215,8 +213,6 @@ export function emailText(
     ...(outro ? ["", ...outro] : []),
     "",
     `— ${brand.name}`,
-    ...(legalName ? [legalName] : []),
-    ...(address ? [address] : []),
     ...(supportEmail ? [supportEmail] : []),
     ...(privacyUrl ? [`Privacy policy: ${privacyUrl}`] : []),
   ].join("\n");

@@ -24,10 +24,10 @@ function reviewSentence(count: number): string {
   if (count === 0) return "Everything found a good match.";
 
   if (count === 1) {
-    return "1 needs a look — drag its pin, or open Fix to edit it.";
+    return "1 needs a look — drag its pin, or press the wrench to edit it.";
   }
 
-  return `${formatCount(count)} need a look — drag their pins, or open Fix to edit them.`;
+  return `${formatCount(count)} need a look — drag their pins, or press the wrench to edit them.`;
 }
 
 /**
@@ -47,6 +47,7 @@ function reviewSentence(count: number): string {
 export function ReviewStep({
   map,
   headroom,
+  shownDrafts,
   isImporting,
   importProgress,
   onImport,
@@ -55,6 +56,11 @@ export function ReviewStep({
 }: {
   map: AppMap;
   headroom: { plan: string; limit: number; used: number };
+  /**
+   * The rows to draw while an import runs, held by the wizard because the store
+   * drops each chunk as it lands. Null means the store's own rows.
+   */
+  shownDrafts: DraftPlace[] | null;
   isImporting: boolean;
   /** How far the confirmed write has got, or null when one isn't running. */
   importProgress: ImportProgress | null;
@@ -64,7 +70,8 @@ export function ReviewStep({
   /** Whether the plan includes keeping a map in sync with a Google Sheet. */
   canSyncSheets: boolean;
 }) {
-  const drafts = useImportStore((state) => state.drafts);
+  const storedDrafts = useImportStore((state) => state.drafts);
+  const drafts = shownDrafts ?? storedDrafts;
   const skippedBlankRows = useImportStore((state) => state.skippedBlankRows);
   const droppedContacts = useImportStore((state) => state.droppedContacts);
   const geocodeError = useImportStore((state) => state.geocodeError);
@@ -72,7 +79,15 @@ export function ReviewStep({
   const removeDraft = useImportStore((state) => state.removeDraft);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  /** The list's last request to see a row on the map. See `ReviewMap`. */
+  const [focus, setFocus] = useState<{ key: string } | null>(null);
   const [placingKey, setPlacingKey] = useState<string | null>(null);
+
+  /** Select a row and send the map to it, every time, even if it was selected. */
+  const showOnMap = (key: string) => {
+    setSelectedKey(key);
+    setFocus({ key });
+  };
   const [showOnlyProblems, setShowOnlyProblems] = useState(true);
 
   /*
@@ -145,7 +160,7 @@ export function ReviewStep({
     // a chosen alternative — is somewhere the user cannot currently see. Selecting
     // it is what sends the camera after it, so the correction is visible rather
     // than taken on trust.
-    if (!options?.fromMap) setSelectedKey(key);
+    if (!options?.fromMap) showOnMap(key);
   };
 
   return (
@@ -219,6 +234,7 @@ export function ReviewStep({
             map={map}
             drafts={drafts}
             selectedKey={selectedKey}
+            focus={focus}
             placingKey={placingKey}
             onSelect={setSelectedKey}
             onPatch={patch}
@@ -234,7 +250,7 @@ export function ReviewStep({
           placingKey={placingKey}
           openKeys={openKeys}
           onShowOnlyProblemsChange={setShowOnlyProblems}
-          onSelect={setSelectedKey}
+          onSelect={showOnMap}
           onPatch={patch}
           onRemove={removeDraft}
           onTogglePlacing={(key) =>

@@ -43,7 +43,7 @@ export const test = base.extend<{
   },
 
   admin: async ({ playwright, baseURL }, provide) => {
-    base.skip(!HAS_ADMIN || !existsSync(ADMIN_AUTH_FILE), "No admin session — set E2E_ADMIN_PASSWORD");
+    base.skip(!HAS_ADMIN || !existsSync(ADMIN_AUTH_FILE), "No admin session — set DEV_ADMIN_EMAIL / DEV_ADMIN_PASSWORD");
     const context = await playwright.request.newContext({ baseURL, storageState: ADMIN_AUTH_FILE });
     await provide(context);
     await context.dispose();

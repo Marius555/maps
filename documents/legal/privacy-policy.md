@@ -12,8 +12,8 @@ means if you used one of those maps.
 
 ## 1. Who is responsible
 
-The controller is **{{company.legalName}}**, company code {{company.registrationNumber}},
-{{company.address}}.
+The controller is **{{company.legalName}}**, individual activity certificate No.
+{{company.registrationNumber}}, {{company.address}}.
 
 Write to **{{contact.privacyEmail}}** about anything in this policy. We have not appointed a data
 protection officer.

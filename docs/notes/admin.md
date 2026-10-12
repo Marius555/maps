@@ -16,6 +16,16 @@ Discounts, which writes to the payment provider rather than to Appwrite
 - **Three env values or no console.** `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`,
   `ADMIN_SESSION_SECRET` (≥ 32 chars). Missing any one of them: `/login/admin` and `/admin`
   404, and `POST /api/admin/login` 404s. Same posture as `LEMON_WEBHOOK_SECRET`.
+- **A development admin can sit beside it, and only in development.** `DEV_ADMIN_EMAIL` /
+  `DEV_ADMIN_PASSWORD` (plain text) are a second console login for local use and the e2e
+  suite, so the real admin's password is never written down for the tests.
+  `devAdminConfig()` in `lib/admin/auth/config.ts` returns `null` in a production build — the
+  `NODE_ENV` check `DISABLE_ALL_PLAN` uses — and when its address is `ADMIN_EMAIL`'s. Its
+  session secret is `ADMIN_SESSION_SECRET` or one derived from `APPWRITE_API_KEY`, never
+  random, because the login route and the pages hold separate module state. Its password
+  check is a digest compare, not scrypt, so its timing differs from the decoy's — acceptable
+  only because it cannot exist where anybody else can reach it. The shell's account menu
+  shows `adminSessionEmail()`, the signed-in account, not `ADMIN_EMAIL`.
 - **The password exists only as a scrypt hash, in a format with no `$`.** Next's
   dotenv-expand reads `$N` as a variable and silently corrupts a `$scrypt$…` value.
   `npm run admin:hash` makes one; `lib/admin/auth/password.ts` verifies it. Both must agree

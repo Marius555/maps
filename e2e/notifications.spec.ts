@@ -3,7 +3,7 @@ import { expect, test } from "./support/fixtures";
 /**
  * A notification sent from the operator console reaches the account it was
  * addressed to, counts as unread until seen, and is deleted afterwards. Needs
- * the console (`E2E_ADMIN_PASSWORD`); skips without it.
+ * the console (`DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD`); skips without it.
  */
 
 type Feed = { items: { id: string; title: string; isUnread: boolean }[]; unreadCount: number };

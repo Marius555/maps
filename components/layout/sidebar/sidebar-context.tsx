@@ -27,6 +27,12 @@ type SidebarContextValue = {
   isCollapsed: boolean;
   isMobileOpen: boolean;
   toggleCollapsed: () => void;
+  /**
+   * Collapse the rail while a screen needs the width, without touching the
+   * saved preference. `false` hands it back. Use `useCollapsedSidebarWhileMounted`
+   * rather than calling this directly.
+   */
+  holdCollapsed: (held: boolean) => void;
   setMobileOpen: (open: boolean) => void;
   /**
    * The map shown off a map's own pages: the last opened, or the account's most
@@ -50,6 +56,14 @@ export function SidebarProvider({
   children: React.ReactNode;
 }) {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
+  /*
+   * A screen asking for the width, separate from the preference. The import
+   * wizard's Columns step is a table wider than any laptop, so it holds the rail
+   * shut while it is on screen and lets go when it leaves. Kept apart from
+   * `isCollapsed` so that letting go returns the rail to what the user chose, and
+   * so the cookie never records it.
+   */
+  const [isHeld, setIsHeld] = useState(false);
   const [isMobileOpen, setMobileOpen] = useState(false);
   const [lastMapId, setLastMapId] = useState(defaultMapId);
 
@@ -62,6 +76,19 @@ export function SidebarProvider({
   }, []);
 
   const toggleCollapsed = useCallback(() => {
+    /*
+     * Held shut, the rail reads as collapsed whatever the preference says, so the
+     * toggle can only mean "open it": the hold goes and the preference becomes
+     * expanded. Flipping the preference instead would do nothing visible for
+     * someone whose preference was already expanded.
+     */
+    if (isHeld) {
+      setIsHeld(false);
+      setIsCollapsed(false);
+      document.cookie = `${SIDEBAR_COOKIE}=0${COOKIE_TAIL}`;
+      return;
+    }
+
     setIsCollapsed((collapsed) => {
       const next = !collapsed;
 
@@ -71,7 +98,7 @@ export function SidebarProvider({
 
       return next;
     });
-  }, []);
+  }, [isHeld]);
 
   // mod+b, the shortcut every sidebar of this shape uses.
   useEffect(() => {
@@ -88,14 +115,15 @@ export function SidebarProvider({
 
   const value = useMemo(
     () => ({
-      isCollapsed,
+      isCollapsed: isHeld || isCollapsed,
       isMobileOpen,
       toggleCollapsed,
+      holdCollapsed: setIsHeld,
       setMobileOpen,
       lastMapId,
       rememberMap,
     }),
-    [isCollapsed, isMobileOpen, toggleCollapsed, lastMapId, rememberMap],
+    [isHeld, isCollapsed, isMobileOpen, toggleCollapsed, lastMapId, rememberMap],
   );
 
   return (
@@ -111,4 +139,27 @@ export function useSidebar(): SidebarContextValue {
   }
 
   return context;
+}
+
+/**
+ * Hold the desktop rail shut while `isHeld` is true.
+ *
+ * For a screen that needs the width: the import wizard's Columns table. When the
+ * flag goes false, or the caller unmounts, the rail returns to the saved
+ * preference. The toggle still works in the meantime, and pressing it lets go of
+ * the hold.
+ *
+ * A flag rather than "while mounted", because the wizard's steps leave through
+ * an exit animation: the Columns step stays mounted until it has faded out, and
+ * that took seconds in a busy tab and never ends in a background one.
+ */
+export function useCollapsedSidebarWhile(isHeld: boolean): void {
+  const { holdCollapsed } = useSidebar();
+
+  useEffect(() => {
+    if (!isHeld) return;
+
+    holdCollapsed(true);
+    return () => holdCollapsed(false);
+  }, [isHeld, holdCollapsed]);
 }

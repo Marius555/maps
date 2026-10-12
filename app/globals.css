@@ -1613,6 +1613,13 @@ html:has([data-app-frame]) {
   animation: map-pin-drop 420ms ease-out 1;
 }
 
+/* "Show on map": the same ripple, slower and three times, because it plays
+   after a flight and one 420ms pass is over before the eye has found the pin.
+   `playFound` in components/map/pin-marker.ts. */
+.map-pin--found .map-pin__pulse {
+  animation: map-pin-drop 900ms ease-out 3;
+}
+
 @keyframes map-pin-drop {
   0% {
     opacity: 0.5;

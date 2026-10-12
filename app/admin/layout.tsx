@@ -3,8 +3,7 @@ import type { Metadata } from "next";
 import { AdminMobileNav } from "@/components/admin/shell/admin-mobile-nav";
 import { AdminSidebar } from "@/components/admin/shell/admin-sidebar";
 import { AdminMain } from "@/components/layout/page-transition/admin-main";
-import { requireAdminPage } from "@/lib/admin/auth/guard";
-import { env } from "@/lib/env";
+import { adminSessionEmail, requireAdminPage } from "@/lib/admin/auth/guard";
 
 export const metadata: Metadata = {
   title: { template: "%s · Admin", default: "Admin" },
@@ -29,12 +28,15 @@ export const metadata: Metadata = {
 export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   await requireAdminPage();
 
+  // The signed-in account's, which in development may be DEV_ADMIN_EMAIL.
+  const email = (await adminSessionEmail()) ?? "";
+
   return (
     <div data-app-frame="" className="flex h-[100dvh] min-h-0 flex-none overflow-hidden">
-      <AdminSidebar email={env.adminEmail} />
+      <AdminSidebar email={email} />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <AdminMobileNav email={env.adminEmail} />
+        <AdminMobileNav email={email} />
         <AdminMain>
           <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
             {children}

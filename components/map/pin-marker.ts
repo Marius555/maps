@@ -103,6 +103,30 @@ export function playDrop(element: HTMLElement): void {
 }
 
 /**
+ * Point at a pin someone asked to see: the drop ripple, three passes.
+ *
+ * For "Show on map" on the import Review step, where zooming in is not enough
+ * when a street holds several pins. Unlike `playDrop` this can be asked for
+ * again while it is still playing, so the class comes off and a reflow is forced
+ * before it goes back on — otherwise the animation would not restart.
+ *
+ * Reduced motion plays one 0.01ms pass, and that is enough: the pin is also the
+ * selected one, which is a static mark that says the same thing.
+ */
+export function playFound(element: HTMLElement): void {
+  element.classList.remove("map-pin--found");
+  void element.offsetWidth;
+  element.classList.add("map-pin--found");
+
+  // `animationend` fires once, after the last iteration.
+  element.addEventListener(
+    "animationend",
+    () => element.classList.remove("map-pin--found"),
+    { once: true },
+  );
+}
+
+/**
  * Whether this location is inside a cluster bubble at the current zoom.
  *
  * The bubble is a style layer and the pin is DOM, so the pin has to be taken off

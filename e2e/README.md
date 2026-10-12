@@ -25,8 +25,15 @@ operator console.
 | Set in `.env` | Unlocks |
 |---|---|
 | `E2E_EMAIL_2` / `E2E_PASSWORD_2` — a second confirmed account | `api-security.spec.ts`'s cross-account checks; `plan-limits.spec.ts` |
-| `E2E_ADMIN_PASSWORD` — the console's plain password (`ADMIN_EMAIL` and the hash must be set too) | `admin.spec.ts` (signed in), `notifications.spec.ts`, `news.spec.ts` |
+| `DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD` — a development-only console login, any address and password you like; `next dev` accepts it and a production build ignores it | `admin.spec.ts` (signed in), `notifications.spec.ts`, `news.spec.ts` |
 | `E2E_UNVERIFIED_EMAIL` / `E2E_UNVERIFIED_PASSWORD` — an account that signed up and never confirmed | `unverified.spec.ts` |
+
+Against a production build or a deployed site the development admin does not
+exist; set `E2E_ADMIN_PASSWORD` to the real console's plain password instead
+(`ADMIN_EMAIL` is read from `.env`). The console's login allows five tries per
+IP per quarter hour, successes included. A run spends one (the wrong-password
+test) plus one more whenever the saved console session has expired, so five
+full runs inside fifteen minutes can see a 429.
 
 ### Two passes
 

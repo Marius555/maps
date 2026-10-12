@@ -17,18 +17,36 @@ Contact addresses live in [contact.md](contact.md).
 
 ## Company
 
+**The service is run as an *individuali veikla*** (a natural person carrying out individual
+activity under a VMI certificate), not a company: certificate FR0468 No. 1554078, activity from
+2026-10-11, EVRK 582900 *Kita programinės įrangos leidyba* (other software publishing). The
+documents are worded for that. If it ever becomes a UAB, the values below change and so does the
+wording around them ("individual activity certificate No." → "company code", "address" →
+"registered office").
+
 | Placeholder | What it is | In `brand.json` | Value |
 |---|---|---|---|
-| `{{company.legalName}}` | Registered name, exactly as on the register extract, e.g. `UAB „Example"` | `company.legalName` | Pinglide — **a stand-in until the company is registered**; replace it with the registered name |
-| `{{company.legalForm}}` | Legal form in words, e.g. "private limited liability company (UAB)" | — (`lib/legal/values.ts`) | |
-| `{{company.registrationNumber}}` | Company code (*juridinio asmens kodas*) | `company.registrationNumber` | |
-| `{{company.register}}` | The register holding the company. For a Lithuanian company: "Register of Legal Entities of the Republic of Lithuania, kept by the State Enterprise Centre of Registers" | — (`lib/legal/values.ts`) | |
-| `{{company.vatNumber}}` | VAT payer code, `LT` followed by digits. **If the company is not VAT-registered, delete the sentence that uses it** rather than leaving it blank | `company.vatNumber` | |
-| `{{company.address}}` | Registered office address | `company.address` | |
+| `{{company.legalName}}` | For an individuali veikla, the person's name as on the certificate. For a company, the registered name, e.g. `UAB „Example"` | `company.legalName` | Marius Zakarauskas |
+| `{{company.legalForm}}` | Legal form in words | — (`lib/legal/values.ts`) | natural person carrying out individual activity (individuali veikla) |
+| `{{company.registrationNumber}}` | The individual activity certificate number. **Never the personal code (*asmens kodas*) printed on the same certificate** — that is not public, and the certificate number is what identifies an individuali veikla (it is what goes on its invoices) | `company.registrationNumber` | 1554078 |
+| `{{company.register}}` | Who keeps the registration | — (`lib/legal/values.ts`) | State Tax Inspectorate under the Ministry of Finance of the Republic of Lithuania (Valstybinė mokesčių inspekcija) |
+| `{{company.vatNumber}}` | VAT payer code, `LT` followed by digits. **If VAT registration does not happen, delete the sentence that uses it** (Terms §1) rather than leaving it blank | `company.vatNumber` | pending, as of 2026-10-12 |
+| `{{company.address}}` | Address. An individuali veikla has no registered office, so this would be the declared home address — **the owner has decided not to publish that** | `company.address` | not set, deliberately (see below) |
 
 The Law on Information Society Services (Art. 5) requires the name, address, register and
 registration number, contact email and VAT payer code to be freely and permanently available to
 users. Terms of Service §1 carries all of them; do not remove that section to shorten the page.
+
+**The address is the one that blocks.** Art. 5 asks for a geographic address, and the DPA's SCC
+annex names the importer's address, so the four pages stay drafts — 404 in production — while it
+is empty. That is the intended state, not a bug to route around: do not delete the placeholder
+from the documents to make them publish. The way out without exposing a home address is a
+correspondence or virtual-office address; whether that satisfies Art. 5 for an individuali veikla
+is lawyer question 11 in [legal/README.md](legal/README.md).
+
+**Personal details stay on the legal pages.** The site footer (`components/brand/company-details.tsx`)
+and the email footer (`lib/email/templates/layout.ts`) print the product name and the support
+address only, by the owner's choice — they do not read `company.*`.
 
 ## Product
 
@@ -63,8 +81,10 @@ All four are filled in `lib/legal/values.ts`.
 
 ## Before any of this is published
 
-The documents name a company as the party customers contract with. **Until that company is
-registered, publishing them makes the person running the service the contracting party instead,
-with personal and unlimited liability** — none of the protection the documents were written to
-give. Register first, fill this file, then publish. The full checklist is in
-[legal/README.md](legal/README.md).
+Registration is done (2026-10-11). Know what it does and does not give: **an individuali veikla is
+the person, so liability for the business is personal and unlimited** — there is no company in
+between. The Terms' liability cap (§18) still limits what a customer can claim under the contract,
+within what Lithuanian law allows, but nothing separates business debts from personal ones.
+Whether that is acceptable at the scale the plans are sized for, or a UAB is needed first, is
+lawyer question 11. What is left before publishing — the address, the VAT code and the rest — is
+the checklist in [legal/README.md](legal/README.md).

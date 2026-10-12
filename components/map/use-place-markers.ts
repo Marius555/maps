@@ -13,6 +13,7 @@ import {
 import {
   createPinElement,
   playDrop,
+  playFound,
   setPinChecking,
   setPinClustered,
   setPinIcon,
@@ -376,7 +377,13 @@ export function usePlaceMarkers({
     };
   }, []);
 
-  return { setVisibleIds };
+  /** Ripple one pin so the eye can find it. Nothing for an id with no marker. */
+  const ripple = useCallback((id: string) => {
+    const marker = markers.current.get(id);
+    if (marker) playFound(marker.getElement());
+  }, []);
+
+  return { setVisibleIds, ripple };
 }
 
 function sameIds(

@@ -38,8 +38,8 @@ export default function ImportingLocationsPage() {
         <p>
           Your file needs one row per location. Every row needs a name and
           something to place it with — a street address, a town, a postcode, or
-          latitude and longitude. Phone, website, description and tags are
-          optional, now or later.
+          latitude and longitude. Phone, website, description, tags and a pin
+          colour are optional, now or later.
         </p>
 
         <DocsCallout>
@@ -125,7 +125,7 @@ export default function ImportingLocationsPage() {
             ],
             [
               "Main tag",
-              "One per row. It goes first, which is what colours the pin on the map.",
+              "One per row. It goes first, which is what colours the pin on the map unless the row has its own Pin colour.",
             ],
             [
               "Tags",
@@ -144,6 +144,10 @@ export default function ImportingLocationsPage() {
               "Website",
               "Shown on the card. Anything that is not a web address is left out.",
             ],
+            [
+              "Pin colour",
+              "Optional styling. A colour code like #e03131 that colours this location’s pin and its card.",
+            ],
           ]}
         />
 
@@ -151,6 +155,30 @@ export default function ImportingLocationsPage() {
           The five address fields are joined, in the order above, into one
           address, so addresses can be spread across several columns. Each column
           feeds one field only.
+        </p>
+      </DocsSection>
+
+      <DocsSection id="colour" title="Styling locations with a colour">
+        <p>
+          Add a column with a colour code for each row, for example{" "}
+          <code>#e03131</code>. We recognise columns called <code>Colour</code>,{" "}
+          <code>Color</code>, <code>Pin colour</code>, <code>Marker color</code>{" "}
+          or <code>Hex</code>, or any column whose values are colour codes. The
+          colour is used for:
+        </p>
+
+        <ul>
+          <li>the location’s pin on the map,</li>
+          <li>the Button on its card, unless you gave the Button its own colour,</li>
+          <li>the pin drawn by the card’s Logo block.</li>
+        </ul>
+
+        <p>
+          Leave a cell empty and that location keeps its usual colour from its
+          main tag or your map’s theme. Write codes as <code>#rrggbb</code>,{" "}
+          <code>rrggbb</code> or <code>#rgb</code>. Colour names such as{" "}
+          <code>red</code> are not read: the row is flagged on the Review step
+          and keeps its usual colour. An uploaded logo image keeps its own colours.
         </p>
       </DocsSection>
 
@@ -282,8 +310,9 @@ export default function ImportingLocationsPage() {
             building.
           </li>
           <li>
-            Press <strong>Fix</strong> to edit the address and search again, or to
-            pick one of the other matches we found.
+            Press the wrench beside a row (<strong>Fix row</strong>) to edit the
+            address and search again, or to pick one of the other matches we
+            found. The tick (<strong>Done with row</strong>) closes it.
           </li>
           <li>
             Press <strong>Place on map</strong> for a row that was never found,
@@ -330,8 +359,8 @@ export default function ImportingLocationsPage() {
       <DocsSection id="saving" title="Importing">
         <p>
           Press <strong>Import N locations</strong>. Tag columns become tags, the
-          main tag goes first so it colours the pin, and you land back on your
-          map.
+          main tag goes first so it colours the pin, a Pin colour column colours
+          its row’s pin and card instead, and you land back on your map.
         </p>
 
         <p>

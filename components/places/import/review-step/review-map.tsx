@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef } from "react";
 
 import { MapCanvas } from "@/components/map/map-canvas";
 import type { MapHandle } from "@/components/map/map-canvas-impl";
@@ -19,8 +19,8 @@ import type { AppMap, Place } from "@/lib/repositories/types";
  * turns the next click into that row's position, which is the only in-app way to
  * place a location the geocoder couldn't find.
  *
- * The camera follows the selected row, because the canvas does not do that on its
- * own (`center` is the opening position and nothing more). Without it "Show on
+ * The camera follows a row the list asks to show, because the canvas does not do
+ * that on its own (`center` is the opening position and nothing more). Without it "Show on
  * map" is a button that highlights a pin somewhere off screen, and correcting a
  * row by typing a coordinate leaves you looking at where it used to be.
  */
@@ -28,6 +28,7 @@ export function ReviewMap({
   map,
   drafts,
   selectedKey,
+  focus,
   placingKey,
   onSelect,
   onPatch,
@@ -35,6 +36,11 @@ export function ReviewMap({
   map: AppMap;
   drafts: DraftPlace[];
   selectedKey: string | null;
+  /**
+   * A request to show a row's pin: a new object each time, so asking for the
+   * same row twice still flies there. Null until the first.
+   */
+  focus: { key: string } | null;
   /** The row a click will place, or null when clicking does nothing. */
   placingKey: string | null;
   onSelect: (key: string | null) => void;
@@ -59,15 +65,28 @@ export function ReviewMap({
   };
 
   const handle = useRef<MapHandle | null>(null);
-  const selected = placedPlaces.find((place) => place.id === selectedKey);
-  const selectedLat = selected?.lat;
-  const selectedLng = selected?.lng;
+
+  /*
+   * Street level, then the pin ripples. Zoom 14 was a neighbourhood, where a pin
+   * among a dozen others was still a search; 17 is a block. The ripple is for the
+   * street that holds several pins anyway.
+   *
+   * An event, read when `focus` changes, rather than an effect on the selected
+   * row's coordinates. It used to be the latter, so pressing Show on map a second
+   * time did nothing (the selection had not changed), and clicking a pin on the
+   * map flew to it too.
+   */
+  const showPlace = useEffectEvent((key: string) => {
+    const place = placedPlaces.find((candidate) => candidate.id === key);
+    if (!place) return;
+
+    handle.current?.flyTo({ lng: place.lng, lat: place.lat }, { zoom: 17 });
+    handle.current?.ripple(key);
+  });
 
   useEffect(() => {
-    if (selectedLat === undefined || selectedLng === undefined) return;
-
-    handle.current?.flyTo({ lng: selectedLng, lat: selectedLat }, { zoom: 14 });
-  }, [selectedKey, selectedLat, selectedLng]);
+    if (focus) showPlace(focus.key);
+  }, [focus]);
 
   return (
     <MapCanvas

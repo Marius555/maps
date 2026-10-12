@@ -2,8 +2,8 @@ import { expect, test } from "./support/fixtures";
 
 /**
  * A post published from the operator console is on the public newsroom, and
- * gone again afterwards. Needs the console (`E2E_ADMIN_PASSWORD`); skips
- * without it.
+ * gone again afterwards. Needs the console (`DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD`);
+ * skips without it.
  */
 test("a published post appears in the newsroom", async ({ page, admin }) => {
   const stamp = Date.now();

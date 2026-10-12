@@ -3,15 +3,16 @@
 import { Button, toast } from "@heroui/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { useCollapsedSidebarWhile } from "@/components/layout/sidebar/sidebar-context";
 import {
   COLLAPSE_CLASS,
   collapseMotion,
   stepMotion,
 } from "@/components/ui/list-row-motion";
 import { formatCount } from "@/lib/format/number";
-import { importableDrafts } from "@/lib/import/draft-places";
+import { importableDrafts, type DraftPlace } from "@/lib/import/draft-places";
 import { draftToCreateInput } from "@/lib/import/draft-to-place";
 import { preflightProblem } from "@/lib/import/preflight";
 import {
@@ -81,6 +82,32 @@ export function ImportWizard({
   const fileName = useImportStore((state) => state.fileName);
 
   const [progress, setProgress] = useState<ImportProgress | null>(null);
+
+  /**
+   * The rows on screen while an import runs, as they were when Import was pressed.
+   *
+   * The store drops each chunk as it lands (see `removeDrafts` below), which is
+   * right for the store and wrong for the screen: a one-chunk file emptied the
+   * review map and list in the frame before the navigation. Held until the page
+   * leaves, or given back by a run that stopped short so its remaining rows show.
+   */
+  const [shownDrafts, setShownDrafts] = useState<DraftPlace[] | null>(null);
+
+  /**
+   * Set once a run has got all the way through and the page is on its way out.
+   *
+   * The in-memory store is reset on unmount rather than before `router.push`,
+   * because resetting it sends `step` back to "source" and the upload screen
+   * cross-faded in for the frames the navigation took.
+   */
+  const isFinished = useRef(false);
+
+  useEffect(
+    () => () => {
+      if (isFinished.current) useImportStore.getState().reset();
+    },
+    [],
+  );
 
   /**
    * True once a run left over from a previous visit has been picked up.
@@ -261,6 +288,7 @@ export function ImportWizard({
     let saved = 0;
     let addedTags = 0;
 
+    setShownDrafts(store.drafts);
     setProgress({ saved: 0, total: inputs.length });
 
     try {
@@ -314,6 +342,7 @@ export function ImportWizard({
       // far it got *and* why it stopped, in one toast. With nothing saved there
       // is nowhere to send them, and the reason is the whole message.
       setProgress(null);
+      setShownDrafts(null);
 
       if (saved > 0) {
         finish(
@@ -359,10 +388,11 @@ export function ImportWizard({
     });
 
     // Only a run that got all the way through throws the wizard away. A partial
-    // one keeps its remaining rows so the user can press Import again. Through
-    // `startOver` rather than `reset`, because `finish` navigates immediately and
-    // a debounced write would not survive it — see the note there.
-    startOver();
+    // one keeps its remaining rows so the user can press Import again. The disk
+    // copy goes now, through `clearStorage` for the reason `startOver` gives; the
+    // in-memory one on unmount, so the Source step never draws on the way out.
+    isFinished.current = true;
+    void useImportStore.persist.clearStorage();
     finish(
       saved,
       drafts.length,
@@ -388,6 +418,11 @@ export function ImportWizard({
    */
   const isWide = step === "mapping" || step === "review";
 
+  // The Columns table is wider than any laptop, so the rail folds away for it
+  // and comes back the moment the step changes. Keyed on the step rather than
+  // on the step's mount: see the hook.
+  useCollapsedSidebarWhile(step === "mapping");
+
   return (
     /*
      * `max-w-full`, not `max-w-none`: `none` is not a length and does not
@@ -395,10 +430,16 @@ export function ImportWizard({
      * 100% does. There is no `motion-reduce:` here because there does not need
      * to be — the blanket `prefers-reduced-motion` rule in globals.css already
      * clamps every transition in the app to 0.01ms.
+     *
+     * Centred down the page only on the narrow steps, and `my-auto` does it rather
+     * than `justify-center`, which would push a tall step's top above the scroll
+     * container where nothing can reach it. The wide steps sit at the top: Review
+     * was centred too, so opening a row grew it from the middle and the whole
+     * screen jumped up by half the fold's height before it overflowed.
      */
     <div
       className={`mx-auto w-full transition-[max-width] duration-[var(--duration-panel)] ease-[var(--ease-out)] ${
-        isWide ? "max-w-full" : "max-w-2xl"
+        isWide ? "max-w-full" : "my-auto max-w-2xl"
       }`}
     >
       <div className="relative space-y-6">
@@ -487,7 +528,13 @@ export function ImportWizard({
               <ReviewStep
                 map={map}
                 headroom={headroom}
-                isImporting={bulkCreate.isPending || updateMap.isPending}
+                shownDrafts={shownDrafts}
+                // `progress` stays set after a finished run, so the button stays
+                // pending through the sheet link and the navigation rather than
+                // re-enabling for the frames in between.
+                isImporting={
+                  progress !== null || bulkCreate.isPending || updateMap.isPending
+                }
                 importProgress={progress}
                 canSyncSheets={canSyncSheets}
                 onImport={() => void runImport()}

@@ -24,9 +24,11 @@ production build and, in development, renders under a notice listing what is mis
 
 ## Before you publish
 
-1. **Register the company.** The documents name `{{company.legalName}}` as the party customers
-   contract with. Published before it exists, they make the person running the service the
-   contracting party, with unlimited personal liability.
+1. ~~**Register the business.**~~ **Done 2026-10-11** as an *individuali veikla* (VMI certificate
+   No. 1554078), not a company — so the contracting party is the person, with personal and
+   unlimited liability ([../company.md](../company.md)). What is left of this step: the address,
+   which is deliberately unset and keeps every page a draft until a publishable one is chosen
+   (lawyer question 11), and the VAT payer code, which is pending.
 2. **Have a Lithuanian lawyer review them**, starting with [the questions below](#questions-for-the-lawyer).
 3. **Fill every placeholder** — in `brand.json`, or in `LEGAL_DETAILS` in `lib/legal/values.ts`
    for the values `brand.json` has no field for. Not by find-and-replace in these files: the
@@ -153,6 +155,12 @@ them being fixed. Each needs a code change or a softer sentence before publishin
     script that makes a device send information can still need consent under Art. 61 even without
     storage. Is legitimate interest without a banner defensible for first-party product analytics, or
     is a consent banner needed — at least on the public website?
+11. **Running as an individuali veikla.** The service is provided by a natural person under a VMI
+    certificate, not a company. (a) Art. 5 of the Law on Information Society Services asks for a
+    geographic address, and the owner will not publish a home address: does a correspondence or
+    virtual-office address satisfy it, and the DPA's SCC annex? (b) Liability is personal and
+    unlimited. Does the Terms' cap give enough protection at the Plans' scale, or should a UAB be
+    formed before the paid launch?
 
 ## Legal checks performed
 

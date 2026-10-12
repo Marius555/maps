@@ -123,19 +123,19 @@ describe("brand", () => {
     expect(html).toContain("Acme Maps");
   });
 
-  it("carries the company, support address and privacy link in both bodies", () => {
+  it("carries the support address and privacy link, never the operator's details", () => {
     const brand = parseBrand({
       ...MINIMAL,
-      company: { legalName: "Acme UAB", address: "Gedimino pr. 1, Vilnius" },
+      company: { legalName: "Jonas Jonaitis", address: "Gedimino pr. 1, Vilnius" },
       contact: { supportEmail: "help@acme.example" },
       legal: { privacyUrl: "/privacy" },
     });
 
     for (const body of [emailShell(CONTENT, brand), emailText(CONTENT, brand)]) {
-      expect(body).toContain("Acme UAB");
-      expect(body).toContain("Gedimino pr. 1, Vilnius");
       expect(body).toContain("help@acme.example");
       expect(body).toContain("https://app.example.com/privacy");
+      expect(body).not.toContain("Jonas Jonaitis");
+      expect(body).not.toContain("Gedimino pr. 1, Vilnius");
     }
   });
 

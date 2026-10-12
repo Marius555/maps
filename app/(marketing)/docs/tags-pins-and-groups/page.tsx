@@ -155,6 +155,11 @@ export default function TagsPinsAndGroupsPage() {
         <p>The first of these that applies wins:</p>
 
         <ol className="list-decimal space-y-2 pl-5 marker:text-muted">
+          <li>
+            The location’s own colour, from <strong>Pin colour</strong> in its
+            row menu or a colour column in an imported file. A custom pin with
+            its own fill still keeps that fill.
+          </li>
           <li>The colour of the group the location is in, if it has one.</li>
           <li>
             For a route stop in no group: the route’s group colour.

@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 
 import { noContent } from "@/lib/api/responses";
 import { parseBody, withoutAuth } from "@/lib/api/route";
-import { adminConfig } from "@/lib/admin/auth/config";
+import { adminAccounts } from "@/lib/admin/auth/config";
 import { setAdminCookie } from "@/lib/admin/auth/cookie";
 import { decoyHash, verifyPassword } from "@/lib/admin/auth/password";
 import { signAdminSession } from "@/lib/admin/auth/session";
@@ -25,10 +25,12 @@ import { adminLoginSchema } from "@/lib/validation/admin.schema";
  * - **One answer for every failure**, and the same time for it: a wrong email
  *   still spends a full scrypt against a decoy, so neither the message nor the
  *   clock says which half was right.
+ * - **Two accounts in development**: the configured admin and `DEV_ADMIN_*`
+ *   (`adminAccounts()`); a production build only ever has the first.
  */
 export const POST = withoutAuth(async (request) => {
-  const config = adminConfig();
-  if (!config) throw new NotFoundError();
+  const accounts = adminAccounts();
+  if (accounts.length === 0) throw new NotFoundError();
 
   // After the config check, so an install with no console still answers 404.
   const ip = clientIp(request.headers);
@@ -38,19 +40,19 @@ export const POST = withoutAuth(async (request) => {
 
   const { email, password } = await parseBody(request, adminLoginSchema);
 
-  const emailMatches = sameText(email.trim().toLowerCase(), config.email);
-  const passwordMatches = await verifyPassword(
-    password,
-    emailMatches ? config.passwordHash : await decoyHash(),
-  );
+  const given = email.trim().toLowerCase();
+  const account = accounts.find((candidate) => sameText(given, candidate.email));
+  const passwordMatches = account
+    ? await account.checkPassword(password)
+    : await verifyPassword(password, await decoyHash());
 
-  if (!emailMatches || !passwordMatches) {
+  if (!account || !passwordMatches) {
     console.warn(`Admin sign-in refused from ${ip}.`);
 
     throw new RepositoryError("unauthorized", "Email or password is incorrect.", 401);
   }
 
-  await setAdminCookie(signAdminSession(config));
+  await setAdminCookie(signAdminSession(account));
 
   return noContent();
 });

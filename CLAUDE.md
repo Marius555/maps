@@ -319,6 +319,10 @@ one exists: `docs/notes/environment.md`.
   two `AuthUser` mappers — the gate in `withAuth` is untouched, it is simply asked about a
   different user, which is why the three places the UI explains the freeze agree with it.
   Warns once, and **inert in a production build** by the same `NODE_ENV` check.
+- **Development only: `DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD`.** A second operator-console
+  login, plain text, for local use and the e2e suite (`e2e/README.md`), so the real admin's
+  password never has to be written down. Opens the console even with the `ADMIN_*` three
+  unset. **Inert in a production build** by the same `NODE_ENV` check; `docs/notes/admin.md`.
 
 - Server-only, optional: `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`, `ADMIN_SESSION_SECRET` — the
   operator console at `/admin`. **All three or no console**: unset, both its pages and its

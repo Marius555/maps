@@ -201,7 +201,10 @@ export default function DesigningTheCardPage() {
 
         <p>
           A button with no <strong>Colour</strong> follows each location’s pin
-          colour. For a per-location button link, add an{" "}
+          colour, and so does a Logo block drawing the pin, including a colour
+          set by a{" "}
+          <Link href="/docs/importing-locations#colour">colour column</Link> in
+          an imported file. For a per-location button link, add an{" "}
           <Link href="/docs/managing-locations#extra-fields">extra field</Link>{" "}
           of type Link, then pick it under <strong>Link to</strong>.{" "}
           <strong>Preview</strong> settings only change the example you design
