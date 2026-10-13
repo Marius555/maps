@@ -1,16 +1,12 @@
 "use client";
 
-import { Button, toast } from "@heroui/react";
+import { toast } from "@heroui/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useCollapsedSidebarWhile } from "@/components/layout/sidebar/sidebar-context";
-import {
-  COLLAPSE_CLASS,
-  collapseMotion,
-  stepMotion,
-} from "@/components/ui/list-row-motion";
+import { stepMotion } from "@/components/ui/list-row-motion";
 import { formatCount } from "@/lib/format/number";
 import { importableDrafts, type DraftPlace } from "@/lib/import/draft-places";
 import { draftToCreateInput } from "@/lib/import/draft-to-place";
@@ -35,7 +31,7 @@ import type { CreatePlaceInput } from "@/lib/validation/place.schema";
 import type { AppMap } from "@/lib/repositories/types";
 import { useImportStore } from "@/lib/stores/import-store";
 import { MAX_BULK_PLACES } from "@/lib/validation/place.schema";
-import { GeocodeStep } from "./geocode-step";
+import { GeocodeStep } from "./geocode-step/geocode-step";
 import { ImportHeading } from "./import-heading";
 import { MappingStep } from "./mapping-step/mapping-step";
 import { ReviewStep } from "./review-step/review-step";
@@ -77,9 +73,9 @@ export function ImportWizard({
   const saveSheetLink = useSaveSheetLink(map.id);
 
   const step = useImportStore((state) => state.step);
+  const stepEntry = useImportStore((state) => state.stepEntry);
   const setStep = useImportStore((state) => state.setStep);
   const reset = useImportStore((state) => state.reset);
-  const fileName = useImportStore((state) => state.fileName);
 
   const [progress, setProgress] = useState<ImportProgress | null>(null);
 
@@ -108,16 +104,6 @@ export function ImportWizard({
     },
     [],
   );
-
-  /**
-   * True once a run left over from a previous visit has been picked up.
-   *
-   * The store restores itself from IndexedDB, so someone who reloaded during a
-   * ten-minute address lookup lands back where they were — which is right, and
-   * is also indistinguishable from a bug unless the page says so and offers the
-   * way out. `attachTo` is what decides the run is ours; see the store.
-   */
-  const isResumed = useImportStore((state) => state.isResumed);
 
   const hydrated = useHasHydrated();
   const attachedMapId = useImportStore((state) => state.mapId);
@@ -413,8 +399,8 @@ export function ImportWizard({
    * would make them harder to use, not easier.
    *
    * **This is the only cap, and the steps must not add their own.** The
-   * Source title and the resumed-run notice are left-aligned in this wrapper,
-   * so they line up with whatever the step draws only while the step fills it.
+   * Source title is left-aligned in this wrapper, so it lines up with whatever
+   * the step draws only while the step fills it.
    */
   const isWide = step === "mapping" || step === "review";
 
@@ -443,43 +429,6 @@ export function ImportWizard({
       }`}
     >
       <div className="relative space-y-6">
-        {/*
-         * Said out loud, with the way out beside it.
-         *
-         * Restoring the run is the right behaviour and a silent restore is not:
-         * someone arriving to import a new file would find themselves three
-         * steps into an old one with no explanation and no obvious way back.
-         * `empty:hidden` and `COLLAPSE_CLASS` for the reason every other fold in
-         * the app uses them — the wrapper must claim no `space-y` gap when there
-         * is nothing to say.
-         */}
-        <div className="empty:hidden">
-          <AnimatePresence initial={false}>
-            {isResumed ? (
-              <motion.div
-                key="resumed"
-                {...collapseMotion()}
-                className={COLLAPSE_CLASS}
-              >
-                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border px-4 py-3">
-                  <p className="min-w-0 flex-1 text-xs text-muted">
-                    Picking up the import you started
-                    {fileName ? ` — ${fileName}` : ""}. Nothing has been added to
-                    your map yet.
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="tertiary"
-                    onPress={startOver}
-                  >
-                    Start over
-                  </Button>
-                </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-        </div>
-
         {step === "source" ? <ImportHeading /> : null}
 
         {/*
@@ -503,8 +452,12 @@ export function ImportWizard({
          * stacking. `relative` on the wrapper below is what the absolute
          * positioning is measured against.
          */}
+        {/*
+         * Keyed on the entry as well as the step: a step still on its way out is
+         * brought back, not remounted, when its key returns — see `stepEntry`.
+         */}
         <AnimatePresence mode="popLayout" initial={false}>
-          <motion.div key={step} {...stepMotion()}>
+          <motion.div key={`${step}:${stepEntry}`} {...stepMotion()}>
             {step === "source" ? (
               <SourceStep
                 mapId={map.id}

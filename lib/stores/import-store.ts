@@ -73,6 +73,18 @@ type ImportState = {
    * Deliberately not persisted: it describes this visit, not the run.
    */
   isResumed: boolean;
+  /**
+   * Bumped every time `setStep` runs, and part of the step's key in the wizard.
+   *
+   * The wizard's steps cross-fade through `AnimatePresence`, which brings a step
+   * that is still on its way out *back* rather than mounting a new one when its
+   * key returns. Exits stall while the tab is in the background, so Review →
+   * Back to columns → Continue could bring back the previous Addresses step,
+   * whose run had already started once and would not start again: the bar sat
+   * at "0 of N" for good. A key that changes on every entry makes every entry a
+   * fresh mount. Not persisted: it describes this visit.
+   */
+  stepEntry: number;
 
   sourceKind: SourceKind | null;
   fileName: string | null;
@@ -198,6 +210,7 @@ const initialState = {
   mapId: null as string | null,
   savedAt: null as number | null,
   isResumed: false,
+  stepEntry: 0,
   sourceKind: null,
   fileName: null,
   sheetReference: null as SheetReference | null,
@@ -227,7 +240,8 @@ export const useImportStore = create<ImportState>()(
     (set, get) => ({
   ...initialState,
 
-  setStep: (step) => set({ step }),
+  setStep: (step) =>
+    set((state) => ({ step, stepEntry: state.stepEntry + 1 })),
 
   setKeepInSync: (keepInSync) => set({ keepInSync }),
 
@@ -259,6 +273,7 @@ export const useImportStore = create<ImportState>()(
       // Kept across the reset: `setSource` is how a *new* file replaces an old
       // one, and the run it starts belongs to the same map the last one did.
       mapId: state.mapId,
+      stepEntry: state.stepEntry + 1,
       savedAt: Date.now(),
       sourceKind: source.kind,
       fileName: source.label,
@@ -440,7 +455,13 @@ export const useImportStore = create<ImportState>()(
    * Throw the run away. Keeps `mapId`, so the next file started on this page is
    * still recognised as belonging to this map.
    */
-  reset: () => set((state) => ({ ...initialState, mapId: state.mapId })),
+  reset: () =>
+    set((state) => ({
+      ...initialState,
+      mapId: state.mapId,
+      // Carried forward rather than reset, for the reason the field gives.
+      stepEntry: state.stepEntry + 1,
+    })),
 
   /** Stamp the run as touched now. Called by the writes that are worth resuming. */
   touch: () => set({ savedAt: Date.now() }),
@@ -497,6 +518,7 @@ type PersistedImport = Omit<
   | "loaded"
   // Describes this visit rather than the run — see the field's own note.
   | "isResumed"
+  | "stepEntry"
   | "setStep"
   | "attachTo"
   | "setSource"

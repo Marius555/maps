@@ -213,8 +213,8 @@ rewritten; it is the record of why this area is shaped as it is.
   The import wizard caps itself per step (`isWide`), animating between `max-w-2xl` and
   `max-w-full` — **`max-w-full`, because `none` is not a length and will not interpolate.**
 - **That cap is the only one; a step must not re-cap itself narrower.** The Source title
-  and the resumed-run notice are left-aligned in the wizard's wrapper, so they line up with
-  a step only while the step fills the wrapper. Source and Addresses were once
+  is left-aligned in the wizard's wrapper, so it lines up with a step only while the step
+  fills the wrapper. Source and Addresses were once
   `mx-auto max-w-2xl` inside a `max-w-5xl` wrapper, which left the (since removed) step
   trail up to 176px left of what it labelled.
 - **There is no step trail.** It was removed at the owner's request; each step says what
@@ -222,6 +222,10 @@ rewritten; it is the record of why this area is shaped as it is.
   `startOver` — `reset()` plus `persist.clearStorage()` — because picking a file jumps
   straight to Columns and a persisted run otherwise brought the user back there on every
   reload, with no way out but a banner shown only for resumed runs.
+- **A resumed run is restored silently.** The "Picking up the import you started" notice and
+  its Start over button were removed at the owner's request (2026-10-12): they followed the
+  user onto every step. Columns' Back is the one way to discard a run. `isResumed` is still
+  computed by the store's `attachTo` and is read by nothing.
 - **The Source step's two panels are both mounted and stacked in one grid cell.** The
   source is picked with two radio cards (`source-choice.tsx`, a HeroUI `RadioGroup`), which
   replaced a tab strip. The two panels differ in height, and the step is centred with
@@ -489,6 +493,35 @@ rewritten; it is the record of why this area is shaped as it is.
   thousand times. `loaded` is deliberately not persisted — it is the raw grid, it roughly
   doubles the clone, and re-picking a header row happens in the first seconds of a flow
   while resuming happens ten minutes in.
+- **The Addresses step is keyed on `stepEntry`, not on the step alone.** `AnimatePresence`
+  brings a step that is still leaving *back* when its key returns, instead of mounting a new
+  one, and exits stall in a background tab. So Review → Back to columns → Continue could
+  revive the previous `GeocodeStep`, whose start-once guard had already fired: no request,
+  "0 of N" for good. `setStep`, `setSource` and `reset` bump the counter. Observed in the
+  browser (2026-10-12), with exited steps piled up four deep in a hidden tab.
+- **Nothing in the lookup may wait without a bound.** Each chunk's request has a 35s deadline
+  (`GEOCODE_CHUNK_TIMEOUT_MS`, just over the host's 30s), `Retry-After` is obeyed up to
+  `MAX_RETRY_AFTER_MS`, the run's promise has a `.catch`, and Skip aborts the chunk in flight
+  rather than waiting for it. Each of the four used to be a way to sit at "0 of N" forever
+  with nothing said. After 20s without movement the step says the service is slow.
+- **`geocode/batch` streams one NDJSON line per address, and the bar moves per line.** It
+  used to answer once per chunk, so a 3-address file read "0 of 3" for the whole request and
+  then jumped to Review. A chunk was measured at ~750ms per lookup (Geoapify plus the usage
+  meter's writes), so a full 25 sat at 0% for ~19s. Format and failure lines:
+  `lib/import/geocode-stream.ts`. A failure partway is a line, not a status; the run keeps
+  what arrived and **retries only the unanswered addresses**. The slot and the meter are
+  released in the stream's own `finally`, since the handler returns once the headers go.
+- **One indicator: the bar, plus the address being looked up now.** No spinner and no
+  indeterminate sweep. A version with all three showed three "working" signs while the count
+  sat at 0. A finished run holds at 100% for 600ms before Review. The time estimate is
+  measured from the run; the server's `paceMs` was three times too hopeful.
+- **Open: whether Appwrite Sites passes the stream through unbuffered.** Unchecked as of
+  2026-10-12. If it buffers, the lines arrive per chunk, which is the old behaviour, and the
+  5-lookup first chunk still moves the bar early. Check it on the deployed site with a
+  `MutationObserver` on `aria-valuenow`. A sampler on a hidden tab only fires once a second.
+- **`geocode/batch` takes its in-flight slot last, directly before the `try`.** Anything
+  thrown between `inFlight()` and the `finally` that releases it held the account's slot for
+  the life of the process — every later batch a 429.
 - **One bad chunk must not end the run.** `geocode-run.ts` gives a chunk three attempts with
   a jittered backoff (the server's `Retry-After` wins when it sends one), then marks just
   that chunk's rows failed and carries on; only `MAX_CONSECUTIVE_FAILURES` chunks in a row

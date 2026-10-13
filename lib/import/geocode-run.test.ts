@@ -7,6 +7,7 @@ import {
   isRetryableStatus,
   MAX_ATTEMPTS,
   MAX_CONSECUTIVE_FAILURES,
+  MAX_RETRY_AFTER_MS,
   runGeocode,
   waitFor,
 } from "./geocode-run";
@@ -118,6 +119,10 @@ describe("isRetryableStatus", () => {
 describe("waitFor", () => {
   it("does what the server told it to, when the server said", () => {
     expect(waitFor(1000, 2000, () => 0.5)).toBe(2000);
+  });
+
+  it("does not sit still for longer than the host's own request ceiling", () => {
+    expect(waitFor(1000, 3_600_000, () => 0.5)).toBe(MAX_RETRY_AFTER_MS);
   });
 
   it("spreads its own backoff so two clients do not return together", () => {
@@ -304,6 +309,148 @@ describe("runGeocode", () => {
     expect(answered).toEqual(["k0", "k1"]);
   });
 
+  it("stops mid-chunk when Skip aborted the request, without retrying it", async () => {
+    // Skip aborts the in-flight fetch, which rejects with no status — the shape
+    // a dropped connection has, and a dropped connection is retried.
+    let stopped = false;
+    const send = vi.fn(async () => {
+      stopped = true;
+      throw new Error("The operation was aborted.");
+    });
+
+    const { options, abandoned, waits } = harness({
+      lookups: lookups(3),
+      batchSize: 2,
+      send,
+      shouldStop: () => stopped,
+    });
+
+    const summary = await runGeocode(options);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(waits).toEqual([]);
+    expect(abandoned).toEqual(["k0", "k1"]);
+    expect(summary).toEqual({
+      completed: 0,
+      failed: 2,
+      wasStopped: true,
+      error: null,
+    });
+  });
+
+  it("sends a smaller first chunk so the bar moves early", async () => {
+    const sizes: number[] = [];
+    const ranges: [number, number][] = [];
+
+    await runGeocode(
+      harness({
+        lookups: lookups(12),
+        batchSize: 5,
+        firstBatchSize: 2,
+        send: async ({ rows }: { rows: { key: string; address: string }[] }) => {
+          sizes.push(rows.length);
+          return { results: resultsFor(rows) };
+        },
+        onChunkStart: (from: number, to: number) => ranges.push([from, to]),
+      }).options,
+    );
+
+    expect(sizes).toEqual([2, 5, 5]);
+    expect(ranges).toEqual([
+      [0, 2],
+      [2, 7],
+      [7, 12],
+    ]);
+  });
+
+  it("moves the count per answer as a chunk streams in", async () => {
+    const progress: number[] = [];
+    const answeredAt: number[] = [];
+
+    await runGeocode(
+      harness({
+        lookups: lookups(3),
+        send: async ({ rows, onResult }) => {
+          for (const result of resultsFor(rows)) onResult(result);
+          return {};
+        },
+        onResult: () => answeredAt.push(progress.length),
+        onProgress: (done: number) => progress.push(done),
+      }).options,
+    );
+
+    // One step per address, inside the one request, then the chunk's close.
+    expect(progress).toEqual([1, 2, 3, 3]);
+    expect(answeredAt).toEqual([0, 1, 2]);
+  });
+
+  it("retries only the addresses a failed chunk had not answered yet", async () => {
+    const asked: string[][] = [];
+
+    const { options, answered, abandoned } = harness({
+      lookups: lookups(4),
+      send: async ({ rows, onResult }) => {
+        asked.push(rows.map((row) => row.key));
+
+        // The first attempt answers two, then the connection drops.
+        if (asked.length === 1) {
+          for (const result of resultsFor(rows.slice(0, 2))) onResult(result);
+          throw httpError(502);
+        }
+
+        for (const result of resultsFor(rows)) onResult(result);
+        return {};
+      },
+    });
+
+    const summary = await runGeocode(options);
+
+    expect(asked).toEqual([
+      ["k0", "k1", "k2", "k3"],
+      ["k2", "k3"],
+    ]);
+    expect(answered).toEqual(["k0", "k1", "k2", "k3"]);
+    expect(abandoned).toEqual([]);
+    expect(summary).toEqual({ completed: 4, failed: 0, wasStopped: false, error: null });
+  });
+
+  it("keeps what streamed in before Skip, and abandons only the rest", async () => {
+    let stopped = false;
+
+    const { options, answered, abandoned } = harness({
+      lookups: lookups(3),
+      send: async ({ rows, onResult }) => {
+        onResult(resultsFor(rows)[0]!);
+        stopped = true;
+        throw new Error("The operation was aborted.");
+      },
+      shouldStop: () => stopped,
+    });
+
+    const summary = await runGeocode(options);
+
+    expect(answered).toEqual(["k0"]);
+    expect(abandoned).toEqual(["k1", "k2"]);
+    expect(summary).toEqual({ completed: 1, failed: 2, wasStopped: true, error: null });
+  });
+
+  it("counts an answer once, however it arrives", async () => {
+    // Streamed, and then returned again at the end by the same request.
+    const { options, answered } = harness({
+      lookups: lookups(2),
+      send: async ({ rows, onResult }) => {
+        const results = resultsFor(rows);
+        for (const result of results) onResult(result);
+        return { results };
+      },
+    });
+
+    const summary = await runGeocode(options);
+
+    expect(answered).toEqual(["k0", "k1"]);
+    expect(summary.completed).toBe(2);
+  });
+
   it("passes the server's reported pace back to the caller", async () => {
     const paces: (number | undefined)[] = [];
 
@@ -317,7 +464,8 @@ describe("runGeocode", () => {
       }).options,
     );
 
-    expect(paces).toEqual([220]);
+    // Progress is reported per answer too; only the chunk's close carries a pace.
+    expect(paces.filter((pace) => pace !== undefined)).toEqual([220]);
   });
 
   it("has nothing to do with an empty plan", async () => {

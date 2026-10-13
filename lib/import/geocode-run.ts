@@ -53,9 +53,28 @@ export const MAX_CONSECUTIVE_FAILURES = 5;
  */
 export const BACKOFF_MS = [1000, 4000] as const;
 
+/**
+ * The longest a `Retry-After` is obeyed for.
+ *
+ * The server's number wins over our backoff, but not without limit: a header
+ * that said an hour would leave the bar sitting still for an hour with nothing
+ * on screen saying why. Thirty seconds is the host's own request ceiling, so no
+ * limiter of ours has a reason to ask for longer.
+ */
+export const MAX_RETRY_AFTER_MS = 30_000;
+
+/**
+ * One request for a chunk's rows.
+ *
+ * `onResult` is called per answer as it arrives, when the transport streams
+ * (`lib/import/geocode-stream.ts`), and that is what moves the bar per address.
+ * A transport that does not stream returns them as `results` instead, and they
+ * are handed over then; an answer given both ways counts once.
+ */
 export type GeocodeSend = (input: {
   rows: { key: string; address: string }[];
-}) => Promise<{ results: BatchGeocodeResult[]; paceMs?: number }>;
+  onResult: (result: BatchGeocodeResult) => void;
+}) => Promise<{ results?: BatchGeocodeResult[]; paceMs?: number }>;
 
 export type GeocodeRunSummary = {
   /** Lookups that came back with an answer, good or "not found". */
@@ -97,7 +116,9 @@ export function isRetryableStatus(status: number | undefined): boolean {
 export async function runGeocode({
   lookups,
   batchSize,
+  firstBatchSize = batchSize,
   send,
+  onChunkStart,
   onProgress,
   onResult,
   shouldStop,
@@ -106,11 +127,22 @@ export async function runGeocode({
 }: {
   lookups: GeocodeLookup[];
   batchSize: number;
+  /**
+   * The size of the first chunk only. Kept small so the bar moves early even
+   * where a host buffers the stream and a chunk only lands whole. It costs one
+   * more round trip and no extra lookups.
+   */
+  firstBatchSize?: number;
   send: GeocodeSend;
   /**
-   * After each chunk settles, however it settled. `paceMs` is the server's own
-   * reported spacing, so the caller's time estimate can stop being a guess after
-   * the first chunk.
+   * Before each chunk is sent, as the index range `[from, to)` into `lookups`,
+   * so the caller can say which addresses are being looked up right now.
+   */
+  onChunkStart?: (from: number, to: number) => void;
+  /**
+   * After every answer — as each one streams in — and once more when a chunk
+   * settles, carrying the server's reported `paceMs` if it sent one. `done` is
+   * lookups answered or abandoned so far.
    */
   onProgress: (done: number, paceMs?: number) => void;
   /**
@@ -119,7 +151,11 @@ export async function runGeocode({
    * only it can run the store's own issue derivation.
    */
   onResult: (lookup: GeocodeLookup, result: BatchGeocodeResult | null) => void;
-  /** Polled between chunks. The Skip button, and nothing else. */
+  /**
+   * Polled between chunks, and again when a chunk's request fails, so a Skip
+   * that aborted the in-flight request ends the run rather than being retried.
+   * The Skip button, and nothing else.
+   */
   shouldStop: () => boolean;
   /** Injected for tests; the real one is `setTimeout`. */
   sleep?: (ms: number) => Promise<void>;
@@ -130,41 +166,83 @@ export async function runGeocode({
   let failed = 0;
   let consecutiveFailures = 0;
 
-  for (let start = 0; start < lookups.length; start += batchSize) {
+  let size = Math.max(1, Math.min(firstBatchSize, batchSize));
+
+  for (let start = 0; start < lookups.length; start += size, size = batchSize) {
     if (shouldStop()) {
       return { completed, failed, wasStopped: true, error: null };
     }
 
-    const chunk = lookups.slice(start, start + batchSize);
-    const outcome = await sendWithRetry({ chunk, send, sleep, jitter });
+    const chunk = lookups.slice(start, start + size);
+    onChunkStart?.(start, start + chunk.length);
 
-    if (outcome.results) {
-      const byKey = new Map(
-        outcome.results.map((result) => [result.key, result] as const),
-      );
+    /*
+     * Answers are handed over one at a time, as they arrive, and each lookup
+     * only once — keyed on its first row, which is what `sendWithRetry` sends.
+     * Whatever is answered here is never asked again, so a chunk that fails
+     * halfway is retried for the rest of its addresses, not all of them.
+     */
+    const byKey = new Map(chunk.map((lookup) => [lookup.keys[0] as string, lookup]));
+    const answered = new Set<GeocodeLookup>();
 
-      for (const lookup of chunk) {
-        // Keyed on the lookup's first row, which is what `chunkRows` sends.
-        const result = byKey.get(lookup.keys[0] as string);
-        onResult(lookup, result ?? null);
+    const deliver = (result: BatchGeocodeResult | null, lookup?: GeocodeLookup) => {
+      const target = lookup ?? (result ? byKey.get(result.key) : undefined);
+      if (!target || answered.has(target)) return;
+
+      answered.add(target);
+      onResult(target, result);
+      completed += 1;
+      onProgress(completed + failed);
+    };
+
+    const unanswered = () => chunk.filter((lookup) => !answered.has(lookup));
+
+    const outcome = await sendWithRetry({
+      unanswered,
+      deliver,
+      send,
+      sleep,
+      jitter,
+      shouldStop,
+    });
+
+    /*
+     * Whatever is still unanswered gets no answer. Its rows are told so now
+     * rather than left `pending`, because "pending" in the review step means an
+     * answer is still coming and none is coming for these.
+     */
+    const abandon = () => {
+      const left = unanswered();
+
+      for (const lookup of left) {
+        answered.add(lookup);
+        onResult(lookup, null);
       }
 
-      completed += chunk.length;
+      failed += left.length;
+      if (left.length > 0) onProgress(completed + failed);
+    };
+
+    if (outcome.wasStopped) {
+      abandon();
+      return { completed, failed, wasStopped: true, error: null };
+    }
+
+    if (outcome.ok) {
+      // A lookup the server answered the chunk without mentioning: its rows
+      // are flagged as before, and the run goes on.
+      for (const lookup of unanswered()) deliver(null, lookup);
+
       consecutiveFailures = 0;
       onProgress(completed + failed, outcome.paceMs);
       continue;
     }
 
-    /*
-     * The chunk is being skipped, not retried again. Its rows are told so now
-     * rather than left `pending`, because "pending" in the review step means an
-     * answer is still coming and no answer is coming for these.
-     */
-    for (const lookup of chunk) onResult(lookup, null);
-
-    failed += chunk.length;
-    consecutiveFailures += 1;
-    onProgress(completed + failed, undefined);
+    // Anything landing in this chunk means the service is answering, if
+    // unevenly — so the count of failures in a row starts again at this one.
+    const landedAny = unanswered().length < chunk.length;
+    abandon();
+    consecutiveFailures = landedAny ? 1 : consecutiveFailures + 1;
 
     if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
       return {
@@ -182,65 +260,84 @@ export async function runGeocode({
 }
 
 type ChunkOutcome = {
-  results: BatchGeocodeResult[] | null;
+  ok: boolean;
   paceMs?: number;
   error?: string;
+  wasStopped?: boolean;
 };
 
 async function sendWithRetry({
-  chunk,
+  unanswered,
+  deliver,
   send,
   sleep,
   jitter,
+  shouldStop,
 }: {
-  chunk: GeocodeLookup[];
+  /** The chunk's lookups still without an answer, asked fresh each attempt. */
+  unanswered: () => GeocodeLookup[];
+  deliver: (result: BatchGeocodeResult) => void;
   send: GeocodeSend;
   sleep: (ms: number) => Promise<void>;
   jitter: () => number;
+  shouldStop: () => boolean;
 }): Promise<ChunkOutcome> {
-  const rows = chunk.map((lookup) => ({
-    // One row per distinct address. `key` is the first draft wearing it, and the
-    // caller fans the answer back out to the rest — see `geocode-plan.ts`.
-    key: lookup.keys[0] as string,
-    address: lookup.address,
-  }));
-
   let lastMessage: string | undefined;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const rows = unanswered().map((lookup) => ({
+      // One row per distinct address. `key` is the first draft wearing it, and
+      // the caller fans the answer back out to the rest — see `geocode-plan.ts`.
+      key: lookup.keys[0] as string,
+      address: lookup.address,
+    }));
+
+    // Everything landed before a failure; there is nothing left to ask.
+    if (rows.length === 0) return { ok: true };
+
     try {
-      const { results, paceMs } = await send({ rows });
-      return { results, paceMs };
+      const { results, paceMs } = await send({ rows, onResult: deliver });
+
+      for (const result of results ?? []) deliver(result);
+
+      return { ok: true, paceMs };
     } catch (error) {
+      // An aborted request carries no status, so it would otherwise read as a
+      // dropped connection and be sent again.
+      if (shouldStop()) return { ok: false, wasStopped: true };
+
       const status = statusOf(error);
       lastMessage = messageOf(error);
 
-      if (!isRetryableStatus(status)) return { results: null, error: lastMessage };
+      if (!isRetryableStatus(status)) return { ok: false, error: lastMessage };
 
       const backoff = BACKOFF_MS[attempt];
       if (backoff === undefined) break;
 
       await sleep(waitFor(backoff, retryAfterOf(error), jitter));
+
+      if (shouldStop()) return { ok: false, wasStopped: true };
     }
   }
 
-  return { results: null, error: lastMessage };
+  return { ok: false, error: lastMessage };
 }
 
 /**
  * How long to wait before the next attempt.
  *
- * The server's own `Retry-After` wins outright when it sent one — it knows when
- * its limiter resets and we are guessing. Otherwise the backoff is spread across
- * ±25%, so two browsers that hit the same limit in the same second do not come
- * back in the same second as well and trip it again together.
+ * The server's own `Retry-After` wins when it sent one — it knows when its
+ * limiter resets and we are guessing — up to `MAX_RETRY_AFTER_MS`. Otherwise
+ * the backoff is spread across ±25%, so two browsers that hit the same limit in
+ * the same second do not come back in the same second as well and trip it again
+ * together.
  */
 export function waitFor(
   backoffMs: number,
   retryAfterMs: number | undefined,
   jitter: () => number,
 ): number {
-  if (retryAfterMs !== undefined) return retryAfterMs;
+  if (retryAfterMs !== undefined) return Math.min(retryAfterMs, MAX_RETRY_AFTER_MS);
 
   return Math.round(backoffMs * (0.75 + jitter() * 0.5));
 }

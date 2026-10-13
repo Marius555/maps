@@ -63,6 +63,8 @@ export async function apiUpload<T>(
 async function unwrap<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T;
 
+  if (!response.ok) throw await errorFromResponse(response);
+
   let body: unknown;
   try {
     body = await response.json();
@@ -70,18 +72,31 @@ async function unwrap<T>(response: Response): Promise<T> {
     body = null;
   }
 
-  if (!response.ok) {
-    const error = (body as ApiErrorBody | null)?.error;
-    throw new ApiError(
-      error?.code ?? "internal_error",
-      error?.message ?? "Something broke on our side. Try again in a moment.",
-      response.status,
-      error?.fields,
-      retryAfterMs(response),
-    );
+  return (body as { data: T }).data;
+}
+
+/**
+ * The `ApiError` a failed response stands for. Exported for the one caller that
+ * reads a success as a stream rather than as JSON (`lib/import/geocode-stream.ts`)
+ * and still has to fail exactly the way `apiFetch` does.
+ */
+export async function errorFromResponse(response: Response): Promise<ApiError> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
   }
 
-  return (body as { data: T }).data;
+  const error = (body as ApiErrorBody | null)?.error;
+
+  return new ApiError(
+    error?.code ?? "internal_error",
+    error?.message ?? "Something broke on our side. Try again in a moment.",
+    response.status,
+    error?.fields,
+    retryAfterMs(response),
+  );
 }
 
 /**

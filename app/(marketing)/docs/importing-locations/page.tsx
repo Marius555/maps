@@ -288,8 +288,9 @@ export default function ImportingLocationsPage() {
 
         <DocsCallout>
           <p>
-            A long import survives a reload: the wizard offers to pick up where
-            it stopped. <strong>Start over</strong> throws the run away.
+            A long import survives a reload: the wizard picks up where it
+            stopped. To throw the run away, press <strong>Back</strong> on the
+            columns step.
           </p>
         </DocsCallout>
       </DocsSection>

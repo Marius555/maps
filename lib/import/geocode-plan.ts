@@ -91,30 +91,30 @@ export function planGeocode(drafts: DraftPlace[]): GeocodePlan {
 }
 
 /**
- * Roughly how long a plan will take, in milliseconds.
+ * Where the file's other rows went, for the sentence above the progress bar.
  *
- * Said out loud before the run starts, because the honest answer for a large
- * file is minutes and a progress bar that appears with no number beside it
- * reads as a hang. It is deliberately a floor plus a per-request allowance
- * rather than a measured average: we know the pace the server is holding
- * (`paceMs`, which the batch endpoint reports so this is not a client-side copy
- * of a provider's rate limit), and the rest is one round trip's latency per
- * chunk, which the caller refines once the first chunk has actually landed.
+ * The bar counts only the rows that need an address looked up, so a 40-row file
+ * with 37 rows of coordinates says "0 of 3", which reads as the import having
+ * lost most of the file unless the screen also says where the other 37 are.
  */
-export function estimateGeocodeMs({
-  lookupCount,
-  paceMs,
-  batchSize,
-  latencyMs = 400,
-}: {
-  lookupCount: number;
-  paceMs: number;
-  batchSize: number;
-  latencyMs?: number;
-}): number {
-  if (lookupCount === 0) return 0;
+export type GeocodeScope = {
+  /** Every row in the run. */
+  totalCount: number;
+  /** Rows that already have a pin: coordinates from the file, or looked up earlier in a resumed run. */
+  placedCount: number;
+  /** Rows that neither have a pin nor will get one here: no address, or no name. Review flags them. */
+  skippedCount: number;
+};
 
-  const chunks = Math.ceil(lookupCount / batchSize);
+export function summarizeGeocodeScope(drafts: DraftPlace[]): GeocodeScope {
+  const needing = draftsNeedingGeocode(drafts).length;
+  const placedCount = drafts.filter(
+    (draft) => draft.lat !== null && draft.lng !== null,
+  ).length;
 
-  return lookupCount * paceMs + chunks * latencyMs;
+  return {
+    totalCount: drafts.length,
+    placedCount,
+    skippedCount: Math.max(drafts.length - needing - placedCount, 0),
+  };
 }

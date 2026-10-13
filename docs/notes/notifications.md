@@ -49,5 +49,5 @@ lists them. They are written from the operator console's **Notifications** page
 | Seen stamp | `lib/notifications/seen.ts` |
 | Routes | `GET /api/notifications`, `POST /api/notifications/seen` (open to unconfirmed accounts) |
 | Console | `app/admin/notifications/page.tsx`, `components/admin/sections/notifications/**`, `POST /api/admin/notifications`, `DELETE /api/admin/notifications/[id]`, `lib/admin/metrics/notifications.ts`, `lib/repositories/admin/notifications.ts` |
-| Client | `lib/query/notifications.ts`, `components/notifications/**` |
+| Client | `lib/query/notifications.ts`, `components/notifications/**` — an inbox in `Measure`: `notification-list` (New / Earlier, one row open at a time), `notification-section`, `notification-item` (an accordion row, also the console's preview), `notification-time` |
 | Chrome | `badge` on `NavItem` (count expanded, dot collapsed); dot on the mobile menu button |

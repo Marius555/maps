@@ -1,8 +1,14 @@
+import { NextResponse } from "next/server";
+
+import type { ApiErrorBody } from "@/lib/api/error-codes";
 import { geocoderFailure } from "@/lib/api/geocoder-errors";
-import { ok } from "@/lib/api/responses";
 import { parseBody, withAuth } from "@/lib/api/route";
 import { getGeocoder, statusFor } from "@/lib/geocoding";
-import type { BatchGeocodeResult } from "@/lib/geocoding/types";
+import {
+  GEOCODE_STREAM_CONTENT_TYPE,
+  type GeocodeStreamError,
+  type GeocodeStreamLine,
+} from "@/lib/import/geocode-stream";
 import { getMap } from "@/lib/repositories/maps.repository";
 import { assertPlaceHeadroom } from "@/lib/repositories/places.repository";
 import {
@@ -16,7 +22,8 @@ import { geocodeBatchSchema } from "@/lib/validation/geocode.schema";
 type Params = { id: string };
 
 /*
- * A chunk of 25 rows spends around six seconds inside the provider's own pacing.
+ * A chunk of 25 rows was measured at about nineteen seconds (2026-10-12: roughly
+ * 750ms a lookup, the provider's pacing plus its latency plus the usage meter).
  * There used to be a `maxDuration = 60` here; it is a Vercel setting and does
  * nothing on Appwrite Sites, which cuts every request at 30 seconds (CLAUDE.md
  * §12). What protects the bill from a chunk killed mid-flight is `lookupMeter`,
@@ -87,59 +94,131 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
    * of this batch is recorded, so two batches side by side could each pass it
    * with room for only one; the import wizard sends them one after another
    * anyway, and a 429 here is what its retry already waits out.
+   *
+   * Taken last, directly before the `try` whose `finally` releases it. Anything
+   * that can throw between the two — `getGeocoder()` with a provider
+   * misconfigured, say — would otherwise hold this account's slot for the life
+   * of the process, and every later batch would be refused with a 429.
    */
-  const release = inFlight(`geocodeBatch:${ctx.userId}`, IN_FLIGHT_LIMITS.geocodeBatch);
   const meter = lookupMeter(ctx.userId);
-  const geocoder = getGeocoder();
+  const release = inFlight(`geocodeBatch:${ctx.userId}`, IN_FLIGHT_LIMITS.geocodeBatch);
 
-  try {
-    const results: BatchGeocodeResult[] = [];
+  /*
+   * Each answer is written the moment it is found — `lib/import/geocode-stream.ts`
+   * has the format and the reason. Everything above has already answered any
+   * refusal as an ordinary JSON error; from here the status is 200 and a failure
+   * is a line.
+   *
+   * The slot and the meter are released in the stream's own `finally`, not the
+   * handler's: the handler returns as soon as the headers go, while the lookups
+   * are still running.
+   */
+  let isCancelled = false;
 
-    // Sequential by design. The provider throttle serialises these anyway, and
-    // Promise.all would only queue them all up front with no ordering benefit.
-    for (const row of input.rows) {
-      if (!row.address) {
-        results.push({
-          key: row.key,
-          candidate: null,
-          alternatives: [],
-          status: "failed",
-        });
-        continue;
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (line: GeocodeStreamLine) => {
+        if (!isCancelled) controller.enqueue(encodeLine(line));
+      };
+
+      try {
+        const geocoder = getGeocoder();
+
+        // Sequential by design. The provider throttle serialises these anyway,
+        // and Promise.all would only queue them all up front with no ordering
+        // benefit — and the order is what the progress bar walks.
+        for (const row of input.rows) {
+          // Skip aborts the request; stop spending lookups on an answer nobody
+          // is waiting for.
+          if (isCancelled || request.signal.aborted) break;
+
+          if (!row.address) {
+            send({
+              result: { key: row.key, candidate: null, alternatives: [], status: "failed" },
+            });
+            continue;
+          }
+
+          const candidates = await geocoder.search({
+            address: row.address,
+            countryCode: input.countryCode,
+            limit: 5,
+          });
+          await meter.spent();
+
+          const [best = null, ...alternatives] = candidates;
+
+          send({
+            result: { key: row.key, candidate: best, alternatives, status: statusFor(best) },
+          });
+        }
+
+        /*
+         * The pacing goes back with the results. A number of milliseconds and
+         * never the provider's name: which service answered stays inside
+         * /lib/geocoding (§7).
+         */
+        send({ done: { paceMs: geocoder.paceMs } });
+      } catch (error) {
+        send({ error: await failureOf(error) });
+      } finally {
+        await meter.flush();
+        release();
+
+        if (!isCancelled) controller.close();
       }
+    },
 
-      const candidates = await geocoder.search({
-        address: row.address,
-        countryCode: input.countryCode,
-        limit: 5,
-      });
-      await meter.spent();
+    cancel() {
+      isCancelled = true;
+    },
+  });
 
-      const [best = null, ...alternatives] = candidates;
-
-      results.push({
-        key: row.key,
-        candidate: best,
-        alternatives,
-        status: statusFor(best),
-      });
-    }
-
-    /*
-     * The pacing goes back with the results so the wizard can say how long the
-     * rest of the file will take.
-     *
-     * A number of milliseconds and never the provider's name: which service
-     * answered stays inside /lib/geocoding (§7), and what leaves the boundary is
-     * the one fact the caller actually needs. It is reported per chunk rather
-     * than fetched once, because it costs nothing here and it means the estimate
-     * corrects itself if the pace is changed under a running import.
-     */
-    return ok({ results, paceMs: geocoder.paceMs });
-  } catch (error) {
-    return geocoderFailure(error);
-  } finally {
-    await meter.flush();
-    release();
-  }
+  return new NextResponse(stream, {
+    status: 200,
+    headers: {
+      "content-type": GEOCODE_STREAM_CONTENT_TYPE,
+      // Every layer that might hold the lines back until the end, told not to.
+      "cache-control": "no-cache, no-transform",
+      "x-accel-buffering": "no",
+    },
+  });
 }, { rateLimit: "metered" });
+
+const encoder = new TextEncoder();
+
+function encodeLine(line: GeocodeStreamLine): Uint8Array {
+  return encoder.encode(`${JSON.stringify(line)}
+`);
+}
+
+/**
+ * A failure partway through, as the line that says so.
+ *
+ * Mapped by `geocoderFailure`, the same function that answered it when this was
+ * one JSON response, so the status, the message and the `Retry-After` the run's
+ * retry policy reads are all unchanged. Anything it does not recognise is a bug,
+ * logged here because nothing above this will see it.
+ */
+async function failureOf(error: unknown): Promise<GeocodeStreamError> {
+  try {
+    const response = geocoderFailure(error);
+    const body = (await response.json()) as ApiErrorBody;
+    const retryAfter = Number(response.headers.get("retry-after"));
+
+    return {
+      code: body.error.code,
+      message: body.error.message,
+      status: response.status,
+      ...(retryAfter > 0 ? { retryAfterMs: retryAfter * 1000 } : {}),
+    };
+  } catch {
+    console.error("Geocode batch failed partway", error);
+
+    return {
+      code: "internal_error",
+      message: "Something broke on our side. Try again in a moment.",
+      status: 500,
+    };
+  }
+}

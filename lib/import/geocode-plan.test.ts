@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import type { DraftPlace } from "./draft-places";
 import {
-  estimateGeocodeMs,
   normalizeAddress,
   planGeocode,
+  summarizeGeocodeScope,
 } from "./geocode-plan";
 
 /**
@@ -133,32 +133,23 @@ describe("planGeocode", () => {
   });
 });
 
-describe("estimateGeocodeMs", () => {
-  it("is the pacing plus one round trip per chunk", () => {
-    expect(
-      estimateGeocodeMs({
-        lookupCount: 50,
-        paceMs: 220,
-        batchSize: 25,
-        latencyMs: 400,
-      }),
-    ).toBe(50 * 220 + 2 * 400);
+describe("summarizeGeocodeScope", () => {
+  it("accounts for every row the progress bar does not count", () => {
+    const scope = summarizeGeocodeScope([
+      draft({ key: "a" }),
+      draft({ key: "b", lat: 54.6, lng: 25.2, status: "manual" }),
+      draft({ key: "c", lat: 54.7, lng: 25.3, status: "manual" }),
+      draft({ key: "d", address: "" }),
+    ]);
+
+    expect(scope).toEqual({ totalCount: 4, placedCount: 2, skippedCount: 1 });
   });
 
-  it("is zero when there is nothing to look up", () => {
-    expect(
-      estimateGeocodeMs({ lookupCount: 0, paceMs: 220, batchSize: 25 }),
-    ).toBe(0);
-  });
-
-  it("still charges a whole round trip for a part-full chunk", () => {
-    expect(
-      estimateGeocodeMs({
-        lookupCount: 1,
-        paceMs: 220,
-        batchSize: 25,
-        latencyMs: 400,
-      }),
-    ).toBe(220 + 400);
+  it("has nothing to explain when every row needs a lookup", () => {
+    expect(summarizeGeocodeScope([draft({ key: "a" }), draft({ key: "b" })])).toEqual({
+      totalCount: 2,
+      placedCount: 0,
+      skippedCount: 0,
+    });
   });
 });
