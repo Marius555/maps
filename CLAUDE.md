@@ -175,6 +175,7 @@ npm run release -- patch|minor|major  # bump, CHANGELOG, commit + tag (never pus
 npm run setup:appwrite  # create missing tables/columns/indexes from scripts/appwrite-schema.mjs
 npm run setup:r2        # snapshot bucket: custom domain, CORS, zone cache + header rules
 npm run deploy:cdn      # embed + gazetteer -> cdn.pinglide.com (skips unchanged files)
+npm run deploy:site     # build + upload to Appwrite Sites; the Deploy workflow runs it (musl only; --no-upload locally)
 npm run setup:lemon     # find the plan variants, write their ids to .env, configure the webhook
 npm run setup:lemon -- --verify  # check .env's ids against the store; non-zero if they disagree
 npm run setup:sheet-sync  # configure + deploy the googleSheetsUpdate function (every 30 min)
@@ -439,6 +440,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `lib/news/**`, `components/news/**`, `app/(marketing)/news/**`, `app/admin/news/**`, `app/api/admin/news/**`, `components/admin/sections/news/**`, `lib/repositories/news.repository.ts` | `docs/notes/news.md` |
 | `documents/legal/**`, `lib/legal/**`, `components/legal/**`, the `legal` links in `brand.json` | `documents/legal/README.md` |
 | `lib/limits/**`, `lib/rate-limit/**`, `lib/api/route.ts`'s wrappers, `rollBackIfOverLimit`, `ownerPermissions`, `scripts/migrate-permissions.mjs` | `docs/notes/limits.md` |
+| `scripts/deploy-site.mjs`, `.github/workflows/deploy.yml`, `output`/`typescript` in `next.config.ts` | `docs/notes/deploy.md` |
 | `scripts/release.mjs`, `scripts/upload-cdn.mjs`, `scripts/build-info.mjs`, `embed/channel.mjs`, `lib/version.ts`, `app/api/version/**`, `CHANGELOG.md` | `docs/notes/versioning.md` |
 | `distribution/**`, `lib/connect/**`, `components/connect/**`, `app/(auth)/connect/**`, `app/api/connect/**`, `lib/auth/oauth-next.ts` | `docs/notes/distribution.md` |
 | `app/admin/**`, `app/(auth)/login/admin/**`, `app/api/admin/**`, `components/admin/**`, `lib/admin/**`, `lib/repositories/admin/**`, `lib/api-usage/**`, `lib/repositories/{api-calls,email-log}.repository.ts` | `docs/notes/admin.md` |
@@ -782,7 +784,10 @@ Each of these is a week not spent getting a paying customer. If one seems necess
 - **Hosting is Appwrite Sites.** No request may run past the site timeout (15s default, 30s
   max), and Sites has no cron — scheduled work is an Appwrite Function (up to 900s when run
   asynchronously) calling a secret-guarded route in bounded steps. `maxDuration` exports are
-  Vercel-only and do nothing here.
+  Vercel-only and do nothing here. **Appwrite cannot build this app**: a cold `next build`
+  peaks at ~2.6GB and the site's 2GB build box kills it. GitHub Actions builds it
+  (`.github/workflows/deploy.yml`, in `node:22-alpine` for musl's `sharp`) and uploads a
+  standalone build that Appwrite only unpacks — `docs/notes/deploy.md`.
 - **Google Maps is not an option anywhere in this codebase.** Their terms forbid storing business names and addresses, cap coordinate caching at 30 days, and require Places results to be shown on a Google map. Our model breaks all three.
 - **Nominatim's public API forbids autocomplete and bulk use.** If we self-host geocoding, use Photon (prebuilt GraphHopper dumps, runs as a separate service on its own VPS — it is not loaded into Appwrite).
 - **A licence and a demo server's usage policy are different things, and confusing them has cost time.** Every component of this stack — OSM data (ODbL), OpenFreeMap, OSRM (BSD-2), MapLibre and PMTiles (BSD-3/MIT) — permits commercial use outright, and nothing here has ever claimed otherwise. What is restricted is running production traffic through the free *demo endpoints* those projects host. Verified September 2026, and the three do not have the same answer:

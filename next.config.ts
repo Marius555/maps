@@ -103,6 +103,22 @@ const nextConfig: NextConfig = {
     staleTimes: { dynamic: 30 },
   },
 
+  /*
+   * The deploy workflow's build (docs/notes/deploy.md). Appwrite Sites cannot
+   * build this app — its build box runs out of memory — so GitHub Actions builds
+   * it and uploads the result.
+   *
+   * - `standalone`: open-runtimes' Next.js bundler, which Appwrite runs after
+   *   the (no-op) build command, detects `.next/standalone/server.js` and starts
+   *   it. Opt-in, because `next start` and everything local assume the default.
+   * - The type check: the workflow runs `npm run check` first, so the build
+   *   need not repeat it. A local `npm run build` still checks.
+   */
+  output: process.env.BUILD_STANDALONE === "true" ? "standalone" : undefined,
+  typescript: {
+    ignoreBuildErrors: process.env.SKIP_BUILD_TYPECHECK === "true",
+  },
+
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

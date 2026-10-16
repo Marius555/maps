@@ -1,0 +1,54 @@
+name: Deploy
+
+# Builds the site here and uploads the finished build to Appwrite Sites, which
+# cannot build it itself: its build box runs out of memory on `next build`.
+# What scripts/deploy-site.mjs does, and why: docs/notes/deploy.md.
+#
+# Repository secrets (Settings -> Secrets and variables -> Actions):
+#   NEXT_PUBLIC_APPWRITE_ENDPOINT, NEXT_PUBLIC_APPWRITE_PROJECT_ID
+#   APPWRITE_DEPLOY_KEY  an Appwrite API key with sites.read and sites.write
+#   APPWRITE_SITE_ID     the site's id
+#
+# Nothing else. The build's own environment (every NEXT_PUBLIC_* value, the
+# server's keys) is read from the site's variables in the Appwrite console at
+# deploy time, so there is one place to set them.
+#
+# Disconnect the repository from the site in Appwrite (Site -> Settings -> Git),
+# or every push also starts an Appwrite build that fails the same way.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    # Alpine because the Appwrite runtime is Alpine: standalone tracing copies the
+    # native `sharp` npm installed, and it has to be musl's. The major version is
+    # the site's buildRuntime (node-22); the script refuses a mismatch.
+    container: node:22-alpine
+    steps:
+      - name: Install build tools
+        run: apk add --no-cache git tar
+
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck, lint, test
+        run: npm run check
+
+      - name: Build and deploy
+        run: node scripts/deploy-site.mjs
+        env:
+          NEXT_PUBLIC_APPWRITE_ENDPOINT: ${{ secrets.NEXT_PUBLIC_APPWRITE_ENDPOINT }}
+          NEXT_PUBLIC_APPWRITE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_APPWRITE_PROJECT_ID }}
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_DEPLOY_KEY }}
+          APPWRITE_SITE_ID: ${{ secrets.APPWRITE_SITE_ID }}
+          BUILD_COMMIT: ${{ github.sha }}

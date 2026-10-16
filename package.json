@@ -28,6 +28,7 @@
     "setup:appwrite": "node --env-file=.env scripts/setup-appwrite.mjs",
     "setup:r2": "node --env-file=.env scripts/setup-r2.mjs",
     "deploy:cdn": "node --env-file=.env scripts/upload-cdn.mjs",
+    "deploy:site": "node scripts/deploy-site.mjs",
     "setup:lemon": "node --env-file=.env scripts/setup-lemon.mjs",
     "setup:sheet-sync": "node --env-file=.env scripts/setup-sheet-sync.mjs",
     "release": "node scripts/release.mjs",
