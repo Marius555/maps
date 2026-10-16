@@ -66,6 +66,13 @@ export function PublishAction({ mapId }: { mapId: string }) {
         Publish
       </Button>
 
+      {/* Terms §10.4: publishing confirms the owner checked what the map
+          shows, so it is said beside the button that does it. */}
+      <p className="text-xs text-muted text-pretty">
+        Check every location before you publish — you’re responsible for where
+        each pin sits.
+      </p>
+
       <VerifyEmailNotice id={noteId} />
     </div>
   );

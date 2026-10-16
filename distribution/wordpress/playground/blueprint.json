@@ -7,6 +7,10 @@
 			"step": "defineWpConfigConsts",
 			"consts": { "PINGLIDE_APP_URL": "http://localhost:3000" }
 		},
-		{ "step": "activatePlugin", "pluginPath": "pinglide/pinglide.php" }
+		{ "step": "activatePlugin", "pluginPath": "pinglide/pinglide.php" },
+		{
+			"step": "installPlugin",
+			"pluginData": { "resource": "wordpress.org/plugins", "slug": "plugin-check" }
+		}
 	]
 }

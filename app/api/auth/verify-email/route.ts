@@ -2,8 +2,7 @@ import { after, NextResponse } from "next/server";
 
 import { noContent } from "@/lib/api/responses";
 import { parseBody, withoutAuth } from "@/lib/api/route";
-import { findUserByEmail, markEmailVerified } from "@/lib/auth/account";
-import { setSessionCookie } from "@/lib/auth/session-cookie";
+import { findUserByEmail, markEmailVerified, revokeSession } from "@/lib/auth/account";
 import { rateLimit } from "@/lib/rate-limit/limiter";
 import { consumeToken, createVerificationLink } from "@/lib/auth/tokens";
 import { mayResendVerification, stampVerificationSent } from "@/lib/auth/verify-throttle";
@@ -50,10 +49,15 @@ export const GET = withoutAuth(async (request) => {
     );
     const user = await markEmailVerified(userId);
 
-    // Confirming signs you in. The token proved control of the address, the
-    // account is this browser's, and asking for a password immediately after
-    // clicking "confirm" is a step that answers no question.
-    await setSessionCookie(session);
+    // Confirming does **not** sign this browser in, and the session the token
+    // bought is thrown away. A link is a credential for whoever holds it, and
+    // anybody can get one for their own account — so a link that signed in
+    // whoever clicked it would let a stranger send theirs to someone else and
+    // have that person working, unknowingly, inside the stranger's account
+    // (login CSRF). The common case loses nothing: whoever signed up in this
+    // browser still holds the cookie signup set, which this redirect never
+    // touches. A different browser lands signed out and logs in once.
+    await revokeSession(session.secret);
 
     // The welcome only now — at signup it would have arrived alongside the
     // confirmation email saying overlapping things and competing for the click.

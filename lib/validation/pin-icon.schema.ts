@@ -45,6 +45,21 @@ export const MAX_PIN_IMAGE_BYTES = 6 * 1024;
  */
 const DATA_URI = /^data:image\/(png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
+/**
+ * The format half of `pinImageSchema`, for values read back out of a row.
+ *
+ * `pinSvg` (packages/shared/pin-icons.ts) writes the image straight into an
+ * `href="…"` that reaches `innerHTML` — in the dashboard and on every site
+ * embedding the map — so anything else in that position is markup, not a
+ * picture. The write path already holds this; the read path holds it too
+ * because rows written before `migrate:permissions` could be written by their
+ * owner directly through Appwrite, past every schema. Format only, not size: a
+ * size rule tightened later must not silently strip a pin from a live map.
+ */
+export function isPinImageDataUri(value: unknown): value is string {
+  return typeof value === "string" && DATA_URI.test(value);
+}
+
 /** Decoded length from the encoded one, without decoding a possibly huge string. */
 export function base64Bytes(dataUri: string): number {
   const encoded = dataUri.slice(dataUri.indexOf(",") + 1);

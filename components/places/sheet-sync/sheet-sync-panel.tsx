@@ -49,6 +49,12 @@ export function SheetSyncPanel({
               : "Not synced yet."}{" "}
           Rows in the sheet are the locations on this map.
         </p>
+        {/* Terms §10.5: a sync publishes with no review step, so the
+            responsibility for checking it is said where the sync is run. */}
+        <p className="text-xs text-muted">
+          A sync places addresses and updates the published map without a
+          review step, so check the map after you change the sheet.
+        </p>
         <a
           href={sheetUrl(link)}
           target="_blank"

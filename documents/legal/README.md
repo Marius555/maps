@@ -26,9 +26,9 @@ production build and, in development, renders under a notice listing what is mis
 
 1. ~~**Register the business.**~~ **Done 2026-10-11** as an *individuali veikla* (VMI certificate
    No. 1554078), not a company — so the contracting party is the person, with personal and
-   unlimited liability ([../company.md](../company.md)). What is left of this step: the address,
-   which is deliberately unset and keeps every page a draft until a publishable one is chosen
-   (lawyer question 11), and the VAT payer code, which is pending.
+   unlimited liability ([../company.md](../company.md)). The VAT payer code (LT100020950510) and the
+   public address were set in `brand.json` on 2026-10-17, so this step is complete. What
+   registration does *not* give is a limit on personal liability — lawyer question 11.
 2. **Have a Lithuanian lawyer review them**, starting with [the questions below](#questions-for-the-lawyer).
 3. **Fill every placeholder** — in `brand.json`, or in `LEGAL_DETAILS` in `lib/legal/values.ts`
    for the values `brand.json` has no field for. Not by find-and-replace in these files: the
@@ -42,7 +42,8 @@ production build and, in development, renders under a notice listing what is mis
    `ROUTING_URL` point at instead — and note that CLAUDE.md §12 says the public Photon and OSRM demo
    endpoints cannot carry paying customers at all.
 6. **Make sure `{{contact.legalEmail}}` and `{{contact.privacyEmail}}` are monitored inboxes.** Both
-   carry legal deadlines.
+   carry legal deadlines. They are meant to be Cloudflare Email Routing rules forwarding to the same
+   Gmail as support@ (see [../contact.md](../contact.md)); send a test to each before publishing.
 7. **Fix, or soften the text around, the [open code issues](#open-issues-in-the-code).**
 8. **Check a production build** (`npm run build && npm start`): the four pages must now answer 200
    rather than 404. **Then set the four `legal` URLs in `brand.json`** to `/terms`, `/privacy`,
@@ -76,6 +77,7 @@ Change one of these and change it everywhere it appears.
 | Export window after any other ending | 30 days | Terms §13.7; DPA §10.2; Privacy §8 |
 | Deletion after that window | within 60 days, backups within 30 more | Terms §13.7; DPA §10.2; Privacy §8 |
 | Liability cap | fees paid in the previous 12 months, or EUR 50 if more | Terms §18.3, Key terms 3 |
+| Courts | competent for Klaipėda (the owner's city) | Terms §23.2, Key terms 11; DPA Annex IV |
 | Claim notice (mitigation only) | 60 days | Terms §18.4 |
 | Force majeure termination | after 60 days | Terms §20.2 |
 | Moderation complaint window | 6 months | Terms §11.4 |
@@ -116,7 +118,7 @@ them being fixed. Each needs a code change or a softer sentence before publishin
    (`lib/account-deletion/`) deletes everything at once; Privacy §9 now says so.
 4. **There is no data export.** Terms §13.3 promises export of all exportable data on request, which
    the Data Act requires. Until an export exists it is a manual job. CLAUDE.md §12 asks for an ODbL
-   flag before building an export feature — Terms §10.4 puts ODbL compliance on the customer for data
+   flag before building an export feature — Terms §10.8 puts ODbL compliance on the customer for data
    they take out.
 5. **The measurement panel says "No cookies"** (`components/publish/design-sidebar/measurement-group.tsx`)
    but not that consent may still be needed (EDPB Guidelines 2/2023). The Terms, DPA and Cookie
@@ -156,11 +158,24 @@ them being fixed. Each needs a code change or a softer sentence before publishin
     storage. Is legitimate interest without a banner defensible for first-party product analytics, or
     is a consent banner needed — at least on the public website?
 11. **Running as an individuali veikla.** The service is provided by a natural person under a VMI
-    certificate, not a company. (a) Art. 5 of the Law on Information Society Services asks for a
-    geographic address, and the owner will not publish a home address: does a correspondence or
-    virtual-office address satisfy it, and the DPA's SCC annex? (b) Liability is personal and
-    unlimited. Does the Terms' cap give enough protection at the Plans' scale, or should a UAB be
-    formed before the paid launch?
+    certificate, not a company, so liability is personal and unlimited. (a) ~~Which address to
+    publish~~ — closed 2026-10-17: the owner chose to publish Debreceno g. 8-10, Klaipėda. (b) **No
+    wording in these documents separates business debts from personal assets.** The cap (§18) binds
+    only customers, only within Civil Code 6.252, and not Visitors, authorities or GDPR Art. 82
+    claimants. Should the business move into a limited-liability entity before the paid launch — a
+    *mažoji bendrija* (no minimum capital) or a UAB — and what does the transfer of customer
+    contracts to it require (Terms §22 allows assignment to a successor)? (c) Which insurance
+    covers the remaining exposure: professional (errors and omissions) liability, cyber liability, or
+    both — and at what sum? (d) Is joint marital property within reach of the business's creditors,
+    and does that change the answer to (b)?
+12. **Visitor claims over inaccurate locations.** A Visitor who relies on a wrong pin is not a party
+    to the Terms, so the cap does not bind them; a claim against us would be in tort (Civil Code
+    6.263), which needs fault. The Terms answer it with: the customer owns and must check every
+    position (§10.4), sync is an instruction to publish without review (§10.5), an exclusion
+    (§10.7, §18.2), DSA hosting with no duty to monitor (§7.10), and an indemnity naming Visitor
+    claims (§19.1(g)). Is that enough, or should Published Maps also carry a short accuracy notice to
+    Visitors? (That costs embed bytes against a budget with ~600 left — CLAUDE.md §4 — so it is a
+    question to answer before building, not after.)
 
 ## Legal checks performed
 
@@ -174,6 +189,7 @@ Each row is a rule that limits how one-sided the documents may be, and what it c
 | **Civil Code 1.125** — limitation periods cannot be changed by agreement | eteismai.lt, temidy.lt | No shortened claim period (Stockist has one). Terms §18.4 is a notice duty for mitigation only |
 | **Data Act Art. 13** — B2B terms on data, liability and termination: blacklist (intent, gross negligence, no remedies) and grey list (short-notice termination, unjustified unilateral changes, blocking data copies) | eu-data-act.com | 30-day notice for our convenience termination; valid reasons stated for changes, with a right to leave; export always available; severability |
 | **Data Act Art. 23–31, recital 89** — switching rules for all SaaS since 12 Sep 2025, no SME exemption in force (the Digital Omnibus relief is still a proposal); switching charges banned from 12 Jan 2027; proportionate early-termination charges allowed | Lawcel; Osborne Clarke; Greenberg Traurig; Bird & Bird | Terms §13 in full; no switching charges; §13.6 early-termination charge |
+| **DSA Arts. 6 and 8** — a hosting provider is not liable for content stored at a user's request without actual knowledge of illegality, and has no general obligation to monitor | eu-digital-services-act.com | Terms §7.10 says we store at the customer's request and do not check; §10.3–10.7 put accuracy on the customer |
 | **DSA Arts. 11, 12, 14, 16, 17, 18** — apply to every hosting provider regardless of size; Art. 15 reports and the online-platform section are exempt for micro and small enterprises | eu-digital-services-act.com; Bird & Bird | Terms §11 and §12.5; changes announced (§21.2); Lithuania's Digital Services Coordinator is RRT |
 | **Law on Information Society Services, Art. 5** — name, address, register and number, email, supervising institution, VAT code | Baltic Times summary of the law | Terms §1; `../company.md` |
 | **GDPR Art. 28** — the contents of a processing contract | gdpr-info.eu | DPA §5 covers (a)–(h); §6 covers Art. 28(2) and (4) |

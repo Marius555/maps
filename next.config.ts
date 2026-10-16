@@ -31,6 +31,30 @@ const adminHeaders = [
   { key: "Cache-Control", value: "private, no-store" },
   { key: "X-Robots-Tag", value: "noindex, nofollow" },
   { key: "X-Frame-Options", value: "DENY" },
+  { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+];
+
+/**
+ * Sent on every response; the admin block below overrides the framing rule with
+ * DENY for its own paths.
+ *
+ * - Framing is `'self'`, not `'none'`: the publish preview draws the embed in
+ *   `srcdoc` iframes on our own pages. Nothing frames the dashboard from another
+ *   site — the embed is a module script on the customer's page, never an iframe,
+ *   and the WordPress plugin opens `/connect/wordpress` as a page.
+ * - `Referrer-Policy` because the password-reset secret sits in its page's URL,
+ *   and a full URL must not leave for another origin in a `Referer` header.
+ * - HSTS without `preload`: preload is a list that takes months to leave.
+ * - No script CSP yet. MapLibre's blob workers, PostHog and the inline theme
+ *   script each need a carve-out, and a CSP that is wrong breaks the editor.
+ */
+const securityHeaders = [
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
 ];
 
 const nextConfig: NextConfig = {
@@ -81,6 +105,7 @@ const nextConfig: NextConfig = {
 
   async headers() {
     return [
+      { source: "/:path*", headers: securityHeaders },
       { source: "/embed/:path*", headers: embedCorsHeaders },
       { source: "/maplibre/:path*", headers: embedCorsHeaders },
       // The gazetteer the embed's search fetches, on the same argument: static

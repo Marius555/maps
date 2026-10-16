@@ -57,7 +57,9 @@ having a legal basis for it; giving data subjects the information required by Ar
 the GDPR, including that Provider processes their data as Customer's processor; obtaining any
 consent required — including under the national rules implementing Article 5(3) of the ePrivacy
 Directive, before switching on visitor measurement; deciding whether to switch visitor measurement
-on; and the accuracy of Customer Content.
+on; and the accuracy of Customer Content, including the position of every location, whether it
+was placed by Customer, by an import, by geocoding or by a sync from a linked Google Sheet (Terms
+§10.3 to §10.7).
 
 **4.2** Customer will not upload or cause Provider to process special categories of personal data
 (Article 9 GDPR), personal data relating to criminal convictions and offences (Article 10 GDPR), or
@@ -301,8 +303,10 @@ publish.
 - **Personal data:** names; addresses and coordinates; phone numbers; email addresses; website links;
   opening hours; descriptions and custom fields; photographs and logos.
 - **Nature of the processing:** storing; importing from files and spreadsheets; geocoding addresses and
-  calculating routes through Sub-processors; editing; publishing as a static file that is publicly
-  available and displayed on websites through the embed script; exporting; deleting.
+  calculating routes through Sub-processors; where Customer links a map to a Google Sheet and keeps it
+  in sync, reading that sheet and geocoding and publishing its rows automatically, without a review
+  step; editing; publishing as a static file that is publicly available and displayed on websites
+  through the embed script; exporting; deleting.
 - **Purpose:** to provide the Service.
 - **Retention:** until Customer deletes it, and then as in §10.
 
@@ -394,6 +398,9 @@ Last updated: {{legal.effectiveDate}}
 - **Resend** (email), **Google** (sign-in) and **{{billing.merchantOfRecord}}** (payments) process only
   the data Provider handles as a controller for its own customers — see the Privacy Policy. They never
   receive Customer Personal Data.
+- **Google Sheets**, where Customer links a map to a sheet: Provider reads a sheet that Customer has
+  itself shared by link or published to the web through Google, under Customer's own agreement with
+  Google. Google does not process Customer Personal Data on Provider's behalf.
 
 ---
 
@@ -406,7 +413,7 @@ Applies only to transfers under §7.3.
 - **Clause 11(a) (independent dispute resolution body):** not included.
 - **Clause 17 (governing law):** the laws of the Republic of Lithuania.
 - **Clause 18 (choice of forum and jurisdiction):** the courts of the Republic of Lithuania competent
-  for Vilnius.
+  for Klaipėda.
 - **Annex I.A and I.B of the SCCs:** Annex I of this DPA.
 - **Annex II of the SCCs**, where relevant: Annex II of this DPA.
 

@@ -29,12 +29,18 @@ is buried in the detail below. Each one points to the full clause.
 6. **You are responsible for your content and for your visitors' data.** If you turn on visitor
    measurement, you are the controller of that data: telling your visitors, and getting any consent
    the law requires, is your job. (§7, §8)
-7. **When your account ends, you have 30 days to take your data out.** After that it is deleted,
+7. **Locations can be wrong, and checking them is your job.** Addresses are placed on the map
+   automatically, and routes, distances and the map itself are estimates. You must check every
+   location before you publish — and, if a map syncs with a Google Sheet, after every change to the
+   sheet, because a sync publishes without a review step. We are not liable for where a pin is shown,
+   or for anyone who relies on it, and you cover us against claims from your visitors about it.
+   (§10, §19)
+8. **When your account ends, you have 30 days to take your data out.** After that it is deleted,
    and your published maps stop working. (§13)
-8. **We may name you as a customer** and show your logo, until you ask us not to. (§15)
-9. **We can change these Terms.** A change that works against you is announced 30 days ahead, and
-   you may leave before it applies. (§21)
-10. **Lithuanian law applies**, and disputes go to the courts of Vilnius. (§23)
+9. **We may name you as a customer** and show your logo, until you ask us not to. (§15)
+10. **We can change these Terms.** A change that works against you is announced 30 days ahead, and
+    you may leave before it applies. (§21)
+11. **Lithuanian law applies**, and disputes go to the courts of Klaipėda. (§23)
 
 ---
 
@@ -117,6 +123,14 @@ and we may block or limit such traffic.
 
 **4.6 No navigation.** Published Maps show locations, shapes and routes. They do not provide
 turn-by-turn navigation. Directions open a third-party maps application, whose own terms apply.
+
+**4.7 Plugins and integrations.** We may offer plugins and integrations that place Published Maps on
+other platforms — for example the {{name}} plugin for WordPress. They are free, provided "as is",
+and distributed under their own licence (for the WordPress plugin, the GNU General Public License);
+§17 and §18 apply to them in full. You install and run them on your own website at your own risk.
+Keep a backup of your website before installing or updating one. We are not responsible for
+conflicts with your website, its theme, its other plugins or its hosting, or for any loss of data or
+downtime on your website.
 
 ## 5. Your Account
 
@@ -208,6 +222,12 @@ Service and publishing statistics. We own that data.
 **7.9 Keep your own copies.** The Service is not an archive or a backup service. Keep your own copies
 of Customer Content.
 
+**7.10 We host, we do not check.** We store and publish Customer Content at your request. We do not
+review, verify or correct it — including the position, address, opening hours or contact details of
+any location — and we have no general obligation to monitor it or to look for facts indicating that
+it is inaccurate or illegal. Anything we do to act on content under §11 does not make us responsible
+for checking the rest.
+
 ## 8. Visitor measurement
 
 **8.1** Visitor measurement is off unless you turn it on for a map. Turning it on takes effect on
@@ -264,11 +284,40 @@ Record, and the maps applications a Visitor opens for directions.
 **10.2** Their own terms apply to your use of them. We do not control them, and we are not
 responsible for them, for their availability, or for changes they make. We may replace any of them.
 
-**10.3 Accuracy.** Geocoding places addresses on the map automatically, and it can be wrong. Route
-lines, distances and travel times are estimates. Review every result before you publish — the import
-review step exists for exactly this. We give no promise of accuracy.
+**10.3 Everything on the map is an estimate.** Geocoding places addresses on the map
+automatically, and it can be wrong — sometimes by a street, sometimes by a town. Confidence labels
+shown for a result are indications, not guarantees. Route lines, distances and travel times, the
+distances shown by "find nearest", and the basemap itself are estimates too. The basemap comes from
+OpenStreetMap, a map made by volunteers, which may be incomplete, out of date or wrong; the borders,
+names and labels it shows do not express any view of ours. We give no promise that any position,
+address, route, distance, travel time or map detail is accurate, complete or current.
 
-**10.4 Open data.** Some data in, or produced by, the Service — such as coordinates and route
+**10.4 A saved position is yours.** Once a location's position is saved, it is Customer Content
+(§7) — however it was placed: by you on the map, by an import, by the geocoder, or by a sync. You
+must check every location before you publish it; the import review step exists to help you do so.
+By publishing a map you confirm that you have checked what it shows.
+
+**10.5 Automatic sync from a Google Sheet.** If you link a map to a Google Sheet and keep it in sync,
+you instruct us to read the sheet (which you make readable by sharing it by link or publishing it), geocode its addresses and publish the result on a schedule and
+whenever you press Sync now — **without a review step**. We write only the matches the geocoder
+reports as confident, and list the rest for you to fix in the sheet, but a confident match can still
+be wrong. You accept that risk, and you are responsible for checking the map after every change to
+the sheet. You can switch automatic sync off at any time.
+
+**10.6 Not for navigation or safety.** Published Maps help people find your locations. They must not
+be relied on for navigation, for emergencies, or wherever an inaccurate position could put anyone's
+health, safety or property at risk (§9(k)). Directions are given by a third-party maps application
+(§4.6). You are responsible for anything you tell your Visitors about the accuracy of your map — for
+example, advising them to confirm an address or opening hours before they travel.
+
+**10.7 No liability for inaccurate information.** Subject to §18.1, we are not liable for any loss
+or damage arising from a location, address, route, distance, travel time, opening hours, contact
+details or other information shown in the Service or on a Published Map being inaccurate,
+incomplete or out of date — whatever placed it there — including a Visitor going to the wrong place,
+a missed delivery, appointment or visit, a lost sale, and any claim made against you by a Visitor or
+other third party. Claims made against us by them are covered by your indemnity in §19.
+
+**10.8 Open data.** Some data in, or produced by, the Service — such as coordinates and route
 geometry — may be derived from OpenStreetMap. If you extract it and reuse it outside the Service,
 you are responsible for complying with the Open Database Licence, including its attribution and
 share-alike terms.
@@ -311,7 +360,9 @@ and Lithuanian.
 
 **12.1 By you.** You may cancel your subscription at any time in your Account or through the
 Merchant of Record. Your paid Plan stays active until the end of the period already paid, and no
-refund is due (§6.5). You may close your Account by writing to {{contact.supportEmail}}.
+refund is due (§6.5). You may close your Account at any time in Settings → Account → Delete account,
+or by writing to {{contact.supportEmail}}. Deleting your Account in Settings deletes your data
+straight away, and your Published Maps stop working.
 
 **12.2 Suspension by us.** We may suspend all or part of the Service for you — including
 unpublishing your maps — immediately and without liability if: (a) you break these Terms, or we
@@ -340,7 +391,7 @@ set out in §11.3.
 **12.7 What happens at the end.** When the Agreement ends: your right to use the Service ends; §13
 applies to your data; Published Maps stop working once their Snapshots are deleted; any amounts you
 owe become due immediately; and every provision that by its nature should continue — including
-§7.5, §7.8, §13, §14, §17 to §20, §23 and §24 — continues.
+§7.5, §7.8, §10.7, §13, §14, §17 to §20, §23 and §24 — continues.
 
 ## 13. Switching provider, exporting and deleting your data
 
@@ -437,9 +488,10 @@ uninterrupted, timely, secure or error-free, that it will be free of harmful com
 results will be accurate, that it will be fit for a particular purpose or meet your requirements, or
 that it will produce any particular result, such as more visitors or sales.
 
-**17.2** We are not responsible for your websites or their compatibility with the embed script; for
-third-party services (§10); for the accuracy of geocoding, routing or map data; for the loss of data
-you did not keep a copy of; or for the acts of Visitors.
+**17.2** We are not responsible for your websites or their compatibility with the embed script or
+our plugins (§4.7); for third-party services (§10); for the accuracy of geocoding, routing or map
+data, or for the position of any location (§10.3 to §10.7); for the loss of data you did not keep a
+copy of; or for the acts of Visitors.
 
 **17.3** All warranties and conditions implied by law are excluded to the extent the law allows.
 
@@ -453,9 +505,10 @@ for injury to health or loss of life, and for non-pecuniary damage.
 **18.2 Excluded losses.** Subject to §18.1, we are not liable for: loss of profit, revenue, turnover,
 business, contracts or anticipated savings; loss of goodwill or reputation; loss or corruption of
 data, beyond restoring it from our most recent available backup where one exists; business
-interruption; lost Visitors or sales; the cost of substitute services; or any indirect, consequential
-or special loss — whether the claim is in contract, tort or otherwise, and even if the loss was
-foreseeable.
+interruption; lost Visitors or sales; loss arising from inaccurate, incomplete or out-of-date
+location, route, distance or map information (§10.7); the cost of substitute services; or any
+indirect, consequential or special loss — whether the claim is in contract, tort or otherwise, and
+even if the loss was foreseeable.
 
 **18.3 Cap.** Subject to §18.1, our total aggregate liability for all claims arising out of or in
 connection with the Agreement is limited to the greater of: (a) the fees you actually paid for the
@@ -471,6 +524,10 @@ contractors and sub-processors, who may rely on them.
 
 **18.6** Our fees reflect this allocation of risk.
 
+**18.7 Exclusive remedies.** To the extent the law permits, the rights and remedies set out in the
+Agreement are your only rights and remedies against us in connection with the Service, and replace
+any others that would otherwise apply.
+
 ## 19. Your indemnity
 
 **19.1** You will defend, indemnify and hold harmless us, our affiliates, and our directors,
@@ -484,7 +541,11 @@ out of or in connection with:
   ePrivacy law, including any missing notice or consent;
 - **(d)** your breach of these Terms, the DPA or the law;
 - **(e)** any claim that Customer Content infringes anyone's rights;
-- **(f)** any use of your Account.
+- **(f)** any use of your Account;
+- **(g)** any claim by a Visitor or other third party arising from reliance on a Published Map,
+  including on the position or accuracy of any location, address, route, distance, travel time,
+  opening hours, contact details or directions shown on it;
+- **(h)** any plugin or integration you install on your websites (§4.7).
 
 **19.2** We will tell you about a claim covered by §19.1. We may conduct the defence and any
 settlement ourselves, at your cost, or ask you to conduct it; you will cooperate either way. You may
@@ -537,7 +598,7 @@ formation (including non-contractual disputes or claims), is governed by the law
 Lithuania, excluding its conflict-of-laws rules. The United Nations Convention on Contracts for the
 International Sale of Goods does not apply.
 
-**23.2** The courts of the Republic of Lithuania competent for Vilnius have exclusive jurisdiction.
+**23.2** The courts of the Republic of Lithuania competent for Klaipėda have exclusive jurisdiction.
 As the only exception, we may also bring proceedings against you in the courts of the country where
 you have your registered office or principal place of business, provided that country is an EU
 Member State or a party to the Lugano Convention — or, if you are established outside those

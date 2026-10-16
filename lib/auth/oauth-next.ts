@@ -32,3 +32,48 @@ export function takeOAuthNext(): string {
     return "/maps";
   }
 }
+
+/**
+ * Proof that *this tab* asked Google to sign it in.
+ *
+ * `/auth/success?userId=…&secret=…` signs in whoever the token belongs to, and
+ * anybody can mint one for their own account. Without this mark, a link to that
+ * URL sent to someone else signs *their* browser into the sender's account —
+ * login CSRF, and anything they then type lands where the sender can read it.
+ * The mark lives in the same per-tab storage as the destination above, so only
+ * a sign-in this tab started can finish here.
+ *
+ * Storage that refuses outright cannot be checked either way, and lets the
+ * sign-in through: an attacker cannot make somebody else's storage throw.
+ */
+const STARTED_KEY = "auth:oauth-started";
+const STARTED_TTL_MS = 30 * 60 * 1000;
+
+export function markOAuthStarted(): void {
+  try {
+    sessionStorage.setItem(STARTED_KEY, String(Date.now()));
+  } catch {
+    // See above: unreadable storage is waved through on the way back.
+  }
+}
+
+/**
+ * Read without spending it, so StrictMode's second call of a `useState`
+ * initializer gets the same answer as the first; `clearOAuthStarted` spends it.
+ */
+export function oauthStartedHere(): boolean {
+  try {
+    const stamp = Number(sessionStorage.getItem(STARTED_KEY));
+    return stamp > 0 && Date.now() - stamp < STARTED_TTL_MS;
+  } catch {
+    return true;
+  }
+}
+
+export function clearOAuthStarted(): void {
+  try {
+    sessionStorage.removeItem(STARTED_KEY);
+  } catch {
+    // Nothing to clear in storage that cannot be read.
+  }
+}

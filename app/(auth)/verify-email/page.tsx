@@ -41,7 +41,7 @@ export default async function VerifyEmailPage(props: PageProps<"/verify-email">)
     return (
       <AuthShell
         title="Email confirmed"
-        description="You're signed in and ready to build your first map."
+        description="You're ready to build your first map. If this isn't the browser you signed up in, you'll log in once first."
       >
         <LinkButton href="/maps" fullWidth>
           Go to your maps

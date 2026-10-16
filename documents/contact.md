@@ -7,7 +7,9 @@ the page renders.
 
 **All three may be the same inbox.** What matters is that each is monitored before the documents go
 live: two of them carry legal deadlines (below), and a notice that nobody reads still counts as
-received.
+received. support@ is a Cloudflare Email Routing rule forwarding to the owner's Gmail (set up
+2026-09-27); privacy@ and legal@ are meant to be two more rules to the same destination, and do
+not receive mail until they are added in the Cloudflare dashboard.
 
 | Placeholder | What arrives there | In `brand.json` | Value |
 |---|---|---|---|

@@ -235,14 +235,15 @@ Tests are `vitest` (`vitest.config.mts`), unit only, `lib/**/*.test.ts` and `pac
 
 ### Environment
 
-`.env` is gitignored and there is no `.env.example`. **Server-only names are unprefixed
+`.env` is gitignored; `.env.example` is committed — every name, no values, split into Site /
+setup-only / dev-only, and the checklist for a deploy. **Server-only names are unprefixed
 deliberately and must never reach a client component or the embed (§9)** — `GEOAPIFY_API_KEY`
 included, which `geoapifyGet` appends last and keeps out of every error message. Why each
 one exists: `docs/notes/environment.md`.
 
-- Browser-safe: `NEXT_PUBLIC_APPWRITE_ENDPOINT`, `NEXT_PUBLIC_APPWRITE_PROJECT_ID`,
-  `NEXT_PUBLIC_APPWRITE_PROJECT_NAME`.
-- Server-only, required: `APPWRITE_API_KEY`, `DATABASE_ID`, `STORAGE_ID`.
+- Browser-safe: `NEXT_PUBLIC_APPWRITE_ENDPOINT`, `NEXT_PUBLIC_APPWRITE_PROJECT_ID`.
+- Server-only, required: `APPWRITE_API_KEY`, `DATABASE_ID`, `STORAGE_ID` — and `APP_URL` in
+  production (`https://pinglide.com`), where the server refuses to start without it.
 - Server-only, optional, defaulted: `GEOCODER_URL` (public Photon),
   `GEOCODER_MIN_INTERVAL_MS` (1000, spacing request *starts*), `GEOCODER_USER_AGENT` — the
   UA exists because public OSM services block unidentified clients, and a WAF 403 is

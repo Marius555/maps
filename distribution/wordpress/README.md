@@ -14,7 +14,15 @@ MSYS_NO_PATHCONV=1 npx @wp-playground/cli@latest server --port=9400 --login \
   --blueprint=./distribution/wordpress/playground/blueprint.json
 ```
 
-Two Windows traps in that line, both measured: `--mount=host:vfs` splits on the drive
+That is Git Bash. In PowerShell, drop the `MSYS_NO_PATHCONV=1` prefix (it is bash syntax, and
+PowerShell does not rewrite paths anyway), quote the package (a leading `@` is splatting),
+and keep it on one line:
+
+```
+npx "@wp-playground/cli@latest" server --port=9400 --login --mount-dir ./distribution/wordpress/pinglide /wordpress/wp-content/plugins/pinglide --blueprint=./distribution/wordpress/playground/blueprint.json
+```
+
+Two Git Bash traps in the bash line, both measured: `--mount=host:vfs` splits on the drive
 letter's colon (`Host path does not exist: …;C`), so use the two-argument `--mount-dir`;
 and Git Bash rewrites `/wordpress/...` into a Windows path unless `MSYS_NO_PATHCONV=1`.
 
@@ -38,6 +46,8 @@ define( 'PINGLIDE_APP_URL', 'http://localhost:3000' );
 
 - Two blocks on one page, connected to two maps: each shows its own.
 - Change `state` on the return URL by hand: refused, nothing stored.
+- Change `script` (or `snapshot`) on the return URL to another host: refused with 400.
+- As a Contributor, re-connect a slot an admin connected: refused with 403.
 - `return` pointing at a different host: `/connect/wordpress` refuses before sign-in.
 - A brand-new account through the flow: waits on "Check your inbox", carries on by itself
   once the link is opened.
@@ -53,14 +63,22 @@ define( 'PINGLIDE_APP_URL', 'http://localhost:3000' );
 2. `npm run build:wordpress` → `public/downloads/pinglide-wordpress.zip`. Every deploy runs
    it too (`prebuild`), so the Publish tab's download link always serves the tree's copy.
 
-## Listing on wordpress.org (needs an account — not done yet)
+## Listing on wordpress.org (account `marius536` — not submitted yet)
 
-1. Create a wordpress.org account, then submit the zip at
-   https://wordpress.org/plugins/developers/add/. Review is manual and takes days to weeks.
-2. Before submitting: run the Plugin Check plugin on a test site and fix what it reports;
-   make sure `readme.txt`'s **External services** section still matches what the plugin
-   and the embed actually contact; and confirm `/terms` and `/privacy` are live, because
-   that section links them.
+1. Upload `public/downloads/pinglide-wordpress.zip` at
+   https://wordpress.org/plugins/developers/add/ while logged in. There is no CLI for the
+   first submission. Review is manual, roughly 1–10 days, and answered by email.
+2. Before submitting:
+   - Run Plugin Check. The Playground blueprint installs it: Tools → Plugin Check →
+     `Pinglide`, every category. Under the Windows CLI its PHPCS checks fail on a temp-file
+     lock (`Exclusive locks are not supported`); an mu-plugin doing
+     `putenv( 'TMPDIR=/pctmp' )` gets past it. It passed clean on 2026-10-13.
+   - Production must serve `/connect/wordpress`, `/terms` and `/privacy`. Reviewers do click
+     through, and the readme's **External services** section links the last two. Keep that
+     section matching what the plugin and the embed actually contact.
+   - The upload page shows the slug it will assign. It must be `pinglide`: the text domain and folder
+     assume it, and it can never change after approval.
 3. Once approved, releases go through the SVN repository they give you (`trunk/` plus a
-   `tags/<version>/` copy). The slug is fixed at approval — `pinglide` is what the code
-   assumes (text domain, folder name).
+   `tags/<version>/` copy). Banner (772×250 and 1544×500), icon (128 and 256) and
+   `screenshot-N.png` go in SVN's `assets/`, never in the zip. After approval, the display
+   name may go back to "Pinglide Maps".

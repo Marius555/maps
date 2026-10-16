@@ -26,6 +26,15 @@ in the navbar's Integrations menu from `lib/marketing/integrations.ts` —
   wp-admin, so our Strict cookie is withheld from the page request; `ConnectFlow` asks
   `/api/auth/me` with a same-origin `fetch`. The SameSite trap, fourth arrival
   (`docs/notes/auth.md`).
+- **`script` and `snapshot` are held to our own hosts.** Both arrive in the return trip's
+  query string, and `script` runs on every visitor's page. The nonce is no defence here:
+  anyone with `edit_posts` — a Contributor — can mint one, and Settings → Pinglide lists
+  every slot id. `Pinglide_Slots::is_allowed_url` accepts only `PINGLIDE_APP_URL`'s and
+  `PINGLIDE_EMBED_URL`'s hosts (plus `PINGLIDE_EXTRA_HOSTS`), and re-checks at render; a
+  slot someone else connected needs `edit_others_posts` to change.
+- **The Plugin Name header is "Pinglide", not "Pinglide Maps".** wordpress.org derives the
+  slug from it once, permanently, and the code (text domain, folder) is `pinglide`. The
+  display name can go back to "Pinglide Maps" after approval; before it, it cannot.
 - **An empty allowlist stays empty.** Empty means every site; adding the WordPress host to
   it would switch the map off everywhere else it is pasted (`allowSite`).
 - **A block holds a slot, not a map id.** The answer arrives in wp-admin, which cannot

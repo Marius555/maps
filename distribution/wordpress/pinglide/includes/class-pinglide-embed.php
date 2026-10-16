@@ -31,7 +31,7 @@ final class Pinglide_Embed {
 	public static function render( $slot, $height ): string {
 		$map = Pinglide_Slots::get( $slot );
 
-		if ( ! $map ) {
+		if ( ! $map || ! Pinglide_Slots::is_allowed_url( $map['snapshot'] ) ) {
 			// An empty box on a live page reads as a broken site, so visitors get
 			// nothing. Whoever can fix it gets a note saying how.
 			if ( ! current_user_can( 'edit_posts' ) ) {
@@ -78,7 +78,8 @@ final class Pinglide_Embed {
 	 * @param string $script The bundle URL the connection stored.
 	 */
 	private static function enqueue( $script ): void {
-		$src = $script ? $script : PINGLIDE_EMBED_URL;
+		// Checked again here, for anything stored before the return trip checked it.
+		$src = $script && Pinglide_Slots::is_allowed_url( $script ) ? $script : PINGLIDE_EMBED_URL;
 
 		wp_enqueue_script_module( 'pinglide-embed', esc_url_raw( $src ), array(), null );
 	}

@@ -81,7 +81,7 @@ export async function addPlacePhotos(
       const created = await admin.storage.createFile({
         bucketId: env.storageId,
         fileId: ID.unique(),
-        file,
+        file: anonymised(file),
         permissions: PUBLIC_FILE_PERMISSIONS,
       });
 
@@ -208,7 +208,7 @@ export async function setPlaceLogo(
     const created = await admin.storage.createFile({
       bucketId: env.storageId,
       fileId: ID.unique(),
-      file,
+      file: anonymised(file),
       permissions: PUBLIC_FILE_PERMISSIONS,
     });
 
@@ -338,6 +338,30 @@ export function assertUploadable(
       422,
     );
   }
+}
+
+/**
+ * The upload under a name that says nothing about who sent it.
+ *
+ * Every file here is `read(any)`, and Appwrite lets anyone *list* a bucket's
+ * readable files with nothing but the project id — which is in every page. That
+ * listing cannot be closed while photos stay public, so what it shows is
+ * narrowed instead: a phone's `IMG_2024…`, a social network's export name or a
+ * customer's own "jane-doe-passport.jpg" would otherwise be readable by anyone,
+ * next to photos from maps that were never published. The extension is kept,
+ * from the checked type, because the bucket allows by extension.
+ */
+const EXTENSION_BY_TYPE: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/avif": "avif",
+};
+
+export function anonymised(file: File): File {
+  return new File([file], `image.${EXTENSION_BY_TYPE[file.type] ?? "jpg"}`, {
+    type: file.type,
+  });
 }
 
 /**

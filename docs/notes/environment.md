@@ -3,9 +3,11 @@
 Moved out of CLAUDE.md on 2026-09-05. The names, scopes and defaults stay in CLAUDE.md §0;
 this is why each one exists.
 
-`.env` is gitignored and there is no `.env.example`. Names in use:
+`.env` is gitignored. `.env.example` is committed: every name, no values, grouped by where it
+belongs (the Appwrite Site, setup scripts only, development only) — the checklist for a
+deploy. Names in use:
 
-- Browser-safe: `NEXT_PUBLIC_APPWRITE_ENDPOINT`, `NEXT_PUBLIC_APPWRITE_PROJECT_ID`, `NEXT_PUBLIC_APPWRITE_PROJECT_NAME`
+- Browser-safe: `NEXT_PUBLIC_APPWRITE_ENDPOINT`, `NEXT_PUBLIC_APPWRITE_PROJECT_ID` (`NEXT_PUBLIC_APPWRITE_PROJECT_NAME` was listed here once and is read by nothing)
 - Server-only: `APPWRITE_API_KEY`, `DATABASE_ID`, `STORAGE_ID` — unprefixed deliberately. These must never reach a client component or the embed bundle (§9).
 - Optional, all server-only, all defaulted: `GEOCODER_URL` (defaults to the public Photon instance), `GEOCODER_MIN_INTERVAL_MS` (defaults to 1000, and now spaces request *starts* rather than waiting for each round trip to finish — see `lib/geocoding/throttle.ts`) and `GEOCODER_USER_AGENT`. Point the first at a self-hosted Photon and lower the second before any real import volume. The third exists because public OSM-derived services block unidentified clients and Node's default UA is exactly that: a 403 from a WAF is otherwise indistinguishable from the service being down, and both arrive as a 502.
 - Optional, all server-only, all defaulted: `ROUTING_URL` (defaults to the public OSRM demo server), `ROUTING_MIN_INTERVAL_MS` (defaults to 1000) and `ROUTING_USER_AGENT`. Exactly the geocoder's three, for exactly the geocoder's reasons — and with a sharper deadline: the demo server's terms forbid reselling access and warn that it can be withdrawn without notice, so `ROUTING_URL` has to point somewhere of our own before the first paying customer. `docs/self-hosting-routing.md` is the runbook, including why Valhalla beats OSRM the moment coverage goes past one country. Nothing published moves when this changes — a route's geometry is baked at draw time, which is the whole feature.
@@ -127,7 +129,9 @@ this is why each one exists.
   single-use token to it, so a link whose origin came from a header the caller controls would let
   a spoofed `Host` mint a working reset link pointing at the attacker's own server. Set it per
   environment; it is not browser-safe and does not need to be, since nothing on the client
-  composes a link.
+  composes a link. **Since 2026-10-16 a production server refuses to start without it** (`lib/env.ts`,
+  `next build` exempt): the old silent fallback to localhost put localhost links in customers'
+  inboxes with nothing in any log, and localhost on a production server is warned about.
 - Optional, server-only: `EMAIL_DOMAIN_ALLOWLIST` — a comma-separated list of domains that may
   sign up whatever the disposable-address check thinks of them. **Unset is the normal state**
   and means the vendored list decides. It exists because

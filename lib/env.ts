@@ -18,6 +18,42 @@ function required(name: string): string {
   return value;
 }
 
+/**
+ * `APP_URL`, refused when a production server would otherwise run without it.
+ *
+ * Unset, it used to fall back to localhost silently — and then every
+ * confirmation and reset email, the checkout's return address and every map a
+ * scheduled sheet sync republishes pointed at a machine the reader does not
+ * have. A server answering errors names the problem in the first request's
+ * logs; a localhost link in a customer's inbox names nothing. `next build`
+ * itself is exempt, so a local production build still works with the
+ * development `.env`, and localhost on a production server is warned about
+ * rather than refused, because that is exactly `npm run build && npm start`.
+ */
+function appUrl(): string {
+  const value = process.env.APP_URL?.trim();
+  const runtime =
+    process.env.NODE_ENV === "production" &&
+    process.env.NEXT_PHASE !== "phase-production-build";
+
+  if (!value) {
+    if (runtime) {
+      throw new Error(
+        "Missing environment variable APP_URL. Set it to the site's public origin (https://pinglide.com) on the host.",
+      );
+    }
+    return "http://localhost:3000";
+  }
+
+  if (runtime && /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(value)) {
+    console.warn(
+      `[env] APP_URL is ${value} on a production build; emailed links will point there.`,
+    );
+  }
+
+  return value.replace(/\/+$/, "");
+}
+
 export const env = {
   appwriteApiKey: required("APPWRITE_API_KEY"),
   databaseId: required("DATABASE_ID"),
@@ -75,7 +111,7 @@ export const env = {
    * would mint a working reset link pointing at the attacker's own server. The
    * one input we cannot let the request decide.
    */
-  appUrl: (process.env.APP_URL || "http://localhost:3000").replace(/\/+$/, ""),
+  appUrl: appUrl(),
   /**
    * Domains that may sign up whatever the disposable list says.
    *

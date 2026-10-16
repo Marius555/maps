@@ -79,6 +79,25 @@ final class Pinglide_Connect {
 			);
 		}
 
+		// `script` runs on every visitor's page: only ever from Pinglide's own hosts.
+		if ( ! Pinglide_Slots::is_allowed_url( $snapshot ) || ( '' !== $script && ! Pinglide_Slots::is_allowed_url( $script ) ) ) {
+			wp_die(
+				esc_html__( "This link didn't come from Pinglide, so nothing was changed. Press Set up this map again.", 'pinglide' ),
+				esc_html__( 'Map not connected', 'pinglide' ),
+				array( 'response' => 400 )
+			);
+		}
+
+		// A map someone else connected is theirs to change, unless you may edit their posts too.
+		$current = Pinglide_Slots::get( $slot );
+		if ( $current && (int) $current['connected_by'] !== get_current_user_id() && ! current_user_can( 'edit_others_posts' ) ) {
+			wp_die(
+				esc_html__( 'Someone else connected this map, so only they or an editor can change it.', 'pinglide' ),
+				esc_html__( 'Map not connected', 'pinglide' ),
+				array( 'response' => 403 )
+			);
+		}
+
 		Pinglide_Slots::set(
 			$slot,
 			array(

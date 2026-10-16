@@ -54,6 +54,7 @@ import {
   type NotificationKind,
 } from "@/lib/notifications/types";
 import { isSafeNotificationLink } from "@/lib/validation/notification.schema";
+import { isPinImageDataUri } from "@/lib/validation/pin-icon.schema";
 
 /**
  * Row → domain. These never throw: a row written by an older version of the app,
@@ -68,6 +69,34 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Custom pins with an image that is not one, dropped.
+ *
+ * Only that one field is checked, deliberately: running each record through
+ * `pinIconSchema` would also apply its defaults (adding bytes to every snapshot)
+ * and its label rules (dropping pins from live maps over a rule written later).
+ * The image is the one field that reaches `innerHTML` as written, so it is the
+ * one that has to be what it claims. A dropped pin draws as a plain one — the
+ * same as a `custom:` id naming a pin that was deleted.
+ */
+function readPinIcons(value: string | null | undefined): CustomPinIcon[] {
+  const raw = parseJson<unknown>(value, []);
+  if (!Array.isArray(raw)) return [];
+
+  return raw.filter(
+    (icon): icon is CustomPinIcon =>
+      typeof icon === "object" &&
+      icon !== null &&
+      (!("image" in icon) || icon.image === "" || isPinImageDataUri(icon.image)),
+  );
+}
+
+/** A cluster icon is a pin id or an image, and an image is held as `readPinIcons` holds one. */
+function readClusterIcon(value: string | null | undefined): string {
+  if (!value) return "";
+  return value.startsWith("data:") && !isPinImageDataUri(value) ? "" : value;
 }
 
 /**
@@ -117,10 +146,10 @@ export function toAppMap(row: MapRow): AppMap {
     categories: parseJson<MapCategory[]>(row.categories, []),
     tagGroups: withTagColors(parseJson<MapTagGroup[]>(row.tagGroups, [])),
     fields: parseJson<MapField[]>(row.fields, []),
-    pinIcons: parseJson<CustomPinIcon[]>(row.pinIcons, []),
+    pinIcons: readPinIcons(row.pinIcons),
     settings: parseJson<Record<string, unknown>>(row.settings, {}),
     appearance: parseJson<Record<string, unknown>>(row.appearance, {}),
-    clusterIcon: row.clusterIcon ?? "",
+    clusterIcon: readClusterIcon(row.clusterIcon),
     allowedDomains: row.allowedDomains ?? [],
     publishedAt: row.publishedAt ?? null,
     snapshotUrl: row.snapshotUrl ?? null,

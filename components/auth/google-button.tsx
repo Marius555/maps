@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { ErrorMessage } from "@/components/ui/error-message";
 import { startGoogleSignIn } from "@/lib/appwrite/browser";
-import { rememberOAuthNext } from "@/lib/auth/oauth-next";
+import { markOAuthStarted, rememberOAuthNext } from "@/lib/auth/oauth-next";
 
 /**
  * Google sign-in, first half.
@@ -46,6 +46,7 @@ export function GoogleButton({
 
     try {
       rememberOAuthNext(redirectTo);
+      markOAuthStarted();
       startGoogleSignIn(window.location.origin);
     } catch {
       // Reached only if the SDK refuses before navigating — a misconfigured

@@ -31,6 +31,18 @@ emails.
   trap* below. This governs `/auth/success`, `/verify-email` and
   `/checkout/done`, and is the single most breakable thing in this area — it was
   broken a third time, by billing, after being written down twice.
+- **No link may sign in a browser that did not ask for it** (login CSRF).
+  `/auth/success` refuses a callback unless this tab started the Google sign-in
+  (`markOAuthStarted` / `oauthStartedHere` in `lib/auth/oauth-next.ts`), and the
+  verify-email link confirms the address without signing anyone in. Every
+  state-changing request through `withAuth`, `withoutAuth` or `withAdmin` is
+  refused when the browser marks it `Sec-Fetch-Site: cross-site`
+  (`lib/api/same-origin.ts`) — `sameSite: "strict"` protects signed-in routes,
+  but login, signup, the OAuth exchange and the reset run before any cookie
+  exists, and `parseBody` reads a cross-site `text/plain` form post as JSON.
+- **`safeRedirect` refuses control characters and `\`.** The URL parser strips
+  tabs and newlines, so `/	/evil.example` passes every prefix check and lands on
+  another host.
 - **`proxy.ts` redirects towards `/login` and never away from it.** Bouncing a
   signed-in visitor off `/login` is `redirectIfSignedIn()`, called by the two
   pages that want it, because a proxy redirect answers a client-side navigation
@@ -141,7 +153,7 @@ cross-site *and carry that classification through a server redirect chain*.
 So the obvious implementation of both flows is wrong in the same way:
 
 ```
-GET /api/auth/verify-email  ->  set cookie  ->  redirect /maps
+GET /api/auth/verify-email  ->  set cookie  ->  redirect /maps   (historical: it no longer sets a cookie)
                                                      |
                                  proxy.ts sees no cookie on this request
                                                      |
@@ -311,9 +323,13 @@ session**. That is not a side effect to be tidied away — it is the only way to
 validate one — so every caller of `consumeToken` decides what happens to the
 session it returns:
 
-- `/api/auth/verify-email` keeps it and signs the user in. The token proved
-  control of the address and the account is this browser's; asking for a password
-  immediately after clicking "confirm" answers no question.
+- `/api/auth/verify-email` **throws it away** (since 2026-10-16; it used to set
+  the cookie). A link signs in whoever holds it, and anybody can get one for their
+  own account — so a verify link that signed the clicker in let a stranger send
+  theirs to someone else and have that person working inside the stranger's
+  account (login CSRF). Nothing is lost in the common case: whoever signed up in
+  this browser still holds the cookie signup set, which the redirect never
+  touches. Another browser lands signed out and logs in once.
 - `resetPasswordForUser` throws it away along with **every other session that
   user has**, before setting the new password. Someone resetting a password is
   often doing it because someone else has been in the account, and leaving that

@@ -93,6 +93,37 @@ final class Pinglide_Slots {
 	}
 
 	/**
+	 * Whether `$url` is on one of Pinglide's own hosts — the app's and the CDN's,
+	 * plus any listed in PINGLIDE_EXTRA_HOSTS (comma-separated, wp-config.php).
+	 *
+	 * Both URLs a connection stores arrive in a query string, and `script` is
+	 * loaded as JavaScript on every visitor's page. Anyone who can edit posts can
+	 * mint the nonce that guards the return trip, so without this a Contributor
+	 * could point a published map at a script of their own.
+	 *
+	 * @param string $url Candidate URL.
+	 */
+	public static function is_allowed_url( $url ): bool {
+		$host = strtolower( (string) wp_parse_url( (string) $url, PHP_URL_HOST ) );
+
+		if ( '' === $host ) {
+			return false;
+		}
+
+		$allowed = array(
+			wp_parse_url( PINGLIDE_APP_URL, PHP_URL_HOST ),
+			wp_parse_url( PINGLIDE_EMBED_URL, PHP_URL_HOST ),
+		);
+		if ( defined( 'PINGLIDE_EXTRA_HOSTS' ) ) {
+			$allowed = array_merge( $allowed, explode( ',', (string) PINGLIDE_EXTRA_HOSTS ) );
+		}
+
+		$allowed = array_map( 'strtolower', array_map( 'trim', array_filter( $allowed, 'is_string' ) ) );
+
+		return in_array( $host, $allowed, true );
+	}
+
+	/**
 	 * Where the owner manages a connected map's locations.
 	 *
 	 * @param array $map A stored connection.

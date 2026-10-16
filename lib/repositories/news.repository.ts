@@ -9,7 +9,7 @@ import { env } from "@/lib/env";
 import type { NewsCategory, NewsPost } from "@/lib/news/types";
 import type { NewsInput } from "@/lib/validation/news.schema";
 import { ConflictError } from "./errors";
-import { assertUploadable, PUBLIC_FILE_PERMISSIONS, removeFiles } from "./files.repository";
+import { anonymised, assertUploadable, PUBLIC_FILE_PERMISSIONS, removeFiles } from "./files.repository";
 import { toNewsPost } from "./mappers";
 import type { NewsRow } from "./types";
 
@@ -174,7 +174,7 @@ export async function setNewsCover(id: string, file: File): Promise<NewsPost> {
     const created = await admin.storage.createFile({
       bucketId: env.storageId,
       fileId: ID.unique(),
-      file,
+      file: anonymised(file),
       permissions: PUBLIC_FILE_PERMISSIONS,
     });
 

@@ -30,19 +30,18 @@ wording around them ("individual activity certificate No." → "company code", "
 | `{{company.legalForm}}` | Legal form in words | — (`lib/legal/values.ts`) | natural person carrying out individual activity (individuali veikla) |
 | `{{company.registrationNumber}}` | The individual activity certificate number. **Never the personal code (*asmens kodas*) printed on the same certificate** — that is not public, and the certificate number is what identifies an individuali veikla (it is what goes on its invoices) | `company.registrationNumber` | 1554078 |
 | `{{company.register}}` | Who keeps the registration | — (`lib/legal/values.ts`) | State Tax Inspectorate under the Ministry of Finance of the Republic of Lithuania (Valstybinė mokesčių inspekcija) |
-| `{{company.vatNumber}}` | VAT payer code, `LT` followed by digits. **If VAT registration does not happen, delete the sentence that uses it** (Terms §1) rather than leaving it blank | `company.vatNumber` | pending, as of 2026-10-12 |
-| `{{company.address}}` | Address. An individuali veikla has no registered office, so this would be the declared home address — **the owner has decided not to publish that** | `company.address` | not set, deliberately (see below) |
+| `{{company.vatNumber}}` | VAT payer code, `LT` followed by digits | `company.vatNumber` | LT100020950510 (set 2026-10-17) |
+| `{{company.address}}` | Address. An individuali veikla has no registered office, so this is the address the owner chose to publish | `company.address` | Debreceno g. 8-10, Klaipėda, Lithuania (set 2026-10-17; postal code to add) |
 
 The Law on Information Society Services (Art. 5) requires the name, address, register and
 registration number, contact email and VAT payer code to be freely and permanently available to
 users. Terms of Service §1 carries all of them; do not remove that section to shorten the page.
 
-**The address is the one that blocks.** Art. 5 asks for a geographic address, and the DPA's SCC
-annex names the importer's address, so the four pages stay drafts — 404 in production — while it
-is empty. That is the intended state, not a bug to route around: do not delete the placeholder
-from the documents to make them publish. The way out without exposing a home address is a
-correspondence or virtual-office address; whether that satisfies Art. 5 for an individuali veikla
-is lawyer question 11 in [legal/README.md](legal/README.md).
+**The address is required, not optional.** Art. 5 asks for a geographic address, and the DPA's SCC
+annex names the importer's address, so the four pages stay drafts — 404 in production — whenever it
+is empty. Do not delete the placeholder from the documents to make them publish. It is set as of
+2026-10-17; if the owner ever moves to a correspondence or virtual-office address, change it in
+`brand.json` and nowhere else.
 
 **Personal details stay on the legal pages.** The site footer (`components/brand/company-details.tsx`)
 and the email footer (`lib/email/templates/layout.ts`) print the product name and the support
@@ -84,7 +83,9 @@ All four are filled in `lib/legal/values.ts`.
 Registration is done (2026-10-11). Know what it does and does not give: **an individuali veikla is
 the person, so liability for the business is personal and unlimited** — there is no company in
 between. The Terms' liability cap (§18) still limits what a customer can claim under the contract,
-within what Lithuanian law allows, but nothing separates business debts from personal ones.
-Whether that is acceptable at the scale the plans are sized for, or a UAB is needed first, is
-lawyer question 11. What is left before publishing — the address, the VAT code and the rest — is
+within what Lithuanian law allows, but nothing separates business debts from personal ones, and
+it does not bind Visitors, authorities or GDPR claimants at all. The documents push every risk they
+lawfully can onto the customer (accuracy: Terms §10.3–10.7; indemnity: §19); what they cannot do
+is make the owner's personal assets unreachable. That takes insurance and a limited-liability
+entity (a *mažoji bendrija* or a UAB) — lawyer question 11. What is left before publishing — the address, the VAT code and the rest — is
 the checklist in [legal/README.md](legal/README.md).

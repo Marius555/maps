@@ -9,7 +9,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { LinkButton } from "@/components/ui/link-button";
 import { identifyUser } from "@/lib/posthog/client";
-import { takeOAuthNext } from "@/lib/auth/oauth-next";
+import { clearOAuthStarted, oauthStartedHere, takeOAuthNext } from "@/lib/auth/oauth-next";
 import { exchangeOAuthToken } from "@/lib/query/auth";
 import { queryKeys } from "@/lib/query/keys";
 
@@ -48,13 +48,20 @@ export function OAuthCallback() {
     secret: searchParams.get("secret"),
   }));
 
+  // Read once with the credentials, and spent in the effect below. A callback
+  // this tab did not start is somebody else's sign-in link (oauth-next.ts).
+  const [startedHere] = useState(() =>
+    typeof window === "undefined" ? true : oauthStartedHere(),
+  );
+
   const [failure, setFailure] = useState<unknown>(null);
 
-  const missing = !credentials.userId || !credentials.secret;
+  const missing = !credentials.userId || !credentials.secret || !startedHere;
 
   useEffect(() => {
     if (started.current || missing) return;
     started.current = true;
+    clearOAuthStarted();
 
     /**
      * The secret is a live credential sitting in the address bar, and from there

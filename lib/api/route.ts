@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/admin/auth/guard";
 import { requireUser } from "@/lib/auth/current-user";
 import { assertEmailVerified } from "@/lib/auth/email-gate";
 import type { AuthUser } from "@/lib/auth/types";
+import { env } from "@/lib/env";
 import { RATE_LIMITS, type RatePolicyName } from "@/lib/limits/rate";
 import { clientIp } from "@/lib/rate-limit/ip";
 import { rateLimit } from "@/lib/rate-limit/limiter";
@@ -14,6 +15,7 @@ import { repoContext, type RepoContext } from "@/lib/repositories/context";
 import { RateLimitError, RepositoryError } from "@/lib/repositories/errors";
 import type { ApiFieldErrors } from "./error-codes";
 import { fail } from "./responses";
+import { assertSameOrigin } from "./same-origin";
 
 export type Handler<Params> = (args: {
   request: NextRequest;
@@ -25,7 +27,8 @@ export type Handler<Params> = (args: {
 type RouteArgs<Params> = { params: Promise<Params> };
 
 /**
- * Wraps a route handler with the five things every one of them does: resolve the
+ * Wraps a route handler with the six things every one of them does: refuse a
+ * write another website made the browser send (`./same-origin.ts`), resolve the
  * caller, refuse a write from an account that has not confirmed its address,
  * await the params promise, build a repo context, and map thrown errors onto the
  * JSON envelope.
@@ -59,6 +62,8 @@ export function withAuth<Params = Record<string, never>>(
     args?: RouteArgs<Params>,
   ): Promise<NextResponse> => {
     try {
+      assertSameOrigin(request, env.appUrl);
+
       const user = await requireUser();
 
       rateLimit(options.rateLimit ?? defaultUserPolicy(request.method), user.id);
@@ -88,6 +93,8 @@ export function withoutAuth(
 ) {
   return async (request: NextRequest): Promise<NextResponse> => {
     try {
+      assertSameOrigin(request, env.appUrl);
+
       if (options.rateLimit) rateLimit(options.rateLimit, clientIp(request.headers));
 
       return await handler(request);
@@ -111,6 +118,8 @@ export function withAdmin<Params = Record<string, never>>(
     args?: RouteArgs<Params>,
   ): Promise<NextResponse> => {
     try {
+      assertSameOrigin(request, env.appUrl);
+
       await requireAdmin();
 
       const params = ((await args?.params) ?? {}) as Params;

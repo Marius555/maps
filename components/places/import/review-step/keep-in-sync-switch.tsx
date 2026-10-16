@@ -42,7 +42,7 @@ export function KeepInSyncSwitch({ isAllowed }: { isAllowed: boolean }) {
       </Switch.Content>
       <Description className="text-pretty">
         {isAllowed
-          ? `Updated ${AUTO_SYNC_EVERY}, or whenever you press Sync now. The sheet stays in charge: rows you edit or skip here come back as the sheet has them.`
+          ? `Updated ${AUTO_SYNC_EVERY}, or whenever you press Sync now. The sheet stays in charge: rows you edit or skip here come back as the sheet has them. Addresses are placed and published without a review step, so check the map after you change the sheet.`
           : "Syncing with a sheet is included on the Starter and Pro plans."}
       </Description>
     </Switch>
