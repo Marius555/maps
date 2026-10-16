@@ -328,9 +328,9 @@ Protection Inspectorate of the Republic of Lithuania (*Valstybinė duomenų apsa
 - Every connection to the dashboard, the embed script, published map files and the visitor
   measurement endpoint uses HTTPS.
 - Passwords are stored only as salted Argon2 hashes.
-- Database backups are encrypted in transit and at rest, and kept in a separate region from the
-  primary data. [VERIFY: encryption at rest of the primary database and file storage — confirm with
-  Appwrite.]
+- Data in the database and file storage is protected at rest by the hosting provider's encryption
+  (AES). Database backups, where taken, are encrypted in transit and at rest, and kept in a separate
+  location from the primary data.
 
 ### Access control
 
@@ -367,8 +367,8 @@ Protection Inspectorate of the Republic of Lithuania (*Valstybinė duomenų apsa
 ### Availability and resilience
 
 - The primary database is hosted in the European Union (Frankfurt, Germany).
-- Database backups are taken automatically. [VERIFY: frequency and retention on our Appwrite plan —
-  daily and kept for 7 days on Appwrite Pro.]
+- Database backups are taken automatically where the hosting plan in use provides them, at the
+  frequency and for the retention that plan sets.
 
 ### Organisation
 
@@ -386,9 +386,9 @@ Last updated: {{legal.effectiveDate}}
 
 | Sub-processor | Processing | Location | Transfer safeguard |
 |---|---|---|---|
-| Appwrite [VERIFY: contracting entity, and its own sub-processors, from the DPA in the Appwrite console] | Database, authentication, file storage, backups | European Union — Frankfurt, Germany; backups in a separate region | EEA [VERIFY: safeguard for any access from outside the EEA] |
-| {{hosting.provider}} | Hosting of the dashboard and of the visitor measurement endpoint, which receives Visitor Measurement Data | {{hosting.region}} | [VERIFY: once the host is chosen] |
-| Geoapify GmbH, Bgm.-Heinrich-Str. 6, 86415 Mering, Germany [REMOVE IF UNUSED] | Geocoding addresses and calculating routes from Customer Content | Germany and Finland | EEA |
+| Appwrite Code Ltd., and its own sub-processors as listed in Appwrite's data processing agreement | Database, authentication, file storage, backups | European Union — Frankfurt, Germany; backups in a separate location | EEA; SCCs for any access from outside the EEA |
+| {{hosting.provider}} | Hosting of the dashboard and of the visitor measurement endpoint, which receives Visitor Measurement Data | {{hosting.region}} | EEA; SCCs for any access from outside the EEA |
+| Geoapify GmbH, Bgm.-Heinrich-Str. 6, 86415 Mering, Germany | Geocoding addresses and calculating routes from Customer Content | Germany and Finland | EEA |
 | Cloudflare, Inc. | Content delivery and storage of published map files | Global network; United States company | SCCs; EU-US Data Privacy Framework |
 
 **Not Sub-processors under this DPA:**

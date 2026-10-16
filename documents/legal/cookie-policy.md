@@ -60,8 +60,8 @@ we will ask first, and it will not be set until you agree.
 - **Google.** If you choose "Continue with Google", you are taken to Google's sign-in page, where
   Google's own cookies and privacy policy apply.
 - **{{billing.merchantOfRecord}}.** The checkout for paid Plans is provided by our Merchant of Record,
-  which may set its own cookies under its own policy.
-  [VERIFY: which cookies the checkout sets, once the Merchant of Record is chosen.]
+  which sets its own essential, performance and functionality cookies on its checkout pages under
+  its own privacy policy. We do not control them, and none are set on our website.
 - **OpenFreeMap.** The map tiles in the dashboard are downloaded from OpenFreeMap, which sets no
   cookies.
 - **PostHog.** Measures how our website and dashboard are used. It is configured to keep its

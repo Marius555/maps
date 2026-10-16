@@ -1,9 +1,14 @@
 # Legal documents — read this before publishing anything here
 
-**Status: draft.** Researched and written on 13 September 2026 for Lithuanian law, business customers
-only. **This is not legal advice.** The drafts lean as far towards the provider as the checks below
-allowed, and a Lithuanian lawyer should review them before they bind anyone — especially the
-questions listed near the end.
+**Status: published 17 October 2026 (version 1.0), before the lawyer review.** Researched and
+written on 13 September 2026 for Lithuanian law, business customers only. **This is not legal
+advice.** They were published early because Google sign-in's consent screen needs a live privacy
+policy and terms; every placeholder was filled and every `[VERIFY]` closed from the providers'
+published pages, softening the sentence wherever a figure could not be confirmed. The lawyer
+review (step 2) is still owed — especially the questions listed near the end — and so is one
+check: **`billing.merchantOfRecord` was read off lemonsqueezy.com, not off a real invoice**
+(`lib/legal/values.ts`). `lib/legal/placeholders.test.ts` fails if an edit makes any of the four a
+draft again, which would 404 it in production.
 
 | File | What it is | Page (`brand.json` link) | Where the app links it |
 |---|---|---|---|
@@ -30,13 +35,14 @@ production build and, in development, renders under a notice listing what is mis
    public address were set in `brand.json` on 2026-10-17, so this step is complete. What
    registration does *not* give is a limit on personal liability — lawyer question 11.
 2. **Have a Lithuanian lawyer review them**, starting with [the questions below](#questions-for-the-lawyer).
-3. **Fill every placeholder** — in `brand.json`, or in `LEGAL_DETAILS` in `lib/legal/values.ts`
+3. ~~**Fill every placeholder**~~ **Done 2026-10-17** (the merchant of record still to be checked
+   against an invoice) — in `brand.json`, or in `LEGAL_DETAILS` in `lib/legal/values.ts`
    for the values `brand.json` has no field for. Not by find-and-replace in these files: the
    placeholders stay, so a value changed in `brand.json` changes in the documents too. The notice
    at the top of each page in development lists what is left.
-4. **Resolve every `[VERIFY: …]`** in the [list below](#verify-items), then delete the marker.
+4. ~~**Resolve every `[VERIFY: …]`**~~ **Done 2026-10-17**, and the rows below record how, in the [list below](#verify-items), then delete the marker.
    `grep -rn "\[VERIFY" documents/legal/` must return nothing.
-5. **Delete the rows that do not apply.** Rows marked `[REMOVE IF UNUSED]` or `[IF USED]` are there
+5. ~~**Delete the rows that do not apply.**~~ **Done 2026-10-17**: Geoapify is in use, so its rows stay. Rows marked `[REMOVE IF UNUSED]` or `[IF USED]` are there
    for a service that may or may not be in use. Delete the row, or keep it and delete the marker. If
    `GEOCODER_PROVIDER` / `ROUTING_PROVIDER` are not `geoapify`, list whatever `GEOCODER_URL` /
    `ROUTING_URL` point at instead — and note that CLAUDE.md §12 says the public Photon and OSRM demo
@@ -45,7 +51,8 @@ production build and, in development, renders under a notice listing what is mis
    carry legal deadlines. They are meant to be Cloudflare Email Routing rules forwarding to the same
    Gmail as support@ (see [../contact.md](../contact.md)); send a test to each before publishing.
 7. **Fix, or soften the text around, the [open code issues](#open-issues-in-the-code).**
-8. **Check a production build** (`npm run build && npm start`): the four pages must now answer 200
+8. ~~**Check a production build**~~ **Done 2026-10-17**, and the four `legal` URLs are set
+   (`npm run build && npm start`): the four pages must now answer 200
    rather than 404. **Then set the four `legal` URLs in `brand.json`** to `/terms`, `/privacy`,
    `/cookies` and `/dpa`. Setting a URL is what turns its link on in the app — `lib/brand.ts`
    draws nothing for an empty string — so do it only once the pages are live, or the footer
@@ -91,16 +98,16 @@ Change one of these and change it everywhere it appears.
 
 | # | Item | Where | How to close it |
 |---|---|---|---|
-| 1 | Appwrite's contracting entity, its own sub-processors, and the safeguard for any access from outside the EEA | Privacy §5; DPA Annex III | Download the DPA from Appwrite console → Organisation settings |
-| 2 | Appwrite backup region and retention on the plan actually in use (Pro: daily, 7 days) | Privacy §5; DPA Annex II | Appwrite console → Databases → Backups; appwrite.io/docs/products/databases/backups |
-| 3 | Encryption at rest of Appwrite's primary database and file storage | DPA Annex II | Appwrite DPA or security page |
+| 1 | ~~Appwrite's contracting entity, its own sub-processors, and the safeguard~~ — **closed 2026-10-17**: Appwrite Code Ltd. (appwrite.io/privacy), its sub-processors by reference to its DPA, SCCs (its privacy policy). Still worth downloading the signed DPA from the console | Privacy §5; DPA Annex III | — |
+| 2 | ~~Appwrite backup region and retention~~ — **closed 2026-10-17** by softening: "where the plan provides them". Backups are a Pro feature; the project may be on Free | Privacy §5; DPA Annex II | — |
+| 3 | ~~Encryption at rest~~ — **closed 2026-10-17**: AES, per appwrite.io/docs/advanced/security/gdpr | DPA Annex II | — |
 | 4 | ~~Automatic deletion of visitor session records by Plan~~ — **closed 2026-10-04**: built (`lib/analytics/retention.ts`), marker removed from both documents | Privacy §6; DPA Annex I.B | — |
-| 5 | Hosting provider for the dashboard and measurement endpoint, and its transfer safeguard | Privacy §5; DPA Annex III | Decided: Appwrite Sites, Frankfurt. Fill `hosting.*` in `lib/legal/values.ts` from the Appwrite DPA (same entity as item 1) |
-| 6 | Resend's contracting entity and how long it keeps delivery logs | Privacy §2, §5 | resend.com/legal/dpa and resend.com/legal/subprocessors |
-| 7 | Which cookies the Merchant of Record's checkout sets | Cookie §4 | The Merchant of Record's cookie policy, once chosen |
-| 8 | Whether a data protection officer is required (GDPR Art. 37(1)(b)) once visitor measurement runs at scale | Privacy §1 | Lawyer question 2 |
-| 9 | Whether Data Act Art. 26(b) is met by describing export formats on request, or needs a published register | Terms §13.3 | Lawyer question 8 |
-| 10 | PostHog's contracting entity, DPA, event retention, and the safeguard for any access from outside the EEA | Privacy §2, §5 | posthog.com/dpa and the project's data retention settings (EU cloud) |
+| 5 | ~~Hosting provider~~ — **closed 2026-10-17**: `hosting.*` = Appwrite Code Ltd. (Appwrite Sites), Frankfurt | Privacy §5; DPA Annex III | — |
+| 6 | ~~Resend's entity and log retention~~ — **closed 2026-10-17**: Plus Five Five, Inc. (resend.com/legal/dpa); logs "currently 30 days", from secondary pricing sources after Resend's March 2026 change | Privacy §2, §5 | — |
+| 7 | ~~Checkout cookies~~ — **closed 2026-10-17** by category (essential, performance, functionality), as lemonsqueezy.com/privacy names no cookies | Cookie §4 | — |
+| 8 | ~~DPO~~ — **closed 2026-10-17** with a reasoned "not required, reviewed as we grow"; lawyer question 2 still stands | Privacy §1 | — |
+| 9 | ~~Data Act Art. 26(b)~~ — **closed 2026-10-17** by describing the formats in Terms §13.3 itself; lawyer question 8 still stands | Terms §13.3 | — |
+| 10 | ~~PostHog~~ — **closed 2026-10-17**: PostHog Inc., EU cloud (Frankfurt), SCCs, retention "at most 7 years" (PostHog's longest plan retention). Confirm the project's retention setting | Privacy §2, §5 | — |
 
 ## Open issues in the code
 

@@ -20,10 +20,10 @@
     "privacyEmail": "privacy@pinglide.com"
   },
   "legal": {
-    "termsUrl": "",
-    "privacyUrl": "",
-    "cookiesUrl": "",
-    "dpaUrl": ""
+    "termsUrl": "/terms",
+    "privacyUrl": "/privacy",
+    "cookiesUrl": "/cookies",
+    "dpaUrl": "/dpa"
   },
   "social": {
     "x": "https://x.com/pinglide",

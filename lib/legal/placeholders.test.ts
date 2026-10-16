@@ -63,8 +63,9 @@ describe("legalPlaceholderValues", () => {
   it("links the documents to one another before brand.json does", () => {
     for (const doc of Object.values(LEGAL_DOCUMENTS)) {
       const key = `legal.${doc.brandKey}`;
+      const href = BRAND.legal[doc.brandKey] ?? doc.path;
       expect(values[key]).toBe(
-        BRAND.legal[doc.brandKey] ?? `${BRAND.website ?? ""}${doc.path}`,
+        href.startsWith("/") ? `${BRAND.website ?? ""}${href}` : href,
       );
     }
     expect(values["legal.subprocessorsUrl"]).toMatch(
@@ -89,6 +90,23 @@ describe("legalPlaceholderValues", () => {
           placeholder,
         );
       }
+    }
+  });
+
+  // The four pages are live (published 2026-10-17, linked from brand.json and
+  // from Google sign-in's consent screen). A draft answers 404 in production,
+  // so an edit that leaves a blank or a marker would take them down silently.
+  it("leaves every published document complete", () => {
+    for (const doc of Object.values(LEGAL_DOCUMENTS)) {
+      const markdown = readFileSync(
+        path.join(process.cwd(), "documents", "legal", doc.file),
+        "utf8",
+      );
+      const filled = fillPlaceholders(markdown, values);
+
+      expect(filled.unfilled, doc.file).toEqual([]);
+      expect(filled.markerCount, doc.file).toBe(0);
+      expect(filled.isDraft, doc.file).toBe(false);
     }
   });
 });

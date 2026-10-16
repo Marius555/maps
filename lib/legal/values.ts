@@ -18,7 +18,7 @@ export const LEGAL_DETAILS = {
   company: {
     /**
      * In words. The service is run as an *individuali veikla* (VMI certificate
-     * FR0468, from 2026-10-11); were it ever a company, this would read
+     * 1554078, from 2026-10-11); were it ever a company, this would read
      * "private limited liability company (UAB)".
      */
     legalForm:
@@ -36,9 +36,9 @@ export const LEGAL_DETAILS = {
   },
   legal: {
     /** e.g. "1.0". Raise it on every published change. */
-    version: "",
+    version: "1.0",
     /** At least 30 days after announcing a change that is not in customers' favour. */
-    effectiveDate: "",
+    effectiveDate: "17 October 2026",
   },
   billing: {
     /**
@@ -58,15 +58,20 @@ export const LEGAL_DETAILS = {
      * Empty means unset, and `lib/brand.ts`'s rule applies: nothing it feeds is
      * drawn. The legal documents are therefore incomplete until it is filled —
      * which is correct, because so is the arrangement they describe.
+     *
+     * TODO: confirm against a real invoice. Filled on 2026-10-17 from the
+     * footer of lemonsqueezy.com/buyer-terms ("Sold through Link, LLC f/k/a
+     * Lemon Squeezy LLC"), not from an invoice, so the documents could be
+     * published for Google sign-in.
      */
-    merchantOfRecord: "",
-    merchantOfRecordTermsUrl: "",
+    merchantOfRecord: "Link, LLC (formerly Lemon Squeezy LLC), trading as Lemon Squeezy",
+    merchantOfRecordTermsUrl: "https://www.lemonsqueezy.com/buyer-terms",
   },
   hosting: {
     /** Legal name of whoever runs the dashboard and the measurement endpoint. */
-    provider: "",
+    provider: "Appwrite Code Ltd. (Appwrite Sites)",
     /** e.g. "Frankfurt, Germany". */
-    region: "",
+    region: "European Union — Frankfurt, Germany",
   },
 };
 

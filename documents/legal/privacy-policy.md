@@ -16,9 +16,8 @@ The controller is **{{company.legalName}}**, individual activity certificate No.
 {{company.registrationNumber}}, {{company.address}}.
 
 Write to **{{contact.privacyEmail}}** about anything in this policy. We have not appointed a data
-protection officer.
-[VERIFY: GDPR Art. 37(1)(b) — confirm that no data protection officer is required once visitor
-measurement for customers runs at scale.]
+protection officer, because our core activities do not involve regular and systematic monitoring of
+people on a large scale (Article 37(1) GDPR). We will review that as the Service grows.
 
 ## 2. What we collect, why, and on what legal basis
 
@@ -28,12 +27,12 @@ measurement for customers runs at scale.]
 |---|---|---|---|
 | **Run your account** | Name, email address, password (stored only as a salted Argon2 hash, never readable), your Plan and account settings. If you choose "Continue with Google": the account identifier, name and email address Google shares with us | (b) contract | For the life of your account, then as in §8 |
 | **Sign you in and keep accounts secure** | Session records: IP address, browser, operating system, device type, country, and times. The sign-in cookie (see the [Cookie Policy]({{legal.cookiesUrl}})). Records of password-reset and email-confirmation requests | (f) our legitimate interest in keeping the Service and accounts secure | Session records until the session ends or expires (at most 1 year); security records up to 12 months |
-| **Send service emails** — confirming your address, resetting your password, and notices about your account, billing and changes to our terms | Email address, name, message content, delivery status | (b) contract; (c) legal obligation, for notices the law requires | Delivery logs as kept by our email provider [VERIFY: Resend log retention period] |
+| **Send service emails** — confirming your address, resetting your password, and notices about your account, billing and changes to our terms | Email address, name, message content, delivery status | (b) contract; (c) legal obligation, for notices the law requires | Delivery logs as kept by our email provider, which deletes them automatically after a short period (currently 30 days) |
 | **Host what you put into the Service** | Customer Content, which may include personal data such as contact names, phone numbers, email addresses and photos | We process it for our customer under our [Data Processing Agreement]({{legal.dpaUrl}}). For your own details in it: (b) contract | As set out in §8 |
 | **Bill paid Plans** | The Merchant of Record handles payment details — we never see card numbers. We receive: name, email address, company name, billing country and address, VAT number, Plan, amounts and subscription status | (b) contract; (c) accounting and tax law | Accounting records for 10 years, as Lithuanian accounting law requires; the rest for the life of your account |
 | **Answer support requests** | Your messages, and anything you tell us in them | (b) contract; (f) our legitimate interest in helping users | 24 months after the last message |
 | **Operate our servers** | Technical request logs: IP address, address requested, time, browser, error details | (f) our legitimate interest in running, securing and fixing the Service | As kept by our hosting provider, and no more than 12 months where we control it |
-| **Improve the Service** | How our website and the dashboard are used: pages viewed, buttons pressed, errors, and the steps you take (signing up, creating a map, adding locations, publishing, paying), with browser, device type and approximate location derived from the IP address. Once you sign in, this is linked to your account identifier, name and email address | (f) our legitimate interest in understanding and improving the Service | [VERIFY: PostHog event retention on our plan] |
+| **Improve the Service** | How our website and the dashboard are used: pages viewed, buttons pressed, errors, and the steps you take (signing up, creating a map, adding locations, publishing, paying), with browser, device type and approximate location derived from the IP address. Once you sign in, this is linked to your account identifier, name and email address | (f) our legitimate interest in understanding and improving the Service | For as long as our analytics provider retains it on our plan, and at most 7 years |
 | **Protect our legal position** | Any of the above that is relevant to a claim, dispute or request from an authority | (c) legal obligation; (f) our legitimate interest in establishing, exercising or defending legal claims | As long as needed, up to the end of the applicable limitation period |
 | **Tell customers about product news** | Name, email address | (f) our legitimate interest, for existing customers about similar services — or your consent. You can opt out in every email | Until you opt out |
 
@@ -62,11 +61,11 @@ Plan; and from your browser, when you use our website and dashboard.
 
 | Provider | What for | Where | Safeguard for transfers |
 |---|---|---|---|
-| Appwrite [VERIFY: contracting entity, from the DPA in the Appwrite console] | Database, file storage, sign-in, backups | European Union — Frankfurt, Germany. Backups are kept in a separate region [VERIFY: backup region and retention on our Appwrite plan] | EU hosting [VERIFY: safeguard for any access from outside the EEA] |
-| {{hosting.provider}} | Runs our website, the dashboard, and the endpoint that receives visitor measurement | {{hosting.region}} | [VERIFY: once the host is chosen] |
-| Resend [VERIFY: contracting entity] | Sending service emails | United States | EU Standard Contractual Clauses and the EU-US Data Privacy Framework |
-| PostHog [VERIFY: contracting entity and DPA] | Measuring how our website and dashboard are used, and reporting errors | European Union — Frankfurt, Germany | EU hosting [VERIFY: safeguard for any access from outside the EEA] |
-| Geoapify GmbH [REMOVE IF UNUSED] | Placing addresses you import on the map, and calculating routes you draw | Germany and Finland | European Economic Area |
+| Appwrite Code Ltd. | Database, file storage, sign-in, backups | European Union — Frankfurt, Germany. Backups, where taken, are encrypted and kept in a separate location | EU hosting; EU Standard Contractual Clauses under Appwrite's data processing agreement for any access from outside the EEA |
+| {{hosting.provider}} | Runs our website, the dashboard, and the endpoint that receives visitor measurement | {{hosting.region}} | EU hosting; EU Standard Contractual Clauses under Appwrite's data processing agreement for any access from outside the EEA |
+| Plus Five Five, Inc. (Resend) | Sending service emails | United States | EU Standard Contractual Clauses and the EU-US Data Privacy Framework |
+| PostHog Inc. | Measuring how our website and dashboard are used, and reporting errors | European Union — Frankfurt, Germany | EU hosting; EU Standard Contractual Clauses under PostHog's data processing agreement for any access from outside the EEA |
+| Geoapify GmbH | Placing addresses you import on the map, and calculating routes you draw | Germany and Finland | European Economic Area |
 | Cloudflare, Inc. | Storing and delivering published map files | Global network; United States company | EU Standard Contractual Clauses and the EU-US Data Privacy Framework |
 
 **Independent controllers**, whose own privacy policies apply:

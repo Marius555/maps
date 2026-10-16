@@ -420,10 +420,11 @@ appropriate for your own purposes.
 - the latest Snapshot of each Published Map;
 - Visitor Measurement Data still held — session records and daily statistics.
 
-Data is provided as CSV or JSON, and files in their original format. A description of the data
-structures and formats is available on request from {{contact.supportEmail}}.
-[VERIFY: Data Act Art. 26(b) expects a reference to an up-to-date online register of data structures
-and formats — publish one, or confirm on request is enough.]
+Data is provided as CSV or JSON, and files in their original format: locations as CSV with one
+column per field; tags, shapes, routes, card designs, settings and Visitor Measurement Data as JSON;
+Snapshots in the same JSON format the embed script reads; photos and logos as the files you
+uploaded. A detailed description of each data structure is available on request from
+{{contact.supportEmail}}.
 
 Excluded, because they are our intellectual property or trade secrets or would expose our security
 or other customers: our source code, the embed script, map style documents, internal logs, security
