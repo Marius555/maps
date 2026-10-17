@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DocsArticle } from "@/components/docs/docs-article";
 import { DocsCallout } from "@/components/docs/docs-callout";
+import { DocsFigure } from "@/components/docs/docs-figure";
 import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
@@ -30,6 +31,11 @@ export default function ShapesAndRoutesPage() {
       summary="Draw delivery areas, zones and lines on your map, import them from a GIS file, and draw driving routes between locations."
     >
       <DocsSection id="draw-menu" title="The drawing tools">
+        <DocsFigure
+          shot="editor-draw-tools"
+          alt="The Choose a drawing tool menu open over the map editor."
+        />
+
         <p>
           On the Map tab, press the shapes button, second from the left in the
           toolbar:

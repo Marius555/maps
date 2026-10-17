@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DocsArticle } from "@/components/docs/docs-article";
 import { DocsCallout } from "@/components/docs/docs-callout";
+import { DocsFigure } from "@/components/docs/docs-figure";
 import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
@@ -111,6 +112,11 @@ export default function PlansAndBillingPage() {
       </DocsSection>
 
       <DocsSection id="upgrading" title="Upgrading">
+        <DocsFigure
+          shot="settings-billing"
+          alt="Settings, Billing: the current plan and the three plans side by side with a Monthly / Yearly switch."
+        />
+
         <DocsSteps>
           <DocsStep title="Choose a plan">
             <p>

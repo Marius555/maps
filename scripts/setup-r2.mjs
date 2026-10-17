@@ -3,7 +3,7 @@
  *
  *   npm run setup:r2
  *
- * Makes the R2 bucket servable to strangers' websites, which is five settings and
+ * Makes the R2 bucket servable to strangers' websites, which is six settings and
  * every one of them is load bearing:
  *
  * 1. **Custom domain** (`SNAPSHOT_PUBLIC_URL`'s host) on the bucket. Never the
@@ -22,6 +22,13 @@
  *    crawler, curl, a prefetch) can fill the edge cache with a copy that has none,
  *    and every browser then fails CORS on that URL until it expires. "set", not
  *    "add", so the header is never doubled — a doubled ACAO fails CORS too.
+ * 6. **A configuration rule** turning Security Level and Browser Integrity Check
+ *    off for the host. Every request to it is a customer's page loading a script
+ *    or fetching JSON, and a Cloudflare challenge cannot render inside either: an
+ *    "I'm Under Attack" switch or a raised Security Level elsewhere on the zone
+ *    would blank every embedded map with no message on screen. **Bot Fight Mode
+ *    cannot be exempted per host on the Free plan** — never switch it on for this
+ *    zone. The probe at the end fails if anything is challenging the host anyway.
  *
  * Uses CLOUDFLARE_API_TOKEN, which the app itself never reads and which never goes
  * onto the deployed site. Safe to re-run: a second run prints only `ok`.
@@ -85,6 +92,22 @@ const ZONE_RULES = [
         headers: {
           "Access-Control-Allow-Origin": { operation: "set", value: "*" },
         },
+      },
+      enabled: true,
+    },
+  },
+  {
+    phase: "http_config_settings",
+    what: "no-challenge config rule",
+    dashboard: "Rules → Configuration Rules",
+    rule: {
+      ref: "snapshots_cdn_config",
+      description: `No security challenge on ${HOST} (npm run setup:r2)`,
+      expression: HOST_EXPRESSION,
+      action: "set_config",
+      action_parameters: {
+        security_level: "essentially_off",
+        bic: false,
       },
       enabled: true,
     },
@@ -232,26 +255,51 @@ async function zoneRule(zone, { phase, what, dashboard, rule }) {
 /**
  * What a customer's browser will see. There is no object at this path, so R2
  * answers 404 — and the CORS header must be on that answer too.
+ *
+ * Asked twice, as a browser and as a bare client, because Bot Fight Mode and
+ * Browser Integrity Check pick on the second and a visitor's embed fetch can
+ * look like either. A challenge shows up as `cf-mitigated`, or as an HTML 403/503
+ * where R2 would have answered.
  */
-async function probe() {
-  try {
-    const response = await fetch(`https://${HOST}/setup-r2-probe.json`, {
-      headers: { Origin: "https://some-customer-shop.example" },
-    });
-    const acao = response.headers.get("access-control-allow-origin");
+const PROBE_AGENTS = [
+  ["browser", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"],
+  ["bare client", "setup-r2-probe"],
+];
 
-    if (acao === "*") {
-      console.log(`  ok      https://${HOST} answers (HTTP ${response.status}) with ACAO *`);
-    } else {
+async function probe() {
+  for (const [label, agent] of PROBE_AGENTS) {
+    try {
+      const response = await fetch(`https://${HOST}/setup-r2-probe.json`, {
+        headers: { Origin: "https://some-customer-shop.example", "User-Agent": agent },
+      });
+      const acao = response.headers.get("access-control-allow-origin");
+      const type = response.headers.get("content-type") ?? "";
+      const challenged =
+        response.headers.has("cf-mitigated") ||
+        ((response.status === 403 || response.status === 503) && type.includes("text/html"));
+
+      if (challenged) {
+        failed += 1;
+        console.error(
+          `  FAIL    Cloudflare is challenging https://${HOST} (${label}, HTTP ${response.status}). ` +
+            "Every embedded map would be blank: check Bot Fight Mode, Security Level and WAF rules.",
+        );
+      } else if (acao === "*") {
+        console.log(
+          `  ok      https://${HOST} answers (${label}, HTTP ${response.status}) with ACAO *, no challenge`,
+        );
+      } else {
+        failed += 1;
+        console.error(
+          `  FAIL    https://${HOST} answered HTTP ${response.status} without ` +
+            "Access-Control-Allow-Origin. DNS may still be propagating — re-run shortly.",
+        );
+      }
+    } catch (error) {
       failed += 1;
-      console.error(
-        `  FAIL    https://${HOST} answered HTTP ${response.status} without ` +
-          "Access-Control-Allow-Origin. DNS may still be propagating — re-run shortly.",
-      );
+      console.error(`  FAIL    https://${HOST} is not reachable yet (${error.message}). Re-run shortly.`);
+      return;
     }
-  } catch (error) {
-    failed += 1;
-    console.error(`  FAIL    https://${HOST} is not reachable yet (${error.message}). Re-run shortly.`);
   }
 }
 

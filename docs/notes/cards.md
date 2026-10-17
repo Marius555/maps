@@ -1351,7 +1351,7 @@ is the entire point: the two renderers must agree.
 
 **And then it followed the wrong viewer, which is the second half of the same
 bug and cost three symptoms that looked unrelated.** `cardThemeClass` resolved
-Auto — and `DEFAULT_MAP_STYLE` is Auto, so this is most maps — by reading
+Auto — and `DEFAULT_MAP_STYLE` was Auto then, so this was most maps — by reading
 `window.matchMedia("(prefers-color-scheme: dark)")` at render. That is the
 *operating system's* preference, and the dashboard's theme is not it: HeroUI
 resolves localStorage first, so an owner whose OS is dark and who picked **Light**

@@ -142,6 +142,23 @@ export function setPinClustered(element: HTMLElement, isClustered: boolean): voi
   element.classList.toggle("map-pin--clustered", isClustered);
 }
 
+/**
+ * The pin a phone's Locations sheet just pointed at, rippling until the next tap.
+ *
+ * On a phone, picking a row shuts the sheet and flies to the pin *without*
+ * opening its card — the card would cover most of a small map, and the point of
+ * the tap was "where is it". A three-pass `playFound` is over before the eye
+ * has found the pin after a flight, so this one loops, and the canvas takes it
+ * off again on the next click anywhere (`locate` in map-canvas-impl.tsx).
+ *
+ * A class rather than a replay of the drop, so the diff pass can write it on
+ * every marker and a marker built afterwards — the optimistic row swapped for
+ * the server's — is told too. Reduced motion gets a still halo in CSS.
+ */
+export function setPinLocated(element: HTMLElement, isLocated: boolean): void {
+  element.classList.toggle("map-pin--located", isLocated);
+}
+
 export function setPinSelected(element: HTMLElement, isSelected: boolean): void {
   element.classList.toggle("map-pin--selected", isSelected);
   element.setAttribute("aria-current", isSelected ? "true" : "false");

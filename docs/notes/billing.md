@@ -80,6 +80,16 @@ The page itself is described in `docs/notes/settings.md`.
 - **Invoices are displayed, never kept.** Listed by the subscription id on the
   caller's own row, each linking the provider's signed PDF. `lib/billing/types.ts`
   says what that does and does not change about the merchant of record.
+  The link opens the provider's *Generate invoice* page, which asks for the buyer's
+  street address before it gives up the PDF. That is kept on purpose (2026-10-18).
+  `POST /subscription-invoices/{id}/generate-invoice` is free and returns the PDF
+  directly, but it requires name, street, city, ZIP and country on every call, and
+  the provider only holds city and country for us.
+- **The store's custom domain must never be the app's own domain.** The provider
+  builds every signed link from it (card update, billing portal), so with
+  `pinglide.com` set there, Update and Edit opened our own 404. Use
+  `pinglide.lemonsqueezy.com` or a CNAME'd subdomain. `npm run setup:lemon`
+  warns on it, and `--verify` fails.
 - **`billingStanding` reads the row, not `getUserPlan`.** Under `DISABLE_ALL_PLAN`
   the latter answers "pro" for everybody; billing controls taken from it would
   offer a developer a switch away from a plan they never bought.

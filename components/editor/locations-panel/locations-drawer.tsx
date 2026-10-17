@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 
@@ -19,25 +19,30 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
  * attribution ⓘ stays under the sheet on purpose (the owner's call; same file).
  * The containing block and the clip the sheet needs are on the editor row in
  * `map-editor.tsx`.
+ *
+ * Open or shut is the caller's, because picking a location puts the sheet away
+ * — see `EditorSidebar`.
  */
 export function LocationsDrawer({
   title,
   meta,
+  isOpen,
+  onOpenChange,
   children,
 }: {
   title: string;
   /** The count badge — it is half of what the shut sheet exists to show. */
   meta: ReactNode;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   children: ReactNode;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-
   return (
     <BottomSheet
       contentId="locations-sheet-content"
       label={title}
       isOpen={isOpen}
-      onOpenChange={setIsOpen}
+      onOpenChange={onOpenChange}
       peek={
         <>
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>

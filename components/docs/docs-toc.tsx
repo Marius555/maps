@@ -27,6 +27,10 @@ const READING_LINE_PX = 96;
  *
  * Plain `#id` links, so the browser's own jump and `scroll-mt-8` do the work and
  * there is no smooth scroll for reduced motion to switch off.
+ *
+ * The list hangs off a hairline rule and the current entry is marked *on* the
+ * rule, as Appwrite's is — a fill behind every entry would compete with the
+ * rail's current guide, which uses one.
  */
 export function DocsToc() {
   const ref = useRef<HTMLElement>(null);
@@ -77,11 +81,11 @@ export function DocsToc() {
     >
       {entries.length > 1 && (
         <>
-          <h2 className="px-2.5 pb-1 text-[0.6875rem] font-medium tracking-wide text-muted uppercase">
+          <h2 className="pb-3 text-[0.6875rem] font-medium tracking-wide text-muted uppercase">
             On this page
           </h2>
 
-          <ul className="space-y-0.5">
+          <ul className="border-l border-border">
             {entries.map((entry) => {
               const isCurrent = entry.id === currentId;
               return (
@@ -89,10 +93,10 @@ export function DocsToc() {
                   <a
                     href={`#${entry.id}`}
                     aria-current={isCurrent ? "location" : undefined}
-                    className={`block rounded-lg px-2.5 py-1.5 text-[0.8125rem] transition-[color,background-color] duration-[var(--duration-fast)] ${
+                    className={`-ml-px block border-l py-1.5 pl-4 text-[0.8125rem] transition-[color,border-color] duration-[var(--duration-fast)] ${
                       isCurrent
-                        ? "bg-default font-medium text-foreground"
-                        : "text-muted hover:bg-default/60 hover:text-foreground"
+                        ? "border-foreground font-medium text-foreground"
+                        : "border-transparent text-muted hover:text-foreground"
                     }`}
                   >
                     {entry.title}

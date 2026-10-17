@@ -136,7 +136,7 @@ and is not done. Signup and Google sign-in now honour `?next=` for it. Its publi
 `/for/wordpress`, reached from the navbar's **Integrations** menu, which lists
 `lib/marketing/integrations.ts`. `docs/notes/distribution.md`.
 
-**Not built yet, and next — the rest of Week 4:** landing page, docs with screenshots. (The
+**Not built yet, and next — the rest of Week 4:** landing page. (The docs have their screenshots now, taken from the running app by `npm run docs:screenshots`. The
 one platform page §10 asked for is WordPress's, not Webflow's.) Plus the two upstreams §12 says are forced before anyone pays
 us, which are now a switch rather than two machines: `GEOCODER_PROVIDER=geoapify` and
 `ROUTING_PROVIDER=geoapify`, both currently set. What is owed there is a plan decision and
@@ -169,6 +169,7 @@ npm run typecheck    # next typegen && tsc --noEmit
 npm run lint         # eslint
 npm run test         # vitest run
 npm run e2e          # playwright, against next dev as the E2E_EMAIL account — e2e/README.md
+npm run docs:screenshots  # retake the /docs screenshots from the running app (both themes) — docs/notes/marketing.md
 npm run build:wordpress  # zip distribution/wordpress/pinglide -> public/downloads (also on prebuild)
 npm run build:embed  # vite build → public/embed, copy MapLibre runtime, check size, write version.json
 npm run release -- patch|minor|major  # bump, CHANGELOG, commit + tag (never pushes) — docs/notes/versioning.md
@@ -433,7 +434,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `components/analytics/**`, `lib/analytics/**`, `embed/src/track.ts`, `app/api/collect/**` | `docs/notes/analytics.md` |
 | `components/auth/**`, `lib/auth/**`, `lib/email/**`, `app/(auth)/**`, `app/api/auth/**`, `proxy.ts` | `docs/notes/auth.md` |
 | `lib/sheet-sync/**`, `components/places/sheet-sync/**`, `app/api/**/sheet-link/**`, `app/api/cron/**`, `functions/**` | `docs/notes/sheet-sync.md` |
-| `app/(marketing)/**`, `components/marketing/**`, `lib/marketing/**` | `docs/notes/marketing.md` |
+| `app/(marketing)/**`, `components/marketing/**`, `lib/marketing/**`, `components/docs/**`, `lib/docs/**`, `e2e/docs-screenshots/**` | `docs/notes/marketing.md` |
 | `lib/billing/**`, `lib/repositories/{subscriptions,usage,plan-limits}.repository.ts`, `app/api/webhooks/billing/**`, `app/(dashboard)/settings/billing/**`, `app/(marketing)/upgrade/**`, `app/api/admin/discounts/**`, `components/admin/sections/discounts/**` | `docs/notes/billing.md` |
 | `app/(dashboard)/settings/**`, `components/user-settings/**`, `lib/theme/**`, `lib/account-deletion/**`, `lib/auth/sessions.ts`, the `.steady` block in `globals.css` | `docs/notes/settings.md` |
 | `lib/notifications/**`, `components/notifications/**`, `app/api/notifications/**`, `lib/repositories/notifications.repository.ts` | `docs/notes/notifications.md` |
@@ -765,7 +766,7 @@ Do not start a phase before the previous one works end to end.
 
 One deviation worth knowing: **the embed's search does not geocode.** It filters the places already in the snapshot by name and address. Geocoding a visitor's typed query would be a metered call in the visitor's path, which §2 forbids outright — the geocoder runs at import time and never again. "Find nearest" uses the browser's own geolocation, which is free and more accurate than resolving a typed address anyway.
 
-**Week 4 — Business layer. ← in progress.** Auth (split-screen login/signup, Google OAuth2), transactional email, the pricing page, plan limits and the MoR integration + webhook are **done** — see §0. Still owed: landing page, docs with screenshots — the one platform page is done, for WordPress rather than Webflow. **Our own geocoding and routing instances belong here too and are the two that are actually forced** — the public Photon and OSRM endpoints both forbid what a paying customer would make us do with them (§12). Own PMTiles on R2 is *not* on this list any more: OpenFreeMap permits commercial use, so that one is insurance to buy when it suits, not a gate to pass.
+**Week 4 — Business layer. ← in progress.** Auth (split-screen login/signup, Google OAuth2), transactional email, the pricing page, plan limits and the MoR integration + webhook are **done** — see §0. Still owed: the landing page — docs with screenshots are done, and the one platform page is done, for WordPress rather than Webflow. **Our own geocoding and routing instances belong here too and are the two that are actually forced** — the public Photon and OSRM endpoints both forbid what a paying customer would make us do with them (§12). Own PMTiles on R2 is *not* on this list any more: OpenFreeMap permits commercial use, so that one is insurance to buy when it suits, not a gate to pass.
 
 **Then stop building and go get ten customers.** What they ask for decides Phase 2 — not this file.
 

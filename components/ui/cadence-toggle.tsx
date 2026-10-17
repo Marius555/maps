@@ -48,7 +48,7 @@ export function CadenceToggle({
             onClick={() => {
               onChange(option);
             }}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+            className={`cursor-pointer rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
               isSelected
                 ? "bg-surface text-foreground"
                 : "text-muted hover:text-foreground"

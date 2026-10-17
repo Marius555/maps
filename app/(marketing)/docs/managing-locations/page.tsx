@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DocsArticle } from "@/components/docs/docs-article";
 import { DocsCallout } from "@/components/docs/docs-callout";
+import { DocsFigure } from "@/components/docs/docs-figure";
 import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
@@ -30,6 +31,11 @@ export default function ManagingLocationsPage() {
       summary="Find, filter and fix your locations, and fill in their contact details, opening hours, photos and logo."
     >
       <DocsSection id="locations-page" title="The Locations page">
+        <DocsFigure
+          shot="locations-list"
+          alt="The Locations page listing fifteen locations with their tags."
+        />
+
         <p>
           Open <strong>Locations</strong> in your map’s sidebar to see every
           location — a table on a wide screen, rows on a phone. Click one to edit
@@ -133,6 +139,11 @@ export default function ManagingLocationsPage() {
       </DocsSection>
 
       <DocsSection id="edit" title="Editing a location">
+        <DocsFigure
+          shot="edit-location"
+          alt="The Edit location dialog for Fieldwork Covent Garden, with its pin on a small map, name, address, tags and pin."
+        />
+
         <p>
           Opening a location brings up <strong>Edit location</strong>. Nothing is
           saved until <strong>Save changes</strong>; <strong>Cancel</strong>{" "}

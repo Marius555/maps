@@ -15,6 +15,13 @@ if (existsSync(".env")) process.loadEnvFile(".env");
 
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
+// Playwright runs every project unless told otherwise, so the docs screenshot
+// capture would ride along with `npm run e2e` and rewrite the committed images.
+// It runs only when asked for by name; workers inherit the flag from here.
+if (process.argv.some((arg) => arg.includes("docs-screenshots"))) {
+  process.env.DOCS_SCREENSHOTS = "1";
+}
+
 export default defineConfig({
   testDir: "./e2e",
   // A cold `next dev` compiles each route on first visit, which routinely
@@ -39,7 +46,7 @@ export default defineConfig({
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "chromium",
-      testIgnore: /mobile-editor\.spec\.ts/,
+      testIgnore: [/mobile-editor\.spec\.ts/, /docs-screenshots[\\/]/],
       use: { ...devices["Desktop Chrome"], storageState: AUTH_FILE },
       dependencies: ["setup"],
     },
@@ -57,6 +64,15 @@ export default defineConfig({
       name: "mobile-editor",
       testMatch: /mobile-editor\.spec\.ts/,
       use: { ...devices["Pixel 7"], storageState: AUTH_FILE },
+      dependencies: ["setup"],
+    },
+    {
+      // Not a test: the screenshots in /docs (`npm run docs:screenshots`,
+      // e2e/docs-screenshots/capture.spec.ts). Only ever run by name, so
+      // `npm run e2e` never rewrites them.
+      name: "docs-screenshots",
+      testMatch: /docs-screenshots[\\/]capture\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], storageState: AUTH_FILE },
       dependencies: ["setup"],
     },
   ],

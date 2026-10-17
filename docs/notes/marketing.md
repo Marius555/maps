@@ -99,12 +99,34 @@
   (no dependency; its tokens must join back to the input, which the test holds)
   on `.code-surface`, one dark ground in both themes. The Publish tab's snippet
   uses the same pair.
-- **The guides cap prose at `max-w-3xl` and spend the freed width, from `xl`, on
-  "On this page"** (`components/docs/docs-toc.tsx`, read from the article's own
-  `section[id]`s). Callouts are tinted — `--accent-soft` for a note, a `--warning`
-  wash for a warning — with body text kept `text-foreground`. The guides were cut
-  ~20% on 2026-10-10 at the owner's request: keep labels exact, keep every step,
-  limit and fix, and drop the why.
+- **The guides are laid out after Appwrite's docs** (owner, 2026-10-18 — full
+  near-white prose in dark mode hurt to read). Running text is `--docs-prose`
+  (`text-docs-prose`, oklch 40% / 73%, ~9:1 and ~8.5:1); headings, `<strong>`,
+  link text and inline code stay foreground, and that contrast is what the eye
+  scans by — do not put body copy back on `text-foreground`. Columns: a 220px rail
+  (`docs-nav-list.tsx`, shared with the phone's "Guides ·" disclosure, which is in
+  the flow because nothing inside `MarketingMain` may be fixed), a `44rem`
+  article, and from `xl` a 208px "On this page" hung off a hairline rule
+  (`docs-toc.tsx`, read from the article's own `section[id]`s). Callouts are a
+  neutral raised panel; the tone is the icon (and an amber hairline for a
+  warning). Group eyebrow above each title and the Previous/Next pager are read
+  from the URL (`use-current-article.ts`), so a new guide is still one entry in
+  `lib/docs/articles.ts` plus its page. Each section's `#` link sits beside its
+  `<h2>`, not inside it, so the heading's name and the TOC entry stay the title.
+  The guides were cut ~20% on 2026-10-10 at the owner's request: keep labels
+  exact, keep every step, limit and fix, and drop the why.
+- **The guides' screenshots are taken from the running app, never drawn.**
+  `npm run docs:screenshots` (dev server up, E2E account in `.env`) seeds a demo
+  map from `e2e/docs-screenshots/demo-map.ts` with fixed coordinates (no lookups),
+  shoots every entry in `SHOTS` in both themes, writes
+  `public/docs/screenshots/<shot>-<theme>.jpg` and regenerates
+  `lib/docs/screenshots.generated.ts`, which types `DocsFigure`'s `shot`. It is
+  its own Playwright project, and the spec skips unless run by that name, so
+  `npm run e2e` never rewrites the images. Before each shot `scrub` swaps any
+  email, the account's name (whole text nodes only: the test account is called
+  "test"), its initials and the dev origin for placeholders and production URLs.
+  **Re-run it after changing any screen a guide shows.** Viewport shots only; a
+  `fullPage` capture blanks an idle MapLibre canvas.
 - **The Integrations popover does not scale, and its corners are concentric.**
   `.mk-nav-popover` (globals.css) resets HeroUI's zoom variables to 1 and sets
   16px outside / 6px padding / 10px rows; the trigger sits in `.steady`, which

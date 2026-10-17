@@ -71,6 +71,7 @@ npx playwright show-report
 | `publish`, `embed`, `analytics` | The snapshot contract: search, tag narrowing, republish to the same URL, designer settings, the domain allowlist, attribution, **no metered call in the visitor's path**; one analytics beacon per session |
 | `account`, `admin`, `notifications`, `news` | Profile and theme; the console's guard; a notification and a news post round-trip |
 | `mobile-editor` (Pixel 7) | The editor's sheet, add-by-search and publish at phone width |
+| `docs-screenshots/capture` | Not a test: retakes the /docs screenshots. Runs only as `npm run docs:screenshots`, and skips itself in a normal run |
 
 ## How it is put together
 

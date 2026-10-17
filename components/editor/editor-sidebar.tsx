@@ -1,7 +1,7 @@
 "use client";
 
 import { ScrollShadow } from "@heroui/react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { RowDragProvider } from "@/components/groups/row-drag-context";
 import type { DraggedObject } from "@/components/groups/use-row-drag";
@@ -126,6 +126,15 @@ export function EditorSidebar({
     places.length + shapes.length + groups.length <= ANIMATE_MOVES_UP_TO;
 
   /*
+   * Whether the bottom sheet is up, held here rather than in the drawer so that
+   * picking a location can put it away. On a phone the sheet covers two thirds
+   * of the map, and the row you just tapped is about a pin behind it — so the
+   * map the camera is flying over has to be the thing left on screen. At `lg`
+   * the panel is a column and this value is ignored.
+   */
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  /*
    * Whether a dragged object is in a group, which is what decides if the ungroup
    * strip is offered. The same rule the lists follow: a `groupId` naming a group
    * that is not in the list reads as ungrouped, so a member of a group that has
@@ -156,6 +165,8 @@ export function EditorSidebar({
           is the only part of this that is on screen. See LocationsDrawer. */}
       <LocationsDrawer
         title="Locations"
+        isOpen={isSheetOpen}
+        onOpenChange={setIsSheetOpen}
         /* Counts every location on the map, grouped or not: this is the plan
            limit, not the length of the list under it. */
         meta={<PlaceCountBadge count={places.length} limit={placeLimit} />}
@@ -192,7 +203,10 @@ export function EditorSidebar({
             animateMoves={animateMoves}
             pendingAddressIds={pendingAddressIds}
             failedAddressIds={failedAddressIds}
-            onSelectPlace={onSelect}
+            onSelectPlace={(placeId) => {
+              setIsSheetOpen(false);
+              onSelect(placeId);
+            }}
             onEditPlace={onEdit}
             onSelectShape={onSelectShape}
             onEditShape={onEditShape}

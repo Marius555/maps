@@ -30,7 +30,7 @@ const DROP_RANKS = dropRanks(HERO_PINS);
  * **Still no MapLibre.** It was the live embed once, and a store locator
  * squeezed into a hero arrived with its search panel, its toolbar and two
  * toggles under it — a busy screenshot rather than a map. The ground is the
- * editor's basemap rendered once and committed as an image (Positron on the
+ * editor's basemap rendered once and committed as an image (Mono on the
  * light site, Carbon on the dark one — see `.mk-hero-map__stage` in
  * globals.css). What moves is four things a visitor to a customer's site
  * actually gets, and nothing else: the pins landing, a card on a pin, the tag

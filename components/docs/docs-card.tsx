@@ -16,18 +16,18 @@ export function DocsCard({ article }: { article: DocsArticle }) {
   return (
     <Link
       href={docsHref(slug)}
-      className="flex w-full gap-4 rounded-2xl border border-border bg-surface p-5 transition-colors duration-[var(--duration-fast)] hover:border-border-secondary hover:bg-default/40"
+      className="flex w-full gap-4 rounded-xl border border-border bg-surface p-5 transition-colors duration-[var(--duration-fast)] hover:border-border-secondary hover:bg-default/30"
     >
       <span
         aria-hidden="true"
-        className="grid size-9 shrink-0 place-items-center rounded-xl bg-default text-foreground"
+        className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-default/50 text-foreground"
       >
         <Icon className="size-4.5" />
       </span>
 
       <span className="min-w-0 space-y-1">
         <span className="block font-medium text-foreground">{title}</span>
-        <span className="block text-pretty text-sm/6 text-muted">{summary}</span>
+        <span className="block text-pretty text-sm/6 text-docs-prose">{summary}</span>
       </span>
     </Link>
   );

@@ -122,8 +122,8 @@ describe("style tables", () => {
     for (const style of MAP_STYLES) expect(style.length).toBeLessThanOrEqual(32);
   });
 
-  it("defaults to Positron, the same in a light or a dark dashboard", () => {
-    expect(DEFAULT_MAP_STYLE).toBe("positron");
+  it("defaults to Mono, the same in a light or a dark dashboard", () => {
+    expect(DEFAULT_MAP_STYLE).toBe("mono");
     expect(isAutoMapStyle(DEFAULT_MAP_STYLE)).toBe(false);
   });
 

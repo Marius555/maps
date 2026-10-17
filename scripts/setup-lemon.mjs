@@ -184,6 +184,32 @@ if (store.attributes.currency !== "EUR") {
   );
 }
 
+/*
+ * The store's domain is the host of every signed link the provider hands us —
+ * the card update and the billing portal on Settings → Billing. Set to the
+ * app's own domain, both opened our Next 404 and nothing else said so. A custom
+ * domain only works if it is CNAME'd to the provider, which a 404 at /billing
+ * (a portal path) rules out.
+ */
+const storeDomain = store.attributes.domain ?? "";
+let storeDomainBroken = false;
+
+if (storeDomain && !storeDomain.endsWith(".lemonsqueezy.com")) {
+  const probe = await fetch(`https://${storeDomain}/billing`, { redirect: "manual" }).catch(
+    () => null,
+  );
+
+  if (!probe || probe.status === 404) {
+    storeDomainBroken = true;
+    console.warn(
+      `  ! Store domain is ${storeDomain}, which does not serve the provider's pages.\n` +
+        "    'Update payment method' and 'Billing details' on Settings → Billing will 404.\n" +
+        `    Lemon Squeezy → Settings → Domains: remove it (back to ${store.attributes.slug}.lemonsqueezy.com)\n` +
+        "    or use a subdomain CNAME'd as Lemon Squeezy instructs. Never the app's own domain.",
+    );
+  }
+}
+
 const { data: variants } = await call("/variants");
 
 /*
@@ -291,6 +317,13 @@ if (verify) {
     );
   }
 
+  if (storeDomainBroken) {
+    problems.push("store domain");
+    console.log(
+      `  WRONG ${"Store domain".padEnd(16)} ${storeDomain} 404s the provider's pages  (Lemon dashboard)`,
+    );
+  }
+
   if (problems.length === 0) {
     console.log();
     console.log("All correct. Nothing was written.");
@@ -303,7 +336,11 @@ if (verify) {
       problems.length === 1 ? "value" : "values"
     }.`,
   );
-  console.log("Run without --verify to correct it. Nothing was written.");
+  console.log(
+    problems.length === 1 && storeDomainBroken
+      ? "Change the store domain in the Lemon Squeezy dashboard. Nothing was written."
+      : "Run without --verify to correct it. Nothing was written.",
+  );
   process.exit(1);
 }
 

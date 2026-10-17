@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DocsArticle } from "@/components/docs/docs-article";
 import { DocsCallout } from "@/components/docs/docs-callout";
+import { DocsFigure } from "@/components/docs/docs-figure";
 import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
@@ -215,6 +216,11 @@ export default function ImportingLocationsPage() {
       </DocsSection>
 
       <DocsSection id="mapping" title="Step 2 — Columns">
+        <DocsFigure
+          shot="import-columns"
+          alt="The Columns step: four rows from a spreadsheet, each column named Name, Street address, City, Postcode, Phone, Latitude and Longitude."
+        />
+
         <p>
           Your file is shown as a table, with our reading of each column above
           it. Correct anything we got wrong.
@@ -296,6 +302,11 @@ export default function ImportingLocationsPage() {
       </DocsSection>
 
       <DocsSection id="review" title="Step 4 — Review">
+        <DocsFigure
+          shot="import-review"
+          alt="The Review step: the imported rows on a map beside their list, ready to import."
+        />
+
         <p>
           A map above your rows, and still nothing saved. The header says{" "}
           <strong>N of M rows are ready</strong>, with tallies for ready, need

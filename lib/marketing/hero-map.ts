@@ -41,7 +41,8 @@ export const HERO_APPEARANCE = {
 } as const;
 
 /**
- * Positron for the light site, Carbon for the dark one.
+ * Mono for the light site, Carbon for the dark one — the default basemap and
+ * its grey dark counterpart.
  *
  * `file` is the stem under `/public/marketing/`; each look ships at 1× and 2×
  * (`<file>.webp`, `<file>@2x.webp`). The paths are written out again in
@@ -49,7 +50,7 @@ export const HERO_APPEARANCE = {
  * is the only way to have the browser fetch just the one it shows.
  */
 export const HERO_LOOKS = [
-  { theme: "light", style: "positron", file: "hero-positron" },
+  { theme: "light", style: "mono", file: "hero-mono" },
   { theme: "dark", style: "carbon", file: "hero-carbon" },
 ] as const;
 

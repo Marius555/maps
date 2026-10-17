@@ -22,6 +22,8 @@
   /* Ours, not HeroUI's — see `--warning-ink` below. Without this line the
      variable exists but `text-warning-ink` is not a utility. */
   --color-warning-ink: var(--warning-ink);
+  /* The guides' body text — `text-docs-prose`. See `--docs-prose` below. */
+  --color-docs-prose: var(--docs-prose);
 }
 
 
@@ -128,6 +130,16 @@
    * `--surface-secondary`, clearing the 3:1 floor for non-text content.
    */
   --warning-ink: oklch(54% 0.13 85);
+
+  /*
+   * The guides' running text (components/docs/docs-article.tsx). A step back
+   * from `--foreground` so a long page is not a wall of full-contrast ink —
+   * headings, `<strong>` and link text stay foreground and are what the eye
+   * scans by, the way Appwrite's docs read. Grey at zero chroma like every
+   * other neutral, ~9:1 here and ~8.5:1 on the dark canvas: well over AA, and
+   * deliberately above `--muted`, which is for captions rather than reading.
+   */
+  --docs-prose: oklch(40% 0 0);
   --danger: oklch(65.32% 0.2378 359.62);
   --danger-foreground: oklch(99.11% 0 0);
 
@@ -254,6 +266,7 @@
   --warning-foreground: oklch(24% 0.04 85);
   /* Same amber, already legible on a dark surface. */
   --warning-ink: oklch(80% 0.14 85);
+  --docs-prose: oklch(73% 0 0);
   --danger: oklch(64% 0.21 359.62);
   --danger-foreground: oklch(99.11% 0 0);
 }
@@ -1675,6 +1688,24 @@ html:has([data-app-frame]) {
 
 @media (prefers-reduced-motion: reduce) {
   .pulsing-pins .map-pin__pulse {
+    animation: none;
+    opacity: 0.3;
+    transform: scale(2);
+  }
+}
+
+/*
+ * The pin a phone's Locations sheet pointed at, rippling until the next tap —
+ * `setPinLocated` in components/map/pin-marker.ts. The same loop as the Edit
+ * dialog's pin above, and the same still halo under reduced motion, because a
+ * state told only in motion is told to nobody.
+ */
+.map-pin--located .map-pin__pulse {
+  animation: map-pin-drop 1.6s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-pin--located .map-pin__pulse {
     animation: none;
     opacity: 0.3;
     transform: scale(2);
@@ -3727,10 +3758,10 @@ body.is-pin-dragging * {
   height: max(100cqh, 50cqw);
   translate: -50% -50%;
   background-color: var(--surface-secondary);
-  background-image: url("/marketing/hero-positron.webp");
+  background-image: url("/marketing/hero-mono.webp");
   background-image: image-set(
-    url("/marketing/hero-positron.webp") 1x,
-    url("/marketing/hero-positron@2x.webp") 2x
+    url("/marketing/hero-mono.webp") 1x,
+    url("/marketing/hero-mono@2x.webp") 2x
   );
   background-size: 100% 100%;
 }

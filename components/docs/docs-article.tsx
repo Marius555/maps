@@ -1,3 +1,5 @@
+import { DocsEyebrow } from "./docs-eyebrow";
+import { DocsPager } from "./docs-pager";
 import { DocsToc } from "./docs-toc";
 
 /**
@@ -8,19 +10,21 @@ import { DocsToc } from "./docs-toc";
  * body's element styles are descendant variants set once, in one place, rather
  * than a class repeated on every paragraph in every guide.
  *
- * **Body copy is `text-foreground`, not `text-muted`.** `--muted` is `L 50%` on
- * an `L 97.5%` page, which lands near 4.2:1 — fine for a caption or a count, and
- * under AA for something somebody is going to read for five minutes. Muted is
- * kept for the summary line, which is short and set larger.
+ * **Running text is `--docs-prose`, a step back from `--foreground`** (owner,
+ * 2026-10-18). It used to be full foreground, chosen because `--muted` is under
+ * AA for long reading — and in dark mode that made every guide a wall of
+ * near-white. `--docs-prose` sits between the two at ~8.5–9:1 in both themes.
+ * Headings, `<strong>`, link text and inline code stay foreground: they are what
+ * the eye scans by, and the contrast between them and the prose is the point.
+ * Appwrite's docs read the same way, which is where this was taken from.
  *
  * **A measure cap, and the width beside it spent on "On this page".** The body
- * once filled the column, and at `text-sm` on a laptop that is a 150-character
- * line nobody can follow back to its start. `max-w-3xl` holds prose near 75
- * characters; from `xl` the room it frees is `DocsToc`'s column, so the page is
- * still full and the reader has a map of the guide beside it. The column is
- * reserved whether or not the list has filled in, so nothing moves on hydration.
- * It sits outside the body's descendant variants on purpose — they would
- * underline and bullet its links.
+ * once filled the column, and on a laptop that was a 150-character line nobody
+ * can follow back to its start. `44rem` holds 15px prose near 85 characters;
+ * from `xl` the room it frees is `DocsToc`'s column. The column is reserved
+ * whether or not the list has filled in, so nothing moves on hydration. It sits
+ * outside the body's descendant variants on purpose — they would underline and
+ * bullet its links.
  */
 export function DocsArticle({
   title,
@@ -32,31 +36,36 @@ export function DocsArticle({
   children: React.ReactNode;
 }) {
   return (
-    <article className="flex min-w-0 flex-1 gap-10">
-      <div className="min-w-0 max-w-3xl flex-1">
+    <article className="flex min-w-0 flex-1 gap-12">
+      <div className="min-w-0 max-w-[44rem] flex-1">
         <header className="space-y-3 pb-10">
-          <h1 className="text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl">
+          <DocsEyebrow />
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
             {title}
           </h1>
-          <p className="text-pretty text-muted">{summary}</p>
+          <p className="text-pretty text-base/7 text-docs-prose sm:text-[1.0625rem]/7">
+            {summary}
+          </p>
         </header>
 
         <div
           className={[
-            "space-y-12 text-sm/6 text-foreground",
+            "space-y-12 text-[0.9375rem]/7 text-docs-prose",
             "[&_p]:text-pretty",
             "[&_strong]:font-medium [&_strong]:text-foreground",
-            "[&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-accent",
+            "[&_a]:text-foreground [&_a]:underline [&_a]:decoration-muted/50 [&_a]:underline-offset-4 [&_a:hover]:decoration-foreground",
             "[&_ul]:space-y-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ul]:marker:text-muted",
             // Inline code only: a `CodeBlock` draws its own `<code>` on its own ground.
-            "[&_:not(pre)>code]:rounded-md [&_:not(pre)>code]:bg-default [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-xs",
+            "[&_:not(pre)>code]:rounded-md [&_:not(pre)>code]:border [&_:not(pre)>code]:border-border [&_:not(pre)>code]:bg-default/60 [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.8125rem] [&_:not(pre)>code]:text-foreground",
           ].join(" ")}
         >
           {children}
         </div>
+
+        <DocsPager />
       </div>
 
-      <aside className="hidden w-48 shrink-0 xl:block">
+      <aside className="hidden w-52 shrink-0 xl:block">
         <DocsToc />
       </aside>
     </article>

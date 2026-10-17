@@ -63,7 +63,6 @@ export function ProfileForm({ name, email }: { name: string; email: string }) {
             name="name"
             label="Full name"
             autoComplete="name"
-            description="How the dashboard addresses you. Visitors to your maps never see it."
           />
         </div>
       </div>

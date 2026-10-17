@@ -3,6 +3,8 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 
+import type { HeldCardSide } from "./place-card/use-card-centering";
+
 /** Breathing room between the anchored card and the frame's edges. */
 const MARGIN = 8;
 
@@ -28,6 +30,13 @@ export function useMapAnchor(
    * marked `data-flip="left"` so CSS can open it on the other side instead.
    */
   flipWidth = 0,
+  /**
+   * A side to hold the content on regardless of room, while the camera is
+   * moving it somewhere that side will fit — or `"keep"` for whichever it is
+   * on. Read on every frame; `null` (or no ref) is the room-based choice. See
+   * `useCardCentering`, the one writer.
+   */
+  heldSideRef?: React.RefObject<HeldCardSide>,
 ) {
   const anchor = useRef<HTMLDivElement>(null);
 
@@ -123,7 +132,9 @@ export function useMapAnchor(
 
       // An attribute rather than a class: CSS owns which side things open on, and
       // this stays a statement about the geometry.
-      element.dataset.flip = openLeft ? "left" : "right";
+      const held = heldSideRef?.current ?? null;
+      if (held === "left" || held === "right") element.dataset.flip = held;
+      else if (held !== "keep") element.dataset.flip = openLeft ? "left" : "right";
     };
 
     place();
@@ -137,7 +148,7 @@ export function useMapAnchor(
       reposition.current = null;
       instance.off("move", place);
     };
-  }, [map, isReady, lng, lat, flipWidth]);
+  }, [map, isReady, lng, lat, flipWidth, heldSideRef]);
 
   return anchor;
 }

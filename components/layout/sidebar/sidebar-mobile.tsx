@@ -1,9 +1,11 @@
 "use client";
 
-import { Button, Drawer } from "@heroui/react";
+import { Drawer } from "@heroui/react";
+import { X } from "lucide-react";
 
 import { PlanBadge } from "@/components/billing/plan-badge";
 import { BrandLogo } from "@/components/brand/brand-logo";
+import { IconButton } from "@/components/ui/icon-button";
 import type { AuthUser } from "@/lib/auth/types";
 import type { PlanId } from "@/lib/repositories/plan-limits";
 import { UserMenu } from "../user-menu";
@@ -24,11 +26,18 @@ export function SidebarMobile({ user, plan }: { user: AuthUser; plan: PlanId }) 
     <Drawer.Backdrop isOpen={isMobileOpen} onOpenChange={setMobileOpen}>
       <Drawer.Content placement="left" className="w-72 max-w-[85vw]">
         <Drawer.Dialog className="flex h-full flex-col">
-          <Drawer.Header>
-            <Drawer.Heading className="flex items-center gap-2 text-sm font-semibold">
+          <Drawer.Header className="flex-row items-center justify-between gap-2">
+            <Drawer.Heading className="flex min-w-0 items-center gap-2 text-sm font-semibold">
               <BrandLogo />
               <PlanBadge plan={plan} />
             </Drawer.Heading>
+            <IconButton
+              slot="close"
+              label="Close menu"
+              icon={X}
+              placement="bottom"
+              className="shrink-0"
+            />
           </Drawer.Header>
 
           <Drawer.Body className="min-h-0 flex-1">
@@ -44,9 +53,6 @@ export function SidebarMobile({ user, plan }: { user: AuthUser; plan: PlanId }) 
               plan={plan}
               onNavigate={() => setMobileOpen(false)}
             />
-            <Button slot="close" variant="tertiary" size="sm">
-              Close
-            </Button>
           </Drawer.Footer>
         </Drawer.Dialog>
       </Drawer.Content>

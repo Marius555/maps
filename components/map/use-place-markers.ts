@@ -17,6 +17,7 @@ import {
   setPinChecking,
   setPinClustered,
   setPinIcon,
+  setPinLocated,
   setPinSelected,
   setPinStop,
   setPinUnroutable,
@@ -137,6 +138,8 @@ export function usePlaceMarkers({
    * Kept so a marker created after that answer is told it too.
    */
   const visibleIds = useRef<ReadonlySet<string> | null>(null);
+  /** The pin `locate` is rippling, or null — see `setPinLocated`. */
+  const locatedId = useRef<string | null>(null);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -185,6 +188,8 @@ export function usePlaceMarkers({
         element,
         visibleIds.current !== null && !visibleIds.current.has(place.id),
       );
+
+      setPinLocated(element, locatedId.current === place.id);
 
       // Only a location someone just placed, and only once — see
       // lib/map/dropped-pins.ts for why creation is the wrong signal for this.
@@ -383,7 +388,19 @@ export function usePlaceMarkers({
     if (marker) playFound(marker.getElement());
   }, []);
 
-  return { setVisibleIds, ripple };
+  /**
+   * Ripple one pin until told otherwise, or stop with `null`. Written on every
+   * marker, so the previous one stops as the next one starts.
+   */
+  const locate = useCallback((id: string | null) => {
+    locatedId.current = id;
+
+    for (const [markerId, marker] of markers.current) {
+      setPinLocated(marker.getElement(), markerId === id);
+    }
+  }, []);
+
+  return { setVisibleIds, ripple, locate };
 }
 
 function sameIds(

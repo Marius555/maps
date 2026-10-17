@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DocsArticle } from "@/components/docs/docs-article";
 import { DocsCallout } from "@/components/docs/docs-callout";
+import { DocsFigure } from "@/components/docs/docs-figure";
 import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
@@ -28,6 +29,11 @@ export default function YourAccountPage() {
       summary="Change your name, theme and password, sign out other devices, reset a forgotten password or delete your account."
     >
       <DocsSection id="general" title="Name and theme">
+        <DocsFigure
+          shot="settings-general"
+          alt="Settings, General: Full name, Email and the Light, Match system and Dark appearance choices."
+        />
+
         <p>
           Open <strong>Settings</strong> from the account menu.{" "}
           <strong>Billing</strong> and <strong>Usage</strong> are in{" "}

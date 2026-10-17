@@ -98,7 +98,7 @@ export function HeroRouteGenerator() {
           >
             <div
               className="absolute inset-0"
-              style={{ backgroundImage: "url(/marketing/hero-positron.webp)", backgroundSize: "100% 100%" }}
+              style={{ backgroundImage: "url(/marketing/hero-mono.webp)", backgroundSize: "100% 100%" }}
             />
 
             <svg

@@ -15,6 +15,17 @@ rewritten; it is the record of why this area is shaped as it is.
   and MapLibre's folder is named after its version, so nothing a cached `map.js` imports is
   ever overwritten — `docs/notes/versioning.md`. R2's ETags are weak (`W/"…"`); compare the
   hash inside them.
+- **Nothing may challenge a request to `cdn.pinglide.com`.** Every request there is a
+  customer's page loading a module script or fetching JSON, and a Cloudflare challenge cannot
+  render inside either. It cannot put a checkbox on a customer's site; it blanks the map with
+  no message. `npm run setup:r2` writes a configuration rule (Security Level essentially off,
+  no Browser Integrity Check) for the host, and its probe fails on `cf-mitigated` or an HTML
+  403/503, as a browser and as a bare client. **Never switch Bot Fight Mode on for the
+  `pinglide.com` zone**: on the Free plan it covers every host and no rule can exempt one.
+  `pinglide.com` itself (dashboard, `/api/collect`) is DNS-only, straight to Appwrite, and
+  must stay that way for the same reason: the beacon is a cross-origin `sendBeacon`.
+  Checked 2026-10-18: no challenge for browser, curl, python-requests or HeadlessChrome
+  user agents.
 - **`map.js` is a ~1KB loader, and the map is `map-[hash].js`** (`embed/src/boot.ts` →
   `embed/src/index.ts`). A module runs nothing until its whole static graph has arrived, so
   a single file made the visitor wait for map.js → MapLibre → MapLibre's shared chunk, in

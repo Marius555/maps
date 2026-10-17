@@ -10,19 +10,24 @@ import { CardView } from "@/components/card/card-view";
 import { GalleryLightboxContext } from "@/components/card/gallery-lightbox";
 import { PhotoLightbox } from "@/components/ui/photo-lightbox/photo-lightbox";
 import { cardSlotOf } from "@/lib/card/card-slots";
+import { MD_DOWN, useMediaQuery } from "@/lib/ui/use-media-query";
 import type { AppMap, MapField, Place } from "@/lib/repositories/types";
 import type { CardBlock, CardLayout } from "@/packages/shared/card-layout";
 import type { CardBlockOverrides } from "@/packages/shared/card-overrides";
 import type { CustomPinIcon } from "@/packages/shared/pin-icons";
 import type { TagChip } from "@/packages/shared/tags";
 import { useMapAnchor } from "../use-map-anchor";
+import {
+  CARD_FADE_SECONDS,
+  CARD_MOTION_EASE,
+  CARD_MOTION_SECONDS,
+  CARD_PIN_GAP,
+} from "./card-motion";
+import type { HeldCardSide } from "./use-card-centering";
 import { PlaceCardChrome } from "./place-card-chrome";
 import { BlockEditorPopover } from "./edit/block-editor-popover";
 import { CardEditTarget } from "./edit/card-edit-target";
 import { CardSlot } from "./slots/card-slot";
-
-/** The gap that keeps the card off the pin, added to the card's own width. */
-const FLIP_GAP = 22;
 
 /**
  * What a location with nothing on it says for itself.
@@ -78,6 +83,7 @@ export function PlaceCard({
   pinIcons,
   slots,
   theme,
+  heldSideRef,
   onClose,
   onEdit,
 }: {
@@ -132,13 +138,44 @@ export function PlaceCard({
    * caller got before this existed.
    */
   theme?: "light" | "dark";
+  /**
+   * Holds the card on one side while the camera moves — see `useCardCentering`,
+   * which writes it. Absent, the side follows the room, as it always did.
+   */
+  heldSideRef?: React.RefObject<HeldCardSide>;
   onClose: () => void;
   onEdit?: (placeId: string) => void;
 }) {
+  /*
+   * The location the card is leaving, kept until its exit has finished.
+   *
+   * The anchor follows a pin only while it has one to follow, and on a phone
+   * closing a card also eases that pin to the middle of the map
+   * (`useCardCentering`) — so a card that let go of its pin at the moment it
+   * started to fade would stand still while the map slid out from under it.
+   * Set during render rather than in an effect, so the frame that starts the
+   * exit already has it; cleared by `onExitComplete` below.
+   */
+  const [leaving, setLeaving] = useState(place);
+  if (place && place !== leaving) setLeaving(place);
+
   // The card's own width now, not a constant — the owner can make it wider, and
   // the side the card flips to has to be decided from the width it will be.
-  const anchor = useMapAnchor(map, isReady, place, layout.width + FLIP_GAP);
+  const anchor = useMapAnchor(
+    map,
+    isReady,
+    place ?? leaving,
+    layout.width + CARD_PIN_GAP,
+    heldSideRef,
+  );
   const prefersReducedMotion = useReducedMotion();
+
+  /*
+   * On a phone the card opens and closes on the camera's clock, because the map
+   * moves with it there — see card-motion.ts. Elsewhere the map holds still and
+   * the card keeps its quicker fade.
+   */
+  const isPhone = useMediaQuery(MD_DOWN);
 
   /**
    * The card's own box, which is what the block editor's panel is anchored to.
@@ -364,7 +401,7 @@ export function PlaceCard({
           writes the attribute at 60fps and this must not depend on a variant
           being generated. */}
       <div className="map-card-anchor__card">
-        <AnimatePresence>
+        <AnimatePresence onExitComplete={() => setLeaving(null)}>
           {place ? (
             <motion.div
               // Constant, not `place.id` — see ShapeCard for the whole story.
@@ -384,7 +421,10 @@ export function PlaceCard({
                   ? { opacity: 0 }
                   : { opacity: 0, scale: 0.94 }
               }
-              transition={{ duration: 0.15, ease: [0, 0, 0.2, 1] }}
+              transition={{
+                duration: isPhone ? CARD_MOTION_SECONDS : CARD_FADE_SECONDS,
+                ease: CARD_MOTION_EASE,
+              }}
               /*
                * Capped against the map frame, not at a fixed 256px.
                *

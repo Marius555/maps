@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DocsArticle } from "@/components/docs/docs-article";
 import { DocsCallout } from "@/components/docs/docs-callout";
+import { DocsFigure } from "@/components/docs/docs-figure";
 import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
@@ -53,6 +54,11 @@ export default function TagsPinsAndGroupsPage() {
       </DocsSection>
 
       <DocsSection id="tags" title="Setting up tags">
+        <DocsFigure
+          shot="tags-manager"
+          alt="The Tags & fields dialog with four tags in one group: Café, Roastery, Stockist and Open Sundays."
+        />
+
         <p>
           Visitors filter your map by tags. Each has a colour, and a location’s
           first tag colours its pin.

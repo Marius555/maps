@@ -27,11 +27,11 @@ export const metadata: Metadata = {
 export default function DocsIndexPage() {
   return (
     <div className="min-w-0 flex-1">
-      <header className="space-y-3 pb-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl">
+      <header className="max-w-2xl space-y-3 pb-10">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
           Documentation
         </h1>
-        <p className="text-pretty text-muted">
+        <p className="text-pretty text-base/7 text-docs-prose sm:text-[1.0625rem]/7">
           How to get your locations onto a map and onto your own site. New here?
           Start with Getting started, then read the rest in any order.
         </p>

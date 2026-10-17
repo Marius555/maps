@@ -19,6 +19,7 @@ import type { GeocodeCandidate } from "@/lib/geocoding/types";
 import { isDefaultView } from "@/lib/map/default-view";
 import { mapThemeClass } from "@/lib/map/style";
 import { usePrefersDark } from "@/lib/theme/use-prefers-dark";
+import { LG_DOWN, useMediaQuery } from "@/lib/ui/use-media-query";
 import { roundCoord } from "@/lib/map/geo";
 import { groupAction, groupActionLabel } from "@/lib/map/group-action";
 import { groupColorIndex } from "@/lib/map/group-colors";
@@ -1230,15 +1231,26 @@ export function MapEditor({
    * ground out from under a click is how a map stops feeling direct. Keeping the
    * two paths separate here is what makes that distinction possible at all —
    * `selectedPlaceId` alone cannot say where the selection came from.
+   *
+   * **Where the panel is a bottom sheet, picking a row opens no card.** The
+   * sheet puts itself away (`EditorSidebar`), and the pin ripples until the next
+   * tap instead: on a phone the card covers most of the map, and what the tap
+   * asked was where the location is. Any card already open closes, so the map
+   * the camera lands on is the pin and nothing over it.
    */
+  const isSheet = useMediaQuery(LG_DOWN);
+
   const focusPlace = useCallback(
     (placeId: string) => {
-      selectPlace(placeId);
+      selectPlace(isSheet ? null : placeId);
 
       const place = places.find((candidate) => candidate.id === placeId);
-      if (place) mapHandle.current?.flyTo(place);
+      if (!place) return;
+
+      mapHandle.current?.flyTo(place);
+      if (isSheet) mapHandle.current?.locate(placeId);
     },
-    [places, selectPlace],
+    [places, selectPlace, isSheet],
   );
 
   /*

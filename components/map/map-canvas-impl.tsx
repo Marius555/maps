@@ -24,6 +24,7 @@ import { effectiveCardLayout } from "@/lib/card/designer-status";
 import { cardThemeClass } from "@/lib/card/card-theme";
 import { mapThemeClass, type MapStyleKey } from "@/lib/map/style";
 import { usePrefersDark } from "@/lib/theme/use-prefers-dark";
+import { MD_DOWN, useMediaQuery } from "@/lib/ui/use-media-query";
 import { configureMaplibreWorker } from "@/lib/map/worker";
 import type {
   AppMap,
@@ -41,6 +42,10 @@ import { withoutClusterLayers } from "./clusters/cluster-layers";
 import { usePlaceClusters } from "./clusters/use-place-clusters";
 import { useClusterIcon } from "./clusters/use-cluster-icon";
 import { PlaceCard } from "./place-card/place-card";
+import {
+  useCardCentering,
+  type HeldCardSide,
+} from "./place-card/use-card-centering";
 import { SelectBox, type SelectBoxHandle } from "./select-box/select-box";
 import { useSelectBox } from "./select-box/use-select-box";
 import { MapShapes, type MapShapesProps } from "./shapes/map-shapes";
@@ -92,6 +97,13 @@ export type MapHandle = {
    * flight in progress has landed. Call it straight after `flyTo`.
    */
   ripple: (placeId: string) => void;
+  /**
+   * Ripples a location's pin on a loop, once any flight in progress has landed,
+   * until the next click anywhere on the page. A phone's answer to picking a
+   * row in the Locations sheet — see `setPinLocated`. Call it straight after
+   * `flyTo`.
+   */
+  locate: (placeId: string) => void;
   /**
    * Frames a box. What `flyTo` is to a pin, this is to an area: a shape has an
    * extent, and flying to its centre at a fixed zoom would show the middle of a
@@ -528,7 +540,7 @@ export default function MapCanvasImpl({
     pinIcons,
   });
 
-  const { setVisibleIds, ripple } = usePlaceMarkers({
+  const { setVisibleIds, ripple, locate } = usePlaceMarkers({
     map,
     isReady,
     places,
@@ -570,6 +582,30 @@ export default function MapCanvasImpl({
     isSuspended: isDrawing,
     isBrowsing: !isAdding && !isDrawing && !selection?.isSelecting,
     onVisibleChange: setVisibleIds,
+  });
+
+  /*
+   * On a phone, opening a card centres the pin and the card together and
+   * closing one centres the pin — see use-card-centering.ts. Only where a card
+   * can open at all, and not while a tool owns the map: the card is hidden then,
+   * and the camera moving under a tool would move what is being drawn on.
+   */
+  const isPhone = useMediaQuery(MD_DOWN);
+  const heldCardSide = useRef<HeldCardSide>(null);
+
+  useCardCentering({
+    map,
+    isReady,
+    isEnabled:
+      isPhone &&
+      Boolean(showPlaceCard) &&
+      !isAdding &&
+      !isDrawing &&
+      !selection?.isSelecting,
+    selectedPlaceId,
+    places,
+    cardWidth: cardLayout.width,
+    heldSideRef: heldCardSide,
   });
 
   // The owner's cluster icon over those bubbles, as the published map draws it.
@@ -733,6 +769,20 @@ export default function MapCanvasImpl({
   const prefersReducedMotion = useReducedMotion();
 
   /**
+   * Undoes whatever `locate` last set up — the pending start, the loop, and the
+   * listener waiting to stop it. One slot, because one pin is located at a time.
+   */
+  const stopLocating = useRef<(() => void) | null>(null);
+
+  useEffect(
+    () => () => {
+      stopLocating.current?.();
+      stopLocating.current = null;
+    },
+    [],
+  );
+
+  /**
    * Built inside the effect rather than memoized outside it. The handle closes
    * over a ref, which is precisely what the React Compiler will not let a
    * `useMemo` do — and it does not need to survive renders, because the only
@@ -868,8 +918,53 @@ export default function MapCanvasImpl({
           ripple(placeId);
         }
       },
+
+      locate: (placeId) => {
+        const instance = map.current;
+        if (!instance) return;
+
+        stopLocating.current?.();
+
+        const start = () => locate(placeId);
+
+        /*
+         * Stopped by a *click*, not a pointerdown: panning or pinching to look
+         * around the pin is not "somewhere else", and a touch pan never becomes
+         * a click. Capture phase, because a pin stops its own click from
+         * bubbling (use-place-markers.ts).
+         *
+         * Only a click whose press began after this call counts. The row that
+         * asked for this fires on pointer*up* (React Aria's `usePress`), so its
+         * own click is still on its way — and without the guard it would stop
+         * the ripple before it started. Bound now rather than once the flight
+         * lands, so a tap during the flight cancels it.
+         */
+        let pressed = false;
+        const press = () => {
+          pressed = true;
+        };
+        const release = () => {
+          if (pressed) stop();
+        };
+
+        const stop = () => {
+          instance.off("moveend", start);
+          document.removeEventListener("pointerdown", press, true);
+          document.removeEventListener("click", release, true);
+          locate(null);
+          stopLocating.current = null;
+        };
+
+        document.addEventListener("pointerdown", press, true);
+        document.addEventListener("click", release, true);
+        stopLocating.current = stop;
+
+        // After the flight, for `ripple`'s reason.
+        if (instance.isMoving()) instance.once("moveend", start);
+        else start();
+      },
     });
-  }, [isReady, onReady, map, prefersReducedMotion, ripple]);
+  }, [isReady, onReady, map, prefersReducedMotion, ripple, locate]);
 
   return (
     /*
@@ -1009,6 +1104,7 @@ export default function MapCanvasImpl({
           // block shows the pin its own location wears.
           pinIcons={pinIcons ?? []}
           slots={cardSlots}
+          heldSideRef={heldCardSide}
           onClose={() => onSelectPlace(null)}
           onEdit={onEditPlace}
         />

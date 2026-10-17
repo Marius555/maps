@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DocsArticle } from "@/components/docs/docs-article";
 import { DocsCallout } from "@/components/docs/docs-callout";
+import { DocsFigure } from "@/components/docs/docs-figure";
 import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
@@ -45,6 +46,11 @@ export default function DesigningTheCardPage() {
       </DocsSection>
 
       <DocsSection id="layout" title="Finding your way around">
+        <DocsFigure
+          shot="card-designer"
+          alt="The card designer: a location’s card previewed on the left and the blocks you can add on the right."
+        />
+
         <p>
           Open <strong>Card</strong> in your map’s sidebar. The card is drawn
           with one of your locations (or an example), beside a panel with two

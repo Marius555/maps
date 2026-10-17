@@ -26,12 +26,12 @@ export function DocsTable({
         <caption className="sr-only">{caption}</caption>
 
         <thead>
-          <tr className="border-b border-border">
+          <tr className="border-b border-border bg-default/30">
             {head.map((cell) => (
               <th
                 key={cell}
                 scope="col"
-                className="px-4 py-2.5 font-medium text-muted"
+                className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted uppercase"
               >
                 {cell}
               </th>
@@ -56,7 +56,7 @@ export function DocsTable({
               {cells.map((cell, cellIndex) => (
                 <td
                   key={cellIndex}
-                  className="px-4 py-3 align-top text-foreground"
+                  className="px-4 py-3 align-top text-docs-prose"
                 >
                   {cell}
                 </td>

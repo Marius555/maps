@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DocsArticle } from "@/components/docs/docs-article";
 import { DocsCallout } from "@/components/docs/docs-callout";
+import { DocsFigure } from "@/components/docs/docs-figure";
 import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
@@ -59,6 +60,11 @@ export default function GettingStartedPage() {
       </DocsSection>
 
       <DocsSection id="create-a-map" title="Create a map">
+        <DocsFigure
+          shot="maps-list"
+          alt="The Maps page, with one map called Fieldwork Coffee stockists, marked Published."
+        />
+
         <DocsSteps>
           <DocsStep title="Press Create map">
             <p>

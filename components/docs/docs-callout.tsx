@@ -3,12 +3,13 @@ import { Info, TriangleAlert } from "lucide-react";
 /**
  * An aside that must not be skimmed past.
  *
- * **Tinted, so it reads as an aside at a glance.** It used to be the page's own
- * surface with a hairline border, which on a long guide looked like one more
- * paragraph. A note sits on `--accent-soft` with an accent icon, a warning on a
- * wash of `--warning` with an amber icon.
+ * **A raised panel, not a tint.** It is a hairline box on a wash of `--default`,
+ * the way Appwrite's docs set theirs, which reads as an aside at a glance without
+ * a coloured block in the middle of the page. The tone is carried by the icon —
+ * accent for a note, amber for a warning — and a warning's border takes a wash
+ * of `--warning` so it still stands apart from a note.
  *
- * **The text stays `text-foreground` in both.** Amber comes from `--warning-ink`,
+ * **The text is the guide's own prose colour.** Amber comes from `--warning-ink`,
  * and only on the icon: `--warning` is a fill token, near 2:1 as text, and even
  * the ink is a colour for a mark or a short label rather than a paragraph
  * somebody has to read. Same rule `plan-limit-note.tsx` and
@@ -29,8 +30,8 @@ export function DocsCallout({
 
   return (
     <div
-      className={`flex items-start gap-2.5 rounded-xl border p-4 text-sm/6 text-foreground ${
-        isWarning ? "border-warning/45 bg-warning/12" : "border-accent/25 bg-accent-soft"
+      className={`flex items-start gap-3 rounded-[10px] border bg-default/40 px-4 py-3.5 text-sm/6 text-docs-prose ${
+        isWarning ? "border-warning/40" : "border-border"
       }`}
     >
       <Icon

@@ -181,11 +181,6 @@ export function PlanCompare({
       {pending ? (
         <PlanChangeNotice current={plan} currentCadence={currentCadence} pending={pending} />
       ) : null}
-
-      <p className="mt-4 text-xs text-muted">
-        Views are unlimited on every plan, including the free one. We are priced
-        by what you build, never by how many people look at it.
-      </p>
     </SettingsSection>
   );
 }

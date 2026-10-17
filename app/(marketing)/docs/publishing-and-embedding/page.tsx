@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DocsArticle } from "@/components/docs/docs-article";
 import { DocsCallout } from "@/components/docs/docs-callout";
+import { DocsFigure } from "@/components/docs/docs-figure";
 import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
@@ -56,6 +57,11 @@ export default function PublishingAndEmbeddingPage() {
       </DocsSection>
 
       <DocsSection id="design" title="Designing the published map">
+        <DocsFigure
+          shot="publish-designer"
+          alt="The Publish tab: design settings on the left and the published map previewed with its results panel."
+        />
+
         <p>The settings come in sections that open one at a time.</p>
 
         <DocsTable
@@ -131,6 +137,11 @@ export default function PublishingAndEmbeddingPage() {
       </DocsSection>
 
       <DocsSection id="embed-code" title="Putting the map on your site">
+        <DocsFigure
+          shot="embed-code"
+          alt="The Put this map on your site dialog, showing tag chips, the one-line embed code and Copy embed code."
+        />
+
         <DocsSteps>
           <DocsStep title="Copy the embed code">
             <p>

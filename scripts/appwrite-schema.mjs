@@ -78,7 +78,7 @@ export const TABLES = [
       varchar("userId", 36, { required: true }),
       varchar("name", 128, { required: true }),
       varchar("slug", 64, { required: true }),
-      varchar("style", 32, { xdefault: "positron" }),
+      varchar("style", 32, { xdefault: "mono" }),
       float("defaultLat", { required: true, min: -90, max: 90 }),
       float("defaultLng", { required: true, min: -180, max: 180 }),
       float("defaultZoom", { required: true, min: 0, max: 24 }),

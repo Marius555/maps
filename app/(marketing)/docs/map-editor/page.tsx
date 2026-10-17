@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DocsArticle } from "@/components/docs/docs-article";
 import { DocsCallout } from "@/components/docs/docs-callout";
+import { DocsFigure } from "@/components/docs/docs-figure";
 import { DocsSection } from "@/components/docs/docs-section";
 import { DocsStep, DocsSteps } from "@/components/docs/docs-steps";
 import { DocsTable } from "@/components/docs/docs-table";
@@ -29,6 +30,11 @@ export default function MapEditorPage() {
       summary="Add and move locations on the map, choose how the map looks, and export it as an image or a PDF."
     >
       <DocsSection id="toolbar" title="The toolbar">
+        <DocsFigure
+          shot="editor-overview"
+          alt="The map editor: the toolbar along the top of the map, pins and two shapes over London, and the list of locations on the right."
+        />
+
         <p>
           The Map tab shows your map with a toolbar across the top and your
           locations beside it. From left to right:
@@ -153,6 +159,11 @@ export default function MapEditorPage() {
       </DocsSection>
 
       <DocsSection id="appearance" title="How the map looks">
+        <DocsFigure
+          shot="editor-appearance"
+          alt="The Map appearance panel open over the editor."
+        />
+
         <p>
           Press <strong>Map appearance</strong>. Changes save at once and reach
           your site when you next publish.

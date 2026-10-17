@@ -250,105 +250,122 @@ export function MapToolbar({
           />
         </span>
 
-        {/* Directly beside the pin control, with no rule between them: adding a
-            location and drawing an area are the two things you put *on* a map,
-            and the rule separates those from the things you do *to* it. */}
-        <span className={`flex shrink-0 ${STEP_ASIDE.shapes}`}>
-          <ShapeToolsButton
-            drawMode={drawMode}
-            isRouting={isRouting}
-            isBusy={isDrawingBusy}
-            headroom={limits?.shapes}
-            routesNote={routesNote}
-            onPickTool={onPickTool}
-            onPickRoute={onPickRoute}
-            onStopDrawing={onStopDrawing}
-            onImport={onImportShapes}
-            onEditClusterIcon={onEditClusterIcon}
-          />
-        </span>
-
-        {/* Third of the three tools that change what a gesture on the map means,
-            so it belongs on this side of the rule with the other two. It picks
-            out what is already there rather than putting something new down,
-            which is why it is the one without a label. */}
-        <span className={`flex shrink-0 ${STEP_ASIDE.select}`}>
-          <SelectToolButton
-            isSelecting={isSelecting}
-            onStartSelecting={onStartSelecting}
-            onStopSelecting={onStopSelecting}
-          />
-        </span>
-
-        {/* Last on this side of the rule: it takes back a change made *on* the
-            map with the tools beside it — a dragged pin. Drawn disabled rather
-            than hidden when there is nothing to undo, so the toolbar does not
-            change width under the pointer the moment a pin is let go. */}
-        {onUndoMove ? (
-          <span className={`flex shrink-0 ${STEP_ASIDE.undo}`}>
-            <IconButton
-              label="Undo pin move"
-              icon={Undo2}
-              placement="bottom"
-              isDisabled={!canUndoMove}
-              aria-keyshortcuts="Control+Z Meta+Z"
-              onPress={onUndoMove}
+        {/*
+         * The rest of the buttons scroll sideways when the row is wider than the
+         * map — a phone, where the last of them used to be cut off by the frame.
+         * Native overflow, so a finger swipe scrolls it; `touch-pan-x` keeps a
+         * sideways swipe from also panning the page. On a desktop nothing
+         * overflows and the box changes nothing.
+         *
+         * Add and the search stay outside it, deliberately. Add never steps
+         * aside (STEP_ASIDE), and inside a box that gives up width first it
+         * could be scrolled out of sight by an open search. The search's results
+         * hang below the bar as an absolute box, and an `overflow-x: auto`
+         * ancestor clips vertically too. The scroller is the one thing in the
+         * row that gives up width (`shrink-[999]`), so a shut search keeps its
+         * icon's size.
+         */}
+        <div className="-mx-0.5 -my-1 flex min-w-0 shrink-[999] touch-pan-x items-center gap-1 overflow-x-auto px-0.5 py-1 overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* Directly beside the pin control, with no rule between them: adding a
+              location and drawing an area are the two things you put *on* a map,
+              and the rule separates those from the things you do *to* it. */}
+          <span className={`flex shrink-0 ${STEP_ASIDE.shapes}`}>
+            <ShapeToolsButton
+              drawMode={drawMode}
+              isRouting={isRouting}
+              isBusy={isDrawingBusy}
+              headroom={limits?.shapes}
+              routesNote={routesNote}
+              onPickTool={onPickTool}
+              onPickRoute={onPickRoute}
+              onStopDrawing={onStopDrawing}
+              onImport={onImportShapes}
+              onEditClusterIcon={onEditClusterIcon}
             />
           </span>
-        ) : null}
 
-        {/* Leaves with Appearance: a rule with nothing after it is a stray line. */}
-        <Separator
-          orientation="vertical"
-          className={`h-6 shrink-0 ${STEP_ASIDE.appearance}`}
-        />
-
-        {/* First on this side of the rule, because it is the one that changes
-            what the map *is* rather than where it is pointed or who is looking. */}
-        <span className={`flex shrink-0 ${STEP_ASIDE.appearance}`}>
-          <AppearanceButton
-            style={style}
-            appearance={appearance}
-            onChangeStyle={onChangeStyle}
-            onChangeAppearance={onChangeAppearance}
-          />
-        </span>
-
-        {/* The default view is where the map opens, for the owner and for every
-            visitor of the embed. Setting it by panning beats typing coordinates. */}
-        <span className={`flex shrink-0 ${STEP_ASIDE.saveView}`}>
-          <IconButton
-            label="Save this view as default"
-            icon={Bookmark}
-            placement="bottom"
-            isPending={isSavingView}
-            onPress={onSaveView}
-          />
-        </span>
-
-        {/* The editor canvas has no popups or filters — those are the embed's.
-            This is the only place in the editor you can see them. */}
-        <span className={`flex shrink-0 ${STEP_ASIDE.preview}`}>
-          <IconButton
-            label="Preview as a visitor"
-            icon={Eye}
-            placement="bottom"
-            onPress={onPreview}
-          />
-        </span>
-
-        {/* After Preview, and last of the three: both of those show you the map,
-            and this is the one that takes it away with you. */}
-        {exportControl ? (
-          <span className={`flex shrink-0 ${STEP_ASIDE.export}`}>
-            <ExportButton {...exportControl} />
+          {/* Third of the three tools that change what a gesture on the map means,
+              so it belongs on this side of the rule with the other two. It picks
+              out what is already there rather than putting something new down,
+              which is why it is the one without a label. */}
+          <span className={`flex shrink-0 ${STEP_ASIDE.select}`}>
+            <SelectToolButton
+              isSelecting={isSelecting}
+              onStartSelecting={onStartSelecting}
+              onStopSelecting={onStopSelecting}
+            />
           </span>
-        ) : null}
 
-        {/* Last, so opening the search grows the panel into empty map rather than
-            shoving the other controls sideways. The rule goes on a phone, where
-            the five pixels it costs are five the address field does not get. */}
-        <Separator orientation="vertical" className="h-6 shrink-0 max-sm:hidden" />
+          {/* Last on this side of the rule: it takes back a change made *on* the
+              map with the tools beside it — a dragged pin. Drawn disabled rather
+              than hidden when there is nothing to undo, so the toolbar does not
+              change width under the pointer the moment a pin is let go. */}
+          {onUndoMove ? (
+            <span className={`flex shrink-0 ${STEP_ASIDE.undo}`}>
+              <IconButton
+                label="Undo pin move"
+                icon={Undo2}
+                placement="bottom"
+                isDisabled={!canUndoMove}
+                aria-keyshortcuts="Control+Z Meta+Z"
+                onPress={onUndoMove}
+              />
+            </span>
+          ) : null}
+
+          {/* Leaves with Appearance: a rule with nothing after it is a stray line. */}
+          <Separator
+            orientation="vertical"
+            className={`h-6 shrink-0 ${STEP_ASIDE.appearance}`}
+          />
+
+          {/* First on this side of the rule, because it is the one that changes
+              what the map *is* rather than where it is pointed or who is looking. */}
+          <span className={`flex shrink-0 ${STEP_ASIDE.appearance}`}>
+            <AppearanceButton
+              style={style}
+              appearance={appearance}
+              onChangeStyle={onChangeStyle}
+              onChangeAppearance={onChangeAppearance}
+            />
+          </span>
+
+          {/* The default view is where the map opens, for the owner and for every
+              visitor of the embed. Setting it by panning beats typing coordinates. */}
+          <span className={`flex shrink-0 ${STEP_ASIDE.saveView}`}>
+            <IconButton
+              label="Save this view as default"
+              icon={Bookmark}
+              placement="bottom"
+              isPending={isSavingView}
+              onPress={onSaveView}
+            />
+          </span>
+
+          {/* The editor canvas has no popups or filters — those are the embed's.
+              This is the only place in the editor you can see them. */}
+          <span className={`flex shrink-0 ${STEP_ASIDE.preview}`}>
+            <IconButton
+              label="Preview as a visitor"
+              icon={Eye}
+              placement="bottom"
+              onPress={onPreview}
+            />
+          </span>
+
+          {/* After Preview, and last of the three: both of those show you the map,
+              and this is the one that takes it away with you. */}
+          {exportControl ? (
+            <span className={`flex shrink-0 ${STEP_ASIDE.export}`}>
+              <ExportButton {...exportControl} />
+            </span>
+          ) : null}
+
+          {/* Last, so opening the search grows the panel into empty map rather than
+              shoving the other controls sideways. The rule goes on a phone, where
+              the five pixels it costs are five the address field does not get. */}
+          <Separator orientation="vertical" className="h-6 shrink-0 max-sm:hidden" />
+        </div>
 
         {search}
       </div>
