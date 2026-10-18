@@ -77,6 +77,9 @@ Discounts, which writes to the payment provider rather than to Appwrite
   clears it on a bfcache Back). `app/admin/loading.tsx` is the other half: the layout is a
   cookie check only, so the shell and skeleton stream at once and the slow metrics load
   inside the console.
+- **Back after a sign-out is `AdminRestoreGuard`'s**, which reloads any bfcache restore so
+  `requireAdminPage()` answers it. Not `Clear-Site-Data` on the logout response: Chrome
+  holds that response for seconds while it walks its cache (`docs/notes/auth.md`).
 
 ## What the numbers are and are not
 

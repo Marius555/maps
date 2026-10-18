@@ -35,12 +35,10 @@ export const POST = withAuth(
 
     await clearSessionCookie();
 
-    const response = ok(progress);
-    // The same eviction logout does, for the same reason: Back must not
-    // restore a dashboard page for an account that no longer exists.
-    response.headers.set("Clear-Site-Data", '"cache"');
-
-    return response;
+    // Back to a dashboard page for an account that no longer exists is
+    // `RestoreAuthGuard`'s, as after a logout — not `Clear-Site-Data`, which
+    // Chrome holds the response for.
+    return ok(progress);
   },
   { allowUnverified: true },
 );

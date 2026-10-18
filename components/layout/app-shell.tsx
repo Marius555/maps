@@ -7,6 +7,7 @@ import { MobileHeader } from "./mobile-header";
 import { MobileHeaderSlotProvider } from "./mobile-header-slot";
 import { PageMain } from "./page-transition/page-main";
 import { PostHogIdentify } from "./posthog-identify";
+import { RestoreAuthGuard } from "./restore-auth-guard";
 import { Sidebar } from "./sidebar/sidebar";
 import { SidebarProvider } from "./sidebar/sidebar-context";
 import { SidebarMobile } from "./sidebar/sidebar-mobile";
@@ -99,6 +100,7 @@ export function AppShell({
           page, and the shell is the one thing that sees every navigation. */}
       <TutorialRouteWatcher pending={tutorials} />
       <PostHogIdentify user={user} />
+      <RestoreAuthGuard />
     </SidebarProvider>
   );
 }

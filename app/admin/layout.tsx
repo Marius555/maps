@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AdminMobileNav } from "@/components/admin/shell/admin-mobile-nav";
+import { AdminRestoreGuard } from "@/components/admin/shell/admin-restore-guard";
 import { AdminSidebar } from "@/components/admin/shell/admin-sidebar";
 import { AdminMain } from "@/components/layout/page-transition/admin-main";
 import { adminSessionEmail, requireAdminPage } from "@/lib/admin/auth/guard";
@@ -34,6 +35,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <div data-app-frame="" className="flex h-[100dvh] min-h-0 flex-none overflow-hidden">
       <AdminSidebar email={email} />
+      <AdminRestoreGuard />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <AdminMobileNav email={email} />

@@ -14,14 +14,9 @@ export const POST = withoutAuth(async () => {
 
   await clearSessionCookie();
 
-  const response = noContent();
-
-  // Evicts the back/forward cache for this origin. Without it a browser can
-  // restore the dashboard document on Back with no request at all, and the
-  // document navigation in `UserMenu` buys nothing. `cache` and not `storage`:
-  // `storage` would also wipe localStorage (theme, sidebar width) and the
-  // import wizard's IndexedDB store.
-  response.headers.set("Clear-Site-Data", '"cache"');
-
-  return response;
+  // No `Clear-Site-Data` here, deliberately. It kept Back from restoring the
+  // dashboard from the bfcache, but Chrome holds the response until its whole
+  // disk cache is walked, and in production that was ~20 seconds of a Log out
+  // that did nothing. `RestoreAuthGuard` covers Back instead.
+  return noContent();
 });

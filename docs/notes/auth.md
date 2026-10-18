@@ -124,15 +124,17 @@ emails.
   is not a request* below. `AuthShell` is centred under a lock badge; its
   `description` is optional, omitted on Log in and Sign up and kept wherever it
   carries instructions.
-- **Logging out is a document navigation, and the logout route sends
-  `Clear-Site-Data`.** `UserMenu` calls `window.location.replace("/login")`, not
-  `router.replace`, and `POST /api/auth/logout` answers its 204 with
-  `Clear-Site-Data: "cache"`. Between them they are the only reason Back after a
-  sign-out reaches a guard at all: a soft replace consumes one history entry and
-  leaves the rest of the dashboard live in the client router cache, and bfcache
-  would hand back the whole document without asking anyone. `"cache"` and not
-  `"storage"`, which would take the theme, the sidebar width and the import
-  wizard's IndexedDB store with it.
+- **Logging out is a document navigation, and a bfcache restore asks who is
+  signed in.** `UserMenu` calls `window.location.replace("/login")`, not
+  `router.replace`, and `RestoreAuthGuard` (mounted by `AppShell`) answers a
+  `pageshow` with `persisted` by asking `/api/auth/me`, sending a 401 to
+  `/login`. Between them they are the only reason Back after a sign-out reaches
+  a guard at all: a soft replace consumes one history entry and leaves the rest
+  of the dashboard live in the client router cache, and bfcache would hand back
+  the whole document without asking anyone. **Never send `Clear-Site-Data` from
+  a logout** — it did this job once, and Chrome holds the response until its
+  whole disk cache is walked: ~20 seconds of Log out doing nothing in
+  production, instant on `next dev`.
 
 - **Who a session belongs to is remembered for 60 seconds per instance, and
   anything that changes the answer must say so.** `getCurrentUser()` checks
@@ -297,15 +299,22 @@ of this instead of fixing this one:
   cross-document — a real request, which `proxy.ts` answers with the 307 it is
   documented above as keeping. `/login` is outside the matcher, so this adds no
   redirect chain and does not go near the SameSite trap.
-- **The logout response sends `Clear-Site-Data: "cache"`.** Without it, bfcache
-  can restore that torn-down document anyway and the second change buys nothing.
-  This is the one part that depends on the browser rather than on us, so it is
-  measured and not assumed: Back after a sign-out should show a request in the
-  Network panel. No request plus a dashboard repaint means this header was not
-  honoured, and the fallback is a `pageshow`/`event.persisted` reload guard in the
-  dashboard shell — deliberately not built in advance, because
+- **A bfcache restore asks whether anyone is still signed in.** Without that,
+  bfcache can restore the torn-down document anyway and the second change buys
+  nothing. `RestoreAuthGuard` listens for `pageshow` with `event.persisted` and
+  asks `/api/auth/me`; a 401 replaces the page with `/login`, anything else
+  leaves it alone. It asks rather than reloading, because
   `lib/stores/import-persist.ts` pays real attention to keeping these pages
   bfcache-eligible and an unconditional reload on restore spends that.
+
+  This was `Clear-Site-Data: "cache"` on the logout response at first, and the
+  header cost more than it bought. Chrome does not release a response carrying
+  it until the cache is cleared, and clearing by origin walks the profile's
+  whole disk cache: measured in production (2026-10-18) as a 15–20 second
+  Log out, while the route itself answered in under 0.6s, Appwrite round trip
+  included. Local was instant, which is what hid it. The account-deletion step
+  and the admin logout carried the same header and dropped it together; the
+  console has `AdminRestoreGuard`, which simply reloads.
 
 ## Why Appwrite's tokens rather than our own
 
