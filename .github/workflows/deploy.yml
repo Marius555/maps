@@ -28,9 +28,9 @@ jobs:
   deploy:
     timeout-minutes: 30
     runs-on: ubuntu-latest
-    # Alpine because the Appwrite runtime is Alpine: standalone tracing copies the
-    # native `sharp` npm installed, and it has to be musl's. The major version is
-    # the site's buildRuntime (node-22); the script refuses a mismatch.
+    # Alpine because the Appwrite runtime is Alpine: standalone tracing copies
+    # whatever native binary npm installed, and it has to be musl's. The major
+    # version is the site's buildRuntime (node-22); the script refuses a mismatch.
     container: node:22-alpine
     steps:
       - name: Install build tools

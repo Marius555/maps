@@ -16,7 +16,7 @@ import { DEMO_MAP_NAME, DEMO_PLACES, DEMO_SHAPES, DEMO_TAGS } from "./demo-map";
  * Not a test: it asserts only what it needs to know the screen is ready, and it
  * lives in its own Playwright project so `npm run e2e` never runs it. It seeds
  * one demo map (`./demo-map.ts`) on the E2E account, shoots every entry in
- * `SHOTS` once per theme, writes `public/docs/screenshots/<shot>-<theme>.jpg`,
+ * `SHOTS` once per theme, writes `public/docs/screenshots/<shot>-<theme>.webp`,
  * regenerates `lib/docs/screenshots.generated.ts` and deletes the map.
  *
  * **Re-run it after changing any screen a guide shows** — a screenshot of a
@@ -31,6 +31,11 @@ const OUT_DIR = path.resolve("public", "docs", "screenshots");
 const MANIFEST = path.resolve("lib", "docs", "screenshots.generated.ts");
 const VIEWPORT = { width: 1440, height: 900 };
 const SCALE = 1.5;
+/**
+ * WebP rather than JPEG, for the deploy's size cap (docs/notes/deploy.md):
+ * half the bytes at the same pixels, with the text still sharp at 0.8.
+ */
+const WEBP_QUALITY = 0.8;
 const THEMES = ["light", "dark"] as const;
 const PLACEHOLDER_EMAIL = "alex@fieldwork.coffee";
 const PLACEHOLDER_NAME = "Alex Morgan";
@@ -196,9 +201,10 @@ test("capture the docs screenshots", async ({ browser }) => {
         await test.step(`${shot.name} (${theme})`, async () => {
           const target = await shot.open(page, map);
           await scrub(page, identity);
-          const buffer = await (target ?? page).screenshot({ type: "jpeg", quality: 85 });
-          writeFileSync(path.join(OUT_DIR, `${shot.name}-${theme}.jpg`), buffer);
-          sizes[shot.name] = jpegSize(buffer);
+          const png = await (target ?? page).screenshot({ type: "png" });
+          const { webp, width, height } = await toWebp(page, png);
+          writeFileSync(path.join(OUT_DIR, `${shot.name}-${theme}.webp`), webp);
+          sizes[shot.name] = { width, height };
         });
       }
 
@@ -322,18 +328,43 @@ async function scrub(page: Page, identity: Identity) {
   );
 }
 
-/** Width and height from a baseline or progressive JPEG's SOF segment. */
-function jpegSize(buffer: Buffer): { width: number; height: number } {
-  let offset = 2;
-  while (offset < buffer.length) {
-    const marker = buffer[offset + 1];
-    const length = buffer.readUInt16BE(offset + 2);
-    if (marker >= 0xc0 && marker <= 0xc2) {
-      return { height: buffer.readUInt16BE(offset + 5), width: buffer.readUInt16BE(offset + 7) };
-    }
-    offset += 2 + length;
-  }
-  throw new Error("Not a JPEG Playwright would write: no SOF segment.");
+/**
+ * A lossless capture, encoded to WebP once by the page's own canvas.
+ *
+ * Playwright can only write PNG or JPEG, and the encoder is the browser's rather
+ * than a package's: `sharp` is not a dependency of this project, only of
+ * `next`, and the deploy package leaves it out (next.config.ts). Encoding from
+ * PNG keeps the shot at one lossy step instead of two. The size comes from the
+ * same decode, so the manifest cannot disagree with the file.
+ */
+async function toWebp(
+  page: Page,
+  png: Buffer,
+): Promise<{ webp: Buffer; width: number; height: number }> {
+  const result = await page.evaluate(
+    async ({ base64, quality }) => {
+      const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
+
+      const blob = await canvas.convertToBlob({ type: "image/webp", quality });
+      const out = new Uint8Array(await blob.arrayBuffer());
+      let binary = "";
+      for (let at = 0; at < out.length; at += 0x8000) {
+        binary += String.fromCharCode(...out.subarray(at, at + 0x8000));
+      }
+
+      return { base64: btoa(binary), width: bitmap.width, height: bitmap.height };
+    },
+    { base64: png.toString("base64"), quality: WEBP_QUALITY },
+  );
+
+  return {
+    webp: Buffer.from(result.base64, "base64"),
+    width: result.width,
+    height: result.height,
+  };
 }
 
 function writeManifest(sizes: Record<string, { width: number; height: number }>) {

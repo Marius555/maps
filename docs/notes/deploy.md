@@ -14,6 +14,10 @@
   secret variable reads back empty.
 - **No `.env*` file travels in the upload.** Next copies them into `.next/standalone`, and the
   script drops them.
+- **The package stays under Appwrite's ~30MB cap.** `deploy-site.mjs` fails before uploading
+  past 30MB and lists the largest parts past 25MB. `sharp` is kept out on purpose
+  (`images.unoptimized` and `outputFileTracingExcludes` in `next.config.ts`): turning the image
+  optimiser back on puts ~8MB back, and that is a decision about the cap.
 
 ## Why the build moved off Appwrite
 
@@ -54,12 +58,42 @@ sets it, so `next start` and local builds are unchanged.
 ## Why Alpine
 
 The runtime image is `node:<v>-alpine` (open-runtimes `ci/runtimes.toml`), with `gcompat`.
-`next/image` runs `sharp`, a native module. Standalone tracing copies the binary npm installed,
-so a build on glibc or Windows ships one that does not load, and every optimised image fails, in
-production only. The workflow therefore builds in `node:22-alpine`, matching the site's
+Standalone tracing copies whatever native binary npm installed, so a build on glibc or Windows
+ships one that does not load, and fails in production only. `sharp` was the module that forced
+this. It is no longer in the package (see the size cap above), but the rule stays for the next
+native module. The workflow therefore builds in `node:22-alpine`, matching the site's
 `buildRuntime` of `node-22`. If the site's runtime changes, change the container to match; the
 script refuses a mismatch. The lockfile already carries the musl binaries for `sharp`, SWC,
 Tailwind's oxide, lightningcss and rolldown.
+
+## The package size cap
+
+The 2026-10-18 deploy failed at upload, not at build: `pack 33.3MB`, then "The deployment file
+size is either not valid or exceeds the maximum allowed size". Appwrite Cloud refuses a Sites
+deployment over about 30MB. That figure comes from user reports, not documentation, and
+`_APP_COMPUTE_SIZE_LIMIT`, which the message names, is a self-hosting variable Cloud does not
+expose.
+
+Where the 33MB went, measured from a standalone build and gzipped:
+
+| Part | Size |
+|---|---|
+| `.next/server` | 6.2MB |
+| `public/docs` (the new screenshots, JPEG) | 4.9MB |
+| `next` | 3.8MB |
+| `.next/static` | 3.7MB |
+| `public/map-themes` | 1.8MB |
+| everything else | ~3MB |
+| `sharp` with its musl libvips | ~8MB |
+
+The last row only shows up in a Linux build: Windows ships libvips inside a package tracing does
+not follow.
+
+Next's standalone tracing copies `sharp` and `@img/sharp-libvips-*` into every build not hosted
+on Vercel (`next/dist/build/collect-build-traces.js`). Nothing here used it: the docs figures
+were the only `next/image` caller and were already `unoptimized`, and the OG image is `next/og`.
+So `sharp` is excluded. The screenshots became WebP at the same pixel size, half the bytes.
+Together those take about 10MB off.
 
 ## The build's environment
 
@@ -77,13 +111,14 @@ as it was meant to from the host.
 ## Checking a deploy
 
 - **The Actions run.** `npm run check` passes, the build lists its routes, and the script prints
-  the package size (~17MB gzipped on 2026-10-17), the deployment id and `ready`.
+  the package size, the deployment id and `ready`. The package must stay under ~30MB; past 25MB
+  the script lists the largest parts.
 - **The Appwrite deployment log.** It shows "Detected standalone Next.js build".
 - **The live site.**
   - `/` renders.
   - `/login` works.
   - `/api/version` shows the pushed commit.
-  - An image goes through `/_next/image`, which proves `sharp` loaded.
+  - A docs page (`/docs/map-editor`) shows its screenshots. They are plain files, not optimised.
 
 To check standalone completeness locally, without uploading:
 

@@ -787,8 +787,11 @@ Each of these is a week not spent getting a paying customer. If one seems necess
   asynchronously) calling a secret-guarded route in bounded steps. `maxDuration` exports are
   Vercel-only and do nothing here. **Appwrite cannot build this app**: a cold `next build`
   peaks at ~2.6GB and the site's 2GB build box kills it. GitHub Actions builds it
-  (`.github/workflows/deploy.yml`, in `node:22-alpine` for musl's `sharp`) and uploads a
-  standalone build that Appwrite only unpacks — `docs/notes/deploy.md`.
+  (`.github/workflows/deploy.yml`, in `node:22-alpine` to match the runtime) and uploads a
+  standalone build that Appwrite only unpacks — `docs/notes/deploy.md`. **That upload is
+  capped at ~30MB**, which is why `sharp` and the image optimiser are off and the docs
+  screenshots are WebP; the deploy script fails before uploading past the cap and names
+  what is taking the room.
 - **Google Maps is not an option anywhere in this codebase.** Their terms forbid storing business names and addresses, cap coordinate caching at 30 days, and require Places results to be shown on a Google map. Our model breaks all three.
 - **Nominatim's public API forbids autocomplete and bulk use.** If we self-host geocoding, use Photon (prebuilt GraphHopper dumps, runs as a separate service on its own VPS — it is not loaded into Appwrite).
 - **A licence and a demo server's usage policy are different things, and confusing them has cost time.** Every component of this stack — OSM data (ODbL), OpenFreeMap, OSRM (BSD-2), MapLibre and PMTiles (BSD-3/MIT) — permits commercial use outright, and nothing here has ever claimed otherwise. What is restricted is running production traffic through the free *demo endpoints* those projects host. Verified September 2026, and the three do not have the same answer:

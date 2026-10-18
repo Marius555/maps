@@ -15,9 +15,10 @@ import { DOCS_SCREENSHOTS, type DocsScreenshot } from "@/lib/docs/screenshots.ge
  * capture does not take fails the typecheck rather than drawing a broken image.
  * The manifest's size reserves the box, so nothing below it moves as it loads.
  *
- * `unoptimized`: the files are already sized JPEGs, and nothing else on the
- * public site runs through the image optimiser, which on Appwrite Sites would be
- * one more thing in the standalone build to keep working for twelve pictures.
+ * `unoptimized`: the files are already sized WebPs, and the image optimiser is
+ * off app-wide — `sharp` is kept out of the deploy package, which Appwrite caps
+ * at ~30MB (`images` in next.config.ts, docs/notes/deploy.md). WebP rather than
+ * JPEG for the same cap: half the bytes at the same pixels.
  */
 export function DocsFigure({
   shot,
@@ -41,13 +42,13 @@ export function DocsFigure({
     <figure className="space-y-2.5">
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         <Image
-          src={`/docs/screenshots/${shot}-light.jpg`}
+          src={`/docs/screenshots/${shot}-light.webp`}
           alt={alt}
           {...common}
           className="h-auto w-full dark:hidden"
         />
         <Image
-          src={`/docs/screenshots/${shot}-dark.jpg`}
+          src={`/docs/screenshots/${shot}-dark.webp`}
           alt={alt}
           {...common}
           className="hidden h-auto w-full dark:block"

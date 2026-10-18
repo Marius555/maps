@@ -26,10 +26,17 @@
  *
  * ## Why Linux with musl
  *
- * The runtime image is `node:<v>-alpine`. `next/image` runs `sharp`, a native
- * module, and standalone tracing copies whichever `sharp` binary npm installed —
- * glibc's or Windows' would ship, load nowhere, and break every image only in
- * production. The workflow builds in a `node:<v>-alpine` container for that.
+ * The runtime image is `node:<v>-alpine`, and standalone tracing copies
+ * whichever native binary npm installed — glibc's or Windows' would ship, load
+ * nowhere, and fail only in production. `sharp` was the one that forced this;
+ * it is left out of the package now (`images` in next.config.ts, for the size
+ * cap below), but the guard stays for the next native module to arrive. The
+ * workflow builds in a `node:<v>-alpine` container for that.
+ *
+ * ## The size cap
+ *
+ * Appwrite refuses a package over about 30MB. `assemble` measures before the
+ * upload and, past `WARN_PACKAGE_MB`, lists the largest parts.
  *
  * ## The environment the build sees
  *
@@ -50,9 +57,10 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, relative, sep } from "node:path";
+import { gzipSync } from "node:zlib";
 
 import { AppwriteException, Client, Sites } from "node-appwrite";
 import { InputFile } from "node-appwrite/file";
@@ -62,6 +70,17 @@ const OUTPUT_DIRECTORY = "./.next";
 
 /** Public files the deployed site must not carry; gitignored, so absent in CI anyway. */
 const PUBLIC_EXCLUDED = new Set(["tiles"]);
+
+/**
+ * Appwrite Sites refuses a deployment over about 30MB ("The deployment file
+ * size is either not valid or exceeds the maximum allowed size"). Not a
+ * documented number and not one Cloud lets us change, so the package is
+ * checked against it here, before the upload, with what is taking the room.
+ * Past the warning line the same list prints without failing, so the next
+ * addition is argued while there is still space. docs/notes/deploy.md.
+ */
+const MAX_PACKAGE_MB = 30;
+const WARN_PACKAGE_MB = 25;
 
 const args = new Set(process.argv.slice(2));
 const build = !args.has("--no-build");
@@ -230,13 +249,20 @@ function assemble() {
   cpSync(".next/standalone", join(stage, ".next/standalone"), {
     recursive: true,
     filter: (source) =>
-      !(basename(source).startsWith(".env") && statSync(source).isFile()),
+      !(basename(source).startsWith(".env") && statSync(source).isFile()) &&
+      !isSourceMap(source),
   });
-  cpSync(".next/static", join(stage, ".next/static"), { recursive: true });
+  cpSync(".next/static", join(stage, ".next/static"), {
+    recursive: true,
+    filter: (source) => !isSourceMap(source),
+  });
 
   for (const name of readdirSync("public")) {
     if (PUBLIC_EXCLUDED.has(name)) continue;
-    cpSync(join("public", name), join(stage, "public", name), { recursive: true });
+    cpSync(join("public", name), join(stage, "public", name), {
+      recursive: true,
+      filter: (source) => !isSourceMap(source),
+    });
   }
 
   // Relative paths only, run from inside the folder: GNU tar reads the colon in
@@ -246,9 +272,74 @@ function assemble() {
   if (tar.status !== 0) fail(`tar exited with ${tar.status ?? tar.signal}.`);
 
   const size = statSync(archive).size;
-  console.log(`  pack    ${(size / 1024 / 1024).toFixed(1)}MB -> ${archive}`);
+  const megabytes = size / 1024 / 1024;
+  console.log(`  pack    ${megabytes.toFixed(1)}MB -> ${archive}`);
+
+  if (megabytes > WARN_PACKAGE_MB) {
+    console.log(`  largest parts (gzipped, approximate):`);
+    for (const [part, bytes] of largestParts(stage, 8)) {
+      console.log(`    ${(bytes / 1024 / 1024).toFixed(2).padStart(6)}MB  ${part}`);
+    }
+
+    if (megabytes > MAX_PACKAGE_MB) {
+      rmSync(root, { recursive: true, force: true });
+      fail(
+        `The package is ${megabytes.toFixed(1)}MB and Appwrite Sites refuses anything over ~${MAX_PACKAGE_MB}MB. The parts above are where it went — see "The package size cap" in docs/notes/deploy.md.`,
+      );
+    }
+
+    console.warn(`  warning past ${WARN_PACKAGE_MB}MB of a ~${MAX_PACKAGE_MB}MB cap.`);
+  }
 
   return { root, archive };
+}
+
+/**
+ * Source maps. Nothing reads them in production — the server is not started
+ * with `--enable-source-maps`, and a browser asks for one only with DevTools
+ * open — so they are bytes against the cap and nothing else.
+ */
+function isSourceMap(source) {
+  return source.endsWith(".map") && statSync(source).isFile();
+}
+
+/**
+ * What the package is made of, by the part a person would act on: each
+ * dependency in the standalone `node_modules`, each folder under `.next`, each
+ * folder under `public`. Sized by gzipping each file alone, which tracks the
+ * tarball closely enough to say where the room went.
+ */
+function largestParts(stage, count) {
+  const parts = new Map();
+
+  const partOf = (path) => {
+    const segments = relative(stage, path).split(sep);
+    const modules = segments.indexOf("node_modules");
+
+    if (modules !== -1) {
+      const name = segments[modules + 1] ?? "";
+      return `node_modules/${name.startsWith("@") ? `${name}/${segments[modules + 2]}` : name}`;
+    }
+    if (segments[0] === "public") return segments.slice(0, 2).join("/");
+    if (segments[0] === ".next" && segments[1] === "standalone") {
+      return segments[2] === ".next" ? `.next/${segments[3]}` : `standalone/${segments[2]}`;
+    }
+    return segments.slice(0, 2).join("/");
+  };
+
+  const walk = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.isFile()) {
+        const part = partOf(path);
+        parts.set(part, (parts.get(part) ?? 0) + gzipSync(readFileSync(path)).length);
+      }
+    }
+  };
+
+  walk(stage);
+  return [...parts].sort((a, b) => b[1] - a[1]).slice(0, count);
 }
 
 /* ------------------------------------------------------------------ *
@@ -286,7 +377,7 @@ async function waitForDeployment(siteId, deploymentId) {
 async function main() {
   if (upload && !isMusl()) {
     fail(
-      "Refusing to upload: this is not Linux with musl, so the build carries the wrong native sharp and images would fail in production. Deploy through .github/workflows/deploy.yml, or pass --no-upload to build and package only.",
+      "Refusing to upload: this is not Linux with musl, so any native module the build traces would be the wrong binary for the Alpine runtime. Deploy through .github/workflows/deploy.yml, or pass --no-upload to build and package only.",
     );
   }
 

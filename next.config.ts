@@ -119,6 +119,21 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: process.env.SKIP_BUILD_TYPECHECK === "true",
   },
 
+  /*
+   * No image optimiser, and so no `sharp` in the deploy package.
+   *
+   * Appwrite Sites refuses a deployment over ~30MB, and standalone tracing
+   * copies `sharp` with its Linux libvips — about 8MB gzipped — into every
+   * build that is not on Vercel (collect-build-traces.js). Nothing used it: the
+   * docs figures are the only `next/image` caller and were already
+   * `unoptimized`, and the OG image is `next/og`. Turning the optimiser back on
+   * is a decision about that cap, not a config tweak — docs/notes/deploy.md.
+   */
+  images: { unoptimized: true },
+  outputFileTracingExcludes: {
+    "*": ["**/node_modules/sharp/**/*", "**/@img/**/*"],
+  },
+
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

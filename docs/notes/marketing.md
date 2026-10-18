@@ -119,7 +119,7 @@
   `npm run docs:screenshots` (dev server up, E2E account in `.env`) seeds a demo
   map from `e2e/docs-screenshots/demo-map.ts` with fixed coordinates (no lookups),
   shoots every entry in `SHOTS` in both themes, writes
-  `public/docs/screenshots/<shot>-<theme>.jpg` and regenerates
+  `public/docs/screenshots/<shot>-<theme>.webp` and regenerates
   `lib/docs/screenshots.generated.ts`, which types `DocsFigure`'s `shot`. It is
   its own Playwright project, and the spec skips unless run by that name, so
   `npm run e2e` never rewrites the images. Before each shot `scrub` swaps any
