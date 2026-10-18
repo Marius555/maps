@@ -224,7 +224,7 @@ Tests are `vitest` (`vitest.config.mts`), unit only, `lib/**/*.test.ts` and `pac
 
 ### Stack specifics that change how you write code
 
-- **Next.js 16.3.** Breaking changes against older App Router knowledge — read `node_modules/next/dist/docs/` before writing route, layout, or caching code (AGENTS.md says the same). Typed route props are globals: `LayoutProps<"/">`, `PageProps<"/maps/[id]">`. Don't hand-write `params` types; `app/layout.tsx` already uses the global form.
+- **Next.js 16.4.** Breaking changes against older App Router knowledge — read `node_modules/next/dist/docs/` before writing route, layout, or caching code (AGENTS.md says the same). Typed route props are globals: `LayoutProps<"/">`, `PageProps<"/maps/[id]">`. Don't hand-write `params` types; `app/layout.tsx` already uses the global form.
 - **A value imported from a `"use client"` module into a *server* component is a client
   reference, not the value.** Components work; constants do not, and nothing warns. A shared
   number read that way became `NaN` in an arithmetic expression, React dropped the invalid
