@@ -5,8 +5,6 @@ import {
   LOCATOR_MONTHLY_USD,
   SETUP_MONTHS,
   SETUP_ONCE_USD,
-  BILL_AXIS_MAX,
-  BILL_AXIS_MIN,
   billSeries,
   compareRows,
   growthFactor,
@@ -122,16 +120,6 @@ describe("billSeries", () => {
     }
 
     expect(series[series.length - 1].metered).toBeGreaterThan(series[0].metered);
-  });
-
-  it("keeps every point inside the axis domain the chart declares", () => {
-    // A log axis silently drops a point outside its domain, so the floor and
-    // the ceiling the chart hardcodes have to be true of the data.
-    for (const point of series) {
-      expect(point.us).toBeGreaterThanOrEqual(BILL_AXIS_MIN);
-      expect(point.locator).toBeLessThanOrEqual(BILL_AXIS_MAX);
-      expect(point.metered).toBeLessThanOrEqual(BILL_AXIS_MAX);
-    }
   });
 
   it("agrees with the table beside it at every traffic level it shares", () => {

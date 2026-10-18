@@ -73,7 +73,7 @@ export function HeroPinMarker({
 }
 
 /** Where a pin sits on the picture, as the `left`/`top` of its positioned box. */
-export function heroPinPosition(pin: HeroPin): CSSProperties {
+export function heroPinPosition(pin: { lng: number; lat: number }): CSSProperties {
   const { x, y } = projectPin(pin);
 
   return { left: `${x.toFixed(3)}%`, top: `${y.toFixed(3)}%` };

@@ -150,8 +150,7 @@ export function costVerdict(views: number, flat: number): string {
  * (components/marketing/reserve.tsx) makes the block as tall as the tallest
  * thing it can hold, once and at every width.
  *
- * Sampled over `0..SLIDER_STEPS` — the slider's own track, the same rule
- * `billSeries` follows — so a change to the range or to the copy is picked up
+ * Sampled over `0..SLIDER_STEPS` — the slider's own track — so a change to the range or to the copy is picked up
  * instead of needing a second list kept in step. Longest *per branch*, because
  * which branch wraps first depends on how wide the page is and the wrapping is
  * the browser's to decide.

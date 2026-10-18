@@ -49,7 +49,7 @@ export function BillChartLoader({ flat }: { flat: number }) {
   const shown = useInView(box, { once: true, amount: 0.4 });
 
   return (
-    <div ref={box} className="mk-chart h-[220px] w-full sm:h-[258px]">
+    <div ref={box} className="mk-chart h-[220px] w-full sm:h-[300px]">
       {near ? <Chart flat={flat} draw={shown} /> : null}
     </div>
   );

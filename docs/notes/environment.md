@@ -53,6 +53,13 @@ deploy. Names in use:
   Pro or `DISABLE_ALL_PLAN=true`, because Free allows one map. Optional `E2E_BASE_URL`
   points the suite somewhere other than `http://localhost:3000`. `e2e/README.md`.
 
+- **Local only: `WIPE_KEEP_EMAILS`.** Comma-separated addresses that survive
+  `npm run danger:wipe-database`, together with everything they own; the `E2E_*` accounts
+  are kept as well. An address with no account behind it stops the wipe, so a typo cannot be
+  how a test account is lost. It lives in `.env` rather than the code because the repo is
+  public. The wipe's other lock is `ADMIN_PASSWORD_HASH`: `--execute` asks for the operator
+  console's password at a terminal. `scripts/wipe/index.mjs`.
+
 - Optional, server-only: `TUTORIAL_ALWAYS_PRESENT`. Set to `1`/`true`/`yes`, the four
   onboarding overlays (`components/onboarding/`) are drawn on every load, dismissed or not:
   the maps list's arrow at Create map; the editor's two at the pin button and Locations on an

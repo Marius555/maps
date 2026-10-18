@@ -166,22 +166,6 @@ export function growthFactor(at: (views: number) => number): number {
 
 export { METERED_USD_PER_1000 };
 
-/**
- * The bill axis the survey chart draws, as decades.
- *
- * **Exported rather than written in the component, because a log axis drops a
- * point outside its domain without a word.** A €19 line under a $10 floor, or a
- * $7,000 one over a $10,000 ceiling, simply is not drawn — no warning, no gap,
- * just a series that ends early. `compare.test.ts` asserts every point of
- * `billSeries` lands inside these, so the failure is a red test rather than a
- * chart that looks finished.
- */
-export const BILL_AXIS_MIN = 10;
-export const BILL_AXIS_MAX = 10_000;
-
-/** The decades the bill axis is labelled at. */
-export const BILL_AXIS_TICKS: readonly number[] = [10, 100, 1_000, 10_000];
-
 export type BillPoint = {
   views: number;
   /** A metered map platform, billed per load. */
@@ -193,15 +177,15 @@ export type BillPoint = {
 };
 
 /**
- * The three bills as continuous curves over the traffic range, for the survey
- * section's line chart.
+ * The bills as continuous curves over the traffic range, for the survey
+ * section's chart.
  *
  * **Sampled on the calculator's own track, not on a fresh one.** `viewsAt` over
  * `0..SLIDER_STEPS` is exactly the log scale the slider two sections up moves
  * along, so the curve a reader sees here is the one they were just dragging.
- * Sixty-one points over three decades is about twenty a decade — enough that a
- * log-log plot draws as a clean line rather than a polyline with visible joints,
- * and few enough to ship in the page.
+ * Sixty-one points over three decades is about twenty a decade — enough that
+ * the curve draws clean rather than as a polyline with visible joints, and few
+ * enough to ship in the page.
  *
  * `us` is constant by construction rather than by a flat-looking curve: nothing
  * about `flatEur` depends on `views`, and that is the claim.

@@ -15,30 +15,25 @@ const MONEY = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 });
 /**
  * The same three bills as numbers, at the three traffic levels a decade apart.
  *
- * **It is doing three jobs, and each one on its own would justify it.**
+ * **It is doing two jobs, and each one on its own would justify it.**
  *
  * 1. **It is what the page ships without JavaScript.** The chart beside it is
  *    `ssr: false`, because recharts measures its container before it can draw
- *    anything. ../reveal.tsx records what this page's rule is and why: an
- *    earlier reveal shipped nineteen elements already invisible in the served
- *    HTML, and with scripts blocked they stayed that way. A section whose whole
- *    argument is three numbers must not be able to arrive empty.
- * 2. **It is the chart's table view**, which any chart owes a reader who cannot
- *    use it — and here the numbers are the point rather than a drill-down.
- * 3. **It is where the exact figures live.** A log axis is read as a shape, not
- *    as values; the amounts the footnote refers to are here, printed.
+ *    anything; a section whose whole argument is its numbers must not be able
+ *    to arrive empty (../reveal.tsx).
+ * 2. **It is the breakdown the chart folds away.** The chart draws the two
+ *    usual ways of buying this as one "Everyone else"; this prints both, at
+ *    three levels a decade apart — and is the chart's table view, which any
+ *    chart owes a reader who cannot use it.
  *
  * **A client component, and still server-rendered.** `"use client"` means
  * hydrated, not client-only: the server still renders this to HTML with every
  * figure printed, which is what point 1 needs. The client half is the arrival —
- * one `useInView` on the table starts all nine figures counting up from zero as
- * the lines beside them draw (../count-up.tsx has how that stays out of the
- * served HTML). Each figure sits in a `Reserve` holding its final text, because
- * the columns are sized by their content and "$0" is narrower than "$7,000".
- *
- * `compareRows` is the same tested function the bar charts used, so the table
- * and the curves cannot drift — `compare.test.ts` asserts `billSeries` agrees
- * with it at every traffic level the two share.
+ * one `useInView` on the table starts all nine figures counting up from zero
+ * as the chart beside them draws (../count-up.tsx
+ * has how that stays out of the served HTML). Each figure sits in a `Reserve`
+ * holding its final text, because the columns are sized by their content and
+ * "$0" is narrower than "$7,000".
  *
  * A real `<table>` with a real `<caption>`, not a grid of divs: it is tabular
  * data, and a screen reader navigating it by column is the whole reason the

@@ -45,7 +45,7 @@ export function HeroMapGenerator() {
       // One at a time: each render holds a WebGL context until it is torn down.
       for (const look of HERO_LOOKS) {
         for (const pixelRatio of HERO_PIXEL_RATIOS) {
-          const blob = await renderHeroMap(look.style, pixelRatio);
+          const blob = await renderHeroMap(look.style, pixelRatio, look.roads);
 
           results.push({
             name: `${look.file}${pixelRatio === 1 ? "" : `@${pixelRatio}x`}.webp`,

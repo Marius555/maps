@@ -1,7 +1,7 @@
 "use client";
 
 import { inView, useReducedMotion } from "motion/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   HERO_PINS,
@@ -11,9 +11,16 @@ import {
   nearestPin,
   type HeroFilter,
   type HeroPin,
+  unprojectPin,
 } from "@/lib/marketing/hero-map";
 
 import { useHeroTour } from "./use-hero-tour";
+
+/** A pin the visitor dropped by pressing the ground. */
+export type DroppedPin = { id: number; lng: number; lat: number };
+
+/** How many dropped pins the map keeps: enough to play with, never a carpet. */
+const MAX_DROPPED = 3;
 
 /** The first card waits for the pins to land — the drop wave takes about this long. */
 const FIRST_CARD_MS = 1600;
@@ -48,6 +55,15 @@ function nearestName(filter: HeroFilter): string | null {
  * card moving on its own would be undoing it. Pointing is not choosing, so a
  * mouse merely crossing the map suppresses the tour's card without ending it.
  *
+ * **"Drop a pin" arms one placement**: the next press on the ground drops a
+ * pin there, opens its card and disarms, the editor's add-location gesture.
+ * Otherwise the ground closes cards, as it always did — a map that dropped a
+ * pin on every click filled up with pins nobody meant (owner, 2026-10-18). A
+ * dropped pin's card stands in for a pinned card until a real pin is pressed;
+ * the hover rule above still wins over it. The last `MAX_DROPPED` are kept; dropped pins answer no
+ * filter and are never "nearest", because they are the visitor's, not the
+ * demo chain's.
+ *
  * Reduced motion gets the tour's first card, open and still: the static form of
  * "this map has cards on it".
  */
@@ -61,6 +77,10 @@ export function useHeroMap(frame: Element | null) {
   const [nearMe, setNearMe] = useState(false);
   const [engaged, setEngaged] = useState(false);
   const [pointing, setPointingState] = useState(false);
+  const [dropped, setDropped] = useState<DroppedPin[]>([]);
+  const [droppedOpenId, setDroppedOpenId] = useState<number | null>(null);
+  const [placing, setPlacing] = useState(false);
+  const nextDropId = useRef(0);
 
   useEffect(() => {
     if (!frame) return;
@@ -98,8 +118,18 @@ export function useHeroMap(frame: Element | null) {
     if (!next) setHoverName(null);
   }, []);
 
+  // Stable, because hero-map.tsx binds Escape with it while placing.
+  const cancelPlacing = useCallback(() => setPlacing(false), []);
+
+  const openDropped = hoverName
+    ? null
+    : (dropped.find((pin) => pin.id === droppedOpenId) ?? null);
+
   const openName =
-    hoverName ?? pinnedName ?? (!pointing && !engaged ? tourName : null);
+    hoverName ??
+    (openDropped
+      ? null
+      : (pinnedName ?? (!pointing && !engaged ? tourName : null)));
 
   // A card on a pin the filter has just hidden closes with it.
   const openPin =
@@ -114,6 +144,9 @@ export function useHeroMap(frame: Element | null) {
     filter,
     shownCount: shownBy(filter).length,
     openPin,
+    dropped,
+    openDropped,
+    placing,
     nearMe,
     nearest,
     isShown: (pin: HeroPin) => matchesFilter(pin, filter),
@@ -140,6 +173,7 @@ export function useHeroMap(frame: Element | null) {
 
       setNearMe(true);
       setPinnedName(nearestName(filter));
+      setDroppedOpenId(null);
     },
 
     hoverPin(pin: HeroPin) {
@@ -156,12 +190,46 @@ export function useHeroMap(frame: Element | null) {
     pressPin(pin: HeroPin) {
       setEngaged(true);
       setPinnedName(pin.name);
+      setDroppedOpenId(null);
     },
 
     pressGround() {
       setEngaged(true);
       setPinnedName(null);
       setHoverName(null);
+      setDroppedOpenId(null);
+    },
+
+    togglePlacing() {
+      setEngaged(true);
+      setPlacing((current) => !current);
+    },
+
+    cancelPlacing,
+
+    /**
+     * `point` is where the ground was pressed, as percentages of the picture.
+     * Only while "Drop a pin" is armed, and it disarms: one press, one pin.
+     */
+    dropAt(point: { x: number; y: number }) {
+      if (!placing) return;
+
+      const id = nextDropId.current++;
+      setPlacing(false);
+
+      setEngaged(true);
+      setPinnedName(null);
+      setHoverName(null);
+      setDropped((current) =>
+        [...current, { id, ...unprojectPin(point) }].slice(-MAX_DROPPED),
+      );
+      setDroppedOpenId(id);
+    },
+
+    /* Pressing a dropped pin opens its card, and pressing it again closes it. */
+    pressDropped(pin: DroppedPin) {
+      setEngaged(true);
+      setDroppedOpenId((current) => (current === pin.id ? null : pin.id));
     },
 
     setPointing,

@@ -191,7 +191,11 @@ npm run migrate:style-host      # move published snapshots to the current tile h
 npm run migrate:snapshots-to-r2 # copy Appwrite-hosted snapshots to R2 (--dry-run first)
 npm run migrate:tags            # fold categories into tags (--dry-run first)
 npm run migrate:permissions     # strip owner permissions from rows/files (--dry-run first; --verify-subscriptions)
+npm run danger:wipe-database    # dry run; -- --execute deletes all but WIPE_KEEP_EMAILS (owner only: TTY + admin password)
 ```
+
+The owner's plain-language guide to all of the above is `handbook/README.md`. Add a line
+there when you add a command.
 
 `npm run check` does **not** build the embed, and does not run `npm run e2e` either (it needs a
 test account and a dev server). After changing anything under `/embed`, run `npm run build:embed` too — that is where the size budget is enforced.

@@ -80,7 +80,65 @@ export function r2Bucket() {
       // what the embed ships; the hash inside is still the body's MD5.
       return (response.headers.get("etag") ?? "").replace(/^W\//, "").replace(/"/g, "") || null;
     },
+
+    /** Every key under `prefix` ("" for the whole bucket). Mirrors lib/r2/client.ts's `list`. */
+    async list(prefix = "") {
+      const keys = [];
+      let token = null;
+
+      do {
+        const query = new URLSearchParams({ "list-type": "2", prefix });
+        if (token) query.set("continuation-token", token);
+
+        const response = await client.fetch(`${base}?${query}`, {
+          signal: AbortSignal.timeout(30_000),
+        });
+        const xml = await response.text();
+
+        if (!response.ok) {
+          throw new Error(`R2 list ${prefix || "/"} failed: HTTP ${response.status}`);
+        }
+
+        keys.push(...tagValues(xml, "Key"));
+        token = tagValues(xml, "IsTruncated")[0] === "true"
+          ? (tagValues(xml, "NextContinuationToken")[0] ?? null)
+          : null;
+      } while (token);
+
+      return keys;
+    },
+
+    async remove(key) {
+      const response = await client.fetch(`${base}/${encodeKey(key)}`, {
+        method: "DELETE",
+        signal: AbortSignal.timeout(30_000),
+      });
+
+      // S3 answers 204 for a key that was never there, so a 404 is not expected —
+      // but it would mean the same thing, and is not a failure.
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`R2 DELETE ${key} failed: HTTP ${response.status}`);
+      }
+    },
   };
+}
+
+function encodeKey(key) {
+  return key.split("/").map(encodeURIComponent).join("/");
+}
+
+/** Text content of every `<tag>` in an S3 XML response — lib/r2/client.ts's `tagValues`. */
+function tagValues(xml, tag) {
+  const pattern = new RegExp(`<${tag}>([^<]*)</${tag}>`, "g");
+
+  return [...xml.matchAll(pattern)].map((match) =>
+    match[1]
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, "&"),
+  );
 }
 
 export function snapshotBucket() {

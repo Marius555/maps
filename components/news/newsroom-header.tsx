@@ -6,20 +6,21 @@ import { newsroomLinks, type NewsroomLink } from "@/lib/news/newsroom-links";
 const ICONS = { mail: Mail, book: BookOpen, tag: Tag } satisfies Record<NewsroomLink["icon"], unknown>;
 
 /**
- * The top of /news: a large title on the left and a short table of where to go
- * next on the right, ruled between rows. Stacks below `md`.
+ * The top of /news: a large title, and under it one ruled row of where to go
+ * next — a label over a link in each cell. The cells stack below `sm`. The
+ * row's own rules close the header, so the header draws none of its own.
  */
 export function NewsroomHeader() {
   const links = newsroomLinks();
 
   return (
-    <header className="grid gap-8 border-b border-border pb-12 md:grid-cols-2 md:gap-12 md:pb-16">
+    <header className="space-y-8 pb-12 md:space-y-10 md:pb-16">
       <h1 className="font-display text-5xl font-semibold tracking-tight text-foreground sm:text-6xl">
         Newsroom
       </h1>
 
       {links.length > 0 ? (
-        <dl className="divide-y divide-border border-y border-border text-sm">
+        <dl className="grid divide-y divide-border border-y border-border text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           {links.map((link) => {
             const Icon = ICONS[link.icon];
             const content = (
@@ -29,11 +30,14 @@ export function NewsroomHeader() {
               </>
             );
             const className =
-              "inline-flex max-w-full items-center gap-2 rounded-sm text-muted transition-colors hover:text-foreground";
+              "inline-flex max-w-full items-center gap-2 rounded-sm text-foreground transition-colors hover:text-accent";
 
             return (
-              <div key={link.label} className="grid grid-cols-2 gap-4 py-3">
-                <dt className="text-muted">{link.label}</dt>
+              <div
+                key={link.label}
+                className="min-w-0 space-y-1.5 py-4 sm:px-5 sm:first:pl-0 sm:last:pr-0"
+              >
+                <dt className="text-xs text-muted">{link.label}</dt>
                 <dd className="min-w-0">
                   {/* A mail link is not a route: a plain anchor, not the router. */}
                   {link.href.startsWith("mailto:") ? (

@@ -16,12 +16,12 @@ const PLAN = MARKETING_PLANS.find((plan) => plan.id === RECOMMENDED_PLAN)!;
  * scale — and a survey is what you do to the ground around you before you draw
  * any of it.
  *
- * **Three lines, where there used to be nine bars.** The section's claim is
- * about a *shape* — two bills that climb with your traffic and one that does
- * not — and three separately scaled bar columns made the reader assemble that
- * shape from three snapshots. It is also the page's fourth bar chart in a row,
- * which is a page that has stopped choosing forms. See bill-chart.tsx, and
- * bill-table.tsx for why the numbers are still printed underneath.
+ * **One area that shoots up, and one line on the floor.** The claim is a
+ * shape — a bill that climbs with your traffic and one that does not — and the
+ * chart draws that shape at full drama without repeating the calculator's
+ * slider and bars above (owner, 2026-10-18). See bill-chart.tsx for why the
+ * hockey stick is honest, and bill-table.tsx for why the numbers are still
+ * printed beside it.
  *
  * The section the page ends on, and it ends on the ask: the two buttons that
  * used to sit under the calculator are here, after the last argument rather
@@ -40,18 +40,18 @@ export function Compare() {
           {/* The table is beside the chart rather than under it, and that is a
               height decision as much as a reading one: stacked, the two came to
               503px and put this section 235px past the screen it has to hold.
-              Beside it, the table reads as the chart's key — the same three
-              dots, the exact figures the curves only show the shape of. */}
-          <div className="grid gap-6 lg:grid-cols-[1.55fr_1fr] lg:items-center lg:gap-10">
+              Beside it, the table is the breakdown — both usual ways, at three
+              traffic levels, where the chart folds them into one. */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.55fr_1fr] lg:items-center lg:gap-10">
             <BillChartLoader flat={PLAN.amount} />
 
             <div className="space-y-2.5">
               <BillTable flat={PLAN.amount} />
               <p className="text-[0.6875rem]/4 text-pretty text-muted">
-                Both axes step by ten. Metered at $7 per 1,000 loads before any
-                free allowance; the locator figure is a published mid-tier
-                subscription plus the loads your own key is billed for. Those
-                publish in dollars; ours is €{PLAN.amount} at every point.
+                Traffic steps by ten; the bills are drawn to scale. Metered at
+                $7 per 1,000 loads before any free allowance; the locator figure is a published mid-tier subscription plus the
+                loads your own key is billed for. Those publish in dollars;
+                ours is €{PLAN.amount} at every traffic level.
               </p>
             </div>
           </div>

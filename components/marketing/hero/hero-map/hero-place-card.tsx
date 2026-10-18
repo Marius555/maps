@@ -1,17 +1,13 @@
 "use client";
 
 import { Clock, Navigation } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
 
 import {
   HERO_KINDS,
   HERO_PIN_COLORS,
   HERO_YOU_ARE_HERE,
   pinInFrame,
-  placeCard,
   projectPin,
-  type CardInsets,
   type FrameSize,
   type HeroPin,
 } from "@/lib/marketing/hero-map";
@@ -22,32 +18,15 @@ import {
   formatDuration,
 } from "@/packages/shared/geo";
 
-import { useElementSize } from "./use-element-size";
-
-/**
- * What the card keeps clear of: the chips and "Nearest to me" along the top,
- * the ⓘ in the bottom corner.
- */
-const INSETS: CardInsets = { top: 64, right: 12, bottom: 44, left: 12 };
-
-/** Used for the one frame before the card has measured itself. */
-const ESTIMATE: FrameSize = { width: 224, height: 118 };
-
-/** Where the card grows from: the side facing its pin. */
-const ORIGIN = {
-  right: "0% 50%",
-  left: "100% 50%",
-  below: "50% 0%",
-  above: "50% 100%",
-} as const;
+import { HeroCardFrame } from "./hero-card-frame";
 
 /**
  * The card a visitor opens on a pin, drawn over the hero's picture.
  *
  * It glides from pin to pin rather than closing and reopening — the spring on
- * `x`/`y` is what makes the tour read as one card being carried around the map
- * — and its contents crossfade as it goes. Placed in frame pixels by
- * `placeCard`, which is why it only exists once the frame has been measured.
+ * `x`/`y` (in `HeroCardFrame`) is what makes the tour read as one card being
+ * carried around the map — and its contents crossfade as it goes. Placed in
+ * frame pixels, which is why it only exists once the frame has been measured.
  *
  * Decoration to a screen reader, like the pins it belongs to: the map's own
  * label says what is on it, and a card that changes every few seconds would be
@@ -66,8 +45,6 @@ export function HeroPlaceCard({
   route: HeroRoute | null;
   frame: FrameSize;
 }) {
-  const [node, setNode] = useState<HTMLDivElement | null>(null);
-  const size = useElementSize(node);
   const anchor = pinInFrame(projectPin(pin), frame);
 
   // While "Nearest to me" is on, open away from the visitor's dot so the card
@@ -76,36 +53,15 @@ export function HeroPlaceCard({
     km !== null || route ? pinInFrame(projectPin(HERO_YOU_ARE_HERE), frame) : null;
   const prefer = you && you.x > anchor.x ? "left" : "right";
 
-  const placed = placeCard(anchor, size ?? ESTIMATE, frame, INSETS, prefer);
-
   return (
-    <motion.div
-      ref={setNode}
-      aria-hidden="true"
-      className="pointer-events-none absolute top-0 left-0 z-10 w-56 rounded-xl bg-surface shadow-lg shadow-black/10"
-      style={{ transformOrigin: ORIGIN[placed.side] }}
-      initial={{ opacity: 0, scale: 0.92, x: placed.x, y: placed.y }}
-      animate={{ opacity: 1, scale: 1, x: placed.x, y: placed.y }}
-      exit={{ opacity: 0, scale: 0.92 }}
-      transition={{
-        type: "spring",
-        stiffness: 240,
-        damping: 30,
-        opacity: { duration: 0.18 },
-      }}
+    <HeroCardFrame
+      anchor={anchor}
+      frame={frame}
+      prefer={prefer}
+      contentKey={pin.name}
     >
-      <AnimatePresence mode="popLayout" initial={false}>
-        <motion.div
-          key={pin.name}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <CardBody pin={pin} km={km} route={route} />
-        </motion.div>
-      </AnimatePresence>
-    </motion.div>
+      <CardBody pin={pin} km={km} route={route} />
+    </HeroCardFrame>
   );
 }
 

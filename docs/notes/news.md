@@ -4,8 +4,10 @@ Posts on the public site, laid out after anthropic.com/news, and written in the 
 console under **News** (`/admin/news`, editor at `/admin/news/new` and `/admin/news/[id]`).
 The site header links to `/news`.
 
-- **`/news`, the Newsroom**: a title with a short table of where to go next
-  (`newsroom-header.tsx`, rows from `lib/news/newsroom-links.ts`); the newest post featured
+- **`/news`, the Newsroom**: a title, and under it one ruled row of where to go next —
+  Questions, Getting started, Plans (`newsroom-header.tsx`, cells from
+  `lib/news/newsroom-links.ts`). Below the title rather than beside it, at the owner's
+  request (2026-10-18), so the page is not a copy of anthropic.com/news; the newest post featured
   across two thirds with the next four as a text column beside it (`news-hero.tsx`); then
   every post as a ruled DATE / CATEGORY / TITLE table with a search box, "See more" in tens,
   and a sticky card showing the cover of the row under the pointer (`news-index/`).

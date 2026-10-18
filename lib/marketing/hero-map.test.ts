@@ -15,7 +15,26 @@ import {
   placeCard,
   projectPin,
   stageBox,
+  unprojectPin,
 } from "./hero-map";
+
+describe("unprojectPin", () => {
+  it("is projectPin's inverse, for every pin on the map", () => {
+    for (const pin of HERO_PINS) {
+      const back = unprojectPin(projectPin(pin));
+
+      expect(back.lng).toBeCloseTo(pin.lng, 8);
+      expect(back.lat).toBeCloseTo(pin.lat, 8);
+    }
+  });
+
+  it("puts the middle of the picture at the camera's centre", () => {
+    const { lng, lat } = unprojectPin({ x: 50, y: 50 });
+
+    expect(lng).toBeCloseTo(HERO_CAMERA.center.lng, 8);
+    expect(lat).toBeCloseTo(HERO_CAMERA.center.lat, 8);
+  });
+});
 
 describe("projectPin", () => {
   it("puts the camera's own centre in the middle of the picture", () => {

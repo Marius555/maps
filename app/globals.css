@@ -3766,6 +3766,11 @@ body.is-pin-dragging * {
   background-size: 100% 100%;
 }
 
+/* "Drop a pin" is armed: the ground is the target (hero-drop-pin-button.tsx). */
+.mk-hero-map__stage[data-placing] {
+  cursor: crosshair;
+}
+
 .dark .mk-hero-map__stage,
 [data-theme="dark"] .mk-hero-map__stage {
   background-image: url("/marketing/hero-carbon.webp");
@@ -4027,8 +4032,10 @@ body.is-pin-dragging * {
 }
 
 /*
- * The survey chart's three series
- * (components/marketing/compare/bill-chart.tsx).
+ * The survey's three series: the table's dots
+ * (components/marketing/compare/bill-table.tsx) and the chart beside it
+ * (compare/bill-chart.tsx), which draws everyone else in the metered ink and
+ * us in the accent.
  *
  * **Two steps of the page's own ink, plus the accent — not three hues.** The
  * rule at the top of this file is that the neutrals are true greys at zero
@@ -4080,6 +4087,14 @@ body.is-pin-dragging * {
  */
 .mk-chart .recharts-surface:focus {
   outline: none;
+}
+
+/*
+ * Our line on the survey chart lies on the floor under a tall grey area; a soft
+ * glow in its own colour is what keeps a 3px line from reading as the axis.
+ */
+.mk-series-glow {
+  filter: drop-shadow(0 0 5px color-mix(in oklab, var(--mk-series-us) 70%, transparent));
 }
 
 /*

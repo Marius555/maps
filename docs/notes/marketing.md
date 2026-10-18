@@ -71,6 +71,19 @@
   between the two greys is the number that carries the palette.
 - **The survey section must render its numbers without JavaScript.** The chart is
   `ssr: false`; `BillTable` is what the server sends.
+- **The hero's roads are thinned for the hero alone.** `quietHeroRoads`
+  (`lib/marketing/hero-basemap.ts`) runs only in the image generator, after the
+  look's own appearance: casings and small streets hidden, the rest constant
+  hairlines, Mono's recoloured grey (`HERO_LOOKS[].roads`). Never move it into
+  `packages/shared/` — customer maps and the embed must keep Liberty's roads.
+  Images are made at `/dev/hero-map`.
+- **"Drop a pin" is a button, and it never looks anything up.** It arms one
+  press on the ground (crosshair, a hint, Escape cancels); unarmed, the ground
+  closes cards as before — dropping on every click littered the map (owner,
+  2026-10-18). The card shows coordinates (`unprojectPin`), not an address — a reverse geocode
+  from a stranger on the landing page is a metered call in the visitor's path
+  (CLAUDE.md §2). Three dropped pins at most; they answer no filter and are
+  never "nearest".
 - **No competitor is named, and every figure is a published list price or is
   written down as an assumption.** `lib/marketing/compare.ts` holds the sources.
 - **Google is named, and only as a vendor.** The Sources section says nothing
@@ -415,7 +428,37 @@ that make the total up are itemised above.
 
 ---
 
-## The survey section: a line chart, and the log axis argument
+## The survey section: a hockey stick (October 2026)
+
+**Third form, and the reasons for the first two are the reasons for this one.**
+
+1. *Three lines on log/log axes* (below) — correct and undramatic. The metered
+   and locator bills differ by $49, so on a log money axis their lines ran
+   on top of each other (the owner's complaint), and ours sat a hand's width
+   under them: $7,000 against €19 read as an inch.
+2. *Two giant bars and a slider* — dramatic, and the same form as the
+   calculator two screens up, slider included. Rejected the day it shipped.
+3. *Now:* `bill-chart.tsx`, a `ComposedChart`. "Everyone else" is one `Area`
+   (the locator figure — the dearer usual way; metered alone is the same curve
+   less $49, the width of the stroke) in the metered ink over a fading
+   gradient; ours is a 3px accent `Line` with a glow (`.mk-series-glow`) on
+   the floor. Big end labels at 1M state both bills; no money axis; the
+   tooltip breaks "everyone else" into metered + subscription; `BillTable`
+   beside it prints all nine figures.
+
+**Log traffic, linear money, and why the hockey stick is honest.** The x axis
+steps by ten like the slider; the y axis is to scale from $0. A bill of $49 +
+$7 per thousand loads is $56, $119, $749, $7,049 at the four decades, which on
+those axes lies flat and then leaves the chart — that *is* what per-view
+billing does as traffic grows by orders of magnitude. Ours is €19 everywhere
+and sits on the floor, also simply true. The caption says the traffic axis
+steps by ten, in one line. There is no `BILL_AXIS_*` any more: a linear axis
+from 0 cannot drop a point, so there is no domain to test.
+
+The area draws first (1.2s), our line along the floor 400ms after; recharts'
+own animation, `'auto'`, so off under reduced motion.
+
+## The survey section, before: a line chart, and the log axis argument
 
 Nine bars in three separately scaled columns became three lines. Two reasons, and
 the second is the one that matters: the claim is about a *shape* — two bills that

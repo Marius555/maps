@@ -50,8 +50,10 @@ export const HERO_APPEARANCE = {
  * is the only way to have the browser fetch just the one it shows.
  */
 export const HERO_LOOKS = [
-  { theme: "light", style: "mono", file: "hero-mono" },
-  { theme: "dark", style: "carbon", file: "hero-carbon" },
+  // Mono's own roads are white, which vanishes once the hero drops their
+  // casings (lib/marketing/hero-basemap.ts), so they are drawn a quiet grey.
+  { theme: "light", style: "mono", file: "hero-mono", roads: "#bdbdbd" },
+  { theme: "dark", style: "carbon", file: "hero-carbon", roads: undefined },
 ] as const;
 
 export const HERO_PIXEL_RATIOS = [1, 2] as const;
@@ -163,6 +165,26 @@ export function projectPin(
   return {
     x: 50 + ((at.x - centre.x) / size.width) * 100,
     y: 50 + ((at.y - centre.y) / size.height) * 100,
+  };
+}
+
+/**
+ * The inverse of `projectPin`: a point on the picture, as percentages, back to
+ * a longitude and latitude. What a pin dropped on the hero by a click is at.
+ */
+export function unprojectPin(
+  point: { x: number; y: number },
+  camera: { center: { lng: number; lat: number }; zoom: number } = HERO_CAMERA,
+  size: { width: number; height: number } = HERO_SIZE,
+): { lng: number; lat: number } {
+  const world = WORLD_SIZE_AT_Z0 * 2 ** camera.zoom;
+  const centre = worldPixels(camera.center.lng, camera.center.lat, camera.zoom);
+  const x = centre.x + ((point.x - 50) / 100) * size.width;
+  const y = centre.y + ((point.y - 50) / 100) * size.height;
+
+  return {
+    lng: (x / world) * 360 - 180,
+    lat: (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / world))) * 180) / Math.PI,
   };
 }
 
