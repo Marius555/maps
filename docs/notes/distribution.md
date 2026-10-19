@@ -47,6 +47,23 @@ in the navbar's Integrations menu from `lib/marketing/integrations.ts` —
   version the readme names; `npm run build:wordpress` refuses to zip when they differ.
 - **The embed script is enqueued with a null version.** WordPress appends `?ver=` to
   anything else.
+- **Sizing is a scoped `!important` rule, never an embed change.** The embed gives a
+  `data-target` an inline `height` from `data-height`; `Pinglide_Embed::css()` prints a rule
+  per map id that outranks it, which is how a map has a phone height while the embed knows one
+  number. `sizeCss()` in `blocks/map/index.js` is its twin for the editor preview — change
+  both or neither.
+- **The live preview is a page under `/wp-admin/`, and analytics drops that path.** The
+  block editor's canvas is a `blob:` iframe with an empty hostname, so a map whose allowlist
+  names the site would refuse to draw there; `admin-post.php?action=pinglide_preview` is on
+  the site itself. `isEditorPreview` in `lib/analytics/collect/editor-preview.ts` keeps the
+  owner's own previews out of their Analytics tab and session ceiling. Move the preview off
+  `/wp-admin/` and both break.
+- **Elementor reads a snapshot server-side in the editor only.** `Pinglide_Elementor::tag_options`
+  is the plugin's one server HTTP call, gated on `is_admin()` — Elementor registers controls
+  on front-end renders too, so without the gate it would run on page views. Cached in one
+  transient (`pinglide_tags`), which `uninstall.php` deletes.
+- **Every display option means, when absent, what 0.1.0 did.** `Pinglide_Embed::options()` is
+  the one normaliser for the block, the shortcode, the preview and Elementor.
 
 ## The round trip
 
@@ -62,8 +79,11 @@ block inserted → slot minted (crypto.randomUUID), saved with the post
   window.location.replace(admin-post.php?action=pinglide_connect&state&slot&map&…)
 plugin: capability + nonce(slot) → option pinglide_slots[slot] → Settings → Pinglide
 editor tab: polls /wp-json/pinglide/v1/slots/{slot} every 3s while a setup tab is open,
-            and on focus → shows the map's name and "Edit locations on Pinglide"
-visitor: render.php → <script type="text/plain" data-snapshot data-height> + map.js module
+            and on focus → iframe of admin-post.php?action=pinglide_preview&slot&tags,
+            sized by sizeCss(); tags read from the snapshot by the browser
+visitor: render.php → <div id=pinglide-N><style/><script type="text/plain" data-snapshot
+         data-target="#pinglide-N-canvas" data-height [data-tags] [data-eager]>
+         <div class=pinglide-map__canvas></div></div> + map.js module
 ```
 
 `type="text/plain"` works because `embed/src/boot.ts` mounts after every
@@ -92,5 +112,7 @@ Now: `SignupForm` goes to `redirectTo` when one is given (the connect page shows
 
 A wordpress.org account is needed only to *list* the plugin. Everything else runs on
 WordPress Playground (PHP-WASM, no Docker) — `distribution/wordpress/README.md` has the
-command. The plugin makes no server-side HTTP calls, so Playground's sandboxed networking
-is never in the way: the browser does every hop.
+command. The plugin makes no server-side HTTP calls but one — the Elementor widget's tag list,
+in the editor — so Playground's sandboxed networking is otherwise never in the way: the
+browser does every hop. `wp_safe_remote_get` refuses `localhost`, so that list is empty
+against a dev snapshot and fills only from a snapshot on the CDN.

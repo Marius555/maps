@@ -23,6 +23,16 @@ export const WORDPRESS_FAQ: readonly FaqItem[] = [
     answer: `The maps disappear from your pages, and come back when you reactivate it. Deleting the plugin forgets which map each block showed; your maps stay in your ${BRAND.name} account.`,
   },
   {
+    question: "Can I choose how big the map is and where it sits?",
+    answer:
+      "Yes, with no code. The block shows the live map in the editor and has a height, a separate height on phones, a width, and left, centre, right, wide or full alignment, plus margins and rounded corners. Elementor gets a widget with the same controls per device.",
+  },
+  {
+    question: "Can one map show different locations on different pages?",
+    answer:
+      "Yes. Tick the tags a page should show in the block’s settings — only dealers on one page, only shops on another — from the same map.",
+  },
+  {
     question: "Does it work on WordPress.com?",
     answer:
       "Yes, on a WordPress.com plan that lets you install plugins. On a plan that doesn’t, paste your map’s embed code into a Custom HTML block instead, where your plan allows it.",

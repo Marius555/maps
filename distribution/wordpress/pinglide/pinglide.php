@@ -3,7 +3,7 @@
  * Plugin Name:       Pinglide
  * Plugin URI:        https://pinglide.com/for/wordpress
  * Description:       Put your locations on a map. Drop the Pinglide map block on a page, connect it to your Pinglide account, and manage the locations there — your page updates by itself.
- * Version:           0.1.0
+ * Version:           0.2.0
  * Requires at least: 6.5
  * Requires PHP:      7.4
  * Author:            Pinglide
@@ -17,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'PINGLIDE_VERSION', '0.1.0' );
+define( 'PINGLIDE_VERSION', '0.2.0' );
 define( 'PINGLIDE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PINGLIDE_BASENAME', plugin_basename( __FILE__ ) );
 
@@ -43,11 +43,17 @@ require_once PINGLIDE_DIR . 'includes/class-pinglide-connect.php';
 require_once PINGLIDE_DIR . 'includes/class-pinglide-rest.php';
 require_once PINGLIDE_DIR . 'includes/class-pinglide-shortcode.php';
 require_once PINGLIDE_DIR . 'includes/class-pinglide-admin.php';
+require_once PINGLIDE_DIR . 'includes/class-pinglide-preview.php';
+require_once PINGLIDE_DIR . 'includes/class-pinglide-pages.php';
+require_once PINGLIDE_DIR . 'includes/class-pinglide-elementor.php';
 
 Pinglide_Connect::init();
 Pinglide_Rest::init();
 Pinglide_Shortcode::init();
 Pinglide_Admin::init();
+Pinglide_Preview::init();
+Pinglide_Pages::init();
+Pinglide_Elementor::init();
 
 add_action(
 	'init',

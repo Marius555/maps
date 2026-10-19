@@ -11,17 +11,25 @@
 
 defined( 'ABSPATH' ) || exit;
 
-$pinglide_html = Pinglide_Embed::render(
-	isset( $attributes['slot'] ) ? (string) $attributes['slot'] : '',
-	isset( $attributes['height'] ) ? $attributes['height'] : Pinglide_Embed::DEFAULT_HEIGHT
-);
+$pinglide_slot = isset( $attributes['slot'] ) ? (string) $attributes['slot'] : '';
 
-if ( '' === $pinglide_html ) {
+if ( ! Pinglide_Slots::get( $pinglide_slot ) ) {
+	// Not set up: no wrapper, so a visitor's page has no empty box with margins.
+	echo Pinglide_Embed::not_set_up(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static, escaped.
 	return;
 }
 
-printf(
-	'<div %s>%s</div>',
-	get_block_wrapper_attributes(), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped by core.
-	$pinglide_html // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in Pinglide_Embed::render().
+$pinglide_html = Pinglide_Embed::render(
+	$pinglide_slot,
+	array(
+		'height'        => isset( $attributes['height'] ) ? $attributes['height'] : Pinglide_Embed::DEFAULT_HEIGHT,
+		'mobile_height' => isset( $attributes['mobileHeight'] ) ? $attributes['mobileHeight'] : 0,
+		'width'         => isset( $attributes['width'] ) ? $attributes['width'] : 100,
+		'align'         => isset( $attributes['align'] ) ? $attributes['align'] : '',
+		'tags'          => isset( $attributes['tags'] ) && is_array( $attributes['tags'] ) ? $attributes['tags'] : array(),
+		'eager'         => ! empty( $attributes['eager'] ),
+	),
+	get_block_wrapper_attributes()
 );
+
+echo $pinglide_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in Pinglide_Embed::render(); the wrapper by core.

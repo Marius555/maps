@@ -2,7 +2,7 @@
 	"$schema": "https://schemas.wp.org/trunk/block.json",
 	"apiVersion": 3,
 	"name": "pinglide/map",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"title": "Pinglide map",
 	"category": "embed",
 	"icon": "location-alt",
@@ -11,11 +11,21 @@
 	"textdomain": "pinglide",
 	"attributes": {
 		"slot": { "type": "string", "default": "" },
-		"height": { "type": "number", "default": 520 }
+		"height": { "type": "number", "default": 520 },
+		"mobileHeight": { "type": "number", "default": 0 },
+		"width": { "type": "number", "default": 100 },
+		"tags": { "type": "array", "items": { "type": "string" }, "default": [] },
+		"eager": { "type": "boolean", "default": false }
 	},
 	"supports": {
 		"html": false,
-		"align": [ "wide", "full" ]
+		"align": [ "left", "center", "right", "wide", "full" ],
+		"spacing": { "margin": true },
+		"__experimentalBorder": {
+			"radius": true,
+			"__experimentalDefaultControls": { "radius": true }
+		},
+		"shadow": true
 	},
 	"editorScript": "file:./index.js",
 	"editorStyle": "file:./editor.css",

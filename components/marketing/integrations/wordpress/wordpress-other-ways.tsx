@@ -26,7 +26,7 @@ export function WordPressOtherWays() {
         <Reveal className="h-full">
           <StepPanel
             title="Classic editor or a page builder"
-            subtitle="Settings → Pinglide → Connect a new map, then paste the shortcode."
+            subtitle="Settings → Pinglide → Connect a new map, then copy the shortcode."
             art={<ShortcodeArt />}
           />
         </Reveal>
@@ -40,7 +40,8 @@ export function WordPressOtherWays() {
       </div>
 
       <p className="mt-6 text-sm text-muted">
-        Elementor, Divi and Beaver Builder all take the shortcode.{" "}
+        Elementor has its own Pinglide map widget; Divi and Beaver Builder take
+        the shortcode.{" "}
         <Link
           href="/docs/publishing-and-embedding#embed-code"
           className="text-foreground underline underline-offset-2"

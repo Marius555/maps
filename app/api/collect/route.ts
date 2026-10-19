@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { isBot } from "@/lib/analytics/collect/bots";
 import { deviceOf } from "@/lib/analytics/collect/device";
+import { isEditorPreview } from "@/lib/analytics/collect/editor-preview";
 import { readVisitorGeo } from "@/lib/analytics/collect/geo-headers";
 import { truncateIp } from "@/lib/analytics/collect/truncate-ip";
 import { visitorKey } from "@/lib/analytics/collect/visitor-key";
@@ -109,7 +110,7 @@ async function readBody(request: NextRequest): Promise<string | null> {
 /**
  * Is this a session worth storing?
  *
- * Ordered by cost. The first two questions are string tests; only the last one
+ * Ordered by cost. The first three questions are string tests; only the last one
  * touches the database, and it is cached per map for a minute
  * (lib/repositories/analytics.repository.ts).
  */
@@ -118,6 +119,8 @@ async function shouldRecord(
   payload: CollectInput,
 ): Promise<boolean> {
   if (isBot(request.headers.get("user-agent"))) return false;
+  // The owner, in the WordPress plugin's live preview — not a visitor.
+  if (isEditorPreview(payload.p)) return false;
 
   const gate = await readCollectGate(payload.m);
   if (!gate) return false;

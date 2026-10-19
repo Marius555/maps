@@ -2,13 +2,47 @@
 	min-height: 240px;
 }
 
-.wp-block-pinglide-map .pinglide-actions {
+.wp-block-pinglide-map .pinglide-map__canvas {
+	position: relative;
+}
+
+.wp-block-pinglide-map .pinglide-map__canvas iframe {
+	display: block;
+	width: 100%;
+	height: 100%;
+	border: 0;
+}
+
+/* Over the map until the block is selected, so a click selects instead of panning. */
+.wp-block-pinglide-map .pinglide-preview-cover {
+	position: absolute;
+	inset: 0;
+	cursor: pointer;
+}
+
+.pinglide-actions {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
 }
 
-.wp-block-pinglide-map .pinglide-hint {
+.pinglide-hint {
 	margin: 0 0 12px;
 	max-width: 42em;
+	color: #757575;
+}
+
+.pinglide-tag-group {
+	margin: 0 0 12px;
+	padding: 0;
+	border: 0;
+}
+
+.pinglide-tag-group legend {
+	margin-bottom: 8px;
+	font-weight: 600;
+}
+
+.pinglide-tag-group .components-checkbox-control {
+	margin-bottom: 8px;
 }

@@ -43,8 +43,14 @@ final class Pinglide_Rest {
 				'connected'  => (bool) $map,
 				'map'        => $map
 					? array(
-						'name'    => $map['name'],
-						'editUrl' => Pinglide_Slots::edit_url( $map ),
+						'name'        => $map['name'],
+						'editUrl'     => Pinglide_Slots::edit_url( $map ),
+						// Public already — the editor reads the map's tags from it.
+						'snapshot'    => $map['snapshot'],
+						// The editor adds `tags` itself, from the block's own choice.
+						'previewUrl'  => Pinglide_Embed::preview_url( $slot ),
+						// Changes when another map is chosen, so the preview knows to reload.
+						'connectedAt' => (int) $map['connected_at'],
 					)
 					: null,
 				// Carries a nonce for this user, so it is minted per request.

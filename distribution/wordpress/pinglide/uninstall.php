@@ -9,3 +9,4 @@
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 delete_option( 'pinglide_slots' );
+delete_transient( 'pinglide_tags' );

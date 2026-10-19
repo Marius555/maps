@@ -54,6 +54,14 @@ define( 'PINGLIDE_APP_URL', 'http://localhost:3000' );
 - The page's network panel: `map.js`, MapLibre and `live.json` from the CDN, and nothing
   from the dashboard's origin.
 - A visitor (logged out) on a page whose block is not connected sees nothing at all.
+- The editor shows the live map at the block's height; the editor's Mobile preview shows the
+  phone height; width + left/right alignment flows text beside it, and phones go full width.
+- Ticking a tag in **Locations shown** leaves only those pins, in the editor and live.
+- Settings → Pinglide: **Copy** copies the shortcode; **Create a page with this map** opens a
+  draft with the map already connected.
+- Elementor (install it from Plugins → Add New): the widget lists connected maps, its
+  per-device height shows in Elementor's device preview, and the front end matches.
+- With measurement on, using the editor preview adds no session to the map's Analytics tab.
 
 ## Releasing
 

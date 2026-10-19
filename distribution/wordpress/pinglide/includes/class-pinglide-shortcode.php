@@ -1,8 +1,11 @@
 <?php
 /**
- * [pinglide slot="…" height="520"] — for the classic editor and page builders
- * (Elementor, Divi, Beaver Builder) that do not show blocks. The settings page
- * hands out the shortcode once a map is connected.
+ * [pinglide slot="…" height="520" mobile_height="400" width="60" align="right" tags="id,id" eager="yes"]
+ *
+ * For the classic editor and page builders that do not show blocks. The
+ * settings page hands out the shortcode once a map is connected, and lists the
+ * optional attributes beside it. Every attribute but `slot` means, when absent,
+ * what the 0.1.0 shortcode did.
  *
  * @package Pinglide
  */
@@ -21,15 +24,21 @@ final class Pinglide_Shortcode {
 	public static function render( $atts ): string {
 		$atts = shortcode_atts(
 			array(
-				'slot'   => '',
-				'height' => Pinglide_Embed::DEFAULT_HEIGHT,
+				'slot'          => '',
+				'height'        => Pinglide_Embed::DEFAULT_HEIGHT,
+				'mobile_height' => 0,
+				'width'         => 100,
+				'align'         => '',
+				'tags'          => '',
+				'eager'         => '',
 			),
 			$atts,
 			'pinglide'
 		);
 
-		$html = Pinglide_Embed::render( (string) $atts['slot'], $atts['height'] );
+		$slot = (string) $atts['slot'];
+		unset( $atts['slot'] );
 
-		return '' === $html ? '' : '<div class="wp-block-pinglide-map">' . $html . '</div>';
+		return Pinglide_Embed::render( $slot, $atts );
 	}
 }
