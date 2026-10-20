@@ -2,7 +2,12 @@ import { after, NextResponse } from "next/server";
 
 import { noContent } from "@/lib/api/responses";
 import { parseBody, withoutAuth } from "@/lib/api/route";
-import { findUserByEmail, markEmailVerified, revokeSession } from "@/lib/auth/account";
+import {
+  findUserByEmail,
+  isEmailVerified,
+  markEmailVerified,
+  revokeSession,
+} from "@/lib/auth/account";
 import { rateLimit } from "@/lib/rate-limit/limiter";
 import { consumeToken, createVerificationLink } from "@/lib/auth/tokens";
 import { mayResendVerification, stampVerificationSent } from "@/lib/auth/verify-throttle";
@@ -30,6 +35,13 @@ import { forgotPasswordSchema } from "@/lib/validation/auth.schema";
  * just-verified user to the login page. `/verify-email` is outside the proxy's
  * matcher, so it renders, and the button on it is a same-site navigation that
  * does carry the cookie.
+ *
+ * **A spent token on an already-confirmed account lands on "ok", not "expired".**
+ * Mail scanners and link previewers open the link before the person does, which
+ * confirms the address and spends the single-use token — so the person's own
+ * first press used to say "expired" about an account that had just been
+ * confirmed. The link already names the user, so saying they are confirmed tells
+ * its holder nothing new.
  */
 export const GET = withoutAuth(async (request) => {
   const url = new URL(request.url);
@@ -71,16 +83,28 @@ export const GET = withoutAuth(async (request) => {
         to: user.email,
         ...welcomeMessage({
           name: greetingName(user.name, user.email),
-          url: `${env.appUrl}/maps`,
+          // Not `/maps`: a press in a mail client is cross-site, the Strict
+          // session cookie stays behind, and `proxy.ts` answers with the login
+          // form. This page is outside its matcher and links on same-site.
+          url: `${env.appUrl}/verify-email?status=ok`,
         }),
       }),
     );
 
     return landing("ok");
   } catch {
-    return landing("expired");
+    return landing((await isEmailVerified(userId)) ? "ok" : "expired");
   }
 }, { rateLimit: "authToken" });
+
+/**
+ * Link checkers ask with HEAD, and Next answers a HEAD by running GET — which
+ * would spend the token on a request nobody sees the answer to. This one spends
+ * nothing.
+ */
+export function HEAD() {
+  return new Response(null, { status: 200 });
+}
 
 /**
  * Send a new confirmation email.

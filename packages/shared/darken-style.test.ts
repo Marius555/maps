@@ -181,7 +181,11 @@ describe("ground", () => {
       layers: [{ id: "hillshade", type: "raster", paint: { "raster-opacity": 1 } }],
     });
 
-    expect(style.layers[0].paint?.["raster-opacity"]).toBeLessThan(0.2);
+    // ["interpolate", ["linear"], ["zoom"], 5, opacity, 7, 0]: the strength it
+    // holds until it starts fading out.
+    const opacity = style.layers[0].paint?.["raster-opacity"] as unknown as unknown[];
+    expect(opacity[4]).toBeLessThan(0.2);
+    expect(opacity.at(-1)).toBe(0);
   });
 });
 

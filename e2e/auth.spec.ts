@@ -19,6 +19,7 @@ test("signup refuses a throwaway address without creating an account", { tag: "@
   await page.goto("/signup");
   await page.getByLabel("Email").fill(`e2e-${Date.now()}@mailinator.com`);
   await page.getByLabel("Password", { exact: true }).fill("a-long-enough-password");
+  await page.getByLabel("Confirm password").fill("a-long-enough-password");
   await page.getByRole("button", { name: "Create account" }).click();
 
   await expect(

@@ -46,6 +46,7 @@ export function AppearancePanel({
       <Separator />
 
       <LayersField
+        style={style}
         value={appearance.layers}
         onChange={(layers) => onChangeAppearance({ ...appearance, layers })}
       />

@@ -1112,6 +1112,9 @@ function wireControls({
            */
           track("pick", { q: place.label });
           setOrigin({ lat: place.lat, lng: place.lng });
+          // And go there. Re-sorting the list alone left the map where it was,
+          // which read as "search doesn't find postcodes".
+          map.focusPoint(place.lat, place.lng);
         },
         gazetteer: createGazetteer(snapshot.gazetteer),
         /*

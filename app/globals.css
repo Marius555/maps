@@ -407,20 +407,56 @@ html:has([data-app-frame]) {
  * must be visible on every rendered map (§12), and illegible is as good as
  * absent.
  */
-[data-map-theme] .maplibregl-ctrl-group {
-  background: var(--map-chrome);
-  border: 1px solid var(--border);
-  /* The glass the toolbar above it is made of — see `--map-chrome`. Without the
-     blur, road lines read straight through the zoom glyphs. */
-  backdrop-filter: blur(8px);
+/*
+ * The zoom pair, in the embed's skin — the same values as `.lm-root
+ * .maplibregl-ctrl-group` in embed/src/styles.css, so the editor and the Publish
+ * preview beside it show one set of buttons rather than two design languages.
+ * Tokens keyed off the map's theme, not the dashboard's, for the reason above.
+ */
+[data-map-theme] {
+  --map-zoom-bg: #ffffff;
+  --map-zoom-border: #e2e5ea;
+  --map-zoom-ring: transparent;
+  --map-zoom-hover: rgba(0, 0, 0, 0.05);
+  --map-zoom-shadow: 0 1px 2px rgba(16, 18, 22, 0.08), 0 8px 24px rgba(16, 18, 22, 0.08);
+}
+
+[data-map-theme="dark"] {
+  --map-zoom-bg: #17181a;
+  --map-zoom-border: #2c2f35;
+  --map-zoom-ring: #2c2f35;
+  --map-zoom-hover: rgba(255, 255, 255, 0.08);
+  --map-zoom-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* `:not(:empty)` because that is MapLibre's own selector for its hard 2px ring,
+   and maplibre-gl.css is injected after this file — equal specificity loses. */
+[data-map-theme] .maplibregl-ctrl-group:not(:empty) {
+  border-radius: 8px;
+  background: var(--map-zoom-bg);
+  /* A ring drawn as a shadow rather than a border, so the light theme (no
+     ring) and the dark one (a 1px ring) lay out at the same size. */
+  box-shadow: 0 0 0 1px var(--map-zoom-ring), var(--map-zoom-shadow);
+}
+
+/* 36px squares holding a 34px icon image: stock MapLibre's glyph-to-box
+   proportion carried up to the larger button — the embed's styles.css argues
+   the number. */
+[data-map-theme] .maplibregl-ctrl-group button {
+  width: 36px;
+  height: 36px;
+}
+
+[data-map-theme] .maplibregl-ctrl-group .maplibregl-ctrl-icon {
+  background-size: 34px;
 }
 
 [data-map-theme] .maplibregl-ctrl-group button + button {
-  border-top-color: var(--border);
+  border-top-color: var(--map-zoom-border);
 }
 
 [data-map-theme] .maplibregl-ctrl-group button:not(:disabled):hover {
-  background-color: var(--surface-secondary);
+  background-color: var(--map-zoom-hover);
 }
 
 /* The icons ship as dark-stroked SVG data URIs, so they cannot be recoloured by

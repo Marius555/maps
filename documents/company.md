@@ -64,6 +64,7 @@ address only, by the owner's choice — they do not read `company.*`.
 | `{{legal.privacyUrl}}` | Where `privacy-policy.md` is published | `legal.privacyUrl` | /privacy |
 | `{{legal.cookiesUrl}}` | Where `cookie-policy.md` is published | `legal.cookiesUrl` | /cookies |
 | `{{legal.dpaUrl}}` | Where `data-processing-agreement.md` is published | `legal.dpaUrl` | /dpa |
+| `{{legal.refundsUrl}}` | Where `refund-policy.md` is published | `legal.refundsUrl` | /refunds |
 | `{{legal.subprocessorsUrl}}` | Where the current sub-processor list lives. The DPA's own Annex III is enough: `{{legal.dpaUrl}}#annex-iii--sub-processors` | — (derived in `lib/legal/values.ts`) | /dpa#annex-iii--sub-processors |
 
 ## Billing and infrastructure

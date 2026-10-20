@@ -25,11 +25,21 @@ export const personName = z.string().trim().min(1, "Tell us your name.").max(128
  * No name: asking for one is a field between a stranger and their first map, and
  * the account takes the part of the address before the `@` instead
  * (`lib/auth/name-from-email.ts`) — changeable in Settings → General.
+ *
+ * The password is typed twice for the reset form's reason: it is masked, and a
+ * typo here is an account nobody can sign in to. The server parses this same
+ * schema (`signupServerSchema` extends it), so the match is checked there too.
  */
-export const signupSchema = z.object({
-  email: z.email("Enter a valid email address."),
-  password,
-});
+export const signupSchema = z
+  .object({
+    email: z.email("Enter a valid email address."),
+    password,
+    confirmPassword: z.string().min(1, "Type the password again."),
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Both passwords need to match.",
+  });
 
 /**
  * What Appwrite appends to an OAuth success URL, and to every emailed link.

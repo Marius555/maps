@@ -319,6 +319,9 @@ export function createMap(
     style,
     center: [snapshot.center.lng, snapshot.center.lat],
     zoom: snapshot.center.zoom,
+    // MapLibre defaults this off, which leaves 3D building edges fuzzy and
+    // jagged — the editor turns it on for the same reason (use-maplibre.ts).
+    canvasContextAttributes: { antialias: true },
     /*
      * Credit for OpenStreetMap and the tile provider is non-negotiable on every
      * rendered map, the embed included (CLAUDE.md §12) — but compact, so it is

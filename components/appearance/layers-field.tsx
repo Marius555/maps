@@ -2,6 +2,13 @@
 
 import { Description, Switch } from "@heroui/react";
 
+import {
+  BASEMAP_SOURCES,
+  MISSING_LAYERS,
+  STYLE_LABELS,
+  styleSourceOf,
+  type MapStyleKey,
+} from "@/lib/map/style";
 import type { LayerToggles } from "@/packages/shared/style-layers";
 
 /**
@@ -16,6 +23,11 @@ import type { LayerToggles } from "@/packages/shared/style-layers";
  * the visitor's path, and this product charges a flat fee precisely because
  * nothing in that path is metered. Saying so is better than a greyed-out switch,
  * which reads as a bug or as an upsell.
+ *
+ * The one greyed-out switch is a different case: a plain basemap that has nothing
+ * for it to act on (`MISSING_LAYERS`). It shows off and says where the layer can
+ * be had, and the stored value is left alone, so switching to a basemap that has
+ * the layer brings back whatever the owner had chosen.
  */
 const LAYERS = [
   {
@@ -57,34 +69,48 @@ const LAYERS = [
 }[];
 
 export function LayersField({
+  style,
   value,
   onChange,
 }: {
+  style: MapStyleKey;
   value: Required<LayerToggles>;
   onChange: (layers: Required<LayerToggles>) => void;
 }) {
+  const source = styleSourceOf(style);
+  const missing = MISSING_LAYERS[source] ?? [];
+
   return (
     <fieldset>
       <legend className="text-sm font-medium text-foreground">Layers</legend>
 
       <div className="mt-2 space-y-3">
-        {LAYERS.map((layer) => (
-          <Switch
-            key={layer.name}
-            isSelected={value[layer.name]}
-            onChange={(isSelected) =>
-              onChange({ ...value, [layer.name]: isSelected })
-            }
-          >
-            <Switch.Content>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-              {layer.label}
-            </Switch.Content>
-            <Description>{layer.description}</Description>
-          </Switch>
-        ))}
+        {LAYERS.map((layer) => {
+          const isMissing = missing.includes(layer.name);
+
+          return (
+            <Switch
+              key={layer.name}
+              isDisabled={isMissing}
+              isSelected={!isMissing && value[layer.name]}
+              onChange={(isSelected) =>
+                onChange({ ...value, [layer.name]: isSelected })
+              }
+            >
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                {layer.label}
+              </Switch.Content>
+              <Description>
+                {isMissing
+                  ? `${STYLE_LABELS[source]} doesn't draw these. ${whereDrawn(layer.name)}`
+                  : layer.description}
+              </Description>
+            </Switch>
+          );
+        })}
       </div>
 
       <p className="mt-3 text-xs text-muted">
@@ -94,4 +120,13 @@ export function LayersField({
       </p>
     </fieldset>
   );
+}
+
+/** "Liberty, Bright and every theme do." — the basemaps that have this layer. */
+function whereDrawn(name: keyof LayerToggles): string {
+  const sources = BASEMAP_SOURCES.filter(
+    (source) => !MISSING_LAYERS[source]?.includes(name),
+  ).map((source) => STYLE_LABELS[source]);
+
+  return `${sources.join(", ")} and every theme do.`;
 }

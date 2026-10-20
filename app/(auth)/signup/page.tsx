@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { AuthShell } from "@/components/auth/auth-shell";
 import { SignupForm } from "@/components/auth/signup-form";
@@ -16,20 +15,7 @@ export default async function SignupPage(props: PageProps<"/signup">) {
   await redirectIfSignedIn(redirectTo ?? undefined);
 
   return (
-    <AuthShell
-      title="Create your account"
-      footer={
-        <>
-          Already have an account?{" "}
-          <Link
-            href={redirectTo ? `/login?next=${encodeURIComponent(redirectTo)}` : "/login"}
-            className="text-foreground underline"
-          >
-            Log in
-          </Link>
-        </>
-      }
-    >
+    <AuthShell title="Create your account">
       <SignupForm redirectTo={redirectTo} />
     </AuthShell>
   );

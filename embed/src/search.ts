@@ -223,11 +223,12 @@ export function createSearchField({
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
       highlight(active - 1);
-    } else if (event.key === "Enter" && active >= 0) {
-      // Only with a row highlighted: Enter on a bare query belongs to the host
-      // page's form, if it has one, and stealing it would be rude.
+    } else if (event.key === "Enter") {
+      // Only with the list open, and then the highlighted row or else the top
+      // one: typing a postcode and pressing Enter is the natural gesture. With
+      // no list, Enter belongs to the host page's form, if it has one.
       event.preventDefault();
-      choose(active);
+      choose(Math.max(active, 0));
     }
   });
 

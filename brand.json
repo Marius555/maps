@@ -5,6 +5,7 @@
   "logo": {
     "light": "/logo/pinglide-logo.svg",
     "dark": "/logo/pinglide-logo-dark.svg",
+    "email": "/logo/pinglide-logo-email.png",
     "alt": "Pinglide"
   },
   "favicon": "/logo/pinglide-icon.svg",
@@ -23,7 +24,8 @@
     "termsUrl": "/terms",
     "privacyUrl": "/privacy",
     "cookiesUrl": "/cookies",
-    "dpaUrl": "/dpa"
+    "dpaUrl": "/dpa",
+    "refundsUrl": "/refunds"
   },
   "social": {
     "x": "https://x.com/pinglide",

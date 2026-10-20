@@ -395,12 +395,14 @@ rewritten; it is the record of why this area is shaped as it is.
   their pill in what is left. Logical `ps`, not `pl`, so an RTL host moves the gap with it.
 - **The dashboard gets the zoom stack and nothing else.** Locate, fullscreen and the scale
   ruler were all built and all removed: on the dashboard they are furniture over a map the
-  owner is *editing*, and the corner is worth more than they are. `showCompass` is the one
-  thing that varies — the editor asks for it, and the three small maps on this same canvas
-  (the pin field, the import review map, the Analytics heatmap) take the bare zoom pair,
-  because a third button on a 160px map is clutter. **The embed is untouched and still offers
-  all of them**, since there the visitor is only looking; that choice lives in
-  `SnapshotSettings` and `components/publish/design-sidebar/map-controls-group.tsx`.
+  owner is *editing*, and the corner is worth more than they are. The compass followed on
+  2026-10-20 ("just zoom in and zoom out"), so every map on this canvas — the editor, the pin
+  field, the import review map, the Analytics heatmap — draws the bare zoom pair, and the
+  `showCompass` option is deleted. The cost is that a rotated or pitched editor map has no
+  one-click reset to north. **The pair wears the embed's skin** (36px buttons, 8px corners,
+  soft shadow — `embed/src/styles.css`), via the `--map-zoom-*` tokens in `app/globals.css`,
+  so the editor and the Publish preview show one set of buttons. At 36px + MapLibre's 10px
+  margin the stack is 46px wide, which still clears the `ps-12` (48px) the bars above carry.
 - **Undoing a pin drag must cancel that pin's address lookup, and restores six fields, not
   two.** A drag is two writes — the position, then the address the reverse geocoder finds a
   second later — so `usePinMoveHistory` snapshots `lat`, `lng`, `address`, `addressParts`,

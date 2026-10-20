@@ -4,8 +4,8 @@
 
 These Terms are a contract between {{company.legalName}} ("**we**", "**us**", "**our**") and the
 business that uses {{name}} ("**you**"). They apply together with our
-[Data Processing Agreement]({{legal.dpaUrl}}), [Privacy Policy]({{legal.privacyUrl}}) and
-[Cookie Policy]({{legal.cookiesUrl}}).
+[Data Processing Agreement]({{legal.dpaUrl}}), [Refund Policy]({{legal.refundsUrl}}),
+[Privacy Policy]({{legal.privacyUrl}}) and [Cookie Policy]({{legal.cookiesUrl}}).
 
 ---
 
@@ -22,8 +22,10 @@ is buried in the detail below. Each one points to the full clause.
    EUR 50 if that is more. We are never liable for lost profits, lost revenue, lost data or other
    indirect loss. None of this applies where the law does not allow it, including damage caused
    intentionally or through gross negligence. (§18)
-4. **Subscriptions renew automatically, and fees are not refunded**, except where these Terms or
-   the law say otherwise. (§6)
+4. **Subscriptions renew automatically, and fees are not refunded** — not for unused time, the rest
+   of an annual plan, a renewal you forgot to cancel, or a downgrade — except in the cases listed in
+   our [Refund Policy]({{legal.refundsUrl}}). Contact us before disputing a charge with your bank: an
+   unfounded chargeback can suspend your Account, and you repay what it costs us. (§6)
 5. **We can suspend or end your access** immediately if you break these Terms, do not pay, or put
    the Service or other people at risk — and on 30 days' notice for any other reason. (§12)
 6. **You are responsible for your content and for your visitors' data.** If you turn on visitor
@@ -64,7 +66,8 @@ Coordinator, for the Digital Services Act.
 - **Service** — the {{name}} website, dashboard, embed script, published maps, and everything else
   we provide under these Terms.
 - **Account** — your registration for the Service.
-- **Agreement** — these Terms, the Data Processing Agreement ("**DPA**"), and the Plan you are on.
+- **Agreement** — these Terms, the Data Processing Agreement ("**DPA**"), the Refund Policy, and
+  the Plan you are on.
 - **Customer Content** — everything you, or anyone using your Account, puts into the Service:
   locations and their details, addresses, descriptions, photos, logos, tags, pin icons, shapes,
   routes, card designs, map designs and settings.
@@ -160,11 +163,16 @@ your Plan stays active until the end of the period already paid.
 that falls at least 30 days after we notify you of it. If you do not accept it, cancel before that
 renewal.
 
-**6.5 No refunds.** Fees are non-refundable, including for part of a billing period, unused
-features or limits, downgrades, and for periods in which you did not use the Service, except:
-(a) where these Terms expressly provide a refund (§4.2, §12.3, §20.2, §21.3); or (b) where the
-Merchant of Record's refund policy or mandatory law requires one. We may give a refund or credit in
-any other case at our sole discretion; doing so once does not oblige us to do so again.
+**6.5 No refunds.** Fees are earned on the first day of the period they cover and are
+non-refundable, including for part of a billing period, the remaining months of an annual Plan,
+renewals, upgrades, downgrades, discounted purchases, unused features, allowances or limits, and
+periods in which you did not use the Service. The only exceptions are those listed in the
+[Refund Policy]({{legal.refundsUrl}}): (a) where these Terms expressly provide a refund (§4.2, §12.3,
+§20.2, §21.3); (b) billing errors; (c) a failure of the paid features of your Plan through our
+fault lasting more than 7 consecutive days after you notify us; and (d) where mandatory law requires
+one. The Merchant of Record may also refund a payment under its own terms. We may give a refund or
+credit in any other case at our sole discretion; doing so once does not oblige us to do so again.
+The Refund Policy sets out how each of these works and how to ask.
 
 **6.6 Failed payment.** If a payment fails and is not put right within 7 days after you are
 notified, we may move your Account to the Free Plan or suspend it. Where we invoice you directly,
@@ -182,6 +190,15 @@ next month; the map itself keeps working.
 
 **6.8 Free Plan branding.** Maps on the Free Plan may display {{name}} branding or a badge. You must
 not hide, cover or remove it.
+
+**6.9 Chargebacks.** If you believe a charge is wrong, contact us first and give us a reasonable
+chance to put it right before asking your bank or card issuer to reverse it. If you file a
+chargeback without contacting us first, or one that is not justified under the Refund Policy, we may
+immediately suspend your Account or move it to the Free Plan until the matter is resolved, and you
+must pay us our actual loss — the dispute fee charged to us, any amount reversed for a period in
+which the Service was provided to you, and reasonable costs of recovering them. This does not apply
+to a chargeback that succeeds because of a billing error we did not correct within 14 days after you
+told us about it.
 
 ## 7. Your content
 
@@ -366,7 +383,8 @@ straight away, and your Published Maps stop working.
 
 **12.2 Suspension by us.** We may suspend all or part of the Service for you — including
 unpublishing your maps — immediately and without liability if: (a) you break these Terms, or we
-reasonably suspect that you have; (b) payment fails as described in §6.6; (c) it is necessary to
+reasonably suspect that you have; (b) payment fails as described in §6.6, or a payment is reversed
+by a chargeback (§6.9); (c) it is necessary to
 protect the Service, other customers, Visitors or third parties from harm, including security threats
 and abuse; (d) the law, a court or an authority requires it; or (e) your use of the Service exposes us
 to legal liability. Where it is proportionate we suspend rather than terminate, and we restore the

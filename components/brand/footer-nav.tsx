@@ -38,6 +38,7 @@ const COLUMNS: readonly { title: string; links: readonly FooterLink[] }[] = [
       { label: "Terms", href: BRAND.legal.termsUrl },
       { label: "Privacy", href: BRAND.legal.privacyUrl },
       { label: "Cookies", href: BRAND.legal.cookiesUrl },
+      { label: "Refunds", href: BRAND.legal.refundsUrl },
     ]),
   },
   {

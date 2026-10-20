@@ -1,3 +1,4 @@
+import type { LayerToggles } from "@/packages/shared/style-layers";
 import type { StyleTint } from "@/packages/shared/style-tint";
 import { MIDNIGHT_TINT } from "@/packages/shared/darken-style";
 
@@ -348,6 +349,26 @@ export function isDarkMapStyle(style: ConcreteMapStyleKey): boolean {
 export function isAutoMapStyle(style: MapStyleKey): boolean {
   return style === "auto";
 }
+
+/**
+ * Layer switches a basemap has nothing to act on.
+ *
+ * Positron, Dark and Fiord are deliberately plain designs and ship no POI layers
+ * at all; only Liberty draws buildings in 3D. A switch left "on" over a map that
+ * cannot draw the thing reads as a bug, so the Layers panel greys these out and
+ * says why. Every theme is Liberty, so none of them is listed.
+ *
+ * Stored rather than inferred for the same reason as `DEFAULT_LAYER_TOGGLES`: the
+ * panel renders before any style JSON is fetched. Measured against OpenFreeMap's
+ * live documents with `applyLayerToggles`'s own matching on 2026-10-20 — re-measure
+ * if the provider's styles change.
+ */
+export const MISSING_LAYERS: Partial<Record<BasemapSource, readonly (keyof LayerToggles)[]>> = {
+  bright: ["buildings3d"],
+  positron: ["poi", "buildings3d"],
+  dark: ["poi", "buildings3d"],
+  fiord: ["poi", "buildings3d"],
+};
 
 /**
  * Swatch colours, lifted from each style document's own layers so a tile in the

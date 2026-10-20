@@ -177,6 +177,7 @@ a Strict cookie.
 
 - Verification: the route handler redirects to `/verify-email?status=ok`, which
   offers a `LinkButton` to `/maps`.
+  The welcome email links to that same page, for the same reason.
 - OAuth: `/auth/success` is a client page. The exchange is a same-origin `fetch`
   (so the `Set-Cookie` lands) and the hop to `/maps` is `router.replace` (so the
   cookie goes with it).
@@ -350,16 +351,23 @@ to reset a password. A reset link is a standing offer to take over the account,
 sitting in an inbox that — because anyone can type any address into
 forgot-password — may not be the owner's.
 
-## Known trade-off: link prefetching
+## Link prefetching
 
 `GET /api/auth/verify-email` spends the token. Corporate mail scanners and link
-previewers follow URLs in email, so a scanned message can arrive already
-"clicked", and the user then sees `status=expired` on their first real press.
+previewers follow URLs in email, so a message can arrive already "clicked". That
+showed up (2026-10-19): the first real press, seconds after signup, said "That link
+has expired" about an account that was in fact confirmed. Two things now cover it,
+short of the interstitial confirm button, which would cost every user a click:
 
-The fix is an interstitial with a confirm button, which costs every user a click
-to protect a minority. Left as is deliberately; the `expired` state carries a
-resend form precisely so this is recoverable rather than terminal. Revisit if it
-shows up in support.
+- **A spent token on an already-confirmed account lands on `status=ok`.** The
+  handler's catch asks `isEmailVerified(userId)`. The link already names the user,
+  so this tells its holder nothing new.
+- **`HEAD` is exported and spends nothing.** Next otherwise answers HEAD by running
+  GET, and link checkers ask with HEAD.
+
+The welcome email links to `/verify-email?status=ok`, not `/maps`: it is clicked in
+a mail client, so it is the SameSite trap above, and it was what bounced a
+just-confirmed user to the login form.
 
 ## Google, and what is not code
 

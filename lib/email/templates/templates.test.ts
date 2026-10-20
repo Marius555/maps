@@ -112,6 +112,17 @@ describe("brand", () => {
     );
   });
 
+  it("prefers the email logo over an SVG one", () => {
+    const brand = parseBrand({
+      ...MINIMAL,
+      logo: { light: "/brand/logo.svg", email: "/brand/logo-email.png" },
+    });
+
+    expect(emailShell(CONTENT, brand)).toContain(
+      'src="https://app.example.com/brand/logo-email.png"',
+    );
+  });
+
   it("sends the name instead of an SVG logo, which mail clients drop", () => {
     const brand = parseBrand({
       ...MINIMAL,

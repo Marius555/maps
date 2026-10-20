@@ -1508,10 +1508,6 @@ export function MapEditor({
           pinIcons={map.pinIcons}
           clustering={clustering}
           clusterIcon={map.clusterIcon}
-          /* Only here. The three small maps built on this same canvas — the pin
-             field, the import review, the heatmap — take the two zoom buttons
-             and nothing else. */
-          showCompass
           showPlaceCard
           /* Every block this location left empty draws a dashed `+` on its
              card, opening the one field behind it — see `cardSlotOf`. The map

@@ -286,12 +286,6 @@ export type MapCanvasProps = {
    * import review and the preview want none of it.
    */
   selection?: MapSelectionProps;
-  /**
-   * Whether the bottom-left zoom stack carries a compass too. Passed straight
-   * through — see `Options.showCompass` in use-maplibre.ts for why the editor
-   * wants one and the three small maps do not.
-   */
-  showCompass?: boolean;
   /** Hands the parent the map handle once there is a map to hand over. */
   onReady?: (handle: MapHandle) => void;
 };
@@ -327,7 +321,6 @@ export default function MapCanvasImpl({
   clusterIcon = "",
   shapes,
   selection,
-  showCompass,
   cardSlots,
   onSelectPlace,
   onEditPlace,
@@ -419,7 +412,6 @@ export default function MapCanvasImpl({
     bounds: openingBounds,
     style,
     appearance,
-    showCompass,
   });
 
   /*

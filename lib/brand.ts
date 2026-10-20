@@ -71,7 +71,16 @@ const brandSchema = z.strictObject({
   tagline: z.string().trim().min(1, "Give the product a one-line tagline."),
   website: link,
   logo: z
-    .strictObject({ light: link, dark: link, alt: text })
+    .strictObject({
+      light: link,
+      dark: link,
+      /**
+       * The logo emails carry. Mail clients drop SVG, so a PNG, JPG or GIF here
+       * is the only way the mark reaches an inbox; unset, emails send the name.
+       */
+      email: link,
+      alt: text,
+    })
     .refine((logo) => !logo.dark || logo.light, {
       message: "Set logo.light too — logo.dark is only the variant for the dark theme.",
       path: ["light"],
@@ -95,6 +104,7 @@ const brandSchema = z.strictObject({
       privacyUrl: link,
       cookiesUrl: link,
       dpaUrl: link,
+      refundsUrl: link,
     })
     .prefault({}),
   social: z

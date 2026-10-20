@@ -7,8 +7,10 @@ policy and terms; every placeholder was filled and every `[VERIFY]` closed from 
 published pages, softening the sentence wherever a figure could not be confirmed. The lawyer
 review (step 2) is still owed — especially the questions listed near the end — and so is one
 check: **`billing.merchantOfRecord` was read off lemonsqueezy.com, not off a real invoice**
-(`lib/legal/values.ts`). `lib/legal/placeholders.test.ts` fails if an edit makes any of the four a
-draft again, which would 404 it in production.
+(`lib/legal/values.ts`). `lib/legal/placeholders.test.ts` fails if an edit makes any of the five a
+draft again, which would 404 it in production. **Version 1.1 (19 October 2026)** added the Refund
+Policy and Terms §6.5 / §6.9; it took effect on publish without the §21.2 notice because nobody was
+on a paid Plan yet. From now on, an adverse change needs the 30 days.
 
 | File | What it is | Page (`brand.json` link) | Where the app links it |
 |---|---|---|---|
@@ -16,11 +18,12 @@ draft again, which would 404 it in production.
 | [privacy-policy.md](privacy-policy.md) | What we do with personal data as a controller | `/privacy` (`legal.privacyUrl`) | Consent notice, footer links, email footer (`lib/email/templates/layout.ts`) |
 | [cookie-policy.md](cookie-policy.md) | Cookies and browser storage, from the code | `/cookies` (`legal.cookiesUrl`) | Footer links |
 | [data-processing-agreement.md](data-processing-agreement.md) | GDPR Art. 28 terms for visitor measurement and customer content | `/dpa` (`legal.dpaUrl`) | Measurement switch in the publish designer (`components/publish/design-sidebar/measurement-group.tsx`) |
+| [refund-policy.md](refund-policy.md) | When a payment is refunded (almost never), chargebacks. Added 2026-10-19 with Terms v1.1 | `/refunds` (`legal.refundsUrl`) | Footer links, Terms §6.5 and key term 4, docs → Plans and billing → Cancelling |
 
 Company and contact placeholders are defined one folder up, in [../company.md](../company.md) and
 [../contact.md](../contact.md).
 
-**How the pages work.** `app/(marketing)/{terms,privacy,cookies,dpa}` render these files as they
+**How the pages work.** `app/(marketing)/{terms,privacy,cookies,dpa,refunds}` render these files as they
 stand (`components/legal/`, `lib/legal/`), filling each `{{path}}` from `brand.json` or
 `lib/legal/values.ts` at build time. **A document is a draft while any placeholder is unfilled or
 any `[VERIFY]`, `[REMOVE IF UNUSED]` or `[IF USED]` marker is left.** A draft answers 404 in a
@@ -93,6 +96,11 @@ Change one of these and change it everywhere it appears.
 | Security records / support messages / accounting records | 12 months / 24 months / 10 years | Privacy §2 |
 | Audits | once per 12 months, 30 days' notice | DPA §8.2 |
 | Data subject requests answered within | one month (+ two for complex requests) | Privacy §9 |
+| Refund for failure that is our fault | after 7 consecutive days from written notice, pro-rata for the outage | Refund §4.3; Terms §6.5(c) |
+| Billing error reported within (mitigation only) | 60 days | Refund §7.2 |
+| Refund requests answered within | 14 days | Refund §7.1 |
+| Uncorrected billing error that excuses a chargeback | 14 days after notice | Refund §9.3; Terms §6.9 |
+| Lemon Squeezy's own refund discretion (theirs, not ours) | 60 days from purchase | Refund §8.2 — from LS's seller docs |
 
 ## `[VERIFY]` items
 
@@ -184,6 +192,15 @@ them being fixed. Each needs a code change or a softer sentence before publishin
     Visitors? (That costs embed bytes against a budget with ~600 left — CLAUDE.md §4 — so it is a
     question to answer before building, not after.)
 
+13. **The Refund Policy's strictness.** It refunds nothing except the Terms' own four cases,
+    billing errors, a failure through our fault lasting more than 7 consecutive days, and what the law
+    requires (Refund §4). (a) Is that exception enough to keep the rest from being an
+    "inappropriate" limit on remedies for non-performance (Data Act Art. 13(5)(a)) or unfair under
+    Civil Code 6.186 — or should the threshold be shorter? (b) Is recovering a chargeback's dispute
+    fee and reversed amount (Refund §9.2(b), Terms §6.9) enforceable as damages without an express
+    checkbox at checkout, given lawyer question 4? (c) Is keeping the remaining months of an annual
+    plan "proportionate" (question 6 again, now stated in Refund §3.1(b))?
+
 ## Legal checks performed
 
 Each row is a rule that limits how one-sided the documents may be, and what it changed.
@@ -207,6 +224,11 @@ Each row is a rule that limits how one-sided the documents may be, and what it c
 | **EDPB Guidelines 2/2023** — Art. 5(3) ePrivacy covers pixels and scripts that send data, not only cookies | EDPB; Hunton | Terms §8.3; DPA §4.1; Cookie Policy §5 |
 | **Late Payment Directive** — ECB rate + 8 points, EUR 40 per invoice, B2B | Your Europe; EUR-Lex | Terms §6.6, only where we invoice directly |
 | **Accounting records** — 10 years in Lithuania | Leinonen; RoboLabs | Privacy §2 |
+| **Civil Code 6.237** — unjust enrichment: what was received without a legal basis must be returned | General principle | Refund §4.2: duplicate charges and charges after a confirmed cancellation are refunded as of right, not as goodwill |
+| **Civil Code 6.71, 6.73** — a contractual penalty may be reduced by a court if excessive | General principle | Chargeback recovery (Refund §9.2(b), Terms §6.9) is limited to actual loss, not a fixed penalty like Lemon Squeezy's $100 |
+| **Consumer Rights Directive 2011/83/EU** — 14-day right of withdrawal | Applies to consumers only | Not offered, since the Service is B2B only (Terms §3.2); Refund §1.3 keeps mandatory consumer law intact if a consumer buys anyway |
+| **Data Act Art. 13(5)(a)** — terms that inappropriately limit remedies for non-performance are presumed unfair | eu-data-act.com | Refund §4.3, the narrow refund for a failure that is our fault, so that "no refunds" is not "no remedy" |
+| **Lemon Squeezy refunds and chargebacks** — LS may refund within 60 days at its own discretion to prevent chargebacks, and charges the seller the amount plus a $15 dispute fee | docs.lemonsqueezy.com; LS buyer terms | Refund §8 says so rather than promising a strictness we cannot enforce; §6.3 ends the paid period for whatever LS refunds |
 | **EU-US Data Privacy Framework** — valid; upheld by the General Court on 3 Sep 2025; appeal C-703/25 P pending | IAPP; WilmerHale | SCCs relied on as well, so transfers survive if it falls |
 
 ## Rivals compared
@@ -220,12 +242,26 @@ None of them publishes a cookie policy or a DPA, so both of ours go beyond the m
 | **Stockist** | Not stated | Publicity until told not to; caveat about CDN and backup copies; cap on aggregate fees | Changing terms "at any time, with no notice" (DSA Art. 14(2)); a one-year limitation period (Civil Code 1.125) |
 | **StoreRocket** | United Kingdom | Refunds only at the provider's discretion | Changing terms "at any time without notice" (as above) |
 
+**Refunds specifically** (read 2026-10-19). Ours is stricter than all four: none of them has a
+permanent free plan, so three of them offer a money-back window instead. Ours does not, because the
+Free Plan is the trial (Refund §2).
+
+| Rival | Refund stance | Taken | Refused, and why |
+|---|---|---|---|
+| **Storemapper** | Nothing refunded for partial months, plan changes or moving to free; minimum term of a month or a year; but a one-off 30-day money-back window | The full list of no-refund cases; downgrade = no refund; annual = the whole year | The money-back window |
+| **Stockist** | Any payment refunded within 30 days; after that at its discretion; "quota has no value, does not accrue, is not refundable" | Allowances have no value and do not roll over (Refund §3.1(g)) | The 30-day refund |
+| **StoreRocket** | Within 30 days, case by case, "subject to fair usage"; cancelling is the customer's job | Fair use as a ground to refuse goodwill (§5.3); cancelling is the customer's job (§3.1(c)) | The 30-day window |
+| **Atlist** | Silent on refunds; fees incurred on day 1; charges "deemed accurate" unless disputed within 10 days | Fees earned on day 1 (§3.1) | The 10-day deeming, which works as a shortened limitation period (Civil Code 1.125); Refund §7.2 is a mitigation-only notice, like Terms §18.4 |
+| **Lemon Squeezy** (our MoR) | Buyer terms: refunds at its sole discretion, none for unused subscription periods, contact it before a chargeback | Contact us before a chargeback (§9.1) | — its own 60-day discretion cannot be overridden, so §8.2 says so |
+
 ## Sources
 
 - Atlist terms — https://www.atlist.com/terms · privacy — https://www.atlist.com/privacy
 - Storemapper terms — https://www.storemapper.com/terms
 - Stockist terms — https://stockist.co/terms
 - StoreRocket terms — https://storerocket.io/terms
+- Lemon Squeezy refunds and chargebacks — https://docs.lemonsqueezy.com/help/payments/refunds-chargebacks ·
+  buyer terms — https://www.lemonsqueezy.com/buyer-terms
 - Civil Code 6.185 — https://www.temidy.lt/kodeksai/civilinis-kodeksas/6-185-straipsnis
 - Civil Code 6.186 — https://www.temidy.lt/kodeksai/civilinis-kodeksas/6-186-straipsnis
 - Civil Code 6.252 — https://www.temidy.lt/kodeksai/civilinis-kodeksas/6-252-straipsnis

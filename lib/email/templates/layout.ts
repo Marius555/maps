@@ -20,6 +20,10 @@ import { BRAND, isExternalLink, type Brand } from "@/lib/brand";
  *
  * The name, logo and footer come from brand.json. `brand` is a parameter only so
  * the tests can pass their own; every real caller takes the default.
+ *
+ * The shape: the logo on the grey canvas, a white card under it with an accent
+ * bar across its top edge, the button, and the raw link last under a rule —
+ * it is the fallback, so it reads as one.
  */
 
 /** The theme's accent, `oklch(64.37% 0.2195 36.18)`, in the one notation email understands. */
@@ -28,6 +32,12 @@ const INK = "#2e2e2e";
 const MUTED = "#767676";
 const BORDER = "#e9e9e9";
 const CANVAS = "#f7f7f7";
+/**
+ * Set on every text element, not inherited: Outlook resets the font inside each
+ * table cell, and with no family at all a client falls back to Times.
+ */
+const FONT =
+  "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;";
 
 /**
  * Image formats every mail client draws. SVG is not one — Gmail and Outlook both
@@ -60,7 +70,7 @@ function paragraphs(lines: string[]): string {
   return lines
     .map(
       (line) =>
-        `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:${INK};">${escapeHtml(line)}</p>`,
+        `<p style="${FONT}margin:0 0 16px;font-size:15px;line-height:1.6;color:${INK};">${escapeHtml(line)}</p>`,
     )
     .join("");
 }
@@ -94,14 +104,19 @@ function resolveLink(
   return origin ? new URL(href, origin).toString() : undefined;
 }
 
+/**
+ * `logo.email` first: it exists because the site's own logo is an SVG, which
+ * no mail client draws. Only `height` is given as an attribute — the width is
+ * the image's own business, and a fixed one would squash the next logo.
+ */
 function header(brand: Brand, origin: string | undefined): string {
-  const logo = resolveLink(brand.logo.light, origin);
+  const logo = resolveLink(brand.logo.email ?? brand.logo.light, origin);
 
   if (logo && EMAIL_IMAGE.test(new URL(logo).pathname)) {
-    return `<img src="${escapeHtml(logo)}" alt="${escapeHtml(brand.logo.alt ?? brand.name)}" height="28" style="display:block;height:28px;width:auto;max-width:200px;margin:0 0 24px;border:0;" />`;
+    return `<img src="${escapeHtml(logo)}" alt="${escapeHtml(brand.logo.alt ?? brand.name)}" height="32" style="display:block;height:32px;width:auto;max-width:220px;border:0;" />`;
   }
 
-  return `<p style="margin:0 0 24px;font-size:14px;font-weight:600;letter-spacing:-0.01em;color:${INK};">${escapeHtml(brand.name)}</p>`;
+  return `<p style="${FONT}margin:0;font-size:18px;font-weight:700;letter-spacing:-0.02em;color:${INK};">${escapeHtml(brand.name)}</p>`;
 }
 
 type Footer = {
@@ -126,10 +141,10 @@ function footer(brand: Brand, origin: string | undefined): Footer {
 function footerHtml({ holder, supportEmail, privacyUrl }: Footer): string {
   const links = [
     supportEmail
-      ? `<a href="mailto:${escapeHtml(supportEmail)}" style="color:${MUTED};">${escapeHtml(supportEmail)}</a>`
+      ? `<a href="mailto:${escapeHtml(supportEmail)}" style="${FONT}color:${MUTED};">${escapeHtml(supportEmail)}</a>`
       : "",
     privacyUrl
-      ? `<a href="${escapeHtml(privacyUrl)}" style="color:${MUTED};">Privacy policy</a>`
+      ? `<a href="${escapeHtml(privacyUrl)}" style="${FONT}color:${MUTED};">Privacy policy</a>`
       : "",
   ]
     .filter(Boolean)
@@ -137,7 +152,7 @@ function footerHtml({ holder, supportEmail, privacyUrl }: Footer): string {
 
   const lines = [escapeHtml(holder), links].filter(Boolean);
 
-  return `<p style="margin:20px 0 0;font-size:12px;line-height:1.6;color:${MUTED};">${lines.join("<br />")}</p>`;
+  return `<p style="${FONT}margin:24px 0 0;font-size:12px;line-height:1.6;text-align:center;color:${MUTED};">${lines.join("<br />")}</p>`;
 }
 
 export function emailShell(
@@ -147,10 +162,10 @@ export function emailShell(
   const origin = originOf(cta);
 
   const button = cta
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
-         <tr><td style="border-radius:8px;background:${ACCENT};">
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 28px;">
+         <tr><td style="border-radius:10px;background:${ACCENT};">
            <a href="${escapeHtml(cta.url)}"
-              style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">${escapeHtml(cta.label)}</a>
+              style="${FONT}display:inline-block;padding:14px 26px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;">${escapeHtml(cta.label)}</a>
          </td></tr>
        </table>`
     : "";
@@ -158,8 +173,12 @@ export function emailShell(
   // The raw URL under the button: a link that cannot be copied out is a dead end
   // for every client that strips anchors, and for anyone reading in plain text.
   const fallback = cta
-    ? `<p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:${MUTED};">Or paste this into your browser:</p>
-       <p style="margin:0 0 24px;font-size:13px;line-height:1.6;word-break:break-all;"><a href="${escapeHtml(cta.url)}" style="color:${ACCENT};">${escapeHtml(cta.url)}</a></p>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px;">
+         <tr><td style="border-top:1px solid ${BORDER};padding-top:20px;">
+           <p style="${FONT}margin:0 0 6px;font-size:12px;line-height:1.6;color:${MUTED};">Button not working? Paste this into your browser:</p>
+           <p style="${FONT}margin:0;font-size:12px;line-height:1.6;word-break:break-all;"><a href="${escapeHtml(cta.url)}" style="${FONT}color:${ACCENT};">${escapeHtml(cta.url)}</a></p>
+         </td></tr>
+       </table>`
     : "";
 
   return `<!doctype html>
@@ -169,23 +188,33 @@ export function emailShell(
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>${escapeHtml(title)}</title>
   </head>
-  <body style="margin:0;padding:0;background:${CANVAS};">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${CANVAS};padding:32px 16px;">
+  <body style="${FONT}margin:0;padding:0;background:${CANVAS};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${CANVAS};padding:40px 16px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border:1px solid ${BORDER};border-radius:14px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
             <tr>
-              <td style="padding:32px 32px 8px;">
-                ${header(brand, origin)}
-                <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:600;letter-spacing:-0.02em;color:${INK};">${escapeHtml(title)}</h1>
-                ${paragraphs(intro)}
-                ${button}
-                ${fallback}
-                ${outro ? paragraphs(outro) : ""}
+              <td style="padding:0 4px 20px;">${header(brand, origin)}</td>
+            </tr>
+            <tr>
+              <td>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid ${BORDER};border-top:4px solid ${ACCENT};border-radius:14px;">
+                  <tr>
+                    <td style="padding:36px 36px 12px;">
+                      <h1 style="${FONT}margin:0 0 16px;font-size:24px;line-height:1.3;font-weight:700;letter-spacing:-0.02em;color:${INK};">${escapeHtml(title)}</h1>
+                      ${paragraphs(intro)}
+                      ${button}
+                      ${outro ? paragraphs(outro) : ""}
+                      ${fallback}
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
+            <tr>
+              <td>${footerHtml(footer(brand, origin))}</td>
+            </tr>
           </table>
-          ${footerHtml(footer(brand, origin))}
         </td>
       </tr>
     </table>

@@ -42,6 +42,11 @@ function Notice({
   );
 }
 
+/** This page's own address, which is where signing up or in brings them back. */
+function upgradeHref(plan: string, cadence: string, code?: string): string {
+  return `/upgrade?plan=${plan}&cadence=${cadence}${code ? `&code=${code}` : ""}`;
+}
+
 /**
  * Signed out, with a plan picked.
  *
@@ -50,31 +55,40 @@ function Notice({
  * they already have, and sending that second person through signup would end at
  * "this address is already registered", which is a dead end at the checkout.
  *
- * The plan is deliberately *not* carried through to signup. Doing that means a
- * redirect target in a query string, and a redirect target in a query string is
- * an open-redirect waiting to be got wrong — a real risk for a saving of one
- * click. The plans are one link away from everywhere.
- *
- * A discount code from a share link is not carried either, for the same
- * reason — so it is *named*, which is what keeps it from reading as lost: open
- * the link again once signed in, or type the code at the checkout.
+ * **Both carry the choice back here as `?next=`**, so the checkout opens the
+ * moment there is an account — plan, cadence and discount code intact. This used
+ * to be withheld as an open redirect waiting to happen; `/signup` and `/login`
+ * now pass every `next` through `safeRedirect`, which allows same-site paths only,
+ * and the WordPress connect flow already relies on the same thing. Without it a
+ * new customer finished signing up and landed in the dashboard with no idea
+ * what had become of the plan they were buying.
  */
-export function UpgradeSignedOut({ plan, code }: { plan: string; code?: string }) {
+export function UpgradeSignedOut({
+  plan,
+  cadence,
+  code,
+}: {
+  plan: string;
+  cadence: string;
+  code?: string;
+}) {
+  const next = encodeURIComponent(upgradeHref(plan, cadence, code));
+
   return (
     <Notice
       title={`Start on ${nameOf(plan)}`}
       actions={
         <>
-          <LinkButton href="/signup">Create an account</LinkButton>
-          <LinkButton href="/login" variant="outline">
+          <LinkButton href={`/signup?next=${next}`}>Create an account</LinkButton>
+          <LinkButton href={`/login?next=${next}`} variant="outline">
             I already have one
           </LinkButton>
         </>
       }
     >
       {code
-        ? `You'll need an account first. Your discount code is ${code}: open this link again once you're signed in, or enter the code at the checkout.`
-        : "You'll need an account first. It takes a minute, and you can pick your plan straight afterwards."}
+        ? `You'll need an account first. It takes a minute, and the checkout opens straight afterwards with your discount code ${code} applied.`
+        : "You'll need an account first. It takes a minute, and the checkout opens straight afterwards."}
     </Notice>
   );
 }
@@ -105,7 +119,7 @@ export function UpgradeFailed({
       title="Couldn't open the checkout"
       actions={
         <>
-          <LinkButton href={`/upgrade?plan=${plan}&cadence=${cadence}${code ? `&code=${code}` : ""}`}>
+          <LinkButton href={upgradeHref(plan, cadence, code)}>
             Try again
           </LinkButton>
           <LinkButton href="/pricing" variant="outline">

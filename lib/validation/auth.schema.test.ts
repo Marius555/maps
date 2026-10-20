@@ -51,19 +51,41 @@ describe("signupSchema", () => {
       name: "Ada",
       email: "ada@example.com",
       password: "12345678",
+      confirmPassword: "12345678",
     });
 
-    expect(result).toEqual({ email: "ada@example.com", password: "12345678" });
+    expect(result).toEqual({
+      email: "ada@example.com",
+      password: "12345678",
+      confirmPassword: "12345678",
+    });
   });
 
   it("holds the password to Appwrite's own minimum of 8", () => {
     const short = signupSchema.safeParse({
       email: "ada@example.com",
       password: "1234567",
+      confirmPassword: "1234567",
     });
 
     expect(short.success).toBe(false);
     expect(short.error?.issues[0]?.message).toBe("Use at least 8 characters.");
+  });
+
+  it("puts a mismatched confirmation on the second field", () => {
+    const result = signupSchema.safeParse({
+      email: "ada@example.com",
+      password: "12345678",
+      confirmPassword: "12345679",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toEqual([
+      expect.objectContaining({
+        path: ["confirmPassword"],
+        message: "Both passwords need to match.",
+      }),
+    ]);
   });
 });
 

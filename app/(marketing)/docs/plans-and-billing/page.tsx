@@ -179,6 +179,19 @@ export default function PlansAndBillingPage() {
           before then undoes it.
         </p>
 
+        <p>
+          Cancelling doesn’t refund the period you’ve paid for, and payments
+          aren’t refunded
+          {BRAND.legal.refundsUrl ? (
+            <>
+              {" "}
+              except as set out in the{" "}
+              <Link href={BRAND.legal.refundsUrl}>Refund Policy</Link>
+            </>
+          ) : null}
+          . Try your map on Free first.
+        </p>
+
         <DocsCallout tone="warning">
           <p>
             On Free, nothing is deleted and published maps keep working, but you

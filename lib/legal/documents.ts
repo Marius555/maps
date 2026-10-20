@@ -1,5 +1,5 @@
 /**
- * The four legal documents, and where each one is published.
+ * The five legal documents, and where each one is published.
  *
  * The text lives in `documents/legal/*.md` — one source, which a lawyer edits as
  * Markdown and the pages render as it stands. `path` is the page in
@@ -7,7 +7,7 @@
  * once set to that path, turns on every link to it across the app.
  */
 
-export type LegalSlug = "terms" | "privacy" | "cookies" | "dpa";
+export type LegalSlug = "terms" | "privacy" | "cookies" | "dpa" | "refunds";
 
 export type LegalDocument = {
   slug: LegalSlug;
@@ -16,7 +16,7 @@ export type LegalDocument = {
   file: string;
   title: string;
   summary: string;
-  brandKey: "termsUrl" | "privacyUrl" | "cookiesUrl" | "dpaUrl";
+  brandKey: "termsUrl" | "privacyUrl" | "cookiesUrl" | "dpaUrl" | "refundsUrl";
 };
 
 export const LEGAL_DOCUMENTS: Record<LegalSlug, LegalDocument> = {
@@ -51,5 +51,13 @@ export const LEGAL_DOCUMENTS: Record<LegalSlug, LegalDocument> = {
     title: "Data Processing Agreement",
     summary: "The terms under which we process personal data on our customers' behalf.",
     brandKey: "dpaUrl",
+  },
+  refunds: {
+    slug: "refunds",
+    path: "/refunds",
+    file: "refund-policy.md",
+    title: "Refund Policy",
+    summary: "When a payment for a paid plan is refunded, and when it is not.",
+    brandKey: "refundsUrl",
   },
 };

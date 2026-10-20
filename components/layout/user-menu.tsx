@@ -3,7 +3,7 @@
 import {
   Avatar,
   Button,
-  Description,
+  Chip,
   Dropdown,
   Header,
   Label,
@@ -45,7 +45,8 @@ import { UserMenuTheme } from "./user-menu-theme";
  * support address with a subject that says which kind, which plan and which
  * topic (`lib/support/support-request.ts`), so the inbox can be triaged by
  * subject alone. Contact support is a paid-plan row: on Free it stays visible
- * but disabled, with the reason under it, and the route refuses it too. Report a
+ * but disabled, with a "Paid only" chip on the same line (a second line of
+ * reason made it the tallest row in the menu), and the route refuses it too. Report a
  * bug is on every plan. The dialog is rendered beside the menu, not in it,
  * since the menu closes as soon as a row is chosen.
  *
@@ -188,9 +189,13 @@ export function UserMenu({
                 textValue="Contact support"
                 isDisabled={isFree}
               >
-                <div className="flex flex-col">
+                <div className="flex w-full items-center justify-between gap-2">
                   <Label>Contact support</Label>
-                  {isFree ? <Description>On paid plans</Description> : null}
+                  {isFree ? (
+                    <Chip size="sm" variant="soft">
+                      <Chip.Label>Paid only</Chip.Label>
+                    </Chip>
+                  ) : null}
                 </div>
               </Dropdown.Item>
             ) : null}

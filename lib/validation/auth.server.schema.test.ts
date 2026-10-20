@@ -25,7 +25,11 @@ const liveSaysDisposable = vi.hoisted(() => vi.fn(async () => false));
 vi.mock("@/lib/email/mx", () => ({ inspectMail }));
 vi.mock("@/lib/email/disposable-live", () => ({ liveSaysDisposable }));
 
-const VALID = { email: "ada@example.com", password: "a-good-password" };
+const VALID = {
+  email: "ada@example.com",
+  password: "a-good-password",
+  confirmPassword: "a-good-password",
+};
 
 let signupServerSchema: typeof import("./auth.server.schema").signupServerSchema;
 

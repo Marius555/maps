@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@heroui/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 
@@ -27,7 +28,7 @@ export function SignupForm({ redirectTo = null }: { redirectTo?: string | null }
     formState: { isSubmitting },
   } = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: "", password: "", confirmPassword: "" },
   });
 
   /**
@@ -90,6 +91,27 @@ export function SignupForm({ redirectTo = null }: { redirectTo?: string | null }
           placeholder="At least 8 characters"
           autoComplete="new-password"
         />
+
+        <div className="space-y-1.5">
+          <FormPasswordField
+            control={control}
+            name="confirmPassword"
+            label="Confirm password"
+            autoComplete="new-password"
+          />
+
+          {/* The login form's line, mirrored: under the field, at its size,
+              rather than a footer of its own below everything else. */}
+          <p className="text-xs text-muted">
+            Already have an account?{" "}
+            <Link
+              href={redirectTo ? `/login?next=${encodeURIComponent(redirectTo)}` : "/login"}
+              className="underline transition-colors hover:text-foreground"
+            >
+              Log in
+            </Link>
+          </p>
+        </div>
 
         <Button type="submit" fullWidth isPending={isSubmitting}>
           Create account

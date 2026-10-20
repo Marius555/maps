@@ -49,7 +49,13 @@ export default async function UpgradePage(props: PageProps<"/upgrade">) {
   const user = await getCurrentUser();
 
   if (!user) {
-    return <UpgradeSignedOut plan={parsed.data.plan} code={parsed.data.code} />;
+    return (
+      <UpgradeSignedOut
+        plan={parsed.data.plan}
+        cadence={parsed.data.cadence}
+        code={parsed.data.code}
+      />
+    );
   }
 
   /*

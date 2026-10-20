@@ -10,12 +10,23 @@ rewritten; it is the record of why this area is shaped as it is.
   costs no new origin, no CORS surface and no money.
 - `darken-style.ts` is now `MIDNIGHT_TINT` plus a one-line `darkenStyle`.
   `packages/shared/darken-style.test.ts` must keep passing **unmodified** — that is the
-  proof the refactor moved no pixel of Auto's dark half.
+  proof the refactor moved no pixel of Auto's dark half. One test in it was changed on
+  purpose (2026-10-19): the raster opacity is now an expression, so it reads the held value.
+- **A raster's colour cannot be tinted, only desaturated.** Liberty's `natural_earth`
+  shaded relief is green and brown and drew zoom 0–7 green on Mono, then vanished in one
+  frame at z7. Rasters now take `raster-saturation` from the ground band (greyscale or a
+  replaced hue gives -1) and fade from `rasterOpacity` at z5 to 0 at z7.
+  `packages/shared/style-tint.test.ts`.
 - A `Band`'s `exponent` applies to the *normalised* value after inversion. `hue` replaces
   the hue outright at an absolute `hueChroma`, never scaling the colour's own. Light
   themes must leave the figure band near identity or the street grid disappears.
 - `lib/map/themes.test.ts` holds every theme to label/ground/figure contrast. Do not add
   a theme without it — nobody will open sixteen maps by hand after touching a number.
+- **Positron, Dark and Fiord ship no POI layers, and only Liberty has 3D buildings** —
+  upstream, by design; Dark's street names are ~2.3:1 on its ground, also upstream, and left
+  as shipped (owner's call, 2026-10-20). The Layers panel greys those switches out from
+  `MISSING_LAYERS` in `lib/map/style.ts` without touching the stored value. That table is
+  measured, not derived: re-measure it if OpenFreeMap's documents change.
 - Labels and layers are **visibility, not colour**, and match on `source-layer` plus what
   the filter names — **never on layer ids**, which differ across all five documents.
 - Cycle paths are the exception: OpenMapTiles files a cycleway as `class: "path"` with

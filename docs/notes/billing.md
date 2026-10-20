@@ -370,9 +370,14 @@ redirects anyone without a session to `/login` before a page in it runs, so a
 signed-out visitor pressing a plan would be bounced to a login form with no idea
 what became of their choice. Here the page can say what they were buying.
 
-The plan is deliberately *not* carried through signup as a `next` parameter. A
-redirect target in a query string is an open redirect waiting to be got wrong, for
-a saving of one click.
+Signed out, both of its buttons carry the choice as `?next=/upgrade?plan=…&cadence=…&code=…`
+(`components/billing/upgrade-notice.tsx`), so signing up, logging in or Google all end
+at the checkout. This was once withheld as an open redirect waiting to be got wrong;
+it changed on 2026-10-19 because the cost was not one click — a new customer finished
+signup in the dashboard having lost the plan entirely — and because `/signup` and
+`/login` now pass every `next` through `safeRedirect`. An unconfirmed account can pay:
+`/upgrade` is a GET page and the confirm gate covers `withAuth` writes only, so the
+dashboard banner asks for the confirmation after `/checkout/done`.
 
 ### Changing a plan that already exists
 

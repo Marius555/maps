@@ -36,9 +36,9 @@ export const LEGAL_DETAILS = {
   },
   legal: {
     /** e.g. "1.0". Raise it on every published change. */
-    version: "1.0",
+    version: "1.1",
     /** At least 30 days after announcing a change that is not in customers' favour. */
-    effectiveDate: "17 October 2026",
+    effectiveDate: "19 October 2026",
   },
   billing: {
     /**
@@ -112,6 +112,7 @@ export function legalPlaceholderValues(): PlaceholderValues {
     "legal.privacyUrl": documentUrl(LEGAL_DOCUMENTS.privacy),
     "legal.cookiesUrl": documentUrl(LEGAL_DOCUMENTS.cookies),
     "legal.dpaUrl": dpaUrl,
+    "legal.refundsUrl": documentUrl(LEGAL_DOCUMENTS.refunds),
     // The DPA's own Annex III is the list (documents/company.md).
     "legal.subprocessorsUrl": `${dpaUrl}#annex-iii--sub-processors`,
 

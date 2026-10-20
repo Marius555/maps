@@ -156,6 +156,19 @@ export async function markEmailVerified(userId: string): Promise<AuthUser> {
 }
 
 /**
+ * Whether this account's address is already confirmed, read off Appwrite rather
+ * than through `readsAsVerified`, which a dev flag can bend. False on any error:
+ * the only caller uses it to soften an "expired" page, never to grant anything.
+ */
+export async function isEmailVerified(userId: string): Promise<boolean> {
+  try {
+    return (await admin.users.get({ userId })).emailVerification;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Sets a new password and hands back a fresh session.
  *
  * **Every other session for this user is deleted first, and that is the point of

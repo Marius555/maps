@@ -91,7 +91,10 @@ export type StyleTint = {
   halo: string;
   /** Only used where the style left `text-halo-width` out; MapLibre defaults it to 0. */
   haloWidth: number;
-  /** Low-zoom shaded relief is a bright raster that fights any recoloured map. */
+  /**
+   * Low-zoom shaded relief is a bright raster that fights any recoloured map.
+   * Held to z5, then faded to nothing by z7; its colour follows `ground.chroma`.
+   */
   rasterOpacity: number;
   /**
    * Floor on a label's alpha. Labels drawn see-through on a light map vanish on
@@ -151,8 +154,21 @@ export function tintStyle<T extends StyleLike>(style: T, tint: StyleTint): T {
 function tintLayer(layer: LayerLike, tint: StyleTint): LayerLike {
   const paint = layer.paint;
 
+  /*
+   * A raster's pixels cannot be recoloured, only desaturated — and Liberty's
+   * shaded relief is green and brown, so left alone it painted Mono green up to
+   * z7. It fades out by z7, where the layer stops drawing, rather than holding
+   * flat and vanishing in one frame.
+   */
   if (layer.type === "raster") {
-    return { ...layer, paint: { ...paint, "raster-opacity": tint.rasterOpacity } };
+    return {
+      ...layer,
+      paint: {
+        ...paint,
+        "raster-opacity": ["interpolate", ["linear"], ["zoom"], 5, tint.rasterOpacity, 7, 0],
+        "raster-saturation": tint.ground.hue === undefined ? tint.ground.chroma - 1 : -1,
+      },
+    };
   }
 
   if (!paint) return layer;
