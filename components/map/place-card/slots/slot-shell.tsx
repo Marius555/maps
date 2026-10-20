@@ -50,8 +50,13 @@ export function SlotShell({
   return (
     // `noValidate` for the reason every other form in this app carries it: the
     // browser's own bubbles say things we did not write, in a voice that is not
-    // ours, and zod already has the sentence.
-    <form onSubmit={submit} noValidate className="w-72 max-w-[calc(100vw-3rem)] space-y-3">
+    // ours, and zod already has the sentence. Full width below `md`, where it is
+    // in a bottom drawer rather than a popover — see `CardSlot`.
+    <form
+      onSubmit={submit}
+      noValidate
+      className="w-72 max-w-[calc(100vw-3rem)] space-y-3 max-md:w-full max-md:max-w-none"
+    >
       <p className="text-sm font-medium text-foreground">{title}</p>
 
       {error ? <ErrorMessage error={error} /> : null}

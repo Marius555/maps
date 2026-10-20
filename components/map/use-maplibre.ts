@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { effectiveAppearance } from "@/lib/map/appearance";
 import { carryRuntimeLayers } from "@/lib/map/carry-style";
 import { resolveStyleUrl, type MapStyleKey } from "@/lib/map/style";
+import { reportOversizedCanvas } from "@/lib/map/canvas-size-diagnostic";
 import { canRenderMaps } from "@/lib/map/webgl";
 import { collapseAttribution } from "@/packages/shared/attribution";
 import { loadMapStyle } from "@/packages/shared/load-style";
@@ -282,6 +283,10 @@ export function useMaplibre(
 
       const instance = map;
 
+      // Development only: names the box behind MapLibre's "canvas is larger
+      // than maxCanvasSize" warning. See canvas-size-diagnostic.ts.
+      reportOversizedCanvas(instance, element, "construct");
+
       /*
        * The size the opening frame above was computed against.
        *
@@ -320,6 +325,7 @@ export function useMaplibre(
          * setup produced the post-load resize as a side effect. Moving the
          * observation to the frame removed it and took the basemap with it.
          */
+        reportOversizedCanvas(instance, element, "load");
         instance.resize();
 
         // Only when the constructor measured a box that has since changed —
@@ -419,6 +425,7 @@ export function useMaplibre(
          * immediately with a size nothing has changed about.
          */
         if (!instance.isStyleLoaded()) {
+          reportOversizedCanvas(instance, element, "before style load");
           instance.resize();
           return;
         }
@@ -426,6 +433,7 @@ export function useMaplibre(
         // Nothing to hold the map against until there has been one good
         // measurement to compare with.
         if (before.width === 0 || before.height === 0) {
+          reportOversizedCanvas(instance, element, "first measurement");
           instance.resize();
           instance.redraw();
           return;
@@ -446,6 +454,7 @@ export function useMaplibre(
         // this measurement came from.
         const anchor = instance.unproject([anchorX, anchorY]);
 
+        reportOversizedCanvas(instance, element, "resize");
         instance.resize();
 
         /*

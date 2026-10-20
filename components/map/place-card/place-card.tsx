@@ -173,7 +173,9 @@ export function PlaceCard({
   /*
    * On a phone the card opens and closes on the camera's clock, because the map
    * moves with it there — see card-motion.ts. Elsewhere the map holds still and
-   * the card keeps its quicker fade.
+   * the card keeps its quicker fade. It is also where the card's two panels stop
+   * opening beside it and rise from the bottom edge instead, because the card is
+   * most of the width and there is no "beside" — see `BlockEditorPopover`.
    */
   const isPhone = useMediaQuery(MD_DOWN);
 
@@ -340,6 +342,7 @@ export function PlaceCard({
             place={place}
             slot={slot}
             isOpen={openSlotId === block.id}
+            isPhone={isPhone}
             onOpenChange={(isOpen) =>
               setOpenPanel(
                 isOpen
@@ -508,6 +511,7 @@ export function PlaceCard({
                   overrides={effectiveOverrides ?? {}}
                   blockId={openEditorId}
                   cardRef={cardRef}
+                  isPhone={isPhone}
                   onPreview={(overrides) =>
                     setPreview(
                       overrides ? { placeId: place.id, overrides } : null,

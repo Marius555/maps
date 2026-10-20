@@ -58,7 +58,9 @@ export default async function MapEditorPage(props: PageProps<"/maps/[id]">) {
     // `min-h-0` so it can also be *squeezed*: without it a flex item refuses to
     // go below its content, and a panel full of locations would push the page
     // taller instead of scrolling. See the height note in map-editor.tsx.
-    <Container className="flex min-h-0 flex-col">
+    // Tighter on a phone, where every pixel of padding is a pixel of map: the
+    // height there subtracts exactly this `py-2`.
+    <Container className="flex min-h-0 flex-col max-md:px-2 max-md:py-2">
       {/* The map's own name, since this page is the map. Every other section
           names itself; this one would only be "Map". */}
       <PageTitle>{data.map.name}</PageTitle>

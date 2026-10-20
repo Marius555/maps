@@ -2,7 +2,10 @@
 
 import type { ReactNode } from "react";
 
+import { MobileBrand } from "@/components/layout/mobile-brand";
+import { NavMenuButton } from "@/components/layout/nav-menu-button";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import type { PlanId } from "@/lib/repositories/plan-limits";
 
 /**
  * The locations panel, and where it goes on a phone.
@@ -22,10 +25,21 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
  *
  * Open or shut is the caller's, because picking a location puts the sheet away
  * — see `EditorSidebar`.
+ *
+ * **Below `md` the strip is the app's header.** `MobileHeader` stands down on
+ * the editor so the map gets its 3.5rem back, and its three things move here:
+ * the hamburger where the title was, the product name and plan where the count
+ * was. The title and count go to the top of the sheet's content, which is where
+ * they are read anyway — they describe the list, and the list is only on screen
+ * once the sheet is up. From `md` the nav sidebar is a column again, so a
+ * hamburger would open something already showing, and the strip goes back to
+ * the title and count; at `lg` it is the column's title row as it always was.
+ * All of it is CSS, so no width paints the wrong strip for a frame.
  */
 export function LocationsDrawer({
   title,
   meta,
+  plan,
   isOpen,
   onOpenChange,
   children,
@@ -33,6 +47,8 @@ export function LocationsDrawer({
   title: string;
   /** The count badge — it is half of what the shut sheet exists to show. */
   meta: ReactNode;
+  /** For the plan badge the strip carries below `md`, in the header's place. */
+  plan: PlanId;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   children: ReactNode;
@@ -45,8 +61,16 @@ export function LocationsDrawer({
       onOpenChange={onOpenChange}
       peek={
         <>
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          {meta}
+          <span className="flex items-center md:hidden">
+            <NavMenuButton />
+          </span>
+          <span className="flex min-w-0 items-center md:hidden">
+            <MobileBrand plan={plan} />
+          </span>
+          <h2 className="hidden text-sm font-semibold text-foreground md:block">
+            {title}
+          </h2>
+          <span className="hidden md:contents">{meta}</span>
         </>
       }
       // At `lg` there is no rail, so the strip is just the title row and shrinks
@@ -54,6 +78,14 @@ export function LocationsDrawer({
       peekClassName="lg:h-11 lg:justify-center"
       className="rounded-xl border border-border lg:w-80 lg:shrink-0"
     >
+      {/* The title and count, below `md` where the strip carries the header
+          instead. The strip's own copies are `display: none` there, so this is
+          the only heading a screen reader finds, and the reverse from `md`. */}
+      <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-3 md:hidden">
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        {meta}
+      </div>
+
       {children}
     </BottomSheet>
   );

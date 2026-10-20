@@ -8,6 +8,7 @@ import type { DraggedObject } from "@/components/groups/use-row-drag";
 import { PlaceCountBadge } from "@/components/places/place-count-badge";
 import { PlaceListEmpty } from "@/components/places/place-list-empty";
 import { ErrorMessage } from "@/components/ui/error-message";
+import type { PlanId } from "@/lib/repositories/plan-limits";
 import type {
   Group,
   MapTagGroup,
@@ -57,6 +58,7 @@ export function EditorSidebar({
   pinIcons,
   defaultPinColor,
   placeLimit,
+  plan,
   selectedPlaceId,
   selectedShapeId,
   selectedPlaceIds,
@@ -90,6 +92,8 @@ export function EditorSidebar({
   /** What a pin nothing else colours is painted — a row's Pin colour needs it. */
   defaultPinColor: string;
   placeLimit: number;
+  /** For the plan badge the sheet carries below `md` — see LocationsDrawer. */
+  plan: PlanId;
   selectedPlaceId: string | null;
   selectedShapeId: string | null;
   /** Locations picked by the marquee or a group — lit like a selected row. */
@@ -165,6 +169,7 @@ export function EditorSidebar({
           is the only part of this that is on screen. See LocationsDrawer. */}
       <LocationsDrawer
         title="Locations"
+        plan={plan}
         isOpen={isSheetOpen}
         onOpenChange={setIsSheetOpen}
         /* Counts every location on the map, grouped or not: this is the plan

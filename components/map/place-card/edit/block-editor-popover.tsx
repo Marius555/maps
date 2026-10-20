@@ -1,6 +1,6 @@
 "use client";
 
-import { Popover, popoverVariants } from "@heroui/react";
+import { Drawer, Popover, popoverVariants } from "@heroui/react";
 import { useMemo, type RefObject } from "react";
 
 import { BLOCK_LABELS } from "@/components/card/designer/block-labels";
@@ -54,6 +54,17 @@ import { BlockEditorForm } from "./block-editor-form";
  * through a context of its own, so they are passed explicitly from
  * `popoverVariants()` -- a public export, and the slots are the plain
  * `popover` / `popover__dialog` class names its own components would have used.
+ *
+ * ### A bottom drawer on a phone
+ *
+ * Below `md` the card is most of the map's width, so there is no "beside" left:
+ * React Aria flipped the panel from one side to the other and both were off the
+ * screen. There it rises from the bottom edge instead, the way every other panel
+ * on a phone does. The backdrop is **transparent** on purpose -- the card above
+ * the drawer repaints as the controls move, and a dimmed card is a preview you
+ * cannot judge. Dismissal is the same three ways (a press outside, Escape, a
+ * swipe on the handle), and it is still mounted only while open, so closing it
+ * still flushes `useDeferredOverrides` on the way out.
  */
 export function BlockEditorPopover({
   map,
@@ -62,6 +73,7 @@ export function BlockEditorPopover({
   overrides,
   blockId,
   cardRef,
+  isPhone,
   onPreview,
   onClose,
 }: {
@@ -75,6 +87,8 @@ export function BlockEditorPopover({
   blockId: string;
   /** What the panel is anchored to -- see the docblock. */
   cardRef: RefObject<HTMLDivElement | null>;
+  /** Below `md`: a bottom drawer rather than a panel beside the card. */
+  isPhone: boolean;
   /** Repaint the card now, before anything is saved. */
   onPreview: (overrides: CardBlockOverrides | null) => void;
   onClose: () => void;
@@ -88,6 +102,53 @@ export function BlockEditorPopover({
   if (!found) return null;
 
   const title = `${BLOCK_LABELS[found.block.type].label} on this card`;
+
+  /*
+    Deliberately **not** keyed on the block. Moving between blocks with the
+    panel open keeps `useDeferredOverrides` mounted, so a change still on its
+    400ms timer rides along with the next one into a single PATCH rather than
+    being flushed by an unmount the moment you look at something else.
+  */
+  const form = (
+    <BlockEditorForm
+      map={map}
+      place={place}
+      block={found.block}
+      layout={layout}
+      overrides={overrides}
+      onPreview={onPreview}
+      onDone={onClose}
+    />
+  );
+
+  if (isPhone) {
+    return (
+      <Drawer.Backdrop
+        isOpen
+        variant="transparent"
+        onOpenChange={(isOpen) => {
+          if (!isOpen) onClose();
+        }}
+      >
+        <Drawer.Content placement="bottom" className="max-h-full">
+          {/* 60dvh rather than the 92 the app's dialogs take, so the card the
+              controls are changing stays in view above it. The form's own
+              scroller takes the bounded height from this flex column. */}
+          <Drawer.Dialog className="flex max-h-[60dvh] min-h-0 flex-col pt-3">
+            <Drawer.Handle />
+            <Drawer.Header>
+              <Drawer.Heading className="text-sm font-semibold">
+                {title}
+              </Drawer.Heading>
+            </Drawer.Header>
+            <Drawer.Body className="flex min-h-0 flex-1 flex-col">
+              {form}
+            </Drawer.Body>
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
+    );
+  }
 
   return (
     /*
@@ -120,22 +181,7 @@ export function BlockEditorPopover({
         aria-label={title}
         className={`${slots.dialog()} flex min-h-0 flex-col`}
       >
-        {/*
-          Deliberately **not** keyed on the block. Moving between blocks with
-          the panel open keeps `useDeferredOverrides` mounted, so a change still
-          on its 400ms timer rides along with the next one into a single PATCH
-          rather than being flushed by an unmount the moment you look at
-          something else.
-        */}
-        <BlockEditorForm
-          map={map}
-          place={place}
-          block={found.block}
-          layout={layout}
-          overrides={overrides}
-          onPreview={onPreview}
-          onDone={onClose}
-        />
+        {form}
       </Popover.Dialog>
     </Popover.Content>
   );

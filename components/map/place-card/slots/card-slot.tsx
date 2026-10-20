@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Popover } from "@heroui/react";
+import { Button, Drawer, Popover } from "@heroui/react";
 import { Plus } from "lucide-react";
 
 import type { CardSlot as CardSlotDescriptor } from "@/lib/card/card-slots";
@@ -32,44 +32,94 @@ import { SlotForm } from "./slot-form";
  * only thing that fits. What it costs is one guard in `PlaceCard`: the card is
  * moved by a transform at 60fps, so an open slot closes when the map starts
  * moving rather than sliding out from under its own block.
+ *
+ * **Below `md` it is a bottom drawer instead**, for `BlockEditorPopover`'s
+ * reason: the card is most of a phone's width, there is no room beside it, and
+ * React Aria's flip only moved the form from one off-screen side to the other.
+ * The button stays the same button; only what it opens changes.
  */
 export function CardSlot({
   map,
   place,
   slot,
   isOpen,
+  isPhone,
   onOpenChange,
 }: {
   map: AppMap;
   place: Place;
   slot: CardSlotDescriptor;
   isOpen: boolean;
+  /** Below `md`: a bottom drawer rather than a popover beside the card. */
+  isPhone: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }) {
   const title = slotTitle(slot);
 
+  const form = (
+    <SlotForm
+      map={map}
+      place={place}
+      slot={slot}
+      onDone={() => onOpenChange(false)}
+    />
+  );
+
+  /*
+   * `onPress` only where nothing else opens it: inside `Popover.Root` the
+   * trigger context toggles the popover itself, and a second handler setting it
+   * open would undo a press meant to close it.
+   */
+  const trigger = (onPress?: () => void) => (
+    <Button
+      variant="tertiary"
+      aria-label={title}
+      onPress={onPress}
+      /*
+       * Our own open flag, and it has to be ours: HeroUI's `Button` reaches
+       * React Aria through a `Pressable` wrapper, which forwards the press but
+       * leaves `aria-expanded` at whatever it rendered with — measured as
+       * `false` on a trigger whose popover was open. So the stylesheet keys
+       * off this instead, and the block the popover is about stays marked
+       * while it is being filled in.
+       */
+      data-open={isOpen || undefined}
+      className="card-slot"
+    >
+      <Plus aria-hidden="true" className="size-4" />
+      {/* The icon is the whole control, so the words live here — a row of
+          identical `+` boxes is unreadable without them, and "Add" alone
+          would announce five slots the same way. */}
+      <span className="sr-only">Add {slotLabel(slot)}</span>
+    </Button>
+  );
+
+  if (isPhone) {
+    return (
+      <>
+        {trigger(() => onOpenChange(true))}
+        <Drawer.Backdrop
+          isOpen={isOpen}
+          onOpenChange={onOpenChange}
+          variant="transparent"
+        >
+          <Drawer.Content placement="bottom" className="max-h-full">
+            <Drawer.Dialog
+              aria-label={title}
+              className="flex max-h-[60dvh] min-h-0 flex-col pt-3"
+            >
+              <Drawer.Handle />
+              <Drawer.Body>{form}</Drawer.Body>
+            </Drawer.Dialog>
+          </Drawer.Content>
+        </Drawer.Backdrop>
+      </>
+    );
+  }
+
   return (
     <Popover.Root isOpen={isOpen} onOpenChange={onOpenChange}>
-      <Button
-        variant="tertiary"
-        aria-label={title}
-        /*
-         * Our own open flag, and it has to be ours: HeroUI's `Button` reaches
-         * React Aria through a `Pressable` wrapper, which forwards the press but
-         * leaves `aria-expanded` at whatever it rendered with — measured as
-         * `false` on a trigger whose popover was open. So the stylesheet keys
-         * off this instead, and the block the popover is about stays marked
-         * while it is being filled in.
-         */
-        data-open={isOpen || undefined}
-        className="card-slot"
-      >
-        <Plus aria-hidden="true" className="size-4" />
-        {/* The icon is the whole control, so the words live here — a row of
-            identical `+` boxes is unreadable without them, and "Add" alone
-            would announce five slots the same way. */}
-        <span className="sr-only">Add {slotLabel(slot)}</span>
-      </Button>
+      {trigger()}
 
       {/*
         Beside the card rather than over it: the card is 320px of the owner's own
@@ -81,14 +131,7 @@ export function CardSlot({
         is what a card sitting near the right edge of the map needs.
       */}
       <Popover.Content placement="end top">
-        <Popover.Dialog aria-label={title}>
-          <SlotForm
-            map={map}
-            place={place}
-            slot={slot}
-            onDone={() => onOpenChange(false)}
-          />
-        </Popover.Dialog>
+        <Popover.Dialog aria-label={title}>{form}</Popover.Dialog>
       </Popover.Content>
     </Popover.Root>
   );

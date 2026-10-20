@@ -137,8 +137,11 @@ export function BlockEditorForm({
      * this overflow the popover, extend the document, and give the *page* a
      * scrollbar. Bounded here, the footer also stays on screen rather than
      * scrolling away with the controls.
+     *
+     * Below `md` it is in a bottom drawer instead (`BlockEditorPopover`), which
+     * is the phone's whole width, so it takes that rather than its 24rem.
      */
-    <div className="flex min-h-0 w-96 max-w-[calc(100vw-2rem)] flex-col gap-3">
+    <div className="flex min-h-0 w-96 max-w-[calc(100vw-2rem)] flex-col gap-3 max-md:w-full max-md:max-w-none">
       {/* `overflow-x-hidden` is written out beside it deliberately: a lone
           `overflow-y: auto` leaves the other axis `visible`, which CSS then
           computes to `auto` — so a scroller declaring one axis quietly gets

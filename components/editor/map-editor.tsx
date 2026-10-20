@@ -1324,9 +1324,11 @@ export function MapEditor({
      * The two subtractions are exact rather than approximate. 3rem is
      * `Container`'s own `py-6` top and bottom, and `PageTitle` is `sr-only`,
      * which is absolutely positioned and contributes no height. Below `md` the
-     * `MobileHeader` is on screen as well, and it is `min-h-14` holding one line
-     * — 3.5rem, for 6.5rem in total. dvh, not vh, so mobile browser chrome
-     * doesn't push the bottom of the sheet out of reach.
+     * page tightens that to `py-2` — 1rem — and there is no `MobileHeader` to
+     * subtract: on this page its hamburger, name and plan ride in the locations
+     * sheet's strip instead (`LocationsDrawer`), so the map has the screen. dvh,
+     * not vh, so mobile browser chrome doesn't push the bottom of the sheet out
+     * of reach.
      *
      * `relative` and `max-lg:overflow-hidden` are the sheet's: the first is what
      * it is positioned against, and the second clips the two thirds of it that
@@ -1335,7 +1337,7 @@ export function MapEditor({
      * the window's scrollbar in with it.
      */
     <div
-      className="relative flex h-[calc(100dvh-3rem)] min-h-0 flex-none flex-col gap-4 max-lg:overflow-hidden max-md:h-[calc(100dvh-6.5rem)] lg:flex-row"
+      className="relative flex h-[calc(100dvh-3rem)] min-h-0 flex-none flex-col gap-4 max-lg:overflow-hidden max-md:h-[calc(100dvh-1rem)] lg:flex-row"
       /* The map's accent, inherited by every place card drawn inside — a Button
          nobody gave a Background wears it, exactly as it does on the published
          map. Here rather than on the card, because the card design is per
@@ -1579,6 +1581,7 @@ export function MapEditor({
         pinIcons={map.pinIcons}
         defaultPinColor={readEmbedSettings(map.settings).pinColor}
         placeLimit={placeLimit}
+        plan={plan}
         selectedPlaceId={selectedPlaceId}
         selectedShapeId={selectedShapeId}
         selectedPlaceIds={selectedPlaceIds}

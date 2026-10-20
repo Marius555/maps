@@ -17,6 +17,17 @@ rewritten; it is the record of why this area is shaped as it is.
 
 ### App shell
 
+- **Below `md` the map editor has no `MobileHeader`; the locations sheet's strip is
+  the header there.** `MobileHeader` returns null on `/maps/<id>` (from the path, so the
+  first paint already agrees), and `LocationsDrawer` draws `NavMenuButton` and
+  `MobileBrand` in its peek, with the title and count moved to the top of its content.
+  The editor row's phone height (`max-md:h-[calc(100dvh-1rem)]`) subtracts only the
+  page's `max-md:py-2` — put the header back and that number is 3.5rem wrong. The
+  `nav-menu` tutorial target travels with `NavMenuButton`, so only one is ever rendered.
+- **A pin card's two panels are bottom drawers below `md`.** `BlockEditorPopover` and
+  `CardSlot` anchor beside the card, and on a phone the card is most of the width, so
+  React Aria flipped them between two off-screen sides. The drawers' backdrop is
+  `transparent` so the card's live preview stays readable above them.
 - **`<main>` in `app-shell.tsx` is `relative`, and must stay so.** It is the dashboard's
   only scroller, and an `overflow` box clips absolutely positioned descendants only when it
   is also their containing block. Without `relative`, every `sr-only` span belonged to the
