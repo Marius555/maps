@@ -373,6 +373,10 @@ Area-specific invariants live at the head of each file in the table below.
   Appwrite's API, past every check. That once let a user set their own subscription to
   `pro`. `ownerPermissions()` returns `[]`, and every access goes through the admin client.
   Limits live in `lib/limits/`, and `docs/notes/limits.md` says how to change one.
+- **Never proxy to another origin with a Next `rewrites()` entry.** It forwards every request
+  header, and on Appwrite Sites that includes the runtime's `Authorization: Basic opr:…` key and
+  the session cookie (the Appwrite secret, above). Relay with a route handler that builds headers
+  from an allowlist — `lib/posthog/relay.ts` is the worked example, and the post-mortem.
 - **Dangling ids are the normal state, not an error.** Nothing sweeps a deleted tag off the
   places wearing it, or a removed block off the pins overriding it. Narrow them away at
   publish and drop them when drawing — do not add a cleanup pass over 3,000 rows.

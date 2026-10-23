@@ -63,7 +63,7 @@ export function loadPostHog(): Promise<PostHog | null> {
   ready ??= import("posthog-js")
     .then(({ default: posthog }) => {
       posthog.init(projectToken, {
-        // Our own origin, relayed to `host` by the rewrites in next.config.ts:
+        // Our own origin, relayed to `host` by app/rp/[...path]/route.ts:
         // tracker blocklists carry *.posthog.com. `ui_host` is where PostHog's
         // own links (toolbar, session links) should still point.
         api_host: "/rp",
