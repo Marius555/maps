@@ -2,7 +2,7 @@ import { METERED_USD_PER_1000 } from "@/lib/marketing/cost";
 
 import { Section } from "../section";
 import { SplitBody } from "../split/split-body";
-import { NoGoogleArt } from "./no-google-art";
+import { NoGoogleArt } from "./no-google-art-loader";
 import {
   NoKeySymbol,
   NoMeterSymbol,

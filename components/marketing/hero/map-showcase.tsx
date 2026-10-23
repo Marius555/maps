@@ -25,7 +25,7 @@ import { EuropeMapLoader } from "../europe-map/europe-map-loader";
  */
 export function MapShowcase() {
   return (
-    <section className="flex min-h-[100svh] flex-col justify-center px-5 py-10 sm:px-8 sm:py-12">
+    <section className="flex flex-col justify-center px-5 py-10 sm:px-8 sm:py-12 lg:min-h-[100svh]">
       <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col">
         <EuropeMapLoader />
       </div>

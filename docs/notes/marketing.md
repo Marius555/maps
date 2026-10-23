@@ -85,9 +85,34 @@
   skeleton. Its land is a dot mask committed in `lib/marketing/world-dots.data.ts`
   (`npm run build:world-dots`), so no geography package ships. It is real CSS 3D:
   opacity, a filter or a mask on `.mk-tilt-plane` flattens it and lays every pin
-  down. **In dark mode it is not a card** — `.mk-europe-frame` takes the page's
+  down. **It is not a card, in either mode** — `.mk-europe-frame` takes the page's
   `--background`, no border, no shadow, and the haze fades to the page colour, so
-  the map blends into the page (owner, 2026-10-23). Light mode keeps the panel.
+  the map blends into the page (owner, 2026-10-23). **Below `lg` it is aspect-sized
+  (6:5, 4:3 from `sm`), not a screen**: sized by `cqh` in a screen-tall phone frame
+  the plane was ~920px wide and showed the middle 40% of Europe. The plane there is
+  `94cqw`, moved right to `left: 56%` because the chain's pins sit west of the
+  land's middle; measured over a full swing at 360/390/430/768, every pin stays in
+  the frame and clear of the legend.
+- **The landing page has no grey panels** (owner, 2026-10-23). Drawings sit on
+  `.mk-ground` (nothing at all) and `.mk-step-scene` fades the ground out at its
+  edges with a mask — on the scene, never the 3D plane. Text and controls (cost
+  cards, survey) sit on `.mk-outline`, a hairline drawn as an inset shadow because
+  a border's 2px put the survey 1px past its screen. `.mk-panel` is kept for the
+  `/for/*` pages, which still wear it.
+- **The Sources drawing plays by itself while on screen, never on hover** (owner,
+  2026-10-23). It stands on the steps' stage (a crop of the dotted Europe) beside a
+  network panel; `useViewPlay` (Motion's `useInView`) drives the same pass engine as
+  the steps' `useHoverPlay` (`steps/stage/use-pass-play.ts`), so it is measured at
+  play time and rests on its finished frame. Loaded `ssr: false`. **It only ever
+  plays forward**: the reset fades everything out in place and moves things back
+  to their start only while invisible — un-drawing the build read as the animation
+  playing backward (owner, 2026-10-23) — and files fly from the network panel *to*
+  the map, the way a download goes. **Every dot lands on what it changes**: the
+  map file sends one dot per location, in that pin's colour, and the pin drops
+  where it lands, as in the import drawing; the script and the tiles land in the
+  middle of the ground and ring or wash out from there. One dot landing on Zurich
+  while five pins dropped elsewhere read as the network panel and the map playing
+  independently (owner, 2026-10-24).
 - **The steps section's drawings play only while their panel is hovered** (owner,
   2026-10-23; `components/marketing/steps/stage/use-hover-play.ts`). Each stands on a
   crop of the showcase's dotted Europe, tilted in CSS 3D, with the editor's pins on
@@ -95,8 +120,8 @@
   finish and settle; the rest frame is also the reduced-motion form. A tap plays one
   pass on touch. Loaded `ssr: false` (`art/steps-art-loader.tsx`). Same 3D rule as
   the showcase: nothing on `.mk-step-plane` itself may set opacity, a filter or a mask.
-  `steps/art/use-art-loop.ts` is no longer used by the steps, but the integrations,
-  no-Google and unlimited-views drawings still loop with it.
+  `steps/art/use-art-loop.ts` is no longer used by the steps or Sources, but the
+  integrations and unlimited-views drawings still loop with it.
 - **"Drop a pin" is a button, and it never looks anything up.** It arms one
   press on the ground (crosshair, a hint, Escape cancels); unarmed, the ground
   closes cards as before — dropping on every click littered the map (owner,

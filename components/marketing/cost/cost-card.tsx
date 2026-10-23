@@ -26,7 +26,7 @@
  */
 export function CostCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mk-panel flex h-full flex-col rounded-2xl p-5 sm:p-6 lg:p-7">
+    <div className="mk-outline flex h-full flex-col rounded-2xl p-5 sm:p-6 lg:p-7">
       {children}
     </div>
   );

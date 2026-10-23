@@ -8,11 +8,12 @@ import { StepHoverContext } from "./stage/step-hover";
 /**
  * One step: a drawing, then a title and one line under it.
  *
- * **A flat card: one surface, no outline, no wash.** It used to carry a border,
- * a gradient tint and a "01" over the title; the drawing in it is what the eye
- * should land on, and each of those was a second thing competing with it. The
- * order the three steps come in is the order they are read in, which says
- * "sequence" without a numeral.
+ * **No card at all: the drawing stands on the page** (`.mk-ground`, owner,
+ * 2026-10-23). It used to carry a border, a gradient tint, a "01" over the
+ * title and then a grey surface; the drawing is what the eye should land on,
+ * and each of those was a second thing competing with it. The order the three
+ * steps come in is the order they are read in, which says "sequence" without a
+ * numeral.
  *
  * **The whole card is the hover target**, and the drawing plays only while it
  * is hovered (stage/use-hover-play.ts). The hover state is handed down by
@@ -39,7 +40,7 @@ export function StepPanel({
 
   return (
     <article
-      className="mk-panel flex h-full flex-col overflow-hidden rounded-2xl"
+      className="mk-ground flex h-full flex-col overflow-hidden"
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
     >
@@ -48,7 +49,7 @@ export function StepPanel({
         <PlayHint hidden={hovered || playing} />
       </div>
 
-      <div className="px-6 pt-1 pb-7">
+      <div className="px-1 pt-1 pb-2">
         <h3 className="text-xl leading-snug font-semibold tracking-tight text-balance text-foreground lg:text-2xl">
           {title}
         </h3>

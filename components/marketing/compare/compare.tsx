@@ -36,7 +36,7 @@ export function Compare() {
       lede="Two ways this is normally bought: a metered map you build on, or a locator product you still connect your own map key to. Both are priced by how many people look."
     >
       <Reveal>
-        <div className="mk-panel space-y-4 rounded-2xl p-5 sm:p-6 lg:p-7">
+        <div className="mk-outline space-y-4 rounded-2xl p-5 sm:p-6 lg:p-7">
           {/* The table is beside the chart rather than under it, and that is a
               height decision as much as a reading one: stacked, the two came to
               503px and put this section 235px past the screen it has to hold.

@@ -3858,21 +3858,36 @@ body.is-pin-dragging * {
  * The frame grows the way `.mk-hero-map` does — a flex item taking whatever the
  * showcase screen leaves, with the same 15rem floor for a short landscape phone.
  *
- * In dark mode it is not a card: the page's own background, no border, no
+ * It is not a card, in either mode: the page's own background, no border, no
  * shadow, so the dots lie on the page and the radial fade in the SVG is the
- * only edge. The skeleton wears the same class, so nothing flashes grey first.
+ * only edge (owner, 2026-10-23). The skeleton wears the same class, so nothing
+ * flashes grey first.
+ *
+ * **Below `lg` it is sized by its width, not by the screen.** There is no snap
+ * there, so a screen-tall frame was only empty height — and the plane, sized
+ * by `cqh` to fill it, came out ~920px wide in a 350px phone frame, showing
+ * the middle 40% of Europe. An aspect ratio near the tilted plane's own is what
+ * lets the whole continent fit.
  */
 .mk-europe-frame {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 15rem;
+  background-color: var(--background);
 }
 
-.dark .mk-europe-frame,
-[data-theme="dark"] .mk-europe-frame {
-  background-color: var(--background);
-  border-color: transparent;
-  box-shadow: none;
+@media (max-width: 63.999rem) {
+  .mk-europe-frame {
+    flex: none;
+    min-height: 0;
+    aspect-ratio: 6 / 5;
+  }
+}
+
+@media (min-width: 40rem) and (max-width: 63.999rem) {
+  .mk-europe-frame {
+    aspect-ratio: 4 / 3;
+  }
 }
 
 /*
@@ -3897,13 +3912,19 @@ body.is-pin-dragging * {
   transform-style: preserve-3d;
 }
 
-/* The horizon fades into whatever the frame is: the panel, or in dark the page. */
-.mk-tilt-haze {
-  background: linear-gradient(to bottom, var(--surface-secondary) 15%, transparent);
+/* Below `lg` the frame is aspect-sized (above), so the width is what to fill. */
+@media (max-width: 63.999rem) {
+  .mk-tilt-plane {
+    /* The chain's pins sit west of the land's middle (Lisbon, Dublin), so the
+       plane moves right to centre them rather than the dots. */
+    left: 56%;
+    top: 59%;
+    width: 94cqw;
+  }
 }
 
-.dark .mk-tilt-haze,
-[data-theme="dark"] .mk-tilt-haze {
+/* The horizon fades into the page. */
+.mk-tilt-haze {
   background: linear-gradient(to bottom, var(--background) 15%, transparent);
 }
 
@@ -3918,6 +3939,16 @@ body.is-pin-dragging * {
   perspective: 900px;
   perspective-origin: 50% 10%;
   pointer-events: none;
+  /*
+   * With no panel behind it, the box's own edge would cut the dots in a hard
+   * rectangle, so the ground fades out at every side. On the scene, never the
+   * plane: the plane is the 3D root, and the scene only receives it flattened,
+   * the way `overflow: hidden` on the drawing already does. The cards beside
+   * the ground are siblings of the scene and stay crisp.
+   */
+  mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent),
+    linear-gradient(to bottom, #000 80%, transparent);
+  mask-composite: intersect;
 }
 
 .mk-step-plane {
@@ -3926,14 +3957,9 @@ body.is-pin-dragging * {
   transform-style: preserve-3d;
 }
 
-/* The panel's own ground (`.mk-panel`), so the horizon fades into the card. */
+/* The drawings stand on the page (`.mk-ground`), so the horizon fades into it. */
 .mk-step-haze {
-  background: linear-gradient(to bottom, var(--surface-tertiary) 10%, transparent);
-}
-
-.dark .mk-step-haze,
-[data-theme="dark"] .mk-step-haze {
-  background: linear-gradient(to bottom, var(--surface-secondary) 10%, transparent);
+  background: linear-gradient(to bottom, var(--background) 10%, transparent);
 }
 
 /* The editor's pin, a size down: a panel is a third of the map above it. */
@@ -4265,6 +4291,26 @@ body.is-pin-dragging * {
   --button-bg: var(--surface);
   --button-bg-hover: color-mix(in oklab, var(--surface) 85%, var(--foreground));
   --button-bg-pressed: var(--button-bg-hover);
+}
+
+/*
+ * The landing page has no grey panels (owner, 2026-10-23): every section lies
+ * on the page, the way the showcase map does. `.mk-panel` above is kept for the
+ * /for/* platform pages, which still wear it.
+ *
+ * `.mk-ground` holds a drawing: nothing at all, so the dots' radial fade and the
+ * haze are its only edges. `.mk-outline` holds text and controls (the cost
+ * cards, the survey), which still need to read as one group — a hairline of the
+ * page's own ink, no fill.
+ */
+.mk-ground {
+  background: transparent;
+}
+
+/* An inset shadow, not a border: a border's 2px put the survey 1px past its screen. */
+.mk-outline {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 9%, transparent);
 }
 
 /*
