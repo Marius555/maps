@@ -66,6 +66,10 @@ export default function EuropeMap() {
           animate={{ scale: 1 }}
           transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
         >
+          {/* Two SVGs, not one: the dots never change, and in the same SVG as the
+              shadows and the road every frame of their entrance repainted the
+              whole masked map — Lighthouse's 300 ms long tasks. Apart, only the
+              top one repaints while it animates. */}
           <svg viewBox={`0 0 ${TILT_VIEW.width} ${TILT_VIEW.height}`} className="absolute inset-0 size-full overflow-visible">
             <defs>
               <radialGradient id="mk-tilt-fade" cx="50%" cy="50%" r="55%">
@@ -75,14 +79,19 @@ export default function EuropeMap() {
               <mask id="mk-tilt-mask">
                 <rect width={TILT_VIEW.width} height={TILT_VIEW.height} fill="url(#mk-tilt-fade)" />
               </mask>
-              <filter id="mk-tilt-blur" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="3" />
-              </filter>
             </defs>
 
             <g mask="url(#mk-tilt-mask)">
               <DotField grid="europe" view={TILT_VIEW} radius={2.3} className="text-foreground/30" />
             </g>
+          </svg>
+
+          <svg viewBox={`0 0 ${TILT_VIEW.width} ${TILT_VIEW.height}`} className="absolute inset-0 size-full overflow-visible">
+            <defs>
+              <filter id="mk-tilt-blur" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="3" />
+              </filter>
+            </defs>
 
             {/* Each pin's shadow on the ground, arriving as the pin lands. */}
             {TILT_PINS.map((pin) => (

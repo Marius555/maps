@@ -2,9 +2,7 @@
 
 import NextError from "next/error";
 import { useEffect } from "react";
-import posthog from "posthog-js";
-
-import { isPostHogEnabled } from "@/lib/posthog/client";
+import { captureException } from "@/lib/posthog/client";
 
 export default function GlobalError({
   error,
@@ -13,9 +11,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    if (isPostHogEnabled) {
-      posthog.captureException(error);
-    }
+    captureException(error);
   }, [error]);
 
   return (

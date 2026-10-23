@@ -1,6 +1,6 @@
 "use client";
 
-import posthog from "posthog-js";
+import type { PostHog } from "posthog-js";
 
 import type { AuthUser } from "@/lib/auth/types";
 
@@ -12,17 +12,83 @@ import type { AuthUser } from "@/lib/auth/types";
  *
  * Both variables are optional. Unset — or with `NEXT_PUBLIC_DISABLE_POSTHOG=true`,
  * which switches it off locally without deleting them — every function below
- * is a no-op and `instrumentation-client.ts` never calls `init`.
+ * is a no-op and `posthog-js` is never downloaded.
+ *
+ * **Loaded lazily, never imported statically.** `posthog-js` is ~100 KB
+ * gzipped, and as a static import it sat in every page's first bundle and ran
+ * before hydration. `instrumentation-client.ts` asks for it once the page is
+ * idle; anything that tracks earlier simply loads it sooner. The npm module
+ * drops calls made before `init` rather than queueing them, which is why
+ * loading and initialising are one promise here and nothing touches the
+ * instance before it resolves. The cost: an exception thrown before that idle
+ * moment is not auto-captured.
+ *
+ * **`persistence: "memory"` is the cookie policy, not a tuning choice.** It
+ * promises no analytics cookies and nothing stored on the device, so PostHog
+ * keeps its id in memory and forgets it on a full reload. Signed-in people are
+ * re-identified on every dashboard load by `PostHogIdentify`; anonymous
+ * marketing visitors are a new id per document, which is the price of having
+ * no consent banner.
+ *
+ * The operator console and the dev pages are dropped in `before_send` so they
+ * never land in the customer funnel.
  */
+const projectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
+const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
+
 export const isPostHogEnabled = Boolean(
-  process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
-    process.env.NEXT_PUBLIC_POSTHOG_HOST &&
-    process.env.NEXT_PUBLIC_DISABLE_POSTHOG !== "true",
+  projectToken && host && process.env.NEXT_PUBLIC_DISABLE_POSTHOG !== "true",
 );
+
+const IGNORED_PATHS = ["/admin", "/login/admin", "/dev"];
+
+function isIgnoredPath(url: unknown): boolean {
+  if (typeof url !== "string") return false;
+  try {
+    const { pathname } = new URL(url);
+    return IGNORED_PATHS.some(
+      (path) => pathname === path || pathname.startsWith(`${path}/`),
+    );
+  } catch {
+    return false;
+  }
+}
+
+let ready: Promise<PostHog | null> | null = null;
+
+/** The initialised instance, loading and initialising it on first call. */
+export function loadPostHog(): Promise<PostHog | null> {
+  if (!isPostHogEnabled || !projectToken || !host) return Promise.resolve(null);
+
+  ready ??= import("posthog-js")
+    .then(({ default: posthog }) => {
+      posthog.init(projectToken, {
+        api_host: host,
+        defaults: "2026-01-30",
+        persistence: "memory",
+        capture_exceptions: true,
+        debug: process.env.NODE_ENV === "development",
+        before_send: (event) =>
+          event && isIgnoredPath(event.properties?.$current_url) ? null : event,
+      });
+      return posthog;
+    })
+    .catch((error: unknown) => {
+      // Analytics must never be what breaks the app.
+      console.warn("PostHog did not initialise:", error);
+      return null;
+    });
+  return ready;
+}
 
 export function track(event: string, properties?: Record<string, unknown>): void {
   if (!isPostHogEnabled) return;
-  posthog.capture(event, properties);
+  void loadPostHog().then((posthog) => posthog?.capture(event, properties));
+}
+
+export function captureException(error: unknown): void {
+  if (!isPostHogEnabled) return;
+  void loadPostHog().then((posthog) => posthog?.captureException(error));
 }
 
 // Prevents a login callback and the dashboard refresh boundary from identifying
@@ -38,15 +104,17 @@ let identifiedUserId: string | null = null;
 export function identifyUser(user: AuthUser): void {
   if (!isPostHogEnabled || identifiedUserId === user.id) return;
 
-  posthog.identify(user.id, {
-    email: user.email,
-    name: user.name,
-  });
   identifiedUserId = user.id;
+  void loadPostHog().then((posthog) =>
+    posthog?.identify(user.id, {
+      email: user.email,
+      name: user.name,
+    }),
+  );
 }
 
 export function resetUser(): void {
   identifiedUserId = null;
   if (!isPostHogEnabled) return;
-  posthog.reset();
+  void loadPostHog().then((posthog) => posthog?.reset());
 }
