@@ -57,7 +57,32 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
 ];
 
+/**
+ * PostHog, relayed through our own origin.
+ *
+ * The browser talks to `/rp` and these rewrites forward it to PostHog, because
+ * tracker blocklists carry `*.posthog.com` and every visitor running one fell
+ * out of the funnel, logging `ERR_BLOCKED_BY_CLIENT` on each retry. `/rp` rather
+ * than `/ingest` or `/posthog`, which the lists carry too. The path is outside
+ * `proxy.ts`'s matcher, so auth never sees it.
+ *
+ * `NEXT_PUBLIC_POSTHOG_HOST` is the relay's upstream, read here at build time;
+ * the assets host is its `-assets` twin (`eu.i…` → `eu-assets.i…`). Dashboard
+ * and marketing pages only — the embed never loads PostHog (§2).
+ */
+const POSTHOG_RELAY_PATH = "/rp"; // `api_host` in lib/posthog/client.ts — keep the two equal
+const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST?.replace(/\/+$/, "");
+const posthogAssetsHost = posthogHost?.replace(/^(https?:\/\/[a-z]+)\.i\./, "$1-assets.i.");
+
 const nextConfig: NextConfig = {
+  /*
+   * PostHog's API paths end in a slash (`/i/v0/e/`, `/flags/`), and Next's own
+   * trailing-slash redirect would answer the relay with a 308 to a path PostHog
+   * does not serve. Switched off app-wide because it cannot be scoped; the
+   * redirect below puts it back for every other path.
+   */
+  skipTrailingSlashRedirect: true,
+
   env: {
     NEXT_PUBLIC_APP_VERSION: build.version,
     NEXT_PUBLIC_APP_COMMIT: build.commit,
@@ -199,6 +224,25 @@ const nextConfig: NextConfig = {
        * to reverse.
        */
       { source: "/dashboard", destination: "/maps", permanent: false },
+      /*
+       * Next's trailing-slash redirect, restored for everything but the PostHog
+       * relay (`skipTrailingSlashRedirect` above), so `/pricing/` still lands on
+       * `/pricing` and no page has two URLs. Permanent, as Next's own is.
+       */
+      {
+        source: `/:path((?!${POSTHOG_RELAY_PATH.slice(1)}(?:/|$)).+)/`,
+        destination: "/:path",
+        permanent: true,
+      },
+    ];
+  },
+
+  async rewrites() {
+    if (!posthogHost || !posthogAssetsHost) return [];
+    return [
+      { source: `${POSTHOG_RELAY_PATH}/static/:path*`, destination: `${posthogAssetsHost}/static/:path*` },
+      { source: `${POSTHOG_RELAY_PATH}/array/:path*`, destination: `${posthogAssetsHost}/array/:path*` },
+      { source: `${POSTHOG_RELAY_PATH}/:path*`, destination: `${posthogHost}/:path*` },
     ];
   },
 };
