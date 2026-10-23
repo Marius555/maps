@@ -1,9 +1,9 @@
 /**
  * How often a linked map syncs on its own, as the UI says it.
  *
- * The schedule itself is the `googleSheetsUpdate` Appwrite Function's cron
- * (`*\/30 * * * *`), which `npm run setup:sheet-sync` sets — change both
- * together. A plain module rather than a `"use client"` one, so server and
+ * The schedule itself is the `googleSheetsUpdate` Appwrite Function's interval
+ * (60 minutes, the Free plan's floor since 2026-10-19), which
+ * `npm run setup:sheet-sync` sets — change both together. A plain module rather than a `"use client"` one, so server and
  * client components both read the string and not a client reference.
  */
-export const AUTO_SYNC_EVERY = "every 30 minutes";
+export const AUTO_SYNC_EVERY = "every hour";

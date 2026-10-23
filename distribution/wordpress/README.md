@@ -31,6 +31,10 @@ at `http://localhost:3000` (`playground/blueprint.json`). Auto-login did not fir
 testing (CLI, October 2026); Playground's own default admin login works. Edits to the
 plugin's files show on the next reload. Playground keeps nothing between runs.
 
+The blueprint also turns on `WP_DEBUG_LOG` with display off, because WordPress's "critical
+error" page names nothing: the fatal is at http://127.0.0.1:9400/wp-content/debug.log.
+Display stays off since a notice printed into a REST response breaks the block editor.
+
 Then: add the **Pinglide map** block → **Set up this map** → sign in on the tab that opens
 → choose or create a map → you land on Settings → Pinglide → back in the editor tab the
 block shows the map's name → publish the page and view it.

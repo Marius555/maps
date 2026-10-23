@@ -8,6 +8,7 @@ import {
   SESSION_LIMITS,
   type PlanId,
 } from "@/lib/limits/plans";
+import { publishingMapIds } from "@/lib/limits/publish-slots";
 import {
   readAccountIdentity,
   readAccountLookups,
@@ -82,10 +83,13 @@ export async function loadAccountLimits(userId: string): Promise<AccountLimits |
   const limits = PLAN_LIMITS[plan];
   const sessionLimit = SESSION_LIMITS[plan].sessionsPerMonth;
 
-  const mapRows = maps.map((map, index): AccountMapRow => {
+  // The same ranking Publish refuses by, so this column cannot disagree with it.
+  const publishing = new Set(publishingMapIds(maps, limits.maps));
+
+  const mapRows = maps.map((map): AccountMapRow => {
     const places = usage(map.places, limits.places);
     const shapes = usage(map.shapes, limits.shapes);
-    const withinMapAllowance = index < limits.maps;
+    const withinMapAllowance = publishing.has(map.id);
 
     return {
       ...map,

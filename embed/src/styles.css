@@ -156,8 +156,8 @@
  *
  * **This does not move the clearance numbers**, and the temptation to make it
  * is why they are named here. `padding-top: 44px` below is the floating
- * *toolbar's* height plus 8, and the drawer's `padding-bottom: 42px` is that
- * same 44 plus 8 less MapLibre's own 10px margin. Both are about what the zoom
+ * *toolbar's* height plus 8, and the drawer's `padding-bottom: 50px` is the
+ * sheet strip's 52 plus 8 less MapLibre's own 10px margin. Both are about what the zoom
  * stack has to clear, never about how tall the stack itself is — see the
  * comment on the `:has(> .lm-toolbar)` rule for the bug that came of confusing
  * the two.
@@ -2087,6 +2087,42 @@ button.lm-popup__gallery:focus-visible {
   display: none;
 }
 
+/*
+ * Every bar the embed draws: a thin rounded thumb on no track, in its own
+ * tokens. The UA default is a white, square-ended strip, which is what a dark
+ * theme got — the embed sets no `color-scheme`.
+ *
+ * `scrollbar-color` only where the pseudo-elements do not exist: Chrome 121+
+ * ignores every `::-webkit-scrollbar` rule once it is set. The `data-lm-bar`
+ * rule above is more specific, so the owner's switch still hides the list's.
+ */
+.lm-root ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.lm-root ::-webkit-scrollbar-track,
+.lm-root ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.lm-root ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: var(--lm-border) padding-box;
+}
+
+.lm-root ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--lm-muted);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .lm-root * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--lm-border) transparent;
+  }
+}
+
 .lm-list__items {
   margin: 0;
   padding: 0;
@@ -2358,7 +2394,8 @@ button.lm-popup__gallery:focus-visible {
 }
 
 .lm-nearest:hover,
-.lm-collapse:hover {
+.lm-collapse:hover,
+.lm-grip__toggle:hover {
   color: var(--lm-focus);
 }
 
@@ -2469,7 +2506,7 @@ button.lm-popup__gallery:focus-visible {
  * Drawer mode: the panel leaves the flow instead of becoming the bottom half.
  *
  * **Two axes live in here and `data-lm-drawer` says which.** `"sheet"` parks the
- * panel at the bottom with 44px of itself showing, which is its own trigger;
+ * panel at the bottom with 52px of itself showing, which is its own trigger;
  * `"side"` parks it off the inline edge with nothing showing, and `installDrawer`
  * puts a hamburger in the floating toolbar to say it is there. That is the
  * Publish designer switch, and the **absence** of the attribute is the third
@@ -2505,14 +2542,10 @@ button.lm-popup__gallery:focus-visible {
  */
 @container lm (max-width: 768px) {
   /*
-   * The strip, which is the whole of how a sheet is operated.
-   *
-   * A real `<button>`, so it is in the tab order, says `aria-expanded` and works
-   * from a keyboard with nothing added. **No `aria-controls`** — the list is this
-   * button’s own next sibling, which is the disclosure pattern ARIA describes, and
-   * `installDrawer` writes out why. The drag is bound on top of the button rather
-   * than instead of it, which is why a click that trails a drag has to be told
-   * apart from one that does not.
+   * The strip, which is the whole of how a sheet is operated: the search on the
+   * left, the toggle centred, the badge on the right (`installDrawer`). Two
+   * equal outer columns are what keep the chevron in the middle whatever the
+   * badge says, and `minmax(0, …)` is what lets the field shrink inside its own.
    *
    * **`touch-action: none`, declaratively, is the only thing that keeps a finger
    * on the strip from scrolling the customer's page.** `preventDefault()` on a
@@ -2521,32 +2554,27 @@ button.lm-popup__gallery:focus-visible {
    * there is no stillness test to hang a non-passive `touchmove` off, because a
    * sheet handle has nothing of its own to scroll. Giving the whole strip to the
    * drag therefore costs nothing; the list below it keeps its own scrolling.
-   *
-   * The pill is `::before` rather than a `<span>`, which is not a style choice:
-   * a pseudo-element is CSS the minifier already ships and an element is JS
-   * bytes, and this pass had 190 of them to spend. `content: ""` keeps it out of
-   * the accessible name, which is the label's job.
    */
   /*
-   * **44px, and it is written out at all three sites rather than held in a
-   * custom property.** The strip's height here, the park distance on the panel
-   * above, and the 42px of MapLibre clearance below all have to agree, and a
-   * `--lm-peek` saying so once is how `app/globals.css` does it for the
-   * dashboard's sheet at 4rem.
+   * **52px — the 36px field and 8px either side — and it is written out at all
+   * three sites rather than held in a custom property.** The strip's height
+   * here, the park distance on the panel above, and the 50px of MapLibre
+   * clearance below all have to agree, and a `--lm-peek` saying so once is how
+   * `app/globals.css` does it for the dashboard's sheet at 4rem.
    *
-   * **42, not 52, and the ten is MapLibre's own margin.** The top rule one
+   * **50, not 60, and the ten is MapLibre's own margin.** The top rule one
    * screen up is "control height plus 8", because the toolbar it clears is
    * inset from the frame by the same 10px the controls are. This strip is flush
-   * to the bottom edge instead, so the arithmetic is 44 + 8 - 10: the controls
+   * to the bottom edge instead, so the arithmetic is 52 + 8 - 10: the controls
    * in `.maplibregl-ctrl-bottom-*` carry `margin-bottom: 10px` of their own, and
    * padding that ignores it draws the phantom band the top rule's comment warns
-   * about. Measured at 515x520 with 52: an 18px gap. With 42: 8px.
+   * about. Measured at 515x520 with 44 + 8: an 18px gap. Less the ten: 8px.
    *
    * It is spelled out here because the property cost more than this pass had:
    * the declaration plus three `var()` calls measured 29 bytes gzipped against a
    * budget that was 29 over, which is the whole of the argument. Two things make
    * it survivable rather than merely cheap. The **JS half cannot drift at all**
-   * — `installDrawer` measures `grip.offsetHeight` and never reads a number — and
+   * — `installDrawer` measures `strip.offsetHeight` and never reads a number — and
    * all three sites are inside this one container query, within fifty lines of
    * each other. Change one and change the other two; the `calc` on the panel is
    * a percentage of its own height, so that one is the only site with arithmetic
@@ -2554,40 +2582,83 @@ button.lm-popup__gallery:focus-visible {
    */
   .lm-grip {
     display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
     gap: 4px;
     /*
-     * **`flex: none`, or the strip is not 44px.** `.lm-panel` is a flex column,
+     * **`flex: none`, or the strip is not its height.** `.lm-panel` is a flex column,
      * so the strip is a flex item and `height` is only its *basis* — the list
      * below it has content to show, so the default `flex-shrink: 1` squeezed the
      * strip to 31px and left the sheet parked 13px too low. Measured before the
-     * fix at 515x520: a 44px rule drawing a 31px box.
+     * fix at 515x520: a 44px rule drawing a 31px box (it was 44 then).
      */
     flex: none;
-    height: 44px;
-    place-items: center;
-    border: 0;
+    height: 52px;
+    padding: 0 8px;
     border-bottom: 1px solid var(--lm-border);
-    background: none;
-    color: inherit;
-    font: inherit;
     touch-action: none;
   }
 
-  .lm-grip::before {
+  /* The docked toolbar, in the strip: the strip draws the rule under it. */
+  .lm-grip .lm-toolbar {
+    padding: 0;
+    border: 0;
+  }
+
+  /* In the strip the field is a box again — a rounded, tinted well — where the
+     wide panel's is bare text: here it sits beside a chevron and a logo, and
+     bare it read as a caption rather than a control. */
+  .lm-grip .lm-search__input {
+    border-color: var(--lm-border);
+    background: color-mix(in oklab, var(--lm-foreground) 5%, transparent);
+  }
+
+  /*
+   * The place suggestions open upwards: the strip is the bottom edge of the
+   * map, and searching does not open the sheet. That needs the sheet's
+   * `overflow: hidden` gone (below) — the dropdown is outside the panel's box.
+   */
+  .lm-grip .lm-search__list {
+    top: auto;
+    bottom: calc(100% + 4px);
+  }
+
+  /*
+   * The logo is the search field's height and centred on it. `.lm-root` for
+   * the weight: `.lm-root .lm-badge` comes later in the file at two classes and
+   * would win a tie, which is how a `margin: 0` here once did nothing.
+   */
+  .lm-root .lm-grip .lm-badge {
+    justify-self: end;
+    height: 36px;
+    gap: 6px;
+    font-size: 14px;
+  }
+
+  .lm-root .lm-grip .lm-badge img {
+    height: 20px;
+  }
+
+  /* Where the word "Locations" was. It points up shut and down open — a
+     static answer either way, so reduced motion loses only the turn. */
+  .lm-grip__toggle {
+    display: grid;
     width: 36px;
-    height: 4px;
-    /*
-     * **A tinted `currentColor`, not `--lm-border`.** The border token was one
-     * declaration instead of two and it was wrong: measured on the dark theme it
-     * rendered `rgb(44, 47, 53)` against a `#17181a` surface, which is a pill
-     * nobody can see — and this pill is the only thing on the strip that says it
-     * can be dragged. `currentColor` is the panel's own foreground, so it tracks
-     * both themes and any colour the owner set, and 35% keeps it a handle rather
-     * than a rule across the sheet.
-     */
-    background: currentColor;
-    opacity: 0.35;
-    content: "";
+    height: 36px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    place-items: center;
+  }
+
+  .lm-grip__toggle svg {
+    transition: transform 0.18s;
+  }
+
+  .lm-root[data-lm-open] .lm-grip__toggle svg {
+    transform: rotate(180deg);
   }
   /*
    * A drawer is the floating panel parked out of the way — not a second skin.
@@ -2691,7 +2762,10 @@ button.lm-popup__gallery:focus-visible {
        percentage width. A sheet spans. */
     width: auto;
     height: 65%;
-    transform: translateY(calc(100% - 44px));
+    /* So the search suggestions can open above the strip. The root still clips
+       the parked part, and the strip and the foot keep the rounded corners. */
+    overflow: visible;
+    transform: translateY(calc(100% - 52px));
   }
 
   /*
@@ -2784,7 +2858,7 @@ button.lm-popup__gallery:focus-visible {
    *
    * **The sheet alone, which is why this one names a value.** A side drawer is
    * flush to an inline edge and parks off it entirely; shut, it covers neither
-   * bottom corner, and reserving 42px there would be the phantom band this
+   * bottom corner, and reserving 50px there would be the phantom band this
    * rule exists to avoid.
    *
    * Sized for the **shut** state: the strip, the 10px gutter under it, and the
@@ -2794,7 +2868,7 @@ button.lm-popup__gallery:focus-visible {
    */
   .lm-root[data-lm-drawer="sheet"] .maplibregl-ctrl-bottom-left,
   .lm-root[data-lm-drawer="sheet"] .maplibregl-ctrl-bottom-right {
-    padding-bottom: 42px;
+    padding-bottom: 50px;
   }
 }
 
@@ -2918,20 +2992,39 @@ button.lm-popup__gallery:focus-visible {
   background: color-mix(in oklab, var(--lm-foreground) 8%, transparent);
 }
 
-/* "Made with …" on a free plan's map, stacked above the attribution. */
+/*
+ * "Made with …" on a free plan's map: the mark and the name, no pill, faded
+ * until pointed at. It lives in the results panel at the bottom right, between
+ * the list and find-nearest — `flex: none` outside the scroller, so a long list
+ * scrolls and the badge stays — or in a phone sheet's strip. On a dark map the
+ * mark's near-black stroke turns light, and the hue turn puts its orange dot
+ * back.
+ */
 .lm-root .lm-badge {
-  margin: 0 10px 6px 0;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--lm-surface);
-  box-shadow: 0 0 0 1px var(--lm-border);
-  color: var(--lm-muted);
-  font-size: 11px;
-  line-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.7;
+  color: var(--lm-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
   text-decoration: none;
 }
-.lm-root .lm-badge:hover {
-  color: var(--lm-foreground);
+.lm-panel > .lm-badge {
+  flex: none;
+  align-self: flex-end;
+  margin: 6px 12px;
+}
+.lm-root .lm-badge:hover,
+.lm-root .lm-badge:focus-visible {
+  opacity: 1;
+}
+.lm-root .lm-badge img {
+  height: 14px;
+}
+.lm-root--dark .lm-badge img {
+  filter: invert(1) hue-rotate(180deg);
 }
 
 /*

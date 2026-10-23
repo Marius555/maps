@@ -30,8 +30,10 @@ Three different questions, answered in three places:
   that must be exact is counted from stored rows: the lookup allowance (`usage` table) and
   plan quantities (counted from the rows themselves).
 - **Publish refuses a map over its owner's plan**, which can only happen after a downgrade.
-  The live snapshot is never touched. A plan's map count keeps the *oldest* maps
-  publishing (`isAmongFirstMaps`).
+  The live snapshot is never touched. A plan's map count keeps **live maps first**, then
+  the oldest drafts, publishing (`holdsPublishSlot` → `lib/limits/publish-slots.ts`), so a
+  live map is never refused an update because an older draft exists. The refusal is a
+  toast, not an alert in the publish sidebar.
 - **Lookups are recorded as they are spent**, every 5 (`lookupMeter`), so a request cut
   off at the host's 30-second cap has already billed nearly everything it spent. Bulk
   endpoints also hold an in-flight slot (`IN_FLIGHT_LIMITS`) so parallel batches cannot

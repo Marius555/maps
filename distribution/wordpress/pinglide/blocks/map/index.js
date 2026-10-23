@@ -228,7 +228,7 @@
 				icon: 'location-alt',
 				label: __( 'Pinglide map', 'pinglide' ),
 				instructions: __(
-					'Show your locations on a map. Set it up on Pinglide — a free account, and nothing to copy or paste. This page updates by itself whenever you change the map there.',
+					'Show your locations on a map. Set it up on Pinglide — a free account, and nothing to copy or paste. Whenever you change the map there and press Publish, this page updates by itself.',
 					'pinglide'
 				),
 			},

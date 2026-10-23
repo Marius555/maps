@@ -136,8 +136,9 @@ type SheetLinkRow = Models.Row & { mapId: string; autoSync?: boolean | null };
 const MAP_READ_CAP = 100;
 
 /**
- * Every map the account owns, oldest first — the order `isAmongFirstMaps` uses
- * to decide which maps still publish after a downgrade — with what each holds.
+ * Every map the account owns, oldest first — the order `publishingMapIds` ranks
+ * within to decide which maps still publish after a downgrade — with what each
+ * holds.
  */
 export async function readAccountMaps(
   userId: string,

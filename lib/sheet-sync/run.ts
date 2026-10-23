@@ -71,7 +71,7 @@ export type SheetSyncStepOutcome =
  * default, 30 at most — and a sheet that gained two hundred addresses is
  * minutes of work at a public geocoder's pace. So each step does a bounded
  * slice and says whether there is more; Sync now repeats it from the browser,
- * the Appwrite Function repeats it every 30 minutes (functions/sheet-sync).
+ * the Appwrite Function repeats it every hour (functions/sheet-sync).
  *
  * The rest of a step — reading the sheet, listing the map, writing, maybe
  * republishing — is a few seconds on top, which is why the default is small.

@@ -1,3 +1,4 @@
+import type { PublishBadge } from "@/lib/embed/badge";
 import { gazetteerBase } from "@/lib/gazetteer/config";
 import type { AppMap, Group, Place, Shape } from "@/lib/repositories/types";
 import type { CardLayout } from "@/packages/shared/card-layout";
@@ -57,7 +58,7 @@ export function buildPreviewSnapshot(
    * The badge a real publish would add for this owner's plan, so the preview
    * shows it too. Resolved on the publish page, which knows the plan.
    */
-  badge?: { brand: string; url: string },
+  badge?: PublishBadge,
 ): MapSnapshot {
   const origin = globalThis.location?.origin ?? "";
   const { snapshot } = buildSnapshot(

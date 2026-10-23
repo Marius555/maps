@@ -77,6 +77,26 @@
   hairlines, Mono's recoloured grey (`HERO_LOOKS[].roads`). Never move it into
   `packages/shared/` — customer maps and the embed must keep Liberty's roads.
   Images are made at `/dev/hero-map`.
+- **The showcase screen is the tilted Europe map** (`components/marketing/europe-map/`),
+  picked by the owner from six ideas on 2026-10-23; the other five are deleted. The
+  London map (`components/marketing/hero/hero-map/`, its CSS, images and
+  `/dev/hero-map` generator) is kept in the tree but not drawn, and Europe borrows
+  its pin marker. Europe loads with `next/dynamic` `ssr: false` behind a same-size
+  skeleton. Its land is a dot mask committed in `lib/marketing/world-dots.data.ts`
+  (`npm run build:world-dots`), so no geography package ships. It is real CSS 3D:
+  opacity, a filter or a mask on `.mk-tilt-plane` flattens it and lays every pin
+  down. **In dark mode it is not a card** — `.mk-europe-frame` takes the page's
+  `--background`, no border, no shadow, and the haze fades to the page colour, so
+  the map blends into the page (owner, 2026-10-23). Light mode keeps the panel.
+- **The steps section's drawings play only while their panel is hovered** (owner,
+  2026-10-23; `components/marketing/steps/stage/use-hover-play.ts`). Each stands on a
+  crop of the showcase's dotted Europe, tilted in CSS 3D, with the editor's pins on
+  it. A pass always starts and ends on the drawing at rest, so leaving mid-pass lets it
+  finish and settle; the rest frame is also the reduced-motion form. A tap plays one
+  pass on touch. Loaded `ssr: false` (`art/steps-art-loader.tsx`). Same 3D rule as
+  the showcase: nothing on `.mk-step-plane` itself may set opacity, a filter or a mask.
+  `steps/art/use-art-loop.ts` is no longer used by the steps, but the integrations,
+  no-Google and unlimited-views drawings still loop with it.
 - **"Drop a pin" is a button, and it never looks anything up.** It arms one
   press on the ground (crosshair, a hint, Escape cancels); unarmed, the ground
   closes cards as before — dropping on every click littered the map (owner,

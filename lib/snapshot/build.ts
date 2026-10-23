@@ -22,6 +22,7 @@ import type {
   Shape,
 } from "@/lib/repositories/types";
 import { tagGroupsInUse, wornTagIds } from "@/lib/tags/tag-usage";
+import type { PublishBadge } from "@/lib/embed/badge";
 import { resolveEmbedWords } from "@/lib/embed/languages";
 import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { isDefaultCardLayout } from "@/lib/validation/card-layout.schema";
@@ -162,7 +163,7 @@ export function buildSnapshot(
    * function stays pure. The text is resolved here, in the map's own language,
    * so the badge speaks the same language as the map it sits on.
    */
-  badge?: { brand: string; url: string },
+  badge?: PublishBadge,
 ): BuildSnapshotResult {
   const usable: Place[] = [];
   const skipped: Place[] = [];
@@ -323,7 +324,16 @@ export function buildSnapshot(
         : {}),
       ...(words.lang ? { lang: words.lang } : {}),
       ...(words.strings ? { strings: words.strings } : {}),
-      ...(badge ? { badge: { text: words.badge, url: badge.url } } : {}),
+      ...(badge
+        ? {
+            badge: {
+              text: words.badge,
+              url: badge.url,
+              name: badge.brand,
+              ...(badge.logo ? { logo: badge.logo } : {}),
+            },
+          }
+        : {}),
       allowedDomains: map.allowedDomains,
     },
     skipped,

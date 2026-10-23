@@ -9,7 +9,10 @@
  *
  * ## What it sets
  *
- * - **The function's settings.** Schedule every 30 minutes; timeout 900s, the
+ * - **The function's settings.** An interval of 60 minutes, not a cron: since
+ *   2026-10-19 Appwrite Cloud keeps cron for paid plans, and its Free plan runs
+ *   a function no more often than hourly. Sending `schedule` would switch it back
+ *   to cron, which that plan refuses. Timeout 900s, the
  *   most a scheduled (asynchronous) execution may have and what `main.js`
  *   budgets against; **no execute access**, because the schedule needs none and
  *   anybody else triggering it would spend geocoding credit on demand; **no
@@ -25,13 +28,14 @@
  * ## Environment (setup only — none of these belong on the site)
  *
  * - `CRON_GOOGLE_GOOGLE_SHEETS_UPDATE` — the function's id. Required.
- * - `SHEET_SYNC_APP_URL` — the origin the function calls. Defaults to the Site's
- *   Appwrite domain. Never the local `APP_URL`, which is `localhost` in
- *   development and unreachable from Appwrite's cloud.
+ * - `SHEET_SYNC_APP_URL` — the origin the function calls. Defaults to the
+ *   production origin. Never the local `APP_URL`, which is `localhost` in
+ *   development and unreachable from Appwrite's cloud — and not the Site's
+ *   `*.appwrite.network` domain, which stopped serving it and 404'd every run.
  * - `APPWRITE_SITE_ID` — which site gets `CRON_SECRET`. Optional when the
  *   project has exactly one site.
  *
- * The schedule is repeated in `lib/sheet-sync/schedule.ts`, which is what the UI
+ * The interval is repeated in `lib/sheet-sync/schedule.ts`, which is what the UI
  * says. Change the two together.
  */
 
@@ -40,14 +44,14 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { gzipSync } from "node:zlib";
 
-import { AppwriteException, Client, Functions, Sites } from "node-appwrite";
+import { AppwriteException, Client, Functions, Query, Sites } from "node-appwrite";
 import { InputFile } from "node-appwrite/file";
 
-const SCHEDULE = "*/30 * * * *";
+const INTERVAL_MINUTES = 60;
 const TIMEOUT_SECONDS = 900;
 const ENTRYPOINT = "src/main.js";
 const SOURCE_DIR = "functions/sheet-sync";
-const DEFAULT_APP_URL = "https://maps-5sbu.appwrite.network";
+const DEFAULT_APP_URL = "https://pinglide.com";
 const DEPLOY_WAIT_MS = 5 * 60_000;
 
 const REQUIRED_ENV = [
@@ -111,7 +115,10 @@ function cronSecret() {
  * ------------------------------------------------------------------ */
 
 async function upsertVariable(label, list, create, update, key, value) {
-  const { variables } = await list();
+  // Asked for by key, never found in a listing: a list answers 25 at most, and
+  // a site past 25 variables hid CRON_SECRET on page two, so the create that
+  // followed collided with it.
+  const { variables } = await list([Query.equal("key", key)]);
   const current = variables.find((variable) => variable.key === key);
 
   if (!current) {
@@ -130,7 +137,7 @@ async function upsertVariable(label, list, create, update, key, value) {
 const functionVariable = (key, value) =>
   upsertVariable(
     "function",
-    () => functions.listVariables({ functionId }),
+    (queries) => functions.listVariables({ functionId, queries }),
     (k, v) =>
       functions.createVariable({ functionId, variableId: "unique()", key: k, value: v, secret: true }),
     (variableId, k, v) =>
@@ -142,7 +149,7 @@ const functionVariable = (key, value) =>
 const siteVariable = (siteId, key, value) =>
   upsertVariable(
     "site",
-    () => sites.listVariables({ siteId }),
+    (queries) => sites.listVariables({ siteId, queries }),
     (k, v) => sites.createVariable({ siteId, variableId: "unique()", key: k, value: v, secret: true }),
     (variableId, k, v) =>
       sites.updateVariable({ siteId, variableId, key: k, value: v, secret: true }),
@@ -257,7 +264,7 @@ async function main() {
     runtime: current.runtime,
     execute: [],
     events: [],
-    schedule: SCHEDULE,
+    interval: INTERVAL_MINUTES,
     timeout: TIMEOUT_SECONDS,
     enabled: true,
     logging: true,
@@ -266,7 +273,7 @@ async function main() {
     scopes: [],
   });
   console.log(
-    `  update  function settings (schedule "${SCHEDULE}", timeout ${TIMEOUT_SECONDS}s, no execute access, no scopes)`,
+    `  update  function settings (every ${INTERVAL_MINUTES} minutes, timeout ${TIMEOUT_SECONDS}s, no execute access, no scopes)`,
   );
 
   await functionVariable("APP_URL", appUrl);
@@ -289,7 +296,7 @@ async function main() {
   console.log(`  ready   ${created.$id} (active)`);
 
   console.log(
-    `\nDone. The function runs ${SCHEDULE} (UTC) against ${appUrl}.` +
+    `\nDone. The function runs every ${INTERVAL_MINUTES} minutes against ${appUrl}.` +
       (siteId
         ? "\nRedeploy the site so it reads CRON_SECRET — until then the cron route answers 401."
         : "\nCRON_SECRET is not on any site yet — add it by hand, then redeploy the site."),

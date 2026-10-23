@@ -38,8 +38,7 @@ const EMAIL_UNVERIFIED = "email_unverified";
  *
  * Exported separately from the toast for the reason `isPlanLimit` is: a surface
  * that already renders `mutation.error` inline needs to ask without also raising
- * a toast, because saying the same thing twice is the habit `publish-action.tsx`
- * declines.
+ * a toast, because saying the same thing twice is a habit worth declining.
  */
 export function isEmailUnverified(error: unknown): error is ApiError {
   return error instanceof ApiError && error.code === EMAIL_UNVERIFIED;

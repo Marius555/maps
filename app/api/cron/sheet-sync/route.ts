@@ -12,7 +12,7 @@ import { cronSyncStepSchema } from "@/lib/validation/sheet-link.schema";
 const MAX_LINKS_PER_RUN = 200;
 
 /**
- * A map synced this recently is not due. Runs are 30 minutes apart, so this
+ * A map synced this recently is not due. Runs are an hour apart, so this
  * only ever skips a map its owner synced by hand moments ago — never one the
  * previous run reached, which may have been as late as fourteen minutes into
  * that run (the function stops starting steps at fourteen).
@@ -22,7 +22,7 @@ const MIN_GAP_MS = 10 * 60_000;
 /**
  * The automatic sync's two calls. docs/notes/sheet-sync.md.
  *
- * The schedule — every 30 minutes — lives in an Appwrite Function
+ * The schedule — every hour — lives in an Appwrite Function
  * (functions/sheet-sync), not here: Appwrite Sites has no cron, and no Sites
  * request may run past 30 seconds. The function may run for fifteen minutes, so it asks this route
  * which maps are due, then walks each one step by step — the same bounded step

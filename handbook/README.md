@@ -102,7 +102,11 @@ If `UPLOAD_EMBED_ON_BUILD=true` is set, every `npm run build` also runs `deploy:
 6. Publish the page and view it. The map should appear.
 
 Playground forgets everything when you stop it. Edits to the plugin's PHP files show on the
-next page reload. For a real WordPress site, upload the zip and add
+next page reload.
+
+**"There has been a critical error on this website"?** Open
+http://127.0.0.1:9400/wp-content/debug.log — the last `PHP Fatal error` line says which
+file broke and why. If the log is empty, stop Playground (Ctrl+C) and start it again. For a real WordPress site, upload the zip and add
 `define( 'PINGLIDE_APP_URL', 'http://localhost:3000' );` to `wp-config.php`. The release
 checklist is in `distribution/wordpress/README.md`.
 
@@ -130,13 +134,13 @@ and `_refunded`. The `payment_*` events also need `--subscription <id>`. Other f
 
 ## 6. Google Sheets auto-sync
 
-`functions/sheet-sync` is an Appwrite Function that runs every 30 minutes. It re-syncs every
+`functions/sheet-sync` is an Appwrite Function that runs every hour. It re-syncs every
 map linked to a Google Sheet. In its 03:00 UTC run it also deletes old visitor sessions.
 It holds no logic of its own: it calls the site's `/api/cron/*` routes in short steps.
 
 | Command | What it does | Needs |
 |---|---|---|
-| `npm run setup:sheet-sync` | Configures and uploads the function: schedule, timeout, `APP_URL`, and a shared `CRON_SECRET` on both the function and the site. | `.env` |
+| `npm run setup:sheet-sync` | Configures and uploads the function: hourly interval, timeout, `APP_URL`, and a shared `CRON_SECRET` on both the function and the site. | `.env` |
 
 **First time:**
 1. Create the function in the Appwrite console.
@@ -197,6 +201,7 @@ hand from the repo's **Actions** tab.
 | Command | What it does | Needs |
 |---|---|---|
 | `npm run build:gazetteer -- GB DE` | Rebuilds the place-name list the embed uses for search. With no countries it does 16 EU ones. | |
+| `npm run build:world-dots` | Rebuilds the dotted Europe the landing page's map draws. Needs `npm run mirror:tile-assets` first. Rarely needed: the result is committed. | |
 | `npm run build:disposable-domains` | Re-downloads the list of throwaway email domains that signup refuses. | |
 | `npm run build:tile-styles -- https://tiles.example.com` | Writes our own basemap style files for a self-hosted tile server. | |
 | `npm run mirror:tile-assets` | Downloads fonts, icons and the world raster for self-hosted tiles (~414MB). `-- --dry-run` shows what it would fetch. | |

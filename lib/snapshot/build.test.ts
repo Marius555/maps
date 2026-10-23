@@ -137,6 +137,7 @@ describe("buildSnapshot", () => {
       expect(snapshot.badge).toEqual({
         text: "Erstellt mit Pinglide",
         url: "https://pinglide.com/?ref=embed",
+        name: "Pinglide",
       });
     });
   });

@@ -5,7 +5,12 @@
 	"steps": [
 		{
 			"step": "defineWpConfigConsts",
-			"consts": { "PINGLIDE_APP_URL": "http://localhost:3000" }
+			"consts": {
+				"PINGLIDE_APP_URL": "http://localhost:3000",
+				"WP_DEBUG": true,
+				"WP_DEBUG_LOG": true,
+				"WP_DEBUG_DISPLAY": false
+			}
 		},
 		{ "step": "activatePlugin", "pluginPath": "pinglide/pinglide.php" },
 		{

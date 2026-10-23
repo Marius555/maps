@@ -9,7 +9,7 @@ import type { MapSnapshot, SnapshotPlace } from "@/packages/shared/snapshot";
 
 import { isDomainAllowed } from "./allowlist";
 import type { EmbedConfig } from "./config";
-import { button, el, icon } from "./dom";
+import { button, el, icon, link } from "./dom";
 import { createGazetteer } from "./gazetteer";
 import { nearestPlace, formatDistance, distanceKm, type Located } from "./geo";
 import { installDirectionsAsk, refreshDirections } from "./directions";
@@ -290,7 +290,14 @@ async function render(
     toolbar.classList.add("lm-toolbar--docked");
 
     const panel = el("div", "lm-panel");
-    panel.append(toolbar, list.element, foot);
+    const badge = createBadge(snapshot);
+    /*
+     * The badge sits between the list and find-nearest, at the panel's bottom
+     * right: outside the scroller, so a long list scrolls under nothing and
+     * cannot push it out of the box. On a phone sheet it moves into the strip
+     * instead (`installDrawer`).
+     */
+    panel.append(toolbar, list.element, badge ?? "", foot);
 
     /*
      * The panel folds away to its own edge, leaving a strip with this arrow in
@@ -387,6 +394,7 @@ async function render(
         foot,
         toolbar,
         snapshot.settings.panelDrawer,
+        badge,
       );
     }
 
@@ -507,6 +515,30 @@ function applyChrome(root: HTMLElement, snapshot: MapSnapshot): void {
 }
 
 /**
+ * "Made with …" on a map whose owner's plan shows it (`MapSnapshot.badge`): the
+ * mark and the name, no pill. `null` on every map published before it existed
+ * and on every paid one; a snapshot without `logo` draws its text.
+ *
+ * Only ever drawn inside the results panel, so a map with the list switched off
+ * shows none — the owner's call, taken when it left the map's bottom corner,
+ * where it hung under the zoom buttons.
+ */
+function createBadge({ badge }: MapSnapshot): HTMLElement | null {
+  if (!badge) return null;
+
+  const node = link("lm-badge", badge.text, badge.url);
+  if (badge.logo) {
+    const mark = new Image();
+    mark.src = badge.logo;
+    mark.alt = "";
+    node.textContent = badge.name ?? badge.text;
+    node.prepend(mark);
+    node.setAttribute("aria-label", badge.text);
+  }
+  return node;
+}
+
+/**
  * The width, in CSS pixels of the embed's own box, below which the results panel
  * becomes a drawer.
  *
@@ -617,47 +649,37 @@ function installDrawer(
   toolbar: HTMLElement,
   /** The owner's answer: a bottom sheet, or the side drawer. */
   sheet: boolean,
+  /** "Made with …", which a sheet carries in its strip. See `createBadge`. */
+  badge: HTMLElement | null,
 ): () => void {
   root.setAttribute("data-lm-drawer", sheet ? "sheet" : "side");
 
   /*
-   * The one control, in whichever form this axis can show.
-   *
-   * The strip's text *is* its accessible name, so there is no `aria-label` to
-   * keep in step with it; the hamburger has no text, so it carries one. The
-   * pill above the strip's words is a `::before`.
-   *
-   * **`aria-expanded` and no `aria-controls`, deliberately.** For the sheet the
-   * list is this button's own next sibling, which is the disclosure pattern ARIA
-   * describes — and there `aria-controls` is optional, thinly supported by
-   * screen readers, and would cost the list a literal `id` that a second map on
-   * the page would collide with. The hamburger is not a sibling of the list, but
-   * naming one there and not here is two answers to one question for a property
-   * that buys nothing in either.
-   *
-   * **The strip says the word and no count, and that is a correctness call
-   * before it is a byte one.** A total printed there is the snapshot's, and the
-   * list under it is whatever the search box and find-nearest have left — so it
-   * would read "Locations · 40" over three matching rows, which is worse than
-   * saying nothing. A live count means a callback out of `setPlaces`, which
-   * costs more than it is worth for a number a visitor did not ask for; the
-   * editor's strip carries one because managing the list is the whole point of
-   * that screen.
+   * The sheet's strip: the search on the left, the toggle in the middle where
+   * the word "Locations" used to be, the badge on the right — the editor's
+   * phone sheet, which carries its header in the same place. A `div` rather
+   * than the button it was, because an input cannot live inside a button; the
+   * drag is bound to the whole strip below and the toggle is the button.
    */
-  const trigger = button(
-    sheet ? "lm-grip" : "lm-button lm-button--icon",
-    // The strip says the word; the hamburger is a glyph and carries the same
-    // word as its label below.
-    sheet ? t("locations") : "",
-  );
+  const strip = el("div", "lm-grip");
 
-  if (!sheet) {
-    // The same name the strip carries, which is one control named once rather
-    // than two names for one job — and `aria-expanded` is what says which state
-    // it is in, on either axis.
-    trigger.ariaLabel = t("locations");
-    trigger.append(icon(["M4 6h16", "M4 12h16", "M4 18h16"]));
-  }
+  /*
+   * The one control, in whichever form this axis can show: a chevron in the
+   * strip, a hamburger in the floating toolbar. Both are glyphs, so both carry
+   * "Locations" as their name and `aria-expanded` says the state.
+   *
+   * **`aria-expanded` and no `aria-controls`, deliberately.** It is optional,
+   * thinly supported by screen readers, and would cost the list a literal `id`
+   * that a second map on the page would collide with.
+   *
+   * **No count, and that is a correctness call before it is a byte one.** A
+   * total printed on the strip is the snapshot's, and the list under it is
+   * whatever the search box and find-nearest have left — "40" over three
+   * matching rows is worse than saying nothing.
+   */
+  const trigger = button(sheet ? "lm-grip__toggle" : "lm-button lm-button--icon", "");
+  trigger.ariaLabel = t("locations");
+  trigger.append(icon(sheet ? ["m18 15-6-6-6 6"] : ["M4 6h16", "M4 12h16", "M4 18h16"]));
 
   // Reflected rather than `setAttribute`, here and in `setOpen`. Baseline 2023,
   // the same vintage as the `inert` and `:has()` this bundle already needs.
@@ -702,13 +724,16 @@ function installDrawer(
    * this repo runs, because HTML5 drag does not fire on touch at all and this
    * one exists for phones first. The pan is refused declaratively by
    * `touch-action: none` on the strip; `preventDefault()` here would do nothing.
+   *
+   * The sheet's alone — a side drawer has no strip, and none of its panel is on
+   * screen to follow the finger. Bound on the strip, so it starts from the
+   * toggle or the empty ground beside it, and **never from the search (field,
+   * button or suggestions) or the badge**: a press there is typing, searching
+   * or following a link, and the tap branch below would otherwise toggle the
+   * sheet on the way.
    */
-  trigger.addEventListener("pointerdown", (down) => {
-    // The sheet's alone. A side drawer has no strip to drag — its trigger is a
-    // 36px button in a toolbar, where a drag is a mispress rather than a
-    // gesture, and there is no travel to measure because none of the panel is
-    // on screen to follow the finger.
-    if (!sheet) return;
+  strip.addEventListener("pointerdown", (down) => {
+    if ((down.target as Element).closest(".lm-search, a")) return;
 
     /*
      * Asked of the DOM at press time rather than tracked, because it is the one
@@ -716,7 +741,7 @@ function installDrawer(
      * whose height changes when a phone's browser chrome collapses, and a travel
      * measured once is a sheet that stops short of its own edge afterwards.
      */
-    const travel = panel.offsetHeight - trigger.offsetHeight;
+    const travel = panel.offsetHeight - strip.offsetHeight;
     if (travel <= 0) return;
 
     const { style } = panel;
@@ -751,7 +776,7 @@ function installDrawer(
       /*
        * **A press that never became a drag is the toggle, and it is handled here
        * rather than in the click listener.** The alternative was a `swallowClick`
-       * flag: the strip is a real button, so a pointer released after 200px of
+       * flag: the toggle is a real button, so a pointer released after 200px of
        * dragging fires a click too, and that click would undo the drag that just
        * landed. Deciding it on the gesture's own terms needs no state to leave
        * armed against an unrelated click later.
@@ -784,6 +809,24 @@ function installDrawer(
   root.addEventListener("keydown", (event) => {
     if (event.key === "Escape") setOpen(false);
   });
+
+  /*
+   * The strip's search button, at the end of the field. Searching does **not**
+   * open the sheet — asked for directly; the place suggestions open upwards
+   * instead (styles.css), so a shut sheet still shows them. A press is Enter:
+   * it picks the top suggestion when there is one, and otherwise just puts the
+   * caret in the field. `mousedown` is cancelled so the press does not blur the
+   * field and close the suggestions it is about to pick from.
+   */
+  const go = button("lm-search__action", "");
+  go.ariaLabel = t("searchLabel");
+  go.append(icon(["m21 21-4.3-4.3", "M3 11a8 8 0 1 0 16 0 8 8 0 1 0-16 0"]));
+  go.onmousedown = (event) => event.preventDefault();
+  go.onclick = () => {
+    const input = toolbar.querySelector("input");
+    input?.focus();
+    input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+  };
 
   /*
    * **The side drawer shuts on a press anywhere outside it, because open it
@@ -823,18 +866,24 @@ function installDrawer(
     narrow = next;
 
     if (next) {
-      toolbar.classList.remove("lm-toolbar--docked");
-      // On the root, where the list-less map already puts it, and after the
-      // layout so it paints over the map.
-      root.append(toolbar);
       /*
-       * The strip is the panel's first child, which is why this waits until the
-       * toolbar has left it. The hamburger rides in that toolbar instead — the
-       * toolbar floating over the map is the whole reason a side drawer can
-       * have a trigger at all.
+       * A sheet's strip is always on screen, so the search rides in it, docked
+       * as it is in the wide panel, beside the toggle and the badge. A side
+       * drawer has nothing of itself showing, so its toolbar floats over the
+       * map — on the root, where the list-less map already puts it — with the
+       * hamburger in it: that is the whole reason a side drawer can have a
+       * trigger at all.
        */
-      if (sheet) panel.prepend(trigger);
-      else toolbar.append(trigger);
+      if (sheet) {
+        strip.append(toolbar, trigger, badge ?? "");
+        panel.prepend(strip);
+        // Null when the owner switched search off: then there is no field.
+        toolbar.querySelector(".lm-search")?.append(go);
+      } else {
+        toolbar.classList.remove("lm-toolbar--docked");
+        root.append(toolbar);
+        toolbar.append(trigger);
+      }
       // Set here as well as in `setOpen`, which returns early when the state
       // has not changed — arriving narrow, the drawer is already shut.
       list.inert = foot.inert = !open;
@@ -843,11 +892,14 @@ function installDrawer(
 
     setOpen(false);
     trigger.remove();
+    strip.remove();
+    go.remove();
     // Back in the flow and reachable again: `inert` belongs to the drawer, not
     // to the list.
     list.inert = foot.inert = false;
     toolbar.classList.add("lm-toolbar--docked");
     panel.prepend(toolbar);
+    if (badge) foot.before(badge);
   }).observe(root);
 
   return () => {

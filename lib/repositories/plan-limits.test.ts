@@ -539,7 +539,10 @@ describe("publishOverLimitMessage", () => {
 
   it("names which maps still publish when there are too many", () => {
     expect(publishOverLimitMessage("maps", 0, 1, "free")).toBe(
-      "The free plan publishes your first map, and this one comes after. Delete an older map or upgrade to publish it.",
+      "The free plan publishes one map, and another of yours already holds that place. Delete it or upgrade to publish this one.",
+    );
+    expect(publishOverLimitMessage("maps", 0, 3, "starter")).toBe(
+      "The starter plan publishes 3 maps, and 3 others of yours already hold those places. Delete one or upgrade to publish this one.",
     );
   });
 });
@@ -656,7 +659,7 @@ describe("assertPlanFeature", () => {
   });
 
   /*
-   * Sheet sync re-reads a sheet every 30 minutes and geocodes what changed, with nobody
+   * Sheet sync re-reads a sheet every hour and geocodes what changed, with nobody
    * pressing anything. A free account that slipped through would spend credits
    * on every run for as long as the link existed.
    */

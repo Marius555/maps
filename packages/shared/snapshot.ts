@@ -820,7 +820,9 @@ export type MapSnapshot = {
    * brand.json — so the embed names no product of its own.
    *
    * Absent means no badge, which is every map published before it existed; a
-   * plan change reaches a live map on its next publish, never by itself.
+   * plan change reaches a live map on its next publish, never by itself. Drawn
+   * inside the results panel (bottom right, or the phone sheet's strip); a map
+   * with the list switched off draws none.
    */
   badge?: SnapshotBadge;
   /**
@@ -840,9 +842,18 @@ export type MapSnapshot = {
 };
 
 export type SnapshotBadge = {
+  /** "Made with Pinglide", translated. The link's accessible name. */
   text: string;
   /** Absolute. */
   url: string;
+  /** The brand name drawn beside `logo`. Absent: `text` is drawn, alone. */
+  name?: string;
+  /**
+   * The brand mark, as a data URI — never a link to our own host, which would
+   * be a request in the visitor's path. Absent is the text-only badge every
+   * snapshot published before it existed draws.
+   */
+  logo?: string;
 };
 
 /** Where the embed posts what it saw. See `MapSnapshot.analytics`. */

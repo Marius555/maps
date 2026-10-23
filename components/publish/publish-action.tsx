@@ -3,36 +3,34 @@
 import { Button, toast } from "@heroui/react";
 import { useId } from "react";
 
-import { ErrorMessage } from "@/components/ui/error-message";
 import {
   useEmailUnverified,
   VerifyEmailNotice,
 } from "@/components/verify-email/verify-email-notice";
 import { track } from "@/lib/posthog/client";
 import { usePublishMap } from "@/lib/query/publish";
+import { toastProblem } from "@/lib/query/toast-error";
+import { isEmailUnverified } from "@/lib/query/verify-email-toast";
 import type { PublishResult } from "@/lib/repositories/publish.repository";
 
 /**
- * The button and its failure state together, because they are one mutation.
- * Splitting them would mean two `usePublishMap()` calls and therefore two
- * independent mutation states — the button would run while the error stayed
- * empty forever.
- *
- * The action keeps its name the whole way through: the button says Publish and
- * the toast says Published (CLAUDE.md §8). That toast is the only animation
- * here — feedback, not decoration, and HeroUI's CSS handles reduced motion.
+ * The button and its outcome, both as toasts. Success says Published — the action
+ * keeps its name the whole way through (CLAUDE.md §8). A refusal says Couldn't
+ * publish with the server's own sentence: it is about something that just
+ * happened, and an alert in the sidebar pushed the design controls down when it
+ * appeared and stayed after it no longer applied (`toastProblem`'s rule).
  *
  * An unconfirmed address is the one thing that disables the button, and only
  * **once `useMe` has answered** — never while it is loading. The server owns the
  * decision either way (`withAuth` refuses every write), so the cost of guessing
  * wrong here is asymmetric: a moment of an enabled button that fails honestly is
  * nothing, a verified customer staring at a permanently dead Publish is a support
- * ticket.
+ * ticket. That note stays beside the button, because it explains a disabled
+ * control and a toast would expire.
  *
  * Press Publish in the instant before `useMe` answers and the 403 arrives with a
- * toast already raised for it globally; `ErrorMessage` drops that one error on
- * the floor so it is not also printed here, which is the same "never say it
- * twice" rule the `catch` below follows for every other failure.
+ * toast already raised for it globally (`lib/query/client.ts`), so the `catch`
+ * skips that one error rather than say it twice.
  */
 export function PublishAction({ mapId }: { mapId: string }) {
   const publish = usePublishMap(mapId);
@@ -47,15 +45,13 @@ export function PublishAction({ mapId }: { mapId: string }) {
         skipped_location_count: result.skippedCount,
       });
       toast.success("Published", { description: describe(result) });
-    } catch {
-      // Rendered below. A toast as well would say the same thing twice.
+    } catch (error) {
+      if (!isEmailUnverified(error)) toastProblem("Couldn’t publish", error);
     }
   };
 
   return (
     <div className="space-y-3">
-      {publish.error ? <ErrorMessage error={publish.error} /> : null}
-
       <Button
         className="w-full"
         onPress={onPress}

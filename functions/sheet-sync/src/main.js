@@ -1,6 +1,6 @@
 /**
  * The automatic Google Sheets sync — the `googleSheetsUpdate` Appwrite Function,
- * scheduled every 30 minutes.
+ * run every hour.
  *
  * It holds no sync logic. That lives in the dashboard (lib/sheet-sync/run.ts),
  * behind `/api/cron/sheet-sync`, and this only drives it: ask which maps are
@@ -18,8 +18,9 @@
  * the 03:00 UTC hour first walk `/api/cron/session-retention` (lib/analytics/
  * retention.ts) for at most `RETENTION_BUDGET_MS`: the Privacy Policy promises
  * raw sessions are deleted after the plan's retention period, and this is the
- * only scheduler the project has. Both half-hour runs in that hour do it, which
- * is harmless — the second finds nothing left.
+ * only scheduler the project has. The function runs on an hourly interval and
+ * Appwrite picks the minute within each hour, so one run starts in that hour;
+ * were two ever to, the second would find nothing left.
  *
  * No dependencies: Node's own `fetch` is enough, and a function with no
  * `node_modules` deploys in seconds and has nothing to patch.
@@ -33,7 +34,7 @@
 const RESERVE_MS = 60_000;
 /**
  * The function's own timeout, as configured. Keep the two in step. It is under
- * the 30-minute schedule, so one run is always over before the next starts.
+ * the 60-minute interval, so one run is always over before the next starts.
  */
 const FUNCTION_TIMEOUT_MS = 900_000;
 /** A runaway guard for one map, far past any real sheet. */

@@ -4,13 +4,17 @@ A map can stay linked to the Google Sheet it was imported from. Rows in the shee
 are the locations on the map: a sync adds new rows, updates changed ones, removes
 rows that are gone, and republishes the live map if anything a visitor sees
 changed. It runs when the owner presses **Sync now** on the Locations page, and
-every 30 minutes on its own.
+every hour on its own.
 
 Built on 2026-09-16 as an answer to a rival (Atlist) shipping the same feature.
 Decisions the owner made: Sync now plus a daily sync; the sheet wins for every
 field a column feeds while app-only extras are kept; a published map republishes
 automatically; Starter and Pro only. On 2026-10-03 the owner moved the automatic
 sync from daily to **every 30 minutes** (the `googleSheetsUpdate` function).
+On 2026-10-19 Appwrite Cloud made cron a paid-plan feature and floored the Free
+plan's function intervals at 60 minutes, converting our `*/30` cron to an
+interval of 60 on its own; it is **every hour** since, set as an `interval`
+rather than a `schedule`.
 
 ## Invariants
 
@@ -106,21 +110,23 @@ sync from daily to **every 30 minutes** (the `googleSheetsUpdate` function).
 ## The automatic sync: an Appwrite Function
 
 `functions/sheet-sync` holds no sync logic. It runs as the `googleSheetsUpdate`
-function (id in `.env` as `CRON_GOOGLE_GOOGLE_SHEETS_UPDATE`) on `*/30 * * * *`
-(UTC). It asks `GET /api/cron/sheet-sync` which maps are due (least recently synced
+function (id in `.env` as `CRON_GOOGLE_GOOGLE_SHEETS_UPDATE`) on a 60-minute
+interval — Appwrite picks the minute within each hour. It asks `GET /api/cron/sheet-sync` which maps are due (least recently synced
 first), then calls `POST /api/cron/sheet-sync { mapId, continuing }` one step at a
 time until each map answers `more: false`. A scheduled execution is asynchronous,
 so it may run for 15 minutes; it stops starting steps a minute before that. Maps it
-does not reach go first next run. Fifteen minutes is under the 30-minute schedule,
+does not reach go first next run. Fifteen minutes is under the 60-minute interval,
 so two runs never overlap; the soft lock is the backstop.
 
 - **A map synced in the last 10 minutes is not due** (`MIN_GAP_MS` in the route).
   That skips a map its owner just synced by hand. It is 10 rather than ~25 because
   `lastSyncedAt` is written at every step, and a run can reach a map as late as
-  fourteen minutes in; a longer gap would make that map skip the next run and sync
-  hourly.
+  fourteen minutes in; a gap longer than the interval minus fourteen minutes would
+  make that map skip the next run.
 - **The interval the UI states is `AUTO_SYNC_EVERY`** in `lib/sheet-sync/schedule.ts`.
-  The real schedule is the function's cron, set by `npm run setup:sheet-sync`.
+  The real schedule is the function's interval, set by `npm run setup:sheet-sync`.
+  **Never send `schedule` with it**: setting a cron clears the interval, and the
+  Free plan refuses cron.
   Change the two together.
 
 **The same function also runs the visitor-session purge.** On the runs that start
@@ -142,9 +148,9 @@ as `CRON_GOOGLE_GOOGLE_SHEETS_UPDATE`. Then run the script. It is idempotent, an
 also how a change under `functions/sheet-sync` is shipped:
 
 - generates `CRON_SECRET` into `.env` if there is none
-- sets the function: schedule `*/30 * * * *`, timeout 900, **no execute access**,
+- sets the function: interval 60 minutes, timeout 900, **no execute access**,
   **no scopes** (it never touches Appwrite, only our route), no build command
-- upserts `APP_URL` (`SHEET_SYNC_APP_URL`, default the site's Appwrite domain) and
+- upserts `APP_URL` (`SHEET_SYNC_APP_URL`, default `https://pinglide.com`) and
   `CRON_SECRET` on the function, and `CRON_SECRET` on the site
 - packs the folder and deploys it as the active deployment
 
@@ -179,3 +185,10 @@ synchronous execution is capped at 30 seconds). The log should end with
   active. One async execution reached `maps-5sbu.appwrite.network`, which answered
   **404 because the site has no active deployment**. Not verified on Appwrite until
   the site is deployed with its env.
+- 2026-10-22: every retained execution since 2026-10-20 had failed with
+  `GET /api/cron/sheet-sync answered 404` — the function still called
+  `maps-5sbu.appwrite.network`, which 404s on every path (`/api/version` too),
+  while `pinglide.com` answers the same route with 401. The deployed code was also
+  older than the retention purge, so neither the sync nor the purge was running.
+  The default origin is `https://pinglide.com` since. **Check the Executions tab
+  after any domain change** — a failing scheduled run tells nobody.

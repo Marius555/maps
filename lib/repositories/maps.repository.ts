@@ -6,6 +6,7 @@ import { admin } from "@/lib/appwrite/admin";
 import { TABLES } from "@/lib/appwrite/config";
 import { isConflict, isNotFound, toRepositoryError } from "@/lib/appwrite/errors";
 import { env } from "@/lib/env";
+import { publishingMapIds } from "@/lib/limits/publish-slots";
 import { deleteSnapshots } from "@/lib/snapshot/storage";
 import { randomSuffix, slugify } from "@/lib/utils/slug";
 import { CUSTOM_PIN_PREFIX } from "@/packages/shared/pin-icons";
@@ -135,14 +136,17 @@ export async function countMaps(ctx: RepoContext): Promise<number> {
 }
 
 /**
- * Whether `mapId` is among the account's `count` oldest maps.
+ * Whether `mapId` holds one of the account's `count` publishing slots.
  *
  * What "within the plan" means for maps once an account holds more than its
- * plan allows — only possible after a downgrade. The oldest keep publishing
- * because they are the ones most likely to be live on somebody's site already;
- * a newer map is the one its owner is still building.
+ * plan allows. Live maps rank first, so republishing the map already on a
+ * customer's site is never refused because an older draft exists —
+ * `lib/limits/publish-slots.ts` has the rule and why.
+ *
+ * Every map is read rather than `count` of them, because the slot holder may be
+ * newer than maps it outranks.
  */
-export async function isAmongFirstMaps(
+export async function holdsPublishSlot(
   userId: string,
   mapId: string,
   count: number,
@@ -155,12 +159,17 @@ export async function isAmongFirstMaps(
         Query.equal("userId", userId),
         Query.orderAsc("$createdAt"),
         Query.orderAsc("$id"),
-        Query.select(["$id"]),
-        Query.limit(count),
+        Query.select(["$id", "publishedAt"]),
+        Query.limit(MAX_MAPS_PER_PAGE),
       ],
     });
 
-    return result.rows.some((row) => row.$id === mapId);
+    const maps = result.rows.map((row) => ({
+      id: row.$id,
+      publishedAt: row.publishedAt ?? null,
+    }));
+
+    return publishingMapIds(maps, count).includes(mapId);
   } catch (error) {
     throw toRepositoryError(error);
   }
@@ -341,7 +350,7 @@ export async function deleteMap(ctx: RepoContext, mapId: string): Promise<void> 
     // Places, shapes, groups and the sheet link next: a map row deleted before
     // its children would orphan them with no owner left to find them by — and
     // an orphaned sheet link would have the automatic sync failing on it every
-    // half hour. By query rather than through the other repositories, which import
+    // hour. By query rather than through the other repositories, which import
     // this module.
     for (const tableId of [TABLES.places, TABLES.shapes, TABLES.groups, TABLES.sheetLinks]) {
       await admin.tablesDB.deleteRows({

@@ -56,6 +56,13 @@ rewritten; it is the record of why this area is shaped as it is.
   nightly sheet sync's republish, which is why `publishMap` reads the plan off `map.userId`.
   The preview gets the same answer from the publish page. A plan change reaches a live map
   on its next publish only.
+- **The badge lives in the results panel, never on the map** (`createBadge` in
+  `embed/src/index.ts`). Wide, it is a `flex: none` row at the panel's bottom right, between
+  the list and find-nearest, so a long list scrolls under nothing; in a phone sheet it is the
+  strip's right-hand end. **A map with the list switched off draws no badge at all** — the
+  owner's call (2026-10-22), taken when it left the map corner where it hung under the zoom
+  buttons. That reaches live free maps on the next `/embed` deploy without a republish. Its
+  mark is a data URI in the snapshot (`badge.logo`), never a URL on our host (§2).
 - **A cluster icon is drawn only by `showClusterIcon` in `packages/shared/clusters.ts`**, and
   both renderers build their bubble and count from `clusterLayers` in the same file. With an
   icon, the bubble stays as a *transparent* layer, because it is what clicks and the pointer
@@ -441,10 +448,10 @@ rewritten; it is the record of why this area is shaped as it is.
   **The number is 42, not 52, and the ten is MapLibre's own margin.** The top rule is
   "control height plus 8" because the toolbar it clears is inset from the frame by the
   same 10px the controls are; the strip is flush to the bottom edge instead, so the
-  arithmetic is 44 + 8 − 10. Measured at 515×520 with 52: an 18px gap, which is the
-  phantom band the top rule's comment warns about. With 42: 8px. Verified on the real
-  publish preview at 414px — attribution and zoom stack both end at 559 against a strip
-  starting at 568.
+  arithmetic is strip + 8 − 10. Measured at 515×520 without the ten: an 18px gap, which is
+  the phantom band the top rule's comment warns about. With it: 8px. The strip is **52px**
+  since it carries the search field (36px + 8 either side), so the clearance is **50**;
+  verified at the Phone tile (390px): zoom and the ⓘ end at 578 against a strip from 587.
 - **The sheet is flush to the bottom edge, and a 10px gutter there is a bug rather than
   a taste.** A translate parks the box by its *own* height, so lifting it 10px and then
   pushing it down by `100% - 44px` leaves 54px on screen: the strip plus a 10px sliver
@@ -465,7 +472,28 @@ rewritten; it is the record of why this area is shaped as it is.
   things make it survivable: the **JS half cannot drift at all**, because
   `installDrawer` measures `grip.offsetHeight` and never reads a number, and all three
   sites are inside one container query within fifty lines of each other.
-- **The strip says "Locations" and no count, and that is a correctness call before it is
+- **The strip is a `div`, not a button, and holds the search, a chevron and the badge**
+  (2026-10-22, asked for to match the editor's phone sheet). Left: the toolbar, still
+  `lm-toolbar--docked` — on a sheet map it never floats over the map any more. Centre: the
+  toggle, `lm-grip__toggle`, a chevron named "Locations" with `aria-expanded`, turned 180°
+  while open. Right: the badge. A three-column grid, `minmax(0,1fr) auto minmax(0,1fr)`,
+  is what keeps the chevron centred whatever the badge says. The drag is bound on the
+  strip and **ignores presses that start in `.lm-search` or `a`** — otherwise its tap
+  branch toggles the sheet on the way to typing, searching or following the badge.
+  **Searching never opens the sheet** — asked for directly, after one revision where focus
+  did. So the place suggestions open *upwards* (`.lm-grip .lm-search__list`), and the
+  sheet's panel is `overflow: visible` for them to escape it; the root still clips the
+  parked part. In the strip the field is a rounded tinted box, not the wide panel's bare
+  text, with a **magnifier at its end** (`go`, `lm-search__action`, the strip's alone — the
+  wide panel's magnifier stays gone) that acts as Enter: top suggestion, or just focus. The
+  badge is the field's 36px with a 20px mark and 14px name, centred on it. Every strip rule
+  that touches the badge says `.lm-root .lm-grip`, because `.lm-root .lm-badge` sits later
+  in the file at two classes and wins a tie. The grab pill (`::before`) went; the chevron is
+  the affordance. The side drawer is unchanged. Verified at 390px: field, magnifier,
+  chevron and badge all 595–631 in a 587–639 strip; a tap in the field or on the magnifier
+  leaves the sheet shut with focus in the field; suggestions draw at 517–591, topmost;
+  tap, keyboard and drag toggle; Escape shuts; `scrollTop`/`scrollLeft` stay 0.
+- **The strip shows no count, and that is a correctness call before it is
   a byte one.** A total printed there is the snapshot's, and the list under it is
   whatever the search box and find-nearest have left — so the strip would read
   "Locations · 40" over three matching rows. A live count means a callback out of
@@ -481,13 +509,9 @@ rewritten; it is the record of why this area is shaped as it is.
   Space. No state to leave armed against an unrelated click later. Verified: drag past
   the snap opens, a 30px drag returns, 150px down shuts, a tap toggles, Escape shuts, a
   `detail: 0` click toggles and a `detail: 1` click is ignored.
-- **The grab pill is a tinted `currentColor`, not `--lm-border`.** The border token was
-  one declaration instead of two and it was wrong: measured on the dark theme it
-  rendered `rgb(44, 47, 53)` against a `#17181a` surface, which is a pill nobody can
-  see — and it is the only thing on the strip that says it can be dragged.
-  `currentColor` tracks both themes and any colour the owner set. It is drawn as
-  `::before` rather than a `<span>` because a pseudo-element is CSS the minifier already
-  ships and an element is JS bytes.
+- *Gone:* the grab pill, replaced by the chevron. If a pill ever comes back, it is a tinted
+  `currentColor`, not `--lm-border` — the border token measured `rgb(44, 47, 53)` on a
+  `#17181a` dark surface, a pill nobody can see.
 - **No `aria-controls`, deliberately.** The list is the strip's own next sibling, which
   is the disclosure pattern ARIA describes, and there `aria-controls` is optional,
   thinly supported by screen readers, and would cost the list a literal `id` that a
@@ -558,7 +582,8 @@ rewritten; it is the record of why this area is shaped as it is.
 
   Measured: controls 10px clear of the panel when open and 20px clear when shut, on both sides;
   the ⓘ's centre hits the panel on a right panel, open and shut; a left panel's ⓘ is unchanged.
-- **The search field has no magnifier, with or without find-nearest in it** — asked to go.
+- **The search field has no magnifier, with or without find-nearest in it** — asked to go —
+  **except in a phone sheet's strip**, where it was asked back (see the strip above).
   `createSearchField` appends `action` only when passed, and the input's end padding is 40px
   only under `.lm-search:has(.lm-search__action)`.
 - **The popup is `closeOnClick: false`, and the map's first click listener shuts it
@@ -1173,9 +1198,27 @@ MapLibre files for a day; gazetteer shards for a week.
 stored in `settings`; publish resolves them. The alternative — auto-detecting each visitor's
 language — would have shipped every table to every visitor.
 
-**The badge** is a MapLibre control in the bottom-right corner, so MapLibre stacks it above
+**The badge** was a MapLibre control in the bottom-right corner, so MapLibre stacked it above
 the attribution instead of the two colliding. It is a link to brand.json's `website` with
 `?ref=embed`, and its text is translated with the map.
+
+*Revised 2026-10-22.* Seen in the WordPress plugin, the pill — text on a bordered ground,
+no logo — hung against a right-hand floating panel, because the `data-lm-float` margin
+rules push every control in the panel's corner to the panel's edge. The owner asked for "just
+logo with name", somewhere it would bother neither visitor nor owner. So the corner is now
+the one away from the panel (`panelSide === "right"` → bottom-left; absent is left, so old
+snapshots keep bottom-right), and the control is the mark plus the brand name straight on
+the map: no ground, a text halo in `--lm-surface` for legibility, 70% opacity until hovered.
+The translated "Made with …" stays as the link's `aria-label`. The snapshot gained
+`badge.name` and `badge.logo` (the mark from `lib/embed/badge.ts`, kept in step with
+`public/logo/pinglide-mark.svg` by its test); a dark map inverts the mark with a hue turn so
+the orange dot survives. Cost: ~0.1KB of own code.
+
+*Revised again the same day.* Still under the zoom buttons on a map whose controls share its
+corner, so it left the map altogether: into the results panel at the bottom right, above
+find-nearest, and into the phone sheet's strip beside the search. No halo now — it sits on
+the panel's ground. Maps with no list show no badge (the owner's call). The invariant at the
+top of this file is the current statement.
 
 **Host-page events.** Every `track()` call also dispatches `pinglide` on `document` with
 `{ type, map, ...data }`, whether or not our own measurement is on — it is a DOM event, not

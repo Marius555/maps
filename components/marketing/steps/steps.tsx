@@ -1,8 +1,6 @@
 import { Reveal } from "../reveal";
 import { Section } from "../section";
-import { DesignArt } from "./art/design-art";
-import { ImportArt } from "./art/import-art";
-import { PublishArt } from "./art/publish-art";
+import { DesignArt, ImportArt, PublishArt } from "./art/steps-art-loader";
 import { StepPanel } from "./step-panel";
 
 /**
@@ -13,8 +11,9 @@ import { StepPanel } from "./step-panel";
  * designed — and three panels read left to right already say that. The "01, 02,
  * 03" they used to wear said it a second time, louder than the drawings.
  *
- * Each drawing plays its step on a loop while it is on screen (useArtLoop), in
- * the page's neutrals and the accent only.
+ * Each drawing stands on the showcase map's dotted Europe, tilted, with the
+ * editor's own pins on it (stage/), and **plays its step only while its panel
+ * is hovered** — at rest it is the finished frame (stage/use-hover-play.ts).
  *
  * **A picture and one line each.** The cards this replaced carried two
  * paragraphs apiece and no image, which is a wall of text in three columns; the

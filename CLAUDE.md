@@ -10,7 +10,7 @@ Project instructions. Read this fully before writing code.
 
 **Weeks 1–3 of §10 are done; Week 4 is most of the way through.** Of §5's layout, `/app`,
 `/lib`, `/components`, `/scripts`, `/embed`, `/packages/shared` and `/functions` (one
-function: the sheet sync every 30 minutes, which also runs the daily visitor-session purge) exist, and so now do `/lib/billing`, `/app/(dashboard)/settings`
+function: the sheet sync every hour, which also runs the daily visitor-session purge) exist, and so now do `/lib/billing`, `/app/(dashboard)/settings`
 (which `/account` now redirects to), `/app/api/webhooks/billing` and `/app/(marketing)/for/` —
 one static folder per platform, WordPress the only one so far.
 
@@ -42,7 +42,7 @@ filter on the Locations page. Full reasoning, and the five blockers it had to an
 **Google Sheets sync is the third call made against a rival (Atlist), and it bends §7.** An
 import from a Google Sheet can leave the map linked: rows in the sheet are its locations, and a
 sync adds, updates and removes them, then republishes a live map. Sync now on the Locations page,
-plus an Appwrite Function every 30 minutes (`npm run setup:sheet-sync`); Starter and Pro only. The §7 bend is that a sync geocodes with no
+plus an Appwrite Function every hour (`npm run setup:sheet-sync`); Starter and Pro only. The §7 bend is that a sync geocodes with no
 review step, and it is survivable because **only confident matches are written** — the rest are
 reported by sheet row number for the owner to fix in the sheet — and a sync that would remove
 most of the map stops and asks. **Hosting is Appwrite Sites, which cuts every request off at 30
@@ -179,7 +179,7 @@ npm run deploy:cdn      # embed + gazetteer -> cdn.pinglide.com (skips unchanged
 npm run deploy:site     # build + upload to Appwrite Sites; the Deploy workflow runs it (musl only; --no-upload locally)
 npm run setup:lemon     # find the plan variants, write their ids to .env, configure the webhook
 npm run setup:lemon -- --verify  # check .env's ids against the store; non-zero if they disagree
-npm run setup:sheet-sync  # configure + deploy the googleSheetsUpdate function (every 30 min)
+npm run setup:sheet-sync  # configure + deploy the googleSheetsUpdate function (hourly)
 npm run billing:replay -- <event> --email you@example.com  # signed webhook at a running server
 
 npm run build:disposable-domains # re-vendor the throwaway-email domain list (98k, ~1.5MB)
@@ -277,7 +277,7 @@ one exists: `docs/notes/environment.md`.
   `googleSheetsUpdate` function) and `SHEET_SYNC_STEP_MS` (lookup time per sync step, default
   5000 — raise only with the site timeout).
 - Setup only, **never on the site**: `CRON_GOOGLE_GOOGLE_SHEETS_UPDATE` (that function's id),
-  `SHEET_SYNC_APP_URL` (the origin it calls, default `https://maps-5sbu.appwrite.network`),
+  `SHEET_SYNC_APP_URL` (the origin it calls, default `https://pinglide.com`),
   `APPWRITE_SITE_ID` (optional with one site) — read by `npm run setup:sheet-sync` alone.
 - Server-only, optional: `TUTORIAL_ALWAYS_PRESENT` — true draws the onboarding overlays (maps
   list, editor, card, publish) on every load; unset or false, each until the account closes

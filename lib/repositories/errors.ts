@@ -281,10 +281,14 @@ export function publishOverLimitMessage(
 ): string {
   const [noun, plural] = NOUNS[resource];
 
+  // Live maps hold the slots before drafts (lib/limits/publish-slots.ts), so the
+  // maps in the way are "others of yours", not necessarily older ones.
   if (resource === "maps") {
-    const first = limit === 1 ? "your first map" : `your first ${formatCount(limit)} maps`;
+    if (limit === 1) {
+      return `The ${plan} plan publishes one map, and another of yours already holds that place. Delete it or upgrade to publish this one.`;
+    }
 
-    return `The ${plan} plan publishes ${first}, and this one comes after. Delete an older map or upgrade to publish it.`;
+    return `The ${plan} plan publishes ${formatCount(limit)} maps, and ${formatCount(limit)} others of yours already hold those places. Delete one or upgrade to publish this one.`;
   }
 
   const over = count - limit;

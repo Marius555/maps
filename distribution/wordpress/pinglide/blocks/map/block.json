@@ -6,7 +6,7 @@
 	"title": "Pinglide map",
 	"category": "embed",
 	"icon": "location-alt",
-	"description": "A map of your locations. Set it up on Pinglide once; add and edit locations there and this page updates by itself.",
+	"description": "A map of your locations. Set it up on Pinglide once; add and edit locations there, press Publish, and this page updates by itself.",
 	"keywords": [ "map", "locations", "store locator", "stockists", "dealers" ],
 	"textdomain": "pinglide",
 	"attributes": {

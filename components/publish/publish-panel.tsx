@@ -98,6 +98,11 @@ export function PublishPanel({
         the frame while shut. Without the clip that box grows the document and
         brings the window's scrollbar in with it.
 
+        `data-publish-frame` is what `globals.css` keys `<main>`'s scrollbar off:
+        a banner above `<main>` (VerifyEmailBanner) leaves this frame taller than
+        its scroller, and beside a phone- or tablet-width preview that bar is the
+        one thing down the right edge.
+
         **`lg` and not `xl`.** The embed decides its own shape with a container
         query at 640px of its own width, and under that it stacks the results
         panel below the map — right on a phone, wrong as the only thing a
@@ -107,7 +112,9 @@ export function PublishPanel({
         `publish/loading.tsx` to keep these strings in step with — see CLAUDE.md
         on why this route has no loading boundary.
       */}
-      <div className="relative flex h-[calc(100dvh-3.5rem)] min-h-0 flex-none flex-col max-lg:overflow-hidden md:h-[100dvh] lg:flex-row">
+      <div
+        data-publish-frame=""
+        className="relative flex h-[calc(100dvh-3.5rem)] min-h-0 flex-none flex-col max-lg:overflow-hidden md:h-[100dvh] lg:flex-row">
         {/* The map first in source, so a phone gets the subject before the
             controls; `lg:order-2` puts the column back on the left where the nav
             was as soon as there are two columns.

@@ -1,173 +1,127 @@
 "use client";
 
-import type { AnimationSequence } from "motion/react";
+import { stagger, type AnimationSequence } from "motion/react";
+import { useId } from "react";
 
-import { ART_CARD, ArtCard } from "../../art/art-card";
-import { ART_PIN, ART_RAISED, ArtPin } from "../../art/art-pin";
-import { ArtStreets } from "../../art/art-streets";
-import { useArtLoop } from "./use-art-loop";
+import { DotField } from "../../europe-map/dot-field";
+import { PinMark } from "../stage/pin-mark";
+import { STAGE_DOT, STAGE_VIEW, stagePlaces } from "../stage/stage-data";
+import { StagePin } from "../stage/stage-pin";
+import { StepStage } from "../stage/step-stage";
+import { useHoverPlay } from "../stage/use-hover-play";
+import { MiniCard } from "./mini-card";
+import { CHIP_STEP, LOOKS, PIN_COLORS, StyleToolbar, SWATCH_STEP } from "./style-toolbar";
 
-const W = 360;
-const H = 240;
-
-const PANEL = { x: 18, y: 30, width: 128, height: 164 } as const;
-const MAP = { x: 160, y: 22, width: 182, height: 196 } as const;
-const ANCHOR = { x: 196, y: 124 } as const;
-
-/** The two basemap swatches, 54 units apart, and the two pin colours, 26 apart. */
-const SWATCH = { x: 14, y: 28, width: 46, height: 32, step: 54 } as const;
-const CHIP = { x: 24, y: 104, step: 26 } as const;
+const PLACES = stagePlaces(["Amsterdam", "Paris", "Berlin", "Prague", "Zurich", "Vienna", "Milan"]);
+/** The pin wearing the card: Zurich, in the middle of the ground. */
+const CARD_PIN = 4;
 
 const EASE = [0.4, 0, 0.2, 1] as const;
+const PIN_STAGGER = stagger(0.05);
 
-/**
- * The choices, made one after another and then undone: the basemap goes dark,
- * the pins change colour, the card closes and opens again, and everything goes
- * back. It ends on the server's drawing, so each repeat carries on from it.
- */
-const SEQUENCE: AnimationSequence = [
-  ['[data-art="swatch-ring"]', { x: SWATCH.step }, { duration: 0.45, ease: EASE, at: 0 }],
-  ['[data-art="dark"]', { opacity: 1 }, { duration: 0.55, ease: EASE, at: 0.1 }],
-  ['[data-art="chip-ring"]', { x: CHIP.step }, { duration: 0.4, ease: EASE, at: 1.4 }],
-  ['[data-art="pin-alt"]', { opacity: 1 }, { duration: 0.35, at: 1.45 }],
-  ['[data-art="card"]', { opacity: 0, scale: 0.85 }, { duration: 0.2, at: 2.6 }],
-  ['[data-art="card"]', { opacity: 1, scale: 1 }, { duration: 0.45, ease: "backOut", at: 2.95 }],
-  ['[data-art="swatch-ring"]', { x: 0 }, { duration: 0.45, ease: EASE, at: 4.2 }],
-  ['[data-art="dark"]', { opacity: 0 }, { duration: 0.55, ease: EASE, at: 4.3 }],
-  ['[data-art="chip-ring"]', { x: 0 }, { duration: 0.4, ease: EASE, at: 5.5 }],
-  ['[data-art="pin-alt"]', { opacity: 0 }, { duration: 0.35, at: 5.55 }],
-];
-
-/**
- * Step two: the choices, and what they do — a style panel on the left, and on
- * the map a pin with its card open.
- *
- * Neutrals and the accent. The dark basemap is the page's own foreground laid
- * over the map, which is why on the dark site the "other look" comes out light:
- * the swatch means *the other one*, and the drawing stays inside the palette.
- */
-export function DesignArt() {
-  const scope = useArtLoop<SVGSVGElement>(SEQUENCE, 1.4);
-
-  return (
-    <svg
-      ref={scope}
-      aria-hidden="true"
-      viewBox={`0 0 ${W} ${H}`}
-      className="h-full w-full"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <defs>
-        <clipPath id="design-map">
-          <rect x={MAP.x} y={MAP.y} width={MAP.width} height={MAP.height} rx="12" />
-        </clipPath>
-      </defs>
-
-      {/* The map, light, with its dark look laid over it and faded out. */}
-      <g style={ART_RAISED}>
-        <rect x={MAP.x} y={MAP.y} width={MAP.width} height={MAP.height} rx="12" fill="var(--surface)" />
-      </g>
-      <g clipPath="url(#design-map)">
-        <ArtStreets x={MAP.x} y={MAP.y} width={MAP.width} height={MAP.height} />
-        <g data-art="dark" opacity="0">
-          <rect
-            x={MAP.x}
-            y={MAP.y}
-            width={MAP.width}
-            height={MAP.height}
-            fill="var(--foreground)"
-            opacity="0.88"
-          />
-          <ArtStreets
-            x={MAP.x}
-            y={MAP.y}
-            width={MAP.width}
-            height={MAP.height}
-            ink="var(--surface)"
-          />
-        </g>
-      </g>
-
-      <ArtPin x={186} y={56} />
-      <ArtPin x={276} y={46} />
-      <ArtPin x={184} y={196} />
-      <ArtPin x={318} y={200} />
-
-      {/* The style panel. */}
-      <g transform={`translate(${PANEL.x} ${PANEL.y})`}>
-        <g style={ART_RAISED}>
-          <rect width={PANEL.width} height={PANEL.height} rx="12" fill="var(--surface)" />
-        </g>
-
-        <rect x="14" y="14" width="44" height="5" rx="2.5" fill="var(--muted)" opacity="0.7" />
-        <Swatch x={SWATCH.x} light />
-        <Swatch x={SWATCH.x + SWATCH.step} />
-        <rect
-          data-art="swatch-ring"
-          x={SWATCH.x - 3}
-          y={SWATCH.y - 3}
-          width={SWATCH.width + 6}
-          height={SWATCH.height + 6}
-          rx="8"
-          fill="none"
-          stroke={ART_PIN.accent}
-          strokeWidth="2"
-        />
-
-        <rect x="14" y="80" width="30" height="5" rx="2.5" fill="var(--muted)" opacity="0.7" />
-        <circle cx={CHIP.x} cy={CHIP.y} r="7" fill={ART_PIN.accent} />
-        <circle cx={CHIP.x + CHIP.step} cy={CHIP.y} r="7" fill="var(--foreground)" />
-        <circle
-          data-art="chip-ring"
-          cx={CHIP.x}
-          cy={CHIP.y}
-          r="10.5"
-          fill="none"
-          stroke={ART_PIN.accent}
-          strokeWidth="2"
-        />
-
-        <rect x="14" y="128" width="36" height="5" rx="2.5" fill="var(--muted)" opacity="0.7" />
-        <rect x="14" y="142" width="70" height="4" rx="2" fill="var(--foreground)" opacity="0.12" />
-        <rect x="14" y="152" width="52" height="4" rx="2" fill="var(--foreground)" opacity="0.12" />
-      </g>
-
-      <g data-art="card">
-        <ArtCard x={ANCHOR.x + 22} y={ANCHOR.y - ART_CARD.height / 2} />
-      </g>
-
-      {/* The chosen pin, in the accent, with its foreground twin over it for
-          when the other colour is picked. */}
-      <ArtPin x={ANCHOR.x} y={ANCHOR.y} color={ART_PIN.accent} r={7} halo />
-      <g data-art="pin-alt" opacity="0">
-        <ArtPin x={ANCHOR.x} y={ANCHOR.y} color="var(--foreground)" r={7} halo />
-      </g>
-    </svg>
-  );
+/** The card turns edge-on, swaps its face, and turns back. */
+function flip(at: number, to: "a" | "b"): AnimationSequence {
+  const from = to === "a" ? "b" : "a";
+  return [
+    ['[data-art="card"]', { rotateY: 90, transformPerspective: 500 }, { duration: 0.18, ease: "easeIn", at }],
+    [`[data-face="${from}"]`, { opacity: 0 }, { duration: 0.01, at: at + 0.18 }],
+    [`[data-face="${to}"]`, { opacity: 1 }, { duration: 0.01, at: at + 0.18 }],
+    ['[data-art="card"]', { rotateY: 0, transformPerspective: 500 }, { duration: 0.28, ease: "easeOut", at: at + 0.19 }],
+  ];
 }
 
-/** A basemap, drawn as the look it stands for: its ground and one road. */
-function Swatch({ x, light = false }: { x: number; light?: boolean }) {
-  const { y, width, height } = SWATCH;
+/**
+ * The pass, every step a single target so it starts and ends on the drawing at
+ * rest: a new basemap, then another; the pins a new colour, then another; the
+ * card a new layout; then every choice walks back.
+ */
+const PASS: AnimationSequence = [
+  ['[data-art="swatch-ring"]', { x: SWATCH_STEP }, { duration: 0.4, ease: EASE, at: 0.2 }],
+  ['[data-look="1"]', { opacity: 1 }, { duration: 0.6, ease: EASE, at: 0.25 }],
+  ['[data-art="swatch-ring"]', { x: SWATCH_STEP * 2 }, { duration: 0.4, ease: EASE, at: 1.2 }],
+  ['[data-look="2"]', { opacity: 1 }, { duration: 0.6, ease: EASE, at: 1.25 }],
+  ['[data-look="1"]', { opacity: 0 }, { duration: 0.6, ease: EASE, at: 1.25 }],
+
+  ['[data-art="chip-ring"]', { x: CHIP_STEP }, { duration: 0.35, ease: EASE, at: 2.1 }],
+  ['[data-alt="1"]', { opacity: 1 }, { duration: 0.3, delay: PIN_STAGGER, at: 2.15 }],
+  ['[data-art="chip-ring"]', { x: CHIP_STEP * 2 }, { duration: 0.35, ease: EASE, at: 2.9 }],
+  ['[data-alt="2"]', { opacity: 1 }, { duration: 0.3, delay: PIN_STAGGER, at: 2.95 }],
+  ['[data-alt="1"]', { opacity: 0 }, { duration: 0.3, delay: PIN_STAGGER, at: 2.95 }],
+
+  ...flip(3.75, "b"),
+
+  ['[data-art="swatch-ring"]', { x: 0 }, { duration: 0.45, ease: EASE, at: 5 }],
+  ['[data-look="2"]', { opacity: 0 }, { duration: 0.6, ease: EASE, at: 5.05 }],
+  ['[data-art="chip-ring"]', { x: 0 }, { duration: 0.4, ease: EASE, at: 5.1 }],
+  ['[data-alt="2"]', { opacity: 0 }, { duration: 0.3, delay: PIN_STAGGER, at: 5.15 }],
+  ...flip(5.3, "a"),
+
+  ['[data-art="hold"]', { opacity: 1 }, { duration: 0.01, at: 6.6 }],
+];
+
+const buildPass = () => PASS;
+
+/**
+ * Step two: the choices, and what they do. A designer toolbar floats over the
+ * ground; on hover the basemap changes look twice, the pins change colour
+ * twice, the card flips to its other layout, and everything goes back.
+ *
+ * The ground is drawn once, in `<defs>`, and shown through one `<use>` per
+ * look, each tinted by its own `color` — three coloured copies of ~600 dots for
+ * the price of one set of circles.
+ */
+export default function DesignArt() {
+  const scope = useHoverPlay<HTMLDivElement>(buildPass);
+  const dots = `mk-step-dots-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
   return (
-    <g>
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        rx="6"
-        fill="var(--foreground)"
-        opacity={light ? 0.07 : 0.85}
-      />
-      <path
-        d={`M${x} ${y + 21}C${x + 14} ${y + 16} ${x + 28} ${y + 26} ${x + width} ${y + 14}M${x + 30} ${y}L${x + 24} ${y + height}`}
-        fill="none"
-        stroke="var(--surface)"
-        strokeWidth="3"
-        opacity={light ? 1 : 0.35}
-      />
-    </g>
+    <div ref={scope} aria-hidden="true" className="absolute inset-0 overflow-hidden">
+      <StepStage
+        place={{ left: "56%", top: "58%", width: "max(80cqw, 112cqh)" }}
+        ground={(mask) => (
+          <>
+            <defs>
+              <g id={dots}>
+                <DotField grid="europe" view={STAGE_VIEW} radius={STAGE_DOT} />
+              </g>
+            </defs>
+            <g mask={mask}>
+              <use href={`#${dots}`} className="text-foreground/30" />
+              {LOOKS.slice(1).map((look, i) => (
+                <g key={look.name} data-look={i + 1} style={{ opacity: 0 }}>
+                  <rect width={STAGE_VIEW.width} height={STAGE_VIEW.height} fill={look.ink} opacity={0.1} />
+                  <use href={`#${dots}`} style={{ color: look.ink }} opacity={0.6} />
+                </g>
+              ))}
+            </g>
+          </>
+        )}
+      >
+        {PLACES.map((place, index) => (
+          <StagePin
+            key={place.name}
+            place={place}
+            index={index}
+            above={index === CARD_PIN ? <MiniCard place={place} /> : undefined}
+            marker={
+              <span className="grid *:col-start-1 *:row-start-1">
+                <PinMark kind={place.kind} />
+                {/* Each over the last by z-index, not just by order: an icon pin's
+                    shape is `z-index: 1`, and an animating opacity makes each
+                    layer a stacking context that would otherwise sit under it. */}
+                {PIN_COLORS.slice(1).map((color, i) => (
+                  <span key={color} data-alt={i + 1} className="relative" style={{ opacity: 0, zIndex: i + 2 }}>
+                    <PinMark kind={place.kind} color={color ?? undefined} />
+                  </span>
+                ))}
+              </span>
+            }
+          />
+        ))}
+      </StepStage>
+
+      <StyleToolbar />
+      <span data-art="hold" className="hidden" />
+    </div>
   );
 }

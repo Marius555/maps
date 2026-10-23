@@ -167,8 +167,8 @@ deploy. Names in use:
   (`docs/notes/sheet-sync.md`). **`CRON_SECRET` gates the automatic sync's route, and unset means
   that route refuses everyone**, not that it is open: an unauthenticated trigger would let a
   stranger spend geocoding credit and republish every linked map. The same value goes on the
-  `googleSheetsUpdate` Appwrite Function (`functions/sheet-sync`), which calls it every 30
-  minutes; `npm run setup:sheet-sync` generates it into `.env` and puts it on the function and
+  `googleSheetsUpdate` Appwrite Function (`functions/sheet-sync`), which calls it every
+  hour; `npm run setup:sheet-sync` generates it into `.env` and puts it on the function and
   the site. `SHEET_SYNC_STEP_MS` is how long
   one sync step may spend looking addresses up (default 5000). A step has to finish inside the
   Appwrite Sites timeout — 15s by default, 30s at most — so raise this to about 15000 only after
@@ -176,7 +176,7 @@ deploy. Names in use:
   secret. `APP_URL` matters here too: an automatic republish has no request to take an origin from.
 - Setup only, **never on the site**: `CRON_GOOGLE_GOOGLE_SHEETS_UPDATE` (the `googleSheetsUpdate`
   function's id), `SHEET_SYNC_APP_URL` (the origin that function calls, default
-  `https://maps-5sbu.appwrite.network` — never the local `APP_URL`, which is localhost and
+  `https://pinglide.com` — never the local `APP_URL`, which is localhost and
   unreachable from Appwrite's cloud) and `APPWRITE_SITE_ID` (optional while the project has one
   site). Read by `npm run setup:sheet-sync` alone.
 

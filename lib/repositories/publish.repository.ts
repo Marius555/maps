@@ -15,7 +15,7 @@ import type { RepoContext } from "./context";
 import { PublishOverLimitError } from "./errors";
 import { listAllGroups } from "./groups.repository";
 import { toAppMap } from "./mappers";
-import { getMap, isAmongFirstMaps } from "./maps.repository";
+import { getMap, holdsPublishSlot } from "./maps.repository";
 import { PLAN_LIMITS, getUserPlan, planAllows, type PlanId } from "./plan-limits";
 import { listAllPlaces } from "./places.repository";
 import { listAllShapes } from "./shapes.repository";
@@ -157,7 +157,7 @@ async function assertPublishable(
     throw new PublishOverLimitError("shapes", shapeCount, limits.shapes, plan);
   }
 
-  if (!(await isAmongFirstMaps(userId, mapId, limits.maps))) {
+  if (!(await holdsPublishSlot(userId, mapId, limits.maps))) {
     throw new PublishOverLimitError("maps", 0, limits.maps, plan);
   }
 }

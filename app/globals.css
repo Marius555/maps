@@ -366,6 +366,42 @@ html:has([data-app-frame]) {
 }
 
 /*
+ * The Publish page's `<main>` scrollbar: a rounded thumb on no track.
+ *
+ * Beside a phone- or tablet-width preview it is the only thing down the right
+ * edge of a dark page, and the classic Windows bar — square ends, arrows, a
+ * track lighter than the page — read as broken there. See `PublishPanel` for why
+ * this `<main>` scrolls at all.
+ *
+ * `scrollbar-color` only where the pseudo-elements do not exist: Chrome 121+
+ * ignores every `::-webkit-scrollbar` rule once it is set.
+ */
+main:has([data-publish-frame])::-webkit-scrollbar {
+  width: 10px;
+}
+
+main:has([data-publish-frame])::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+main:has([data-publish-frame])::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background: var(--scrollbar) padding-box;
+}
+
+main:has([data-publish-frame])::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  main:has([data-publish-frame]) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar) transparent;
+  }
+}
+
+/*
  * The canvas stretches horizontally to its container, whatever pixel width
  * MapLibre last gave it.
  *
@@ -3814,6 +3850,170 @@ body.is-pin-dragging * {
     url("/marketing/hero-carbon.webp") 1x,
     url("/marketing/hero-carbon@2x.webp") 2x
   );
+}
+
+/*
+ * The landing page's map: Europe on a table (components/marketing/europe-map/).
+ *
+ * The frame grows the way `.mk-hero-map` does — a flex item taking whatever the
+ * showcase screen leaves, with the same 15rem floor for a short landscape phone.
+ *
+ * In dark mode it is not a card: the page's own background, no border, no
+ * shadow, so the dots lie on the page and the radial fade in the SVG is the
+ * only edge. The skeleton wears the same class, so nothing flashes grey first.
+ */
+.mk-europe-frame {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 15rem;
+}
+
+.dark .mk-europe-frame,
+[data-theme="dark"] .mk-europe-frame {
+  background-color: var(--background);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/*
+ * The table: the scene is the perspective and a size container, the plane is
+ * Europe tilted inside it. The plane is wider than the frame and scaled to its
+ * height too (`cqh`), so the tilt never shows its edges on a tall phone.
+ * `preserve-3d` is what lets the pins stand up off it; anything that flattens
+ * the plane (opacity below 1, a filter, a mask) lays them down.
+ */
+.mk-tilt-scene {
+  container-type: size;
+  perspective: 1300px;
+  perspective-origin: 50% 20%;
+}
+
+.mk-tilt-plane {
+  position: absolute;
+  left: 50%;
+  top: 47%;
+  width: max(86cqw, 118cqh);
+  translate: -50% -50%;
+  transform-style: preserve-3d;
+}
+
+/* The horizon fades into whatever the frame is: the panel, or in dark the page. */
+.mk-tilt-haze {
+  background: linear-gradient(to bottom, var(--surface-secondary) 15%, transparent);
+}
+
+.dark .mk-tilt-haze,
+[data-theme="dark"] .mk-tilt-haze {
+  background: linear-gradient(to bottom, var(--background) 15%, transparent);
+}
+
+/*
+ * The steps section's drawings (components/marketing/steps/stage/): the same
+ * table as the map above, a patch of it per panel. Same rule as `.mk-tilt-plane`:
+ * opacity, a filter or a mask on the plane lays every pin down. No pointer
+ * events inside — the pins are pictures, and the panel is what is hovered.
+ */
+.mk-step-scene {
+  container-type: size;
+  perspective: 900px;
+  perspective-origin: 50% 10%;
+  pointer-events: none;
+}
+
+.mk-step-plane {
+  position: absolute;
+  translate: -50% -50%;
+  transform-style: preserve-3d;
+}
+
+/* The panel's own ground (`.mk-panel`), so the horizon fades into the card. */
+.mk-step-haze {
+  background: linear-gradient(to bottom, var(--surface-tertiary) 10%, transparent);
+}
+
+.dark .mk-step-haze,
+[data-theme="dark"] .mk-step-haze {
+  background: linear-gradient(to bottom, var(--surface-secondary) 10%, transparent);
+}
+
+/* The editor's pin, a size down: a panel is a third of the map above it. */
+.mk-step-pin {
+  display: block;
+}
+
+.mk-step-pin .map-pin {
+  width: 2rem;
+  height: 2rem;
+  cursor: default;
+}
+
+.mk-step-pin .map-pin__dot {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.mk-step-pin .map-pin__shape {
+  --map-pin-size: 1.75rem;
+}
+
+.mk-step-pin--flat .map-pin {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.mk-step-pin--flat .map-pin__dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-width: 1.5px;
+}
+
+.mk-step-pin--flat .map-pin__shape {
+  --map-pin-size: 1.35rem;
+}
+
+/* On the ground under a standing pin: its shadow, and the ring it lands with. */
+.mk-step-shadow,
+.mk-step-ripple {
+  position: absolute;
+  width: 1.5rem;
+  height: 1.5rem;
+  translate: -50% -50%;
+  border-radius: 9999px;
+}
+
+.mk-step-shadow {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--foreground) 32%, transparent),
+    transparent
+  );
+}
+
+.mk-step-ripple {
+  border: 2px solid;
+}
+
+/* "Hover to play" — or "Tap to play" where nothing hovers — and out of the way while it plays. */
+.mk-step-hint {
+  transition: opacity 200ms ease-out;
+}
+
+.mk-step-hint[data-hidden] {
+  opacity: 0;
+}
+
+.mk-step-hint__touch {
+  display: none;
+}
+
+@media (hover: none) {
+  .mk-step-hint__hover {
+    display: none;
+  }
+
+  .mk-step-hint__touch {
+    display: inline;
+  }
 }
 
 /*

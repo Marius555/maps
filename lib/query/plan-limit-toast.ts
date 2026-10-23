@@ -51,8 +51,8 @@ const PLAN_LIMIT = "plan_limit_reached";
 /**
  * True when this error is the plan limit and nothing else. Exported separately
  * because the editor needs to ask without also raising a toast — its sidebar
- * renders `createPlace.error` inline, and saying the same thing twice is the
- * habit `publish-action.tsx` already declines.
+ * renders `createPlace.error` inline, and saying the same thing twice is a
+ * habit worth declining.
  */
 export function isPlanLimit(error: unknown): error is ApiError {
   return error instanceof ApiError && error.code === PLAN_LIMIT;
