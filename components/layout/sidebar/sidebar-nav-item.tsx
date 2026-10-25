@@ -25,6 +25,11 @@ export type NavItem = {
    * Nothing is drawn at zero or when absent.
    */
   badge?: number;
+  /**
+   * Makes the row a button that opens something over the page instead of a link
+   * away from it. `href` is then only the row's identity.
+   */
+  onSelect?: () => void;
 };
 
 /**
@@ -33,6 +38,10 @@ export type NavItem = {
  * Active state is weight plus a quiet fill — no accent bar and no coloured
  * background. The accent is reserved for things you can press; using it for
  * "you are here" makes every page look like it has a primary action in the nav.
+ *
+ * A row with `onSelect` is a button rather than a link — Notifications opens a
+ * drawer over the page instead of replacing it. Both shapes draw `RowContent`
+ * with `rowClassName`, so the two cannot drift apart.
  */
 export function SidebarNavItem({
   item,
@@ -46,8 +55,26 @@ export function SidebarNavItem({
   /** Closes the mobile drawer once a destination is chosen. */
   onNavigate?: () => void;
 }) {
-  const { icon: Icon, label, href, newTab, tutorialTarget, badge = 0 } = item;
+  const { label, href, newTab, tutorialTarget, badge = 0, onSelect } = item;
   const name = badge > 0 ? `${label}, ${badge} new` : label;
+  const className = rowClassName(isActive, isCollapsed);
+
+  if (onSelect) {
+    return (
+      <button
+        type="button"
+        data-tutorial={tutorialTarget}
+        onClick={onSelect}
+        aria-haspopup="dialog"
+        aria-expanded={isActive}
+        title={isCollapsed ? name : undefined}
+        aria-label={name}
+        className={`w-full text-left ${className}`}
+      >
+        <RowContent item={item} isCollapsed={isCollapsed} />
+      </button>
+    );
+  }
 
   return (
     <Link
@@ -65,12 +92,32 @@ export function SidebarNavItem({
        * nav item's only name on.
        */
       aria-label={newTab ? `${name} (opens in a new tab)` : name}
-      className={`flex min-h-9 items-center rounded-2xl px-2.5 text-sm transition-[color,background-color] duration-[var(--duration-fast)] ${
-        isActive
-          ? "bg-default font-medium text-foreground"
-          : "text-muted hover:bg-default/60 hover:text-foreground"
-      } ${isCollapsed ? "justify-center gap-0" : "gap-2.5"}`}
+      className={className}
     >
+      <RowContent item={item} isCollapsed={isCollapsed} />
+
+      {/* Nothing to wait for when the destination is another tab — this one
+          never navigates, so `useLinkStatus` would report a pending state that
+          has no end. */}
+      {newTab ? null : <NavPending />}
+    </Link>
+  );
+}
+
+function rowClassName(isActive: boolean, isCollapsed: boolean): string {
+  return `flex min-h-9 items-center rounded-2xl px-2.5 text-sm transition-[color,background-color] duration-[var(--duration-fast)] ${
+    isActive
+      ? "bg-default font-medium text-foreground"
+      : "text-muted hover:bg-default/60 hover:text-foreground"
+  } ${isCollapsed ? "justify-center gap-0" : "gap-2.5"}`;
+}
+
+/** The icon, the label and the count — the same inside a link and a button. */
+function RowContent({ item, isCollapsed }: { item: NavItem; isCollapsed: boolean }) {
+  const { icon: Icon, label, badge = 0 } = item;
+
+  return (
+    <>
       <span className="relative flex shrink-0">
         <Icon aria-hidden="true" className="size-5" />
         {/* The count has nowhere to go on the collapsed rail, so a dot on the
@@ -98,12 +145,7 @@ export function SidebarNavItem({
       </span>
 
       {badge > 0 && !isCollapsed ? <NavBadge count={badge} /> : null}
-
-      {/* Nothing to wait for when the destination is another tab — this one
-          never navigates, so `useLinkStatus` would report a pending state that
-          has no end. */}
-      {newTab ? null : <NavPending />}
-    </Link>
+    </>
   );
 }
 

@@ -26,8 +26,8 @@
 	var useBlockProps = blockEditor.useBlockProps;
 	var InspectorControls = blockEditor.InspectorControls;
 	var BlockControls = blockEditor.BlockControls;
-	var Placeholder = components.Placeholder;
 	var Button = components.Button;
+	var Dashicon = components.Dashicon;
 	var Spinner = components.Spinner;
 	var PanelBody = components.PanelBody;
 	var RangeControl = components.RangeControl;
@@ -221,33 +221,109 @@
 		onOpened();
 	}
 
-	function NotConnected( props ) {
-		return el(
-			Placeholder,
-			{
-				icon: 'location-alt',
-				label: __( 'Pinglide map', 'pinglide' ),
-				instructions: __(
-					'Show your locations on a map. Set it up on Pinglide — a free account, and nothing to copy or paste. Whenever you change the map there and press Publish, this page updates by itself.',
-					'pinglide'
-				),
-			},
-			el(
-				'div',
-				{ className: 'pinglide-actions' },
+	/**
+	 * What the block looks like before it shows a map: a picture of the default
+	 * basemap at the block's real size (`placeholder.webp`, a copy of the app's
+	 * label-free theme picture), with the setup card over it. The card shows on
+	 * hover, on keyboard focus, and while the block is selected or waiting —
+	 * never on hover alone, which no touch screen or keyboard can reach.
+	 *
+	 * Without `connectUrl` it is the loading state: the same picture, a spinner.
+	 */
+	function SetupBackdrop( props ) {
+		var open = props.isSelected || props.waiting || ! props.connectUrl;
+		var body;
+
+		var creditPair = useState( false );
+		var creditOpen = creditPair[ 0 ];
+		var setCreditOpen = creditPair[ 1 ];
+
+		if ( ! props.connectUrl ) {
+			body = el( Spinner );
+		} else {
+			body = el(
+				Fragment,
+				null,
+				el( 'p', { className: 'pinglide-setup__title' }, __( 'Pinglide map', 'pinglide' ) ),
 				el(
-					Button,
-					{
-						variant: 'primary',
-						onClick: function () {
-							openSetup( props.connectUrl, props.onOpened );
+					'p',
+					{ className: 'pinglide-setup__text' },
+					__( 'Show your locations here. Set the map up on Pinglide — a free account, nothing to copy or paste — and this page updates whenever you press Publish there.', 'pinglide' )
+				),
+				el(
+					'div',
+					{ className: 'pinglide-actions' },
+					el(
+						Button,
+						{
+							variant: 'primary',
+							onClick: function () {
+								openSetup( props.connectUrl, props.onOpened );
+							},
 						},
-					},
-					__( 'Set up this map', 'pinglide' )
+						__( 'Set up this map', 'pinglide' )
+					)
 				),
 				props.waiting
-					? el( 'span', null, el( Spinner ), ' ', __( 'Waiting for Pinglide…', 'pinglide' ) )
+					? el( 'p', { className: 'pinglide-setup__waiting' }, el( Spinner ), __( 'Waiting for Pinglide…', 'pinglide' ) )
 					: null
+			);
+		}
+
+		return el(
+			'div',
+			{
+				className: 'pinglide-map__canvas pinglide-setup' + ( open ? ' is-open' : '' ),
+				role: 'group',
+				'aria-label': __( 'Pinglide map', 'pinglide' ),
+			},
+			el( 'div', { className: 'pinglide-setup__map', 'aria-hidden': true } ),
+			el(
+				'span',
+				{ className: 'pinglide-setup__chip', 'aria-hidden': true },
+				el( Dashicon, { icon: 'location-alt' } ),
+				__( 'Pinglide map', 'pinglide' )
+			),
+			el( 'div', { className: 'pinglide-setup__overlay' }, el( 'div', { className: 'pinglide-setup__card' }, body ) ),
+			el( MapCredit, { open: creditOpen, onToggle: function () { setCreditOpen( ! creditOpen ); } } )
+		);
+	}
+
+	/**
+	 * The picture's OpenStreetMap credit, folded into an ⓘ that opens on a click —
+	 * the way MapLibre's compact attribution does on every live map, editor and embed.
+	 */
+	function MapCredit( props ) {
+		return el(
+			'div',
+			{ className: 'pinglide-setup__credit' + ( props.open ? ' is-open' : '' ) },
+			props.open
+				? el(
+						'span',
+						{ className: 'pinglide-setup__credit-text' },
+						'© ',
+						el( 'a', { href: 'https://www.openstreetmap.org/copyright', target: '_blank', rel: 'noopener' }, 'OpenStreetMap' ),
+						' ',
+						__( 'contributors', 'pinglide' )
+				  )
+				: null,
+			el(
+				'button',
+				{
+					type: 'button',
+					className: 'pinglide-setup__credit-button',
+					'aria-label': props.open ? __( 'Hide map credit', 'pinglide' ) : __( 'Show map credit', 'pinglide' ),
+					'aria-expanded': props.open,
+					onClick: props.onToggle,
+				},
+				el(
+					'svg',
+					{ viewBox: '0 0 20 20', width: 20, height: 20, 'aria-hidden': true, focusable: 'false' },
+					el( 'path', {
+						fillRule: 'evenodd',
+						d: 'M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0',
+					} )
+				)
 			)
 		);
 	}
@@ -546,8 +622,35 @@
 			setWaiting( true );
 		};
 
-		if ( ! state ) {
-			return el( 'div', blockProps, el( Placeholder, { icon: 'location-alt', label: __( 'Pinglide map', 'pinglide' ) }, el( Spinner ) ) );
+		var size = el(
+			'style',
+			null,
+			sizeCss( '#' + wrapperId, {
+				height: attributes.height || 520,
+				mobileHeight: attributes.mobileHeight || 0,
+				width: attributes.width || 100,
+				align: attributes.align || '',
+			} )
+		);
+
+		// Loading, or not set up yet: the basemap picture at the size the map will have.
+		if ( ! state || ( ! state.failed && ! map ) ) {
+			return el(
+				'div',
+				blockProps,
+				el(
+					InspectorControls,
+					null,
+					el( SizePanel, { attributes: attributes, setAttributes: setAttributes } )
+				),
+				size,
+				el( SetupBackdrop, {
+					connectUrl: state ? state.connectUrl : '',
+					waiting: waiting,
+					onOpened: onOpened,
+					isSelected: props.isSelected,
+				} )
+			);
 		}
 
 		if ( state.failed ) {
@@ -560,10 +663,6 @@
 					__( "Couldn't check this map's setup. Reload the editor and try again.", 'pinglide' )
 				)
 			);
-		}
-
-		if ( ! map ) {
-			return el( 'div', blockProps, el( NotConnected, { connectUrl: state.connectUrl, waiting: waiting, onOpened: onOpened } ) );
 		}
 
 		var tags = attributes.tags || [];
@@ -584,16 +683,7 @@
 					setReloads( reloads + 1 );
 				},
 			} ),
-			el(
-				'style',
-				null,
-				sizeCss( '#' + wrapperId, {
-					height: attributes.height || 520,
-					mobileHeight: attributes.mobileHeight || 0,
-					width: attributes.width || 100,
-					align: attributes.align || '',
-				} )
-			),
+			size,
 			el( Preview, {
 				src: src,
 				frameKey: map.connectedAt + ':' + reloads,

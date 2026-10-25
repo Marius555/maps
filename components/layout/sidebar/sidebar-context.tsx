@@ -35,6 +35,12 @@ type SidebarContextValue = {
   holdCollapsed: (held: boolean) => void;
   setMobileOpen: (open: boolean) => void;
   /**
+   * The notifications drawer. Here rather than local to the row, because the row
+   * is drawn twice (the rail and the mobile nav) and the drawer once, in the shell.
+   */
+  isNotificationsOpen: boolean;
+  setNotificationsOpen: (open: boolean) => void;
+  /**
    * The map shown off a map's own pages: the last opened, or the account's most
    * recent when that is not this account's (`sidebarMapId`), or null for an
    * account with no maps. The URL's own map always wins over it.
@@ -65,6 +71,7 @@ export function SidebarProvider({
    */
   const [isHeld, setIsHeld] = useState(false);
   const [isMobileOpen, setMobileOpen] = useState(false);
+  const [isNotificationsOpen, setNotificationsOpen] = useState(false);
   const [lastMapId, setLastMapId] = useState(defaultMapId);
 
   const rememberMap = useCallback((mapId: string | null) => {
@@ -120,10 +127,20 @@ export function SidebarProvider({
       toggleCollapsed,
       holdCollapsed: setIsHeld,
       setMobileOpen,
+      isNotificationsOpen,
+      setNotificationsOpen,
       lastMapId,
       rememberMap,
     }),
-    [isHeld, isCollapsed, isMobileOpen, toggleCollapsed, lastMapId, rememberMap],
+    [
+      isHeld,
+      isCollapsed,
+      isMobileOpen,
+      isNotificationsOpen,
+      toggleCollapsed,
+      lastMapId,
+      rememberMap,
+    ],
   );
 
   return (

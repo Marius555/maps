@@ -4,7 +4,7 @@ Tags: map, store locator, locations, stockists, dealers
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -73,6 +73,9 @@ No. Pinglide leaves out maps viewed in the WordPress editor.
 The maps disappear from your pages, and come back when you reactivate it. Deleting the plugin forgets which map each block showed; your maps stay in your Pinglide account.
 
 == Changelog ==
+
+= 0.2.1 =
+* The block shows a map with a setup button, not an empty box, until it is set up.
 
 = 0.2.0 =
 * The block shows the live map in the editor, at its real size.

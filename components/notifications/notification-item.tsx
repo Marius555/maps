@@ -31,12 +31,15 @@ export function NotificationItem({
   isOpen,
   onToggle,
   now,
+  onNavigate,
 }: {
   notification: AppNotification;
   isNew: boolean;
   isOpen: boolean;
   onToggle: () => void;
   now: number;
+  /** Called when the message's in-app link is followed — the drawer closes. */
+  onNavigate?: () => void;
 }) {
   const { id, title, body, kind, linkUrl, linkLabel, publishedAt } = notification;
   const style = NOTIFICATION_KIND_STYLE[kind];
@@ -122,7 +125,7 @@ export function NotificationItem({
             >
               <div className="flex flex-wrap items-center gap-x-4 gap-y-3 pt-3">
                 {linkUrl && linkLabel ? (
-                  <NotificationLink href={linkUrl} label={linkLabel} />
+                  <NotificationLink href={linkUrl} label={linkLabel} onNavigate={onNavigate} />
                 ) : null}
                 <span className="text-xs text-muted">
                   {format(new Date(publishedAt), "d MMM yyyy, HH:mm")}

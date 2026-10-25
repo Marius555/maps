@@ -58,6 +58,8 @@ define( 'PINGLIDE_APP_URL', 'http://localhost:3000' );
 - The page's network panel: `map.js`, MapLibre and `live.json` from the CDN, and nothing
   from the dashboard's origin.
 - A visitor (logged out) on a page whose block is not connected sees nothing at all.
+- A block not set up yet shows the basemap picture at the block's height; hovering, tabbing
+  to it or selecting it shows **Set up this map**.
 - The editor shows the live map at the block's height; the editor's Mobile preview shows the
   phone height; width + left/right alignment flows text beside it, and phones go full width.
 - Ticking a tag in **Locations shown** leaves only those pins, in the editor and live.

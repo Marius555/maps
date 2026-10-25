@@ -1,3 +1,4 @@
+import { NotificationsDrawer } from "@/components/notifications/drawer/notifications-drawer";
 import { TutorialRouteWatcher } from "@/components/onboarding/tutorial-route-watcher";
 import { VerifyEmailBanner } from "@/components/verify-email/verify-email-banner";
 import type { AuthUser } from "@/lib/auth/types";
@@ -84,6 +85,7 @@ export function AppShell({
       >
         <Sidebar user={user} plan={plan} />
         <SidebarMobile user={user} plan={plan} />
+        <NotificationsDrawer />
 
         {/* The provider wraps the header *and* the page, because the trigger a
             page portals into the header is rendered from inside `children`. */}

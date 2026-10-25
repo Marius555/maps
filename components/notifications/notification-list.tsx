@@ -10,7 +10,7 @@ import { NotificationSection } from "./notification-section";
 import { NotificationsEmpty } from "./notifications-empty";
 
 /**
- * The Notifications page: an inbox, in a readable column.
+ * The inbox: on the Notifications page, and in the drawer the sidebar opens.
  *
  * Opening it is reading it: once drawn, the sidebar's count clears and the
  * account's stamp moves on. What was new at load stays marked "New" for the
@@ -20,7 +20,14 @@ import { NotificationsEmpty } from "./notifications-empty";
  *
  * Every row starts shut and one opens at a time (CLAUDE.md §8, folds).
  */
-export function NotificationList({ initialFeed }: { initialFeed: NotificationFeed }) {
+export function NotificationList({
+  initialFeed,
+  onNavigate,
+}: {
+  initialFeed: NotificationFeed;
+  /** Set in the drawer: following a link away closes it. Absent, the empty state links back to the maps. */
+  onNavigate?: () => void;
+}) {
   const { data = initialFeed } = useNotifications(initialFeed);
   const markSeen = useMarkNotificationsSeen();
   const { mutate } = markSeen;
@@ -39,7 +46,7 @@ export function NotificationList({ initialFeed }: { initialFeed: NotificationFee
     mutate(initialFeed);
   }, [initialFeed, mutate]);
 
-  if (data.items.length === 0) return <NotificationsEmpty />;
+  if (data.items.length === 0) return <NotificationsEmpty showBackLink={!onNavigate} />;
 
   const fresh = data.items.filter((item) => newIds.has(item.id));
   const earlier = data.items.filter((item) => !newIds.has(item.id));
@@ -74,6 +81,7 @@ export function NotificationList({ initialFeed }: { initialFeed: NotificationFee
                 setOpenId((current) => (current === item.id ? null : item.id))
               }
               now={now}
+              onNavigate={onNavigate}
             />
           ))}
         </NotificationSection>

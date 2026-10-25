@@ -1,8 +1,10 @@
 # Notifications
 
 Messages from us to account owners: product news, maintenance, a note about one
-account. The sidebar's **Notifications** row carries an unread count; `/notifications`
-lists them. They are written from the operator console's **Notifications** page
+account. The sidebar's **Notifications** row carries an unread count and opens them in a
+drawer over the current page — down the right edge from `md`, a bottom sheet below it.
+`/notifications` lists the same inbox as a page, kept for deep links; nothing in the app
+links to it. They are written from the operator console's **Notifications** page
 (`/admin/notifications`), which also lists what was sent and deletes it.
 
 ## Invariants
@@ -20,12 +22,20 @@ lists them. They are written from the operator console's **Notifications** page
   `deletionStartedAt` live there too). A broadcast stays one row however many accounts.
 - **Unread = published after `max(notificationsSeenAt, registration)`.** A new account is
   not greeted with a count of every broadcast ever sent; older ones still list.
-- **Opening the page is reading it.** The count clears; the items new at load stay marked
+- **Opening the drawer or the page is reading it.** The count clears; the items new at load stay marked
   "New" for the visit (`newIds`, taken from the server's feed), even after a refetch
   reports them read.
 - **The mark-seen mutation cancels in-flight feed queries before zeroing the count.** On a
   cold load of `/notifications` the sidebar's own first fetch otherwise lands after it and
   puts the count back — measured, not hypothetical.
+- **The drawer fetches a fresh feed on open, then marks *that* seen** — never the
+  sidebar's cached copy (`useFreshNotificationFeed`). The cache can be five minutes old,
+  and a message sent in that window would be stamped read without ever showing as New.
+  The page gets the same guarantee by rendering on the server. The drawer's content
+  unmounts when it shuts, so every open is a new visit.
+- **The drawer's in-app links close it; outside links leave it open** (they open a new
+  tab). `onNavigate` is threaded list → item → link; its absence is what tells the
+  empty state it is on the page and should offer "Back to your maps".
 - **The count is fetched on the client, not in the dashboard layout**, so no page waits
   on it. Focus refetch plus a 10-minute interval; there is no push.
 - A future `publishedAt` is a scheduled message; `expiresAt` past hides it. Both filtered at
@@ -49,5 +59,5 @@ lists them. They are written from the operator console's **Notifications** page
 | Seen stamp | `lib/notifications/seen.ts` |
 | Routes | `GET /api/notifications`, `POST /api/notifications/seen` (open to unconfirmed accounts) |
 | Console | `app/admin/notifications/page.tsx`, `components/admin/sections/notifications/**`, `POST /api/admin/notifications`, `DELETE /api/admin/notifications/[id]`, `lib/admin/metrics/notifications.ts`, `lib/repositories/admin/notifications.ts` |
-| Client | `lib/query/notifications.ts`, `components/notifications/**` — an inbox in `Measure`: `notification-list` (New / Earlier, one row open at a time), `notification-section`, `notification-item` (an accordion row, also the console's preview), `notification-time` |
-| Chrome | `badge` on `NavItem` (count expanded, dot collapsed); dot on the mobile menu button |
+| Client | `lib/query/notifications.ts`, `components/notifications/**` — the inbox, in `Measure` on the page and in `drawer/` (`notifications-drawer`, `notifications-panel`, `notifications-skeleton`) from the sidebar: `notification-list` (New / Earlier, one row open at a time), `notification-section`, `notification-item` (an accordion row, also the console's preview), `notification-time` |
+| Chrome | `badge` on `NavItem` (count expanded, dot collapsed); `onSelect` makes the row a button; open state is `isNotificationsOpen` in the sidebar context; drawer mounted once in `AppShell`; dot on the mobile menu button |

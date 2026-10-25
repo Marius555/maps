@@ -62,6 +62,13 @@ in the navbar's Integrations menu from `lib/marketing/integrations.ts` —
   is the plugin's one server HTTP call, gated on `is_admin()` — Elementor registers controls
   on front-end renders too, so without the gate it would run on page views. Cached in one
   transient (`pinglide_tags`), which `uninstall.php` deletes.
+- **A block not set up yet draws a picture, not a map.** There is no snapshot to draw, so
+  `SetupBackdrop` shows `blocks/map/placeholder.webp` — a byte-for-byte copy of the app's
+  `public/map-themes/mono@2x.webp` (Mono, `DEFAULT_MAP_STYLE`, no labels) — at the block's own
+  size, with the setup card on hover, focus, selection or while waiting. Never on hover
+  alone: touch and keyboard cannot hover. Re-copy it when the theme pictures are
+  regenerated or `DEFAULT_MAP_STYLE` changes. It carries the OpenStreetMap credit, because it is OSM data (§12), folded into an ⓘ
+  that opens on click like MapLibre's compact attribution everywhere else.
 - **Every display option means, when absent, what 0.1.0 did.** `Pinglide_Embed::options()` is
   the one normaliser for the block, the shortcode, the preview and Elementor.
 

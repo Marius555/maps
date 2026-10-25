@@ -10,6 +10,15 @@ import { useSidebar } from "./sidebar-context";
 import { SidebarMapNav, isItemActive } from "./sidebar-map-nav";
 import { SidebarNavItem, type NavItem } from "./sidebar-nav-item";
 
+// Beside All maps rather than in the account menu: a message from us is only
+// worth sending if it is seen, and a count in a closed menu is not. Opens a
+// drawer over the page (see below) rather than navigating to /notifications.
+const NOTIFICATIONS_ITEM: NavItem = {
+  href: "/notifications",
+  label: "Notifications",
+  icon: Bell,
+};
+
 const GLOBAL_ITEMS: NavItem[] = [
   {
     href: "/maps",
@@ -18,9 +27,7 @@ const GLOBAL_ITEMS: NavItem[] = [
     // Exact, or it would stay lit while you're inside a single map.
     exact: true,
   },
-  // Beside All maps rather than in the account menu: a message from us is only
-  // worth sending if it is seen, and a count in a closed menu is not.
-  { href: "/notifications", label: "Notifications", icon: Bell },
+  NOTIFICATIONS_ITEM,
   {
     href: "/docs",
     label: "Documentation",
@@ -39,8 +46,24 @@ export function SidebarNav({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const { lastMapId, rememberMap } = useSidebar();
+  const { lastMapId, rememberMap, isNotificationsOpen, setNotificationsOpen } =
+    useSidebar();
   const unread = useNotifications().data?.unreadCount ?? 0;
+
+  /*
+   * Notifications is read over whatever page the owner is on, so reading a
+   * message from us does not throw away the map they were editing. On a phone
+   * the row is inside the nav drawer, which closes first — two drawers stacked
+   * would be two focus traps.
+   */
+  const notificationsItem: NavItem = {
+    ...NOTIFICATIONS_ITEM,
+    badge: unread,
+    onSelect: () => {
+      onNavigate?.();
+      setNotificationsOpen(true);
+    },
+  };
 
   /*
    * The map in the URL, or failing that the one the layout chose — the last
@@ -63,8 +86,12 @@ export function SidebarNav({
         {GLOBAL_ITEMS.map((item) => (
           <li key={item.href}>
             <SidebarNavItem
-              item={item.href === "/notifications" ? { ...item, badge: unread } : item}
-              isActive={isItemActive(pathname, item)}
+              item={item === NOTIFICATIONS_ITEM ? notificationsItem : item}
+              isActive={
+                item === NOTIFICATIONS_ITEM
+                  ? isNotificationsOpen
+                  : isItemActive(pathname, item)
+              }
               isCollapsed={isCollapsed}
               onNavigate={onNavigate}
             />

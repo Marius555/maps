@@ -10,11 +10,22 @@ import { LinkButton } from "@/components/ui/link-button";
  * outside address opens in a new tab: the owner was reading their own
  * dashboard, and replacing it with somebody's blog post makes Back the only way
  * home. The address was checked on write and again in `toNotification`.
+ *
+ * `onNavigate` is for the in-app path only — the drawer closes as the page
+ * changes under it, and stays open when an outside link opens another tab.
  */
-export function NotificationLink({ href, label }: { href: string; label: string }) {
+export function NotificationLink({
+  href,
+  label,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  onNavigate?: () => void;
+}) {
   if (href.startsWith("/")) {
     return (
-      <LinkButton href={href} variant="secondary" size="sm">
+      <LinkButton href={href} variant="secondary" size="sm" onClick={onNavigate}>
         {label}
       </LinkButton>
     );

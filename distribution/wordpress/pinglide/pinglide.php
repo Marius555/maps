@@ -3,7 +3,7 @@
  * Plugin Name:       Pinglide
  * Plugin URI:        https://pinglide.com/for/wordpress
  * Description:       Put your locations on a map. Drop the Pinglide map block on a page, connect it to your Pinglide account, and manage the locations there — press Publish and your page updates by itself.
- * Version:           0.2.0
+ * Version:           0.2.1
  * Requires at least: 6.5
  * Requires PHP:      7.4
  * Author:            Pinglide
@@ -17,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'PINGLIDE_VERSION', '0.2.0' );
+define( 'PINGLIDE_VERSION', '0.2.1' );
 define( 'PINGLIDE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PINGLIDE_BASENAME', plugin_basename( __FILE__ ) );
 
