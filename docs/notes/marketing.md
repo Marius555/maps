@@ -8,7 +8,9 @@
   viewport under the 72px header (`calc(100svh-4.5rem)`, measured) and centres the
   title, the toggle row and the cards. Measured 2026-10-03 at 1536×695 — a 1536×864
   laptop at 125% scaling — the cards end at **688px**, seven pixels inside the
-  window. That is why there is no eyebrow and no lede, why the title is one line at
+  window. Re-measured 2026-10-30 after the "People on the team" row was added (team
+  seats): the cards end at **667px** at 1536×695, 680 at 1280×720, 718 at 1024×768 —
+  still inside. That is why there is no eyebrow and no lede, why the title is one line at
   `lg`, why the card rows are `PlanRowList dense`, and why the discount control sits
   in the toggle's row rather than under the cards. Re-measure before adding a row to
   a card. **The title is gone from the screen** (`Section`'s `hideTitle`, an `sr-only`
