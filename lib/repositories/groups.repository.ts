@@ -191,7 +191,7 @@ export async function createGroup(
         color: input.color,
         sortOrder: input.sortOrder,
       },
-      permissions: ownerPermissions(ctx.userId),
+      permissions: ownerPermissions(ctx.workspaceId),
     });
   } catch (error) {
     throw toRepositoryError(error);

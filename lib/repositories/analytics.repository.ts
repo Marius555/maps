@@ -10,7 +10,7 @@ import { isConflict, toRepositoryError } from "@/lib/appwrite/errors";
 import { env } from "@/lib/env";
 import { MAX_EVENTS, type CollectEvent } from "@/lib/validation/collect.schema";
 import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
-import type { RepoContext } from "./context";
+import { asWorkspaceId, type RepoContext } from "./context";
 import { toMapSession } from "./mappers";
 import { getMap } from "./maps.repository";
 import { getUserPlan, planAllows, SESSION_LIMITS } from "./plan-limits";
@@ -180,7 +180,7 @@ async function loadCollectGate(mapId: string): Promise<CollectGate | null> {
     if (!readEmbedSettings(parseSettings(row.settings)).analytics) return null;
 
     const [plan, used] = await Promise.all([
-      getUserPlan(row.userId),
+      getUserPlan(asWorkspaceId(row.userId)),
       countSessionsThisMonth(mapId),
     ]);
 

@@ -1,5 +1,5 @@
 import { ok } from "@/lib/api/responses";
-import { withAuth } from "@/lib/api/route";
+import { withPersonalAuth } from "@/lib/api/route";
 import { revokeOtherSessions } from "@/lib/auth/sessions";
 
 /**
@@ -9,6 +9,6 @@ import { revokeOtherSessions } from "@/lib/auth/sessions";
  * using is a defence, not a change to anything the account owns, and it should
  * not wait on a confirmation link.
  */
-export const DELETE = withAuth(async () => ok({ signedOut: await revokeOtherSessions() }), {
+export const DELETE = withPersonalAuth(async () => ok({ signedOut: await revokeOtherSessions() }), {
   allowUnverified: true,
 });

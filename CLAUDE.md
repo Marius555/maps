@@ -136,6 +136,19 @@ and is not done. Signup and Google sign-in now honour `?next=` for it. Its publi
 `/for/wordpress`, reached from the navbar's **Integrations** menu, which lists
 `lib/marketing/integrations.ts`. `docs/notes/distribution.md`.
 
+**Team seats are the fourth call made against rivals, and they override §11** ("teams and
+permissions"). Every rival sells seats; a brand's map is worked on by more than one person.
+The owner invites by email from **Settings → Team** as admin, editor or viewer; the invitee
+joins from the link or from **Invitations for you**, and switches teams in the sidebar.
+Seats are per plan (Free 1, Starter 3, Pro 10), owner + members + pending invites. **A
+workspace is one person's account and its id is their user id**, so every existing
+`userId` column already named a workspace — no migration, and billing is untouched.
+**Every authenticated route names its scope** — `withMapAuth` (the map's owner),
+`withAuth` (the active-team cookie, a hint checked on every request), `withPersonalAuth` —
+and `RepoContext` carries `{ workspaceId, actorId, role }` with a branded `WorkspaceId`, so
+a person's id cannot be passed where a workspace's is meant. A viewer's write is refused in
+`withAuth` beside the email gate. No ownership transfer in v1. `docs/notes/team.md`.
+
 **Not built yet, and next — the rest of Week 4:** landing page. (The docs have their screenshots now, taken from the running app by `npm run docs:screenshots`. The
 one platform page §10 asked for is WordPress's, not Webflow's.) Plus the two upstreams §12 says are forced before anyone pays
 us, which are now a switch rather than two machines: `GEOCODER_PROVIDER=geoapify` and
@@ -452,6 +465,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `scripts/deploy-site.mjs`, `.github/workflows/deploy.yml`, `output`/`typescript` in `next.config.ts` | `docs/notes/deploy.md` |
 | `scripts/release.mjs`, `scripts/upload-cdn.mjs`, `scripts/build-info.mjs`, `embed/channel.mjs`, `lib/version.ts`, `app/api/version/**`, `CHANGELOG.md` | `docs/notes/versioning.md` |
 | `distribution/**`, `lib/connect/**`, `components/connect/**`, `app/(auth)/connect/**`, `app/api/connect/**`, `lib/auth/oauth-next.ts` | `docs/notes/distribution.md` |
+| `lib/team/**`, `lib/repositories/{memberships,invites}.repository.ts`, `lib/repositories/context.ts`, `app/api/{team,invites,workspaces}/**`, `app/(auth)/invite/**`, `app/(dashboard)/settings/team/**`, `components/team/**`, `components/user-settings/team/**`, the scopes in `lib/api/route.ts` | `docs/notes/team.md` |
 | `app/admin/**`, `app/(auth)/login/admin/**`, `app/api/admin/**`, `components/admin/**`, `lib/admin/**`, `lib/repositories/admin/**`, `lib/api-usage/**`, `lib/repositories/{api-calls,email-log}.repository.ts` | `docs/notes/admin.md` |
 
 Self-hosting runbooks, unchanged: `docs/self-hosting-geocoding.md`,
@@ -687,12 +701,20 @@ second is a circuit breaker: the upstream sells one daily quota shared by everyo
 so one customer's bulk import can starve every other customer's and the only symptom
 is somebody else's feature failing. `docs/notes/billing.md`.
 
+### `memberships` / `invites`
+`memberships`: `workspaceId` · `userId` · `role` (`admin` | `editor` | `viewer`).
+`invites`: `workspaceId` · `email` · `role` · `invitedBy` · `tokenHash` · `expiresAt` · `sentAt`
+
+Who else works in a workspace — which is one person's account, its id their user id, so the
+owner is never a row. An invite's token is stored only as its sha256. Both tables carry no
+permission and are read only through the admin client. `docs/notes/team.md`.
+
 ### Plan limits
-| Plan | Maps | Places/map | Shapes/map | Lookups/month | Routes | Sheets | Analytics | Views |
-|---|---|---|---|---|---|---|---|---|
-| Free | 1 | 25 | 3 | 250 | — | — | — | unlimited |
-| Starter €19 / €190 yr | 3 | 300 | 50 | 4,000 | ✓ | ✓ | ✓ | unlimited |
-| Pro €39 / €390 yr | 15 | 3,000 | 250 | 50,000 | ✓ | ✓ | ✓ | unlimited |
+| Plan | Maps | Seats | Places/map | Shapes/map | Lookups/month | Routes | Sheets | Analytics | Views |
+|---|---|---|---|---|---|---|---|---|---|
+| Free | 1 | 1 | 25 | 3 | 250 | — | — | — | unlimited |
+| Starter €19 / €190 yr | 3 | 3 | 300 | 50 | 4,000 | ✓ | ✓ | ✓ | unlimited |
+| Pro €39 / €390 yr | 15 | 10 | 3,000 | 250 | 50,000 | ✓ | ✓ | ✓ | unlimited |
 
 Enforce limits **server-side** in repositories, never only in the UI.
 
@@ -782,7 +804,7 @@ One deviation worth knowing: **the embed's search does not geocode.** It filters
 
 ## 11. Explicitly out of scope for v1
 
-Teams and permissions · public API · **turn-by-turn directions** (a route's line, distance and drive are in — see §0; step-by-step navigation is not, and we link out to a maps app for that) · ~~analytics dashboards~~ (**built anyway, deliberately — §0 records the override and `docs/notes/analytics.md` the reasoning**) · custom styling beyond 3–4 presets · uploaded image/floor-plan maps · mobile apps · white-labelling · multi-language UI · autocomplete · SEO location pages.
+~~Teams and permissions~~ (**built anyway — team seats, §0 and `docs/notes/team.md`**) · public API · **turn-by-turn directions** (a route's line, distance and drive are in — see §0; step-by-step navigation is not, and we link out to a maps app for that) · ~~analytics dashboards~~ (**built anyway, deliberately — §0 records the override and `docs/notes/analytics.md` the reasoning**) · custom styling beyond 3–4 presets · uploaded image/floor-plan maps · mobile apps · white-labelling · multi-language UI · autocomplete · SEO location pages.
 
 Each of these is a week not spent getting a paying customer. If one seems necessary, say why and ask first.
 

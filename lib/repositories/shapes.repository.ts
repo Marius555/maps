@@ -180,7 +180,7 @@ export async function createShape(
 ): Promise<Shape> {
   await getMap(ctx, mapId);
 
-  const plan = await getUserPlan(ctx.userId);
+  const plan = await getUserPlan(ctx.workspaceId);
   const limit = PLAN_LIMITS[plan].shapes;
 
   if ((await countShapes(ctx, mapId)) >= limit) {
@@ -210,7 +210,7 @@ export async function createShape(
         groupId: input.groupId ?? "",
         ...toShapeColumns(input.geometry),
       },
-      permissions: ownerPermissions(ctx.userId),
+      permissions: ownerPermissions(ctx.workspaceId),
     });
   } catch (error) {
     throw toRepositoryError(error);
@@ -247,7 +247,7 @@ export async function createShapes(
   await getMap(ctx, mapId);
   if (inputs.length === 0) return [];
 
-  const plan = await getUserPlan(ctx.userId);
+  const plan = await getUserPlan(ctx.workspaceId);
   const limit = PLAN_LIMITS[plan].shapes;
   const existing = await countShapes(ctx, mapId);
 
@@ -260,7 +260,7 @@ export async function createShapes(
     inputs.map((input) => input.geometry),
   );
 
-  const permissions = ownerPermissions(ctx.userId);
+  const permissions = ownerPermissions(ctx.workspaceId);
   const created: Shape[] = [];
 
   try {
@@ -315,7 +315,7 @@ export async function updateShape(
 ): Promise<Shape> {
   await getShape(ctx, mapId, shapeId);
 
-  if (input.geometry) assertRoutesAllowed(await getUserPlan(ctx.userId), [input.geometry]);
+  if (input.geometry) assertRoutesAllowed(await getUserPlan(ctx.workspaceId), [input.geometry]);
 
   /*
    * Geometry is the one field whose domain shape is not its column shape — one

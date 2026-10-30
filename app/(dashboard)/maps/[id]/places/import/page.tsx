@@ -2,12 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { ImportWizard } from "@/components/places/import/import-wizard";
+import { ViewOnlyEmpty } from "@/components/team/view-only-empty";
 import { Container } from "@/components/ui/container";
 import { PageTitle } from "@/components/ui/page-title";
 import { requireUser } from "@/lib/auth/current-user";
-import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
-import { loadMap } from "@/lib/repositories/load-map";
 import {
   PLAN_LIMITS,
   getUserPlan,
@@ -15,6 +14,8 @@ import {
 } from "@/lib/repositories/plan-limits";
 import { countPlaces } from "@/lib/repositories/places.repository";
 import type { AppMap } from "@/lib/repositories/types";
+import { loadMapAccess } from "@/lib/team/resolve";
+import { can, type WorkspaceRole } from "@/lib/team/roles";
 
 export const metadata: Metadata = { title: "Import locations" };
 
@@ -33,22 +34,24 @@ export default async function ImportPage(
    * server-side, which is where CLAUDE.md §6 requires the actual enforcement to
    * live — this is the courtesy of saying it early, not the rule.
    *
-   * All three in parallel, like `loadPlaces` on the Locations page. None needs
-   * another, and the map used to be awaited on its own first, which put a whole
-   * round trip of skeleton in front of the other two for nothing. `countPlaces`
-   * checks ownership itself, so a missing map reaches the same `notFound()`
-   * whichever read fails first. The try wraps only the fetch — see the
+   * Access first, because it names the workspace whose plan sets the headroom
+   * — the map's owner's, which for a team member is not their own — and then
+   * the other two in parallel. The try wraps only the fetch — see the
    * Locations page for why.
    */
   let map: AppMap;
+  let role: WorkspaceRole;
   let plan: Awaited<ReturnType<typeof getUserPlan>>;
   let used: number;
 
   try {
-    [map, plan, used] = await Promise.all([
-      loadMap(user.id, id),
-      getUserPlan(user.id),
-      countPlaces(repoContext(user.id), id),
+    const access = await loadMapAccess(user.id, id);
+
+    map = access.map;
+    role = access.ctx.role;
+    [plan, used] = await Promise.all([
+      getUserPlan(access.ctx.workspaceId),
+      countPlaces(access.ctx, id),
     ]);
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
@@ -78,11 +81,19 @@ export default async function ImportPage(
        * up is there without anything new being measured. `PageTitle` is
        * `sr-only` and takes none of it.
        */}
-      <ImportWizard
-        map={map}
-        headroom={{ plan, limit: PLAN_LIMITS[plan].places, used }}
-        canSyncSheets={planAllows(plan, "sheetSync")}
-      />
+      {can(role, "edit") ? (
+        <ImportWizard
+          map={map}
+          headroom={{ plan, limit: PLAN_LIMITS[plan].places, used }}
+          canSyncSheets={planAllows(plan, "sheetSync")}
+        />
+      ) : (
+        <ViewOnlyEmpty
+          title="Importing needs editor access"
+          backHref={`/maps/${map.id}/places`}
+          backLabel="Back to locations"
+        />
+      )}
     </Container>
   );
 }

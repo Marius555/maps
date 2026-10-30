@@ -35,11 +35,13 @@ import { useAccountDeletion } from "./use-account-deletion";
 export function DeleteAccountDialog({
   email,
   mapCount,
+  memberCount,
   isOpen,
   onOpenChange,
 }: {
   email: string;
   mapCount: number;
+  memberCount: number;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }) {
@@ -94,6 +96,15 @@ export function DeleteAccountDialog({
               {maps}, every location and photo on them, and their analytics are
               deleted for good. Maps embedded on your websites stop working.
             </p>
+            {memberCount > 0 ? (
+              // Said before anything else is: these people did not choose this,
+              // and they find out by their next click failing (docs/notes/team.md).
+              <p className="font-medium text-foreground">
+                {memberCount === 1
+                  ? "1 person on your team loses access to these maps."
+                  : `${String(memberCount)} people on your team lose access to these maps.`}
+              </p>
+            ) : null}
             <p>
               Any subscription is cancelled first, so nothing more is charged.
               This can&apos;t be undone.

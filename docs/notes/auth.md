@@ -6,6 +6,7 @@ emails.
 
 ## Invariants
 
+- **Team membership is never part of `AuthUser`**, which is cached 60 s per instance; it is read fresh per request by `lib/team/resolve.ts`, so a removed member is out on their next click. Invite links follow the cross-site landing rule below (`/invite/<token>` is outside the matcher), and accepting one stays behind the email gate. `docs/notes/team.md`.
 - **The session is the httpOnly cookie our server sets, and there is only one of
   them.** `setSessionCookie` writes `a_session_<projectId>`; `proxy.ts`, the
   dashboard layout's `getCurrentUser()` and `requireUser()` in every `withAuth`

@@ -10,6 +10,7 @@ import { useConnectWordPress } from "@/lib/query/connect";
 import { useMaps } from "@/lib/query/maps";
 import type { AppMap } from "@/lib/repositories/types";
 import { ConnectNote, connectBlocked } from "./connect-note";
+import { TeamPicker, useCanConnect } from "./team-picker";
 
 const NEW = "new";
 const NOTE_ID = "connect-note";
@@ -33,6 +34,8 @@ export function MapChoice({
 }) {
   const maps = useMaps();
   const connect = useConnectWordPress();
+  // A viewer of the switched-to team can see its maps but not publish one.
+  const canConnect = useCanConnect();
   const [picked, setPicked] = useState<string | null>(null);
   const [name, setName] = useState(suggestedName || "Our locations");
 
@@ -65,6 +68,8 @@ export function MapChoice({
         if (!blocked && !nameMissing) submit();
       }}
     >
+      <TeamPicker />
+
       <RadioGroup
         aria-label={`Map to show on ${host}`}
         value={choice}
@@ -92,13 +97,20 @@ export function MapChoice({
 
       <ConnectNote id={NOTE_ID} map={chosen} host={host} />
 
+      {canConnect ? null : (
+        <p className="text-sm text-muted">
+          You can view this team&apos;s maps but not publish them. Pick another team, or ask an
+          admin for editor access.
+        </p>
+      )}
+
       {connect.isError ? <ErrorMessage error={connect.error} /> : null}
 
       <Button
         type="submit"
         fullWidth
         isPending={connect.isPending}
-        isDisabled={blocked || nameMissing}
+        isDisabled={blocked || nameMissing || !canConnect}
         aria-describedby={NOTE_ID}
       >
         Connect

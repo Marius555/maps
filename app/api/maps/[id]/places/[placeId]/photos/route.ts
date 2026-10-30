@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { fail, ok } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withMapAuth } from "@/lib/api/route";
 import { assertUploadSize } from "@/lib/api/upload-size";
 import {
   addPlacePhotos,
@@ -28,7 +28,7 @@ const reorderSchema = z.object({
  * `getAll`, not `get`: the picker is `multiple`, and a visitor choosing four
  * photos should be four uploads and one row write rather than four round trips.
  */
-export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
+export const POST = withMapAuth<Params>(async ({ request, params, ctx }) => {
   assertUploadSize(request, "photos");
 
   let files: FormDataEntryValue[];
@@ -54,7 +54,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   return ok({ place });
 }, { rateLimit: "upload" });
 
-export const PATCH = withAuth<Params>(async ({ request, params, ctx }) => {
+export const PATCH = withMapAuth<Params>(async ({ request, params, ctx }) => {
   const { photoIds } = await parseBody(request, reorderSchema);
 
   return ok({
@@ -62,6 +62,6 @@ export const PATCH = withAuth<Params>(async ({ request, params, ctx }) => {
   });
 });
 
-export const DELETE = withAuth<Params>(async ({ params, ctx }) =>
+export const DELETE = withMapAuth<Params>(async ({ params, ctx }) =>
   ok({ place: await clearPlacePhotos(ctx, params.id, params.placeId) }),
 );

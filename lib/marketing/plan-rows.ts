@@ -25,6 +25,7 @@ import type { MarketingPlan } from "./plans";
  */
 export type PlanRowId =
   | "maps"
+  | "seats"
   | "places"
   | "shapes"
   | "views"
@@ -45,6 +46,11 @@ export type PlanRow = {
 export function planRows(plan: MarketingPlan): PlanRow[] {
   return [
     { id: "maps", kind: "quantity", label: "Maps", value: plan.maps },
+    /*
+     * Beside Maps, because both are about the account rather than one map: how
+     * many there are, and how many people may work on them.
+     */
+    { id: "seats", kind: "quantity", label: "People on the team", value: plan.seats },
     {
       id: "places",
       kind: "quantity",

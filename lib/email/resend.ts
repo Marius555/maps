@@ -54,7 +54,7 @@ function sender(): string {
  * Which message this is, for the operator console's email log. One per
  * template in `./templates`; required so a new caller cannot send unlabelled.
  */
-export type EmailTemplate = "verify" | "welcome" | "reset" | "support";
+export type EmailTemplate = "verify" | "welcome" | "reset" | "support" | "invite";
 
 export type SendEmailInput = {
   template: EmailTemplate;

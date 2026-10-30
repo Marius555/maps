@@ -2,16 +2,16 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PublishPanel } from "@/components/publish/publish-panel";
+import { RoleProvider } from "@/components/team/role-context";
 import { requireUser } from "@/lib/auth/current-user";
 import { publishBadge } from "@/lib/embed/badge";
 import { getCardDesign } from "@/lib/repositories/card-design.repository";
-import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
 import { listAllGroups } from "@/lib/repositories/groups.repository";
-import { loadMap } from "@/lib/repositories/load-map";
 import { listAllPlaces } from "@/lib/repositories/places.repository";
 import { getUserPlan, planAllows } from "@/lib/repositories/plan-limits";
 import { listAllShapes } from "@/lib/repositories/shapes.repository";
+import { loadMapAccess } from "@/lib/team/resolve";
 
 export const metadata: Metadata = { title: "Publish" };
 
@@ -43,17 +43,19 @@ export default async function MapPublishPage(
    * the preview is wide enough to draw the desktop layout a visitor gets.
    */
   return (
-    <PublishPanel
-      initialMap={data.map}
-      initialPlaces={data.places}
-      initialShapes={data.shapes}
-      initialGroups={data.groups}
-      initialCardDesign={data.cardDesign}
-      badge={data.badge}
-      // Set by the Analytics tab's "Turn it on" — the sidebar opens on the
-      // switch and flips it, through the designer's own writer.
-      turnOnAnalytics={search.analytics === "on"}
-    />
+    <RoleProvider role={data.role}>
+      <PublishPanel
+        initialMap={data.map}
+        initialPlaces={data.places}
+        initialShapes={data.shapes}
+        initialGroups={data.groups}
+        initialCardDesign={data.cardDesign}
+        badge={data.badge}
+        // Set by the Analytics tab's "Turn it on" — the sidebar opens on the
+        // switch and flips it, through the designer's own writer.
+        turnOnAnalytics={search.analytics === "on"}
+      />
+    </RoleProvider>
   );
 }
 
@@ -72,17 +74,21 @@ async function loadPublishData(userId: string, mapId: string) {
   // pin or a route is painted (lib/map/group-colors.ts). Fetched here rather
   // than from the browser so the preview never draws the ungrouped colours once
   // and then rebuilds — the same argument the card design makes above.
-  const [map, places, shapes, groups, cardDesign, plan] = await Promise.all([
-    loadMap(userId, mapId),
-    listAllPlaces(repoContext(userId), mapId),
-    listAllShapes(repoContext(userId), mapId),
-    listAllGroups(repoContext(userId), mapId),
-    getCardDesign(repoContext(userId)),
-    getUserPlan(userId),
+  //
+  // Access comes first and alone: it names the workspace every read below is
+  // scoped to, whose card design the preview draws and whose plan decides the
+  // badge — the map's owner's, which for a team member is not their own.
+  const { map, ctx } = await loadMapAccess(userId, mapId);
+  const [places, shapes, groups, cardDesign, plan] = await Promise.all([
+    listAllPlaces(ctx, mapId),
+    listAllShapes(ctx, mapId),
+    listAllGroups(ctx, mapId),
+    getCardDesign(ctx),
+    getUserPlan(ctx.workspaceId),
   ]);
   // The badge a publish would add, so the preview draws it before a visitor
   // sees it — the same question publish.repository.ts asks.
   const badge = planAllows(plan, "noBadge") ? undefined : publishBadge();
 
-  return { map, places, shapes, groups, cardDesign, badge };
+  return { map, places, shapes, groups, cardDesign, badge, role: ctx.role };
 }

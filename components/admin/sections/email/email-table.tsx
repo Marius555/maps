@@ -14,6 +14,7 @@ const TEMPLATE_LABEL: Record<string, string> = {
   welcome: "Welcome",
   reset: "Password reset",
   support: "Support request",
+  invite: "Team invite",
 };
 
 const COLUMNS: DataColumn<Row>[] = [

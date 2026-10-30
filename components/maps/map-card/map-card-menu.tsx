@@ -13,6 +13,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useCan } from "@/components/team/role-context";
 import { RowMenu } from "@/components/ui/row-menu";
 import { DeleteMapDialog } from "../delete-map-dialog";
 import { RenameMapDialog } from "../rename-map-dialog";
@@ -41,6 +42,10 @@ export function MapCardMenu({ mapId, mapName }: { mapId: string; mapName: string
   const router = useRouter();
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  // Absent rather than greyed: a viewer has nothing to rename, an editor nothing
+  // to delete, and a row that can never work is noise in a menu (lib/team/roles.ts).
+  const canRename = useCan("edit");
+  const canDelete = useCan("deleteMap");
 
   return (
     <>
@@ -53,19 +58,27 @@ export function MapCardMenu({ mapId, mapName }: { mapId: string; mapName: string
             icon: section.icon,
             onAction: () => router.push(`/maps/${mapId}${section.path}`),
           })),
-          {
-            id: "rename",
-            label: "Rename",
-            icon: Pencil,
-            onAction: () => setIsRenaming(true),
-          },
-          {
-            id: "delete",
-            label: "Delete map",
-            icon: Trash2,
-            isDanger: true,
-            onAction: () => setIsDeleting(true),
-          },
+          ...(canRename
+            ? [
+                {
+                  id: "rename",
+                  label: "Rename",
+                  icon: Pencil,
+                  onAction: () => setIsRenaming(true),
+                },
+              ]
+            : []),
+          ...(canDelete
+            ? [
+                {
+                  id: "delete",
+                  label: "Delete map",
+                  icon: Trash2,
+                  isDanger: true,
+                  onAction: () => setIsDeleting(true),
+                },
+              ]
+            : []),
         ]}
       />
 

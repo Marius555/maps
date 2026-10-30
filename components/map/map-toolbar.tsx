@@ -112,6 +112,7 @@ export function MapToolbar({
   onChangeStyle,
   onChangeAppearance,
   exportControl,
+  readOnly = false,
 }: {
   isAdding: boolean;
   /** The icon add mode is armed with — see AddLocationButton. */
@@ -201,6 +202,12 @@ export function MapToolbar({
     onExport: () => void;
     onOpen: () => void;
   };
+  /**
+   * A team viewer's toolbar: what shows the map — search, preview, export —
+   * and nothing that changes it. Absent means everything, which is this toolbar
+   * as it always was (components/team/role-context.tsx).
+   */
+  readOnly?: boolean;
 }) {
   return (
     /*
@@ -234,21 +241,28 @@ export function MapToolbar({
           dashboard's (`mapThemeClass` on the canvas frame), so a toolbar over a
           white basemap is white even when the dashboard is in dark mode. */}
       <div className="map-chrome-panel group/toolbar pointer-events-auto flex max-w-full min-w-0 items-center gap-1 rounded-xl border border-border p-1 shadow-sm">
-        <span className="flex shrink-0">
-          <AddLocationButton
-            isAdding={isAdding}
-            addIcon={addIcon}
-            recentIcons={recentIcons}
-            pinIcons={pinIcons}
-            isBusy={isBusy}
-            headroom={limits?.places}
-            onPickIcon={onPickIcon}
-            onStopAdding={onStopAdding}
-            onDropPin={onDropPin}
-            onDraggingChange={onDraggingChange}
-            onOpenStudio={onOpenStudio}
-          />
-        </span>
+        {readOnly ? (
+          <span className="flex shrink-0 items-center gap-1.5 px-2 text-sm font-medium text-muted">
+            <Eye aria-hidden="true" className="size-4" />
+            View only
+          </span>
+        ) : (
+          <span className="flex shrink-0">
+            <AddLocationButton
+              isAdding={isAdding}
+              addIcon={addIcon}
+              recentIcons={recentIcons}
+              pinIcons={pinIcons}
+              isBusy={isBusy}
+              headroom={limits?.places}
+              onPickIcon={onPickIcon}
+              onStopAdding={onStopAdding}
+              onDropPin={onDropPin}
+              onDraggingChange={onDraggingChange}
+              onOpenStudio={onOpenStudio}
+            />
+          </span>
+        )}
 
         {/*
          * The rest of the buttons scroll sideways when the row is wider than the
@@ -269,78 +283,82 @@ export function MapToolbar({
           {/* Directly beside the pin control, with no rule between them: adding a
               location and drawing an area are the two things you put *on* a map,
               and the rule separates those from the things you do *to* it. */}
-          <span className={`flex shrink-0 ${STEP_ASIDE.shapes}`}>
-            <ShapeToolsButton
-              drawMode={drawMode}
-              isRouting={isRouting}
-              isBusy={isDrawingBusy}
-              headroom={limits?.shapes}
-              routesNote={routesNote}
-              onPickTool={onPickTool}
-              onPickRoute={onPickRoute}
-              onStopDrawing={onStopDrawing}
-              onImport={onImportShapes}
-              onEditClusterIcon={onEditClusterIcon}
-            />
-          </span>
+          {readOnly ? null : (
+            <>
+              <span className={`flex shrink-0 ${STEP_ASIDE.shapes}`}>
+                <ShapeToolsButton
+                  drawMode={drawMode}
+                  isRouting={isRouting}
+                  isBusy={isDrawingBusy}
+                  headroom={limits?.shapes}
+                  routesNote={routesNote}
+                  onPickTool={onPickTool}
+                  onPickRoute={onPickRoute}
+                  onStopDrawing={onStopDrawing}
+                  onImport={onImportShapes}
+                  onEditClusterIcon={onEditClusterIcon}
+                />
+              </span>
 
-          {/* Third of the three tools that change what a gesture on the map means,
-              so it belongs on this side of the rule with the other two. It picks
-              out what is already there rather than putting something new down,
-              which is why it is the one without a label. */}
-          <span className={`flex shrink-0 ${STEP_ASIDE.select}`}>
-            <SelectToolButton
-              isSelecting={isSelecting}
-              onStartSelecting={onStartSelecting}
-              onStopSelecting={onStopSelecting}
-            />
-          </span>
+              {/* Third of the three tools that change what a gesture on the map means,
+                  so it belongs on this side of the rule with the other two. It picks
+                  out what is already there rather than putting something new down,
+                  which is why it is the one without a label. */}
+              <span className={`flex shrink-0 ${STEP_ASIDE.select}`}>
+                <SelectToolButton
+                  isSelecting={isSelecting}
+                  onStartSelecting={onStartSelecting}
+                  onStopSelecting={onStopSelecting}
+                />
+              </span>
 
-          {/* Last on this side of the rule: it takes back a change made *on* the
-              map with the tools beside it — a dragged pin. Drawn disabled rather
-              than hidden when there is nothing to undo, so the toolbar does not
-              change width under the pointer the moment a pin is let go. */}
-          {onUndoMove ? (
-            <span className={`flex shrink-0 ${STEP_ASIDE.undo}`}>
-              <IconButton
-                label="Undo pin move"
-                icon={Undo2}
-                placement="bottom"
-                isDisabled={!canUndoMove}
-                aria-keyshortcuts="Control+Z Meta+Z"
-                onPress={onUndoMove}
+              {/* Last on this side of the rule: it takes back a change made *on* the
+                  map with the tools beside it — a dragged pin. Drawn disabled rather
+                  than hidden when there is nothing to undo, so the toolbar does not
+                  change width under the pointer the moment a pin is let go. */}
+              {onUndoMove ? (
+                <span className={`flex shrink-0 ${STEP_ASIDE.undo}`}>
+                  <IconButton
+                    label="Undo pin move"
+                    icon={Undo2}
+                    placement="bottom"
+                    isDisabled={!canUndoMove}
+                    aria-keyshortcuts="Control+Z Meta+Z"
+                    onPress={onUndoMove}
+                  />
+                </span>
+              ) : null}
+
+              {/* Leaves with Appearance: a rule with nothing after it is a stray line. */}
+              <Separator
+                orientation="vertical"
+                className={`h-6 shrink-0 ${STEP_ASIDE.appearance}`}
               />
-            </span>
-          ) : null}
 
-          {/* Leaves with Appearance: a rule with nothing after it is a stray line. */}
-          <Separator
-            orientation="vertical"
-            className={`h-6 shrink-0 ${STEP_ASIDE.appearance}`}
-          />
+              {/* First on this side of the rule, because it is the one that changes
+                  what the map *is* rather than where it is pointed or who is looking. */}
+              <span className={`flex shrink-0 ${STEP_ASIDE.appearance}`}>
+                <AppearanceButton
+                  style={style}
+                  appearance={appearance}
+                  onChangeStyle={onChangeStyle}
+                  onChangeAppearance={onChangeAppearance}
+                />
+              </span>
 
-          {/* First on this side of the rule, because it is the one that changes
-              what the map *is* rather than where it is pointed or who is looking. */}
-          <span className={`flex shrink-0 ${STEP_ASIDE.appearance}`}>
-            <AppearanceButton
-              style={style}
-              appearance={appearance}
-              onChangeStyle={onChangeStyle}
-              onChangeAppearance={onChangeAppearance}
-            />
-          </span>
-
-          {/* The default view is where the map opens, for the owner and for every
-              visitor of the embed. Setting it by panning beats typing coordinates. */}
-          <span className={`flex shrink-0 ${STEP_ASIDE.saveView}`}>
-            <IconButton
-              label="Save this view as default"
-              icon={Bookmark}
-              placement="bottom"
-              isPending={isSavingView}
-              onPress={onSaveView}
-            />
-          </span>
+              {/* The default view is where the map opens, for the owner and for every
+                  visitor of the embed. Setting it by panning beats typing coordinates. */}
+              <span className={`flex shrink-0 ${STEP_ASIDE.saveView}`}>
+                <IconButton
+                  label="Save this view as default"
+                  icon={Bookmark}
+                  placement="bottom"
+                  isPending={isSavingView}
+                  onPress={onSaveView}
+                />
+              </span>
+            </>
+          )}
 
           {/* The editor canvas has no popups or filters — those are the embed's.
               This is the only place in the editor you can see them. */}

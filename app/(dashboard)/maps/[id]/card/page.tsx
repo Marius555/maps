@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { CardDesigner } from "@/components/card/designer/card-designer";
+import { RoleProvider } from "@/components/team/role-context";
 import { Container } from "@/components/ui/container";
 import { requireUser } from "@/lib/auth/current-user";
 import { getCardDesign } from "@/lib/repositories/card-design.repository";
-import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
-import { loadMap } from "@/lib/repositories/load-map";
 import { listAllPlaces } from "@/lib/repositories/places.repository";
+import { loadMapAccess } from "@/lib/team/resolve";
 
 export const metadata: Metadata = { title: "Card" };
 
@@ -36,18 +36,22 @@ export default async function MapCardPage(props: PageProps<"/maps/[id]/card">) {
     // height to divide between the card's workspace and the sidebar. `min-h-0`
     // so it can also be squeezed rather than growing the page. Same pair as the
     // map editor's page, for the same reason.
-    <Container className="flex min-h-0 flex-col">
-      <CardDesigner
-        map={data.map}
-        initialPlaces={data.places}
-        initialCardDesign={data.cardDesign}
-      />
-    </Container>
+    <RoleProvider role={data.role}>
+      <Container className="flex min-h-0 flex-col">
+        <CardDesigner
+          map={data.map}
+          initialPlaces={data.places}
+          initialCardDesign={data.cardDesign}
+        />
+      </Container>
+    </RoleProvider>
   );
 }
 
 async function loadCard(userId: string, mapId: string) {
-  const ctx = repoContext(userId);
+  // The map's workspace first: the design shown is that workspace's, which
+  // for a member is the team's rather than their own.
+  const { map, ctx } = await loadMapAccess(userId, mapId);
 
   /*
    * The locations come with the page, and are not optional.
@@ -65,15 +69,14 @@ async function loadCard(userId: string, mapId: string) {
    * as an example and carrying no photo, so the half of the argument above that
    * was right is kept: the gallery block still shows its own empty state.
    *
-   * The design itself is the account's, not this map's — see
+   * The design itself is the workspace's, not this map's — see
    * lib/repositories/card-design.repository.ts — but this page still needs a
-   * map to fetch its places from.
+   * map to fetch its places from, and the map is what names the workspace.
    */
-  const [map, places, cardDesign] = await Promise.all([
-    loadMap(userId, mapId),
+  const [places, cardDesign] = await Promise.all([
     listAllPlaces(ctx, mapId),
     getCardDesign(ctx),
   ]);
 
-  return { map, places, cardDesign };
+  return { map, places, cardDesign, role: ctx.role };
 }

@@ -1,5 +1,5 @@
 import { ok } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withMapAuth } from "@/lib/api/route";
 import { setGroupPin } from "@/lib/repositories/groups.repository";
 import { setGroupPinSchema } from "@/lib/validation/group.schema";
 
@@ -16,7 +16,7 @@ type Params = { id: string; groupId: string };
  * Answers with the count so the client can say how many changed rather than
  * guessing from what it happened to have cached.
  */
-export const PATCH = withAuth<Params>(async ({ request, params, ctx }) => {
+export const PATCH = withMapAuth<Params>(async ({ request, params, ctx }) => {
   const input = await parseBody(request, setGroupPinSchema);
   const count = await setGroupPin(ctx, params.id, params.groupId, input.icon);
 

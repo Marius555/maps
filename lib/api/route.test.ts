@@ -15,6 +15,27 @@ process.env.STORAGE_ID ||= "test-storage";
 const { requireUser } = vi.hoisted(() => ({ requireUser: vi.fn() }));
 vi.mock("@/lib/auth/current-user", () => ({ requireUser }));
 
+/**
+ * Which workspace a request is about is lib/team/resolve.ts's question, tested
+ * there against the memberships table. Here it is a stub that answers with
+ * whatever role a test sets, because what this file tests is what the wrapper
+ * does with the answer — the viewer gate.
+ */
+const { resolveActiveContext, resolveMapContext } = vi.hoisted(() => ({
+  resolveActiveContext: vi.fn(),
+  resolveMapContext: vi.fn(),
+}));
+vi.mock("@/lib/team/resolve", () => ({ resolveActiveContext, resolveMapContext }));
+
+type Role = "owner" | "admin" | "editor" | "viewer";
+
+function answerAs(role: Role, workspaceId = "team-1") {
+  const ctx = { workspaceId, actorId: "u1", role };
+
+  resolveActiveContext.mockResolvedValue(ctx);
+  resolveMapContext.mockResolvedValue({ ctx, map: { id: "map-1", userId: workspaceId } });
+}
+
 const ORIGINAL_RESEND_KEY = process.env.RESEND_API_KEY;
 
 type User = { id: string; email: string; name: string; emailVerified: boolean };
@@ -72,6 +93,7 @@ describe("withAuth — the confirmed-address gate", () => {
 
   beforeEach(async () => {
     requireUser.mockReset();
+    answerAs("owner", "u1");
     handler = vi.fn(respond);
     withAuth = await loadWithAuth("re_test_key");
   });
@@ -153,6 +175,97 @@ describe("withAuth — the confirmed-address gate", () => {
     const response = await withAuth(handler)(request("GET"));
 
     expect(response.status).toBe(401);
+  });
+});
+
+/**
+ * The viewer gate is the email gate's twin: one check in the one wrapper every
+ * authenticated route goes through, so a route written next month is covered by
+ * being written normally. The failure modes are as silent as that gate's — too
+ * loose and a viewer edits a team's live map; too strict and a viewer cannot
+ * leave the team or switch away from it.
+ */
+describe("withAuth — the viewer gate", () => {
+  let route: typeof import("./route");
+  let handler: ReturnType<typeof vi.fn<typeof respond>>;
+
+  beforeEach(async () => {
+    requireUser.mockReset();
+    requireUser.mockResolvedValue(VERIFIED);
+    handler = vi.fn(respond);
+    vi.resetModules();
+    route = await import("./route");
+  });
+
+  it("refuses every unsafe method from a viewer, in the active workspace", async () => {
+    answerAs("viewer");
+
+    for (const method of ["POST", "PATCH", "PUT", "DELETE"]) {
+      const response = await route.withAuth(handler)(request(method));
+
+      expect(response.status).toBe(403);
+      expect((await body(response)).error?.code).toBe("role_required");
+    }
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("refuses a viewer's write to a team's map", async () => {
+    answerAs("viewer");
+
+    const response = await route.withMapAuth<{ id: string }>(handler as never)(
+      request("PATCH"),
+      { params: Promise.resolve({ id: "map-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    expect(resolveMapContext).toHaveBeenCalledWith("u1", "map-1");
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("lets a viewer read", async () => {
+    answerAs("viewer");
+
+    for (const method of ["GET", "HEAD", "OPTIONS"]) {
+      expect((await route.withAuth(handler)(request(method))).status).toBe(204);
+    }
+  });
+
+  it("lets editors, admins and the owner write", async () => {
+    for (const role of ["editor", "admin", "owner"] as const) {
+      answerAs(role);
+      expect((await route.withAuth(handler)(request("POST"))).status).toBe(204);
+    }
+  });
+
+  it("does not apply to personal routes, so a viewer can still leave or switch", async () => {
+    answerAs("viewer");
+
+    const response = await route.withPersonalAuth(handler)(request("DELETE"));
+
+    expect(response.status).toBe(204);
+    // A personal route never asks which team is open.
+    expect(resolveActiveContext).not.toHaveBeenCalled();
+  });
+
+  it("hands a map route the map's workspace, never the cookie's", async () => {
+    answerAs("editor", "owner-of-the-map");
+    let seen: string | undefined;
+
+    await route.withMapAuth<{ id: string }>(async ({ ctx }) => {
+      seen = ctx.workspaceId;
+      return new Response(null, { status: 204 }) as unknown as NextResponse;
+    })(request("GET"), { params: Promise.resolve({ id: "map-1" }) });
+
+    expect(seen).toBe("owner-of-the-map");
+    expect(resolveActiveContext).not.toHaveBeenCalled();
+  });
+
+  it("answers a map route with no id as a missing map", async () => {
+    const response = await route.withAuth(handler, { workspace: "map" })(request("GET"));
+
+    expect(response.status).toBe(404);
+    expect(handler).not.toHaveBeenCalled();
   });
 });
 

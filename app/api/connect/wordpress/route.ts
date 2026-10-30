@@ -1,9 +1,13 @@
 import { ok } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withPersonalAuth } from "@/lib/api/route";
 import { allowSite, siteHost } from "@/lib/connect/wordpress";
 import { embedScriptUrl } from "@/lib/embed/snippet";
 import { createMap, getMap, updateMap } from "@/lib/repositories/maps.repository";
+import { RoleRequiredError } from "@/lib/repositories/errors";
 import { publishMap } from "@/lib/repositories/publish.repository";
+import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/team/active-cookie";
+import { resolveActiveContext, resolveMapContext } from "@/lib/team/resolve";
+import { can } from "@/lib/team/roles";
 import { connectMapSchema } from "@/lib/validation/connect.schema";
 import { createMapSchema } from "@/lib/validation/map.schema";
 
@@ -25,13 +29,28 @@ import { createMapSchema } from "@/lib/validation/map.schema";
  *   second. Without the second, the live snapshot still carries the old list and
  *   the embed refuses to draw on the site that was just allowed.
  *
+ * **Which workspace** depends on the choice, so the route resolves it itself
+ * rather than through `withAuth`'s scope: an existing map is acted on in the
+ * workspace that owns it (`resolveMapContext`, the rule every map route keeps),
+ * a new one is made in the team the dashboard is switched to. Either way the
+ * person must be able to edit there — connecting publishes.
+ *
  * Nothing here runs when a visitor loads that page — the plugin stores the
  * snapshot URL and the page reads it from the CDN like any pasted snippet (§2).
  */
-export const POST = withAuth(async ({ request, ctx }) => {
+export const POST = withPersonalAuth(async ({ request, user }) => {
   const input = await parseBody(request, connectMapSchema);
   const origin = new URL(request.url).origin;
   const host = siteHost(input.site);
+
+  const ctx =
+    "create" in input.map
+      ? await resolveActiveContext(user.id, request.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value)
+      : (await resolveMapContext(user.id, input.map.id)).ctx;
+
+  if (!can(ctx.role, "edit")) {
+    throw new RoleRequiredError("Connecting a map publishes it, which needs editor access on its team.");
+  }
 
   let map =
     "create" in input.map

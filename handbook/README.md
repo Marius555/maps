@@ -181,6 +181,10 @@ every account Pro, `DISABLE_EMAIL_VERIFICATION=true` makes every account confirm
 
 Then section 5 (billing) and section 6 (sheet sync).
 
+**Re-run `npm run setup:appwrite` after updating to the version with teams.** It adds the
+two tables team seats need (`memberships` and `invites`) and changes nothing else. Until
+it has run, Settings → Team and inviting people fail with a server error.
+
 ## 9. Deploy and release
 
 **Deploying:** push to `main`. GitHub Actions (`.github/workflows/deploy.yml`) runs

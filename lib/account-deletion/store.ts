@@ -21,6 +21,6 @@ export function deletionStoreFor(ctx: RepoContext): DeletionStore {
     deletePlaces: (mapId, placeIds) => deletePlaces(ctx, mapId, placeIds),
     deleteEmptiedMap: (mapId) => deleteEmptiedMap(ctx, mapId),
     deleteAccountRows: () => deleteAccountRows(ctx),
-    deleteUser: () => deleteUser(ctx.userId),
+    deleteUser: () => deleteUser(ctx.actorId),
   };
 }

@@ -1,4 +1,4 @@
 import { ok } from "@/lib/api/responses";
-import { withAuth } from "@/lib/api/route";
+import { withPersonalAuth } from "@/lib/api/route";
 
-export const GET = withAuth(async ({ user }) => ok({ user }));
+export const GET = withPersonalAuth(async ({ user }) => ok({ user }));

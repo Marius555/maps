@@ -46,7 +46,7 @@ export default defineConfig({
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "chromium",
-      testIgnore: [/mobile-editor\.spec\.ts/, /docs-screenshots[\\/]/],
+      testIgnore: [/mobile-editor\.spec\.ts/, /team\.spec\.ts/, /docs-screenshots[\\/]/],
       use: { ...devices["Desktop Chrome"], storageState: AUTH_FILE },
       dependencies: ["setup"],
     },
@@ -65,6 +65,16 @@ export default defineConfig({
       testMatch: /mobile-editor\.spec\.ts/,
       use: { ...devices["Pixel 7"], storageState: AUTH_FILE },
       dependencies: ["setup"],
+    },
+    {
+      // Team seats (e2e/team.spec.ts) join the second account to the first's
+      // workspace for the length of the file. Everything else assumes the two
+      // are strangers — api-security.spec.ts most of all — so this runs after
+      // them, on its own.
+      name: "team",
+      testMatch: /team\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], storageState: AUTH_FILE },
+      dependencies: ["chromium"],
     },
     {
       // Not a test: the screenshots in /docs (`npm run docs:screenshots`,

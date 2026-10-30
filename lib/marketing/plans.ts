@@ -62,6 +62,12 @@ export type MarketingPlan = {
    * as another quantity.
    */
   lookups: number;
+  /**
+   * People who can work on the maps, the owner included — every member and every
+   * pending invite holds one (docs/notes/team.md). `plans.test.ts` holds it to
+   * `SEAT_LIMITS`, the number the invite route refuses at.
+   */
+  seats: number;
   routes: boolean;
   sheetSync: boolean;
   analytics: boolean;
@@ -84,6 +90,7 @@ export const MARKETING_PLANS: MarketingPlan[] = [
     places: 25,
     shapes: 3,
     lookups: 250,
+    seats: 1,
     routes: false,
     sheetSync: false,
     analytics: false,
@@ -104,6 +111,7 @@ export const MARKETING_PLANS: MarketingPlan[] = [
     places: 300,
     shapes: 50,
     lookups: 4000,
+    seats: 3,
     routes: true,
     sheetSync: true,
     analytics: true,
@@ -124,6 +132,7 @@ export const MARKETING_PLANS: MarketingPlan[] = [
     places: 3000,
     shapes: 250,
     lookups: 50000,
+    seats: 10,
     routes: true,
     sheetSync: true,
     analytics: true,

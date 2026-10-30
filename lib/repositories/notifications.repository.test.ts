@@ -50,7 +50,7 @@ describe("listNotificationsFor", () => {
   it("asks for everyone's, this plan's and this account's — nobody else's", async () => {
     listRows.mockResolvedValue({ rows: [] });
 
-    await listNotificationsFor({ userId: "user-1" }, "starter");
+    await listNotificationsFor("user-1", "starter");
 
     const queries = (listRows.mock.calls[0][0] as { queries: string[] }).queries.join(" ");
     expect(queries).toContain('"all"');
@@ -69,7 +69,7 @@ describe("listNotificationsFor", () => {
       ],
     });
 
-    const items = await listNotificationsFor({ userId: "user-1" }, "free");
+    const items = await listNotificationsFor("user-1", "free");
 
     expect(items.map((item) => item.id)).toEqual(["live", "scripted", "odd-kind"]);
     expect(items[1]).toMatchObject({ linkUrl: null, linkLabel: null });

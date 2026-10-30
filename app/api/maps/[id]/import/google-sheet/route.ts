@@ -1,5 +1,5 @@
 import { ok } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withMapAuth } from "@/lib/api/route";
 import { fetchGoogleSheetCsv } from "@/lib/import/google-sheet-fetch";
 import { getMap } from "@/lib/repositories/maps.repository";
 import { googleSheetSourceSchema } from "@/lib/validation/import-source.schema";
@@ -18,7 +18,7 @@ type Params = { id: string };
  * sheet sync reads the same sheet through. The route adds ownership, so it isn't
  * a general-purpose fetcher for anyone with an account.
  */
-export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
+export const POST = withMapAuth<Params>(async ({ request, params, ctx }) => {
   await getMap(ctx, params.id);
 
   const input = await parseBody(request, googleSheetSourceSchema);

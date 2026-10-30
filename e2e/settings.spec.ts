@@ -5,6 +5,7 @@ const SECTIONS = [
   { link: "Account", headings: ["Password", "Signed-in devices", "Delete account"] },
   // Payment and Invoices appear only with a subscription; the test account has none.
   { link: "Billing", headings: ["Plan"] },
+  { link: "Team", headings: ["Your team"] },
   { link: "Usage", headings: ["Usage"] },
 ];
 

@@ -1,5 +1,5 @@
 import { ok } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withMapAuth } from "@/lib/api/route";
 import { routerFailure } from "@/lib/api/router-errors";
 import { getMap } from "@/lib/repositories/maps.repository";
 import { assertPlanFeature } from "@/lib/repositories/plan-limits";
@@ -34,9 +34,9 @@ type Params = { id: string };
  * server owns (lib/routing/routable.ts) and the client has no use for the metres
  * — sending them would invite a second, disagreeing rule in the browser.
  */
-export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
+export const POST = withMapAuth<Params>(async ({ request, params, ctx }) => {
   await getMap(ctx, params.id);
-  await assertPlanFeature(ctx.userId, "routes");
+  await assertPlanFeature(ctx.workspaceId, "routes");
 
   const input = await parseBody(request, routableSchema);
 
@@ -52,10 +52,10 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
    * up to `ROUTE_PROBE_LIMIT` pins, and on Geoapify each one bills as a reverse
    * geocode because that adapter has no native `nearest`.
    */
-  await assertLookupHeadroom(ctx.userId, input.points.length, "background");
+  await assertLookupHeadroom(ctx.workspaceId, input.points.length, "background");
 
   // The sweep asks one batch at a time; a single pin may be asked meanwhile.
-  const release = inFlight(`routable:${ctx.userId}`, IN_FLIGHT_LIMITS.routable);
+  const release = inFlight(`routable:${ctx.workspaceId}`, IN_FLIGHT_LIMITS.routable);
 
   /*
    * Each point the engine answers is billed as it answers — those were real
@@ -63,7 +63,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
    * batch would charge for work nobody did; billing none of it would make a
    * failing sweep the cheapest way to spend the day's budget.
    */
-  const meter = lookupMeter(ctx.userId);
+  const meter = lookupMeter(ctx.workspaceId);
   const results: boolean[] = [];
 
   try {

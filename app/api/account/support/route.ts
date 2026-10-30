@@ -1,5 +1,5 @@
 import { noContent } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withPersonalAuth } from "@/lib/api/route";
 import { sendSupportRequest } from "@/lib/support/support-request";
 import { supportRequestSchema } from "@/lib/validation/support.schema";
 
@@ -11,7 +11,7 @@ import { supportRequestSchema } from "@/lib/validation/support.schema";
  * what such an account needs to report, and the only inbox this can reach is
  * ours.
  */
-export const POST = withAuth(
+export const POST = withPersonalAuth(
   async ({ request, user }) => {
     const input = await parseBody(request, supportRequestSchema);
 

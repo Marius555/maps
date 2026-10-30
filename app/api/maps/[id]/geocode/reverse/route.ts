@@ -1,6 +1,6 @@
 import { geocoderFailure } from "@/lib/api/geocoder-errors";
 import { ok } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withMapAuth } from "@/lib/api/route";
 import { getGeocoder } from "@/lib/geocoding";
 import { getMap } from "@/lib/repositories/maps.repository";
 import {
@@ -29,17 +29,17 @@ type Params = { id: string };
  * promise to the customer and the customer asked once. The slack is paid for by
  * `LOOKUP_LIMITS` being sized above full entitlement — see its docblock.
  */
-export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
+export const POST = withMapAuth<Params>(async ({ request, params, ctx }) => {
   await getMap(ctx, params.id);
 
   const input = await parseBody(request, reverseGeocodeSchema);
 
-  await assertLookupHeadroom(ctx.userId, 1, "interactive");
+  await assertLookupHeadroom(ctx.workspaceId, 1, "interactive");
 
   try {
     const candidate = await getGeocoder().reverse(input);
 
-    await recordLookups(ctx.userId, 1);
+    await recordLookups(ctx.workspaceId, 1);
 
     // Null, not a 404: open water and unmapped roads are ordinary answers here,
     // and the caller's response to both is to leave the address blank.

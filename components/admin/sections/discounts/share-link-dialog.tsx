@@ -6,7 +6,7 @@ import { Copy } from "lucide-react";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import { discountShareLink, offerLabel } from "@/lib/billing/discounts";
 import type { Discount } from "@/lib/billing/types";
-import { copyText } from "./copy-text";
+import { copyText } from "@/components/ui/copy-text";
 
 /**
  * A link to the pricing page with this code applied. The visitor sees the

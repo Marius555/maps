@@ -1,5 +1,5 @@
 import { ok } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withMapAuth } from "@/lib/api/route";
 import { routerFailure } from "@/lib/api/router-errors";
 import { getMap } from "@/lib/repositories/maps.repository";
 import { assertPlanFeature } from "@/lib/repositories/plan-limits";
@@ -32,9 +32,9 @@ type Params = { id: string };
  * named one. Without it the only honest message is that something among the
  * stops has no road near it, which is not a thing anybody can act on.
  */
-export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
+export const POST = withMapAuth<Params>(async ({ request, params, ctx }) => {
   await getMap(ctx, params.id);
-  await assertPlanFeature(ctx.userId, "routes");
+  await assertPlanFeature(ctx.workspaceId, "routes");
 
   const input = await parseBody(request, directionsSchema);
 
@@ -44,7 +44,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
    * which is also why this endpoint was never the expensive half of the feature.
    * The sweep in `routable` is, and it is metered per point.
    */
-  await assertLookupHeadroom(ctx.userId, 1, "interactive");
+  await assertLookupHeadroom(ctx.workspaceId, 1, "interactive");
 
   try {
     const outcome = await getRouter().route({
@@ -52,7 +52,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
       profile: input.profile,
     });
 
-    await recordLookups(ctx.userId, 1);
+    await recordLookups(ctx.workspaceId, 1);
 
     return ok(outcome);
   } catch (error) {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { ApiErrorBody } from "@/lib/api/error-codes";
 import { geocoderFailure } from "@/lib/api/geocoder-errors";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withMapAuth } from "@/lib/api/route";
 import { getGeocoder, statusFor } from "@/lib/geocoding";
 import {
   GEOCODE_STREAM_CONTENT_TYPE,
@@ -65,7 +65,7 @@ type Params = { id: string };
  * makes the *first* chunk the one refused when a file plainly will not fit — but
  * it is no longer the only thing standing between a stranger and our bill.
  */
-export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
+export const POST = withMapAuth<Params>(async ({ request, params, ctx }) => {
   await getMap(ctx, params.id);
 
   const input = await parseBody(request, geocodeBatchSchema);
@@ -87,7 +87,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
    */
   const billable = input.rows.filter((row) => Boolean(row.address)).length;
 
-  await assertLookupHeadroom(ctx.userId, billable, "interactive");
+  await assertLookupHeadroom(ctx.workspaceId, billable, "interactive");
 
   /*
    * One batch at a time per account. The headroom check above runs before any
@@ -100,8 +100,8 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
    * misconfigured, say — would otherwise hold this account's slot for the life
    * of the process, and every later batch would be refused with a 429.
    */
-  const meter = lookupMeter(ctx.userId);
-  const release = inFlight(`geocodeBatch:${ctx.userId}`, IN_FLIGHT_LIMITS.geocodeBatch);
+  const meter = lookupMeter(ctx.workspaceId);
+  const release = inFlight(`geocodeBatch:${ctx.workspaceId}`, IN_FLIGHT_LIMITS.geocodeBatch);
 
   /*
    * Each answer is written the moment it is found — `lib/import/geocode-stream.ts`

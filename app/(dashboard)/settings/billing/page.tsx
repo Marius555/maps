@@ -12,6 +12,7 @@ import { withKnownCadence } from "@/lib/billing/known-cadence";
 import { paidOffer, pendingKept } from "@/lib/billing/plan-change";
 import { billingStanding } from "@/lib/billing/standing";
 import { LEGAL_DETAILS } from "@/lib/legal/values";
+import { ownWorkspace } from "@/lib/repositories/context";
 import { getUserPlan } from "@/lib/repositories/plan-limits";
 import { getSubscription } from "@/lib/repositories/subscriptions.repository";
 
@@ -46,7 +47,7 @@ export default async function BillingSettingsPage(props: PageProps<"/settings/bi
   const user = await requireUser();
   const { checkout } = await props.searchParams;
 
-  const [plan, stored] = await Promise.all([getUserPlan(user.id), getSubscription(user.id)]);
+  const [plan, stored] = await Promise.all([getUserPlan(ownWorkspace(user.id)), getSubscription(ownWorkspace(user.id))]);
   const subscriptionId = stored?.billingSubscriptionId ?? "";
 
   const [details, firstPage] = subscriptionId

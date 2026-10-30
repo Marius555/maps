@@ -30,18 +30,19 @@ vi.mock("@/lib/appwrite/admin", () => ({
 }));
 
 vi.mock("./mappers", () => ({
-  toAppMap: (row: { $id: string }) => ({ id: row.$id }),
+  toAppMap: (row: { $id: string; userId?: string }) => ({ id: row.$id, userId: row.userId }),
   toPlace: (row: { $id: string }) => ({ id: row.$id }),
   toShape: (row: { $id: string }) => ({ id: row.$id }),
   toGroup: (row: { $id: string }) => ({ id: row.$id }),
 }));
 
+import { ownerContext } from "./context";
 import { NotFoundError } from "./errors";
 import { listAllGroups } from "./groups.repository";
 import { listAllPlaces, listPlaces } from "./places.repository";
 import { listAllShapes } from "./shapes.repository";
 
-const ctx = { userId: "owner" };
+const ctx = ownerContext("owner");
 const MAP_ID = "map-1";
 
 /** One serialised query of `method` from a listRows call, parsed. */

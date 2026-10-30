@@ -10,6 +10,7 @@ Three different questions, answered in three places:
 
 ## Invariants
 
+- **Seats are a limit like the others** — `SEAT_LIMITS` in `lib/limits/plans.ts`, a table of its own beside `LOOKUP_LIMITS`, counted with count-insert-recount where an invite is made and where one is accepted. Rate limits stay per person; lookups, in-flight slots and plan reads are per workspace, so a team shares one allowance. `docs/notes/team.md`.
 - **Every limit number is in `lib/limits/`.** `plans.ts` for quantities, `rate.ts` for
   request rates. `lib/repositories/plan-limits.ts` re-exports the plan tables, so old
   imports keep working. Nothing else should hard-code a limit.

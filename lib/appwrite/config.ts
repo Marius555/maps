@@ -25,4 +25,6 @@ export const TABLES = {
   emailLog: "emailLog",
   promotions: "promotions",
   news: "news",
+  memberships: "memberships",
+  invites: "invites",
 } as const;

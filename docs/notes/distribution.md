@@ -8,6 +8,7 @@ in the navbar's Integrations menu from `lib/marketing/integrations.ts` —
 
 ## Invariants
 
+- **Connecting a map acts in the map's own workspace**, resolved from the map in the request body (`resolveMapContext`), and a new map is made in the switched-to team. A viewer cannot connect, because connecting publishes; the page offers a team picker to somebody in more than one. `docs/notes/team.md`.
 - **Nothing a platform plugin does runs per visitor.** The plugin stores a map's live
   snapshot URL and the page loads `map.js` and that snapshot from the CDN, exactly as a
   pasted snippet does (§2). The plugin never calls our API on a page view, and it must not

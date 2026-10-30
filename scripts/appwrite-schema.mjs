@@ -69,6 +69,9 @@ export const NOTIFICATION_KINDS = ["info", "success", "warning"];
 export const NOTIFICATION_AUDIENCES = ["all", "plan", "user"];
 // Hand-copied from lib/news/categories.ts, on the same terms.
 export const NEWS_CATEGORIES = ["announcements", "product", "company"];
+// Hand-copied from lib/team/roles.ts's MEMBER_ROLES, on the same terms. `owner`
+// is not here: the owner is whoever the workspace id names, never a row.
+export const MEMBER_ROLES = ["admin", "editor", "viewer"];
 
 export const TABLES = [
   {
@@ -812,6 +815,70 @@ export const TABLES = [
         columns: ["category", "publishedAt"],
         orders: ["asc", "desc"],
       },
+    ],
+  },
+  {
+    // Who else may work in a workspace, and as what. docs/notes/team.md.
+    //
+    // A workspace is one person's account, and its id is that person's user id
+    // — the `userId` every map, card design, subscription and usage row already
+    // carries. So this is the only new thing teams needed: the owner is never a
+    // row here, and nothing about a workspace is stored but who is in it.
+    //
+    // No permission, like every other table (CLAUDE.md invariants): the admin
+    // client is the only reader, and membership is checked in the repositories
+    // on every request. Appwrite's own Role.team() is deliberately unused — a
+    // row permission is usable straight through Appwrite's API with the
+    // session cookie, past every check this app makes.
+    id: "memberships",
+    name: "Memberships",
+    columns: [
+      varchar("workspaceId", 36, { required: true }),
+      varchar("userId", 36, { required: true }),
+      enumeration("role", MEMBER_ROLES, { required: true }),
+    ],
+    indexes: [
+      {
+        key: "idx_memberships_workspace_user",
+        type: "unique",
+        columns: ["workspaceId", "userId"],
+        orders: ["asc", "asc"],
+      },
+      // The switcher's query: every workspace one person belongs to.
+      { key: "idx_memberships_userId", type: "key", columns: ["userId"], orders: ["asc"] },
+    ],
+  },
+  {
+    // An invitation to a workspace that nobody has accepted yet. A pending
+    // invite holds a seat, so the seat count cannot be beaten by inviting faster
+    // than people accept.
+    //
+    // `tokenHash` is the sha256 of the token in the invite link. The token
+    // itself is never stored, so a leaked table is not a set of working links.
+    // `email` is lowercased on the way in; accepting requires the signed-in
+    // account's confirmed address to equal it.
+    id: "invites",
+    name: "Invites",
+    columns: [
+      varchar("workspaceId", 36, { required: true }),
+      varchar("email", 320, { required: true }),
+      enumeration("role", MEMBER_ROLES, { required: true }),
+      varchar("invitedBy", 36, { required: true }),
+      varchar("tokenHash", 64, { required: true }),
+      datetime("expiresAt", { required: true }),
+      // When the email last went out — the resend throttle.
+      datetime("sentAt"),
+    ],
+    indexes: [
+      { key: "idx_invites_tokenHash", type: "unique", columns: ["tokenHash"], orders: ["asc"] },
+      {
+        key: "idx_invites_workspace_email",
+        type: "unique",
+        columns: ["workspaceId", "email"],
+        orders: ["asc", "asc"],
+      },
+      // "Invitations for you": every invite addressed to one confirmed address.
+      { key: "idx_invites_email", type: "key", columns: ["email"], orders: ["asc"] },
     ],
   },
 ];

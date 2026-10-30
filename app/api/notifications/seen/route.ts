@@ -1,5 +1,5 @@
 import { noContent } from "@/lib/api/responses";
-import { withAuth } from "@/lib/api/route";
+import { withPersonalAuth } from "@/lib/api/route";
 import { markNotificationsSeen } from "@/lib/notifications/seen";
 
 /**
@@ -9,7 +9,7 @@ import { markNotificationsSeen } from "@/lib/notifications/seen";
  * a message is not the kind of write the email gate freezes, and refusing it
  * would leave the sidebar's count up for good.
  */
-export const POST = withAuth(
+export const POST = withPersonalAuth(
   async ({ user }) => {
     await markNotificationsSeen(user.id);
     return noContent();

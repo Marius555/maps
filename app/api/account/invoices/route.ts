@@ -1,8 +1,9 @@
 import { z } from "zod";
 
 import { fail, ok } from "@/lib/api/responses";
-import { withAuth } from "@/lib/api/route";
+import { withPersonalAuth } from "@/lib/api/route";
 import { BillingError, getBilling } from "@/lib/billing";
+import { ownWorkspace } from "@/lib/repositories/context";
 import { getSubscription } from "@/lib/repositories/subscriptions.repository";
 
 const pageSchema = z.coerce.number().int().min(1).max(1000).catch(1);
@@ -14,12 +15,12 @@ const pageSchema = z.coerce.number().int().min(1).max(1000).catch(1);
  * subscription id on the caller's own row and nothing else, so there is no
  * parameter here that could name somebody else's.
  *
- * A GET, so it is open to an unconfirmed account like every read (`withAuth`'s
+ * A GET, so it is open to an unconfirmed account like every read (`withPersonalAuth`'s
  * gate only refuses writes).
  */
-export const GET = withAuth(async ({ request, user }) => {
+export const GET = withPersonalAuth(async ({ request, user }) => {
   const page = pageSchema.parse(request.nextUrl.searchParams.get("page") ?? 1);
-  const subscription = await getSubscription(user.id);
+  const subscription = await getSubscription(ownWorkspace(user.id));
 
   if (!subscription?.billingSubscriptionId) {
     return ok({ invoices: [], page: 1, lastPage: 1 });

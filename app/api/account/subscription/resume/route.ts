@@ -1,7 +1,8 @@
 import { fail, ok } from "@/lib/api/responses";
-import { withAuth } from "@/lib/api/route";
+import { withPersonalAuth } from "@/lib/api/route";
 import { BillingError, getBilling, type SubscriptionDetails } from "@/lib/billing";
 import { billingStanding } from "@/lib/billing/standing";
+import { ownWorkspace } from "@/lib/repositories/context";
 import {
   getSubscription,
   upsertSubscription,
@@ -17,8 +18,8 @@ import {
  * POST rather than a PATCH on `../route.ts`, whose PATCH is the plan change: two
  * different requests for two different presses, validated two different ways.
  */
-export const POST = withAuth(async ({ user }) => {
-  const subscription = await getSubscription(user.id);
+export const POST = withPersonalAuth(async ({ user }) => {
+  const subscription = await getSubscription(ownWorkspace(user.id));
 
   if (!subscription?.billingSubscriptionId || billingStanding(subscription) === "none") {
     return fail(

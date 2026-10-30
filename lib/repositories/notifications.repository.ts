@@ -9,7 +9,6 @@ import { env } from "@/lib/env";
 import { isLive } from "@/lib/notifications/unread";
 import type { AppNotification } from "@/lib/notifications/types";
 import type { NotificationInput } from "@/lib/validation/notification.schema";
-import type { RepoContext } from "./context";
 import { toNotification } from "./mappers";
 import type { PlanId } from "./plan-limits";
 import type { NotificationRow } from "./types";
@@ -26,15 +25,20 @@ import type { NotificationRow } from "./types";
 const FEED_LIMIT = 50;
 
 /**
- * Every notification addressed to this account and live right now: sent to
- * everyone, to its plan, or to it alone — newest first.
+ * Every notification addressed to this person and live right now: sent to
+ * everyone, to their plan, or to them alone — newest first.
+ *
+ * A person, not a workspace: notifications follow whoever is signed in, across
+ * every team they switch between. So it takes their user id rather than a
+ * `RepoContext`, and `plan` is `personalPlan` (lib/team/resolve.ts) — the best
+ * of the plans they work under, so the feed does not change when they switch.
  *
  * Expiry is checked here rather than in the query, because "no expiry or later
  * than now" is an `or` with an `isNull` inside it for a filter that removes, at
  * most, a handful of rows.
  */
 export async function listNotificationsFor(
-  ctx: RepoContext,
+  userId: string,
   plan: PlanId,
 ): Promise<AppNotification[]> {
   const now = new Date();
@@ -48,7 +52,7 @@ export async function listNotificationsFor(
           Query.equal("audience", "all"),
           Query.and([
             Query.equal("audience", "user"),
-            Query.equal("audienceUserId", ctx.userId),
+            Query.equal("audienceUserId", userId),
           ]),
           Query.and([
             Query.equal("audience", "plan"),

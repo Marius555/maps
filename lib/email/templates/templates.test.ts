@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseBrand } from "@/lib/brand";
+import { INVITE_SUBJECT, inviteMessage } from "./invite";
 import { emailShell, emailText, type EmailShellInput } from "./layout";
 import { resetPasswordMessage } from "./reset-password";
 import { verifyEmailMessage } from "./verify-email";
@@ -23,6 +24,10 @@ const MESSAGES = [
   ["verify", verifyEmailMessage({ name: "Ada", url: LINK })],
   ["reset", resetPasswordMessage({ name: "Ada", url: LINK })],
   ["welcome", welcomeMessage({ name: "Ada", url: LINK })],
+  [
+    "invite",
+    inviteMessage({ inviterName: "Ada", workspaceName: "Grace", role: "editor", url: LINK }),
+  ],
 ] as const;
 
 describe.each(MESSAGES)("%s email", (_name, message) => {
@@ -76,7 +81,54 @@ describe("escaping", () => {
   });
 });
 
-describe("the three messages are distinguishable", () => {
+/**
+ * The invite is the one email whose words are partly typed by somebody other
+ * than its recipient — the inviter's name and the team's — sent to an address
+ * the inviter chose. So none of those words may reach the subject line, and in
+ * the body they are escaped and capped.
+ */
+describe("the invite", () => {
+  it("has a fixed subject, whoever sends it", () => {
+    const message = inviteMessage({
+      inviterName: "Claim your prize now",
+      workspaceName: "Bank of Somewhere",
+      role: "admin",
+      url: LINK,
+    });
+
+    expect(message.subject).toBe(INVITE_SUBJECT);
+  });
+
+  it("escapes a name that looks like markup, in the HTML", () => {
+    const message = inviteMessage({
+      inviterName: "<img src=x onerror=alert(1)>",
+      workspaceName: "Grace",
+      role: "viewer",
+      url: LINK,
+    });
+
+    expect(message.html).not.toContain("<img src=x");
+    expect(message.html).toContain("&lt;img");
+  });
+
+  it("caps a name long enough to be a paragraph", () => {
+    const message = inviteMessage({
+      inviterName: "a".repeat(500),
+      workspaceName: "Grace",
+      role: "viewer",
+      url: LINK,
+    });
+
+    expect(message.text).not.toContain("a".repeat(61));
+  });
+
+  it("says which role, with the right article", () => {
+    expect(inviteMessage({ inviterName: "Ada", workspaceName: "Grace", role: "admin", url: LINK }).text).toContain("as an admin");
+    expect(inviteMessage({ inviterName: "Ada", workspaceName: "Grace", role: "viewer", url: LINK }).text).toContain("as a viewer");
+  });
+});
+
+describe("the messages are distinguishable", () => {
   it("does not reuse a subject line", () => {
     const subjects = MESSAGES.map(([, message]) => message.subject);
     expect(new Set(subjects).size).toBe(subjects.length);

@@ -10,7 +10,7 @@ import type { DiscountRow } from "@/lib/admin/metrics/discounts";
 import { useFeatureDiscount } from "@/lib/query/admin";
 import { toastError } from "@/lib/query/toast-error";
 import type { AdminDiscountForm } from "@/lib/validation/discount.schema";
-import { copyText } from "./copy-text";
+import { copyText } from "@/components/ui/copy-text";
 import { DeleteDiscountDialog } from "./delete-discount-dialog";
 import { DiscountFormDialog } from "./discount-form-dialog";
 import { formFromDiscount } from "./discount-options";

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PlacesManager } from "@/components/places/places-manager";
+import { RoleProvider } from "@/components/team/role-context";
 import { Container } from "@/components/ui/container";
 import { requireUser } from "@/lib/auth/current-user";
 import {
@@ -9,13 +10,12 @@ import {
   UNTAGGED_FILTER_ID,
   type PlaceFilter,
 } from "@/lib/places/place-filters";
-import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
-import { loadMap } from "@/lib/repositories/load-map";
 import { listAllPlaces } from "@/lib/repositories/places.repository";
 import { PLAN_LIMITS, getUserPlan } from "@/lib/repositories/plan-limits";
 import { getSheetLink } from "@/lib/repositories/sheet-links.repository";
 import { toSheetLinkView } from "@/lib/sheet-sync/types";
+import { loadMapAccess } from "@/lib/team/resolve";
 import type { AppMap } from "@/lib/repositories/types";
 import { tagGroupIndex } from "@/packages/shared/tags";
 
@@ -38,16 +38,18 @@ export default async function PlacesPage(props: PageProps<"/maps/[id]/places">) 
   }
 
   return (
-    <Container size="centered">
-      <PlacesManager
-        initialMap={data.map}
-        initialPlaces={data.places}
-        placeLimit={data.placeLimit}
-        initialSheetLink={data.sheetLink}
-        initialFilter={readFilter(search.filter)}
-        initialTagIds={readTagIds(search.tag, data.map)}
-      />
-    </Container>
+    <RoleProvider role={data.role}>
+      <Container size="centered">
+        <PlacesManager
+          initialMap={data.map}
+          initialPlaces={data.places}
+          placeLimit={data.placeLimit}
+          initialSheetLink={data.sheetLink}
+          initialFilter={readFilter(search.filter)}
+          initialTagIds={readTagIds(search.tag, data.map)}
+        />
+      </Container>
+    </RoleProvider>
   );
 }
 
@@ -90,16 +92,18 @@ function readTagIds(
 }
 
 async function loadPlaces(userId: string, mapId: string) {
-  const [map, places, plan, sheetLink] = await Promise.all([
-    loadMap(userId, mapId),
-    listAllPlaces(repoContext(userId), mapId),
-    getUserPlan(userId),
+  // The map's workspace first: its plan is the place limit shown here.
+  const { map, ctx } = await loadMapAccess(userId, mapId);
+  const [places, plan, sheetLink] = await Promise.all([
+    listAllPlaces(ctx, mapId),
+    getUserPlan(ctx.workspaceId),
     // With the rest, so the Sheet sync button is in the toolbar on first paint
     // rather than arriving a request later and shoving Import along.
-    getSheetLink(repoContext(userId), mapId),
+    getSheetLink(ctx, mapId),
   ]);
 
   return {
+    role: ctx.role,
     map,
     places,
     placeLimit: PLAN_LIMITS[plan].places,

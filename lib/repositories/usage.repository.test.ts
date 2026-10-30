@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ownWorkspace } from "./context";
+
 /**
  * The allowance is the other half of the paywall, and the half that costs real
  * money when it regresses: every ceiling tested in `plan-limits.test.ts` bounds
@@ -30,7 +32,7 @@ vi.mock("@/lib/appwrite/admin", () => ({
   },
 }));
 
-const USER_ID = "user-1";
+const USER_ID = ownWorkspace("user-1");
 
 /** Counts the fake table answers with, keyed `${userId}:${period}`. */
 let counts: Record<string, number> = {};

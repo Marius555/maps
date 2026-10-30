@@ -19,8 +19,9 @@ test.use({ contextOptions: { reducedMotion: "reduce" } });
 
 type CardLayout = Record<string, unknown>;
 
-async function readDesign(request: APIRequestContext): Promise<CardLayout> {
-  const response = await request.get("/api/account/card-design");
+async function readDesign(request: APIRequestContext, mapId: string): Promise<CardLayout> {
+  // Under the map: the design is its workspace's, and the map names the workspace.
+  const response = await request.get(`/api/maps/${mapId}/card-design`);
   expect(response.ok(), await response.text()).toBe(true);
   return ((await response.json()) as { data: { cardLayout: CardLayout } }).data.cardLayout;
 }
@@ -32,7 +33,7 @@ test("a change in the card designer is saved for the account", async ({ page, re
     lng: 25.2797,
     address: "Gedimino pr. 9",
   });
-  const before = await readDesign(request);
+  const before = await readDesign(request, testMap.id);
 
   try {
     await page.goto(`/maps/${testMap.id}/card`);
@@ -53,13 +54,13 @@ test("a change in the card designer is saved for the account", async ({ page, re
     const saved = page.waitForResponse(
       (response) =>
         response.request().method() === "PATCH" &&
-        response.url().includes("/api/account/card-design"),
+        response.url().includes(`/api/maps/${testMap.id}/card-design`),
     );
     await save.click();
     expect((await saved).ok()).toBe(true);
     await expect(save).toBeDisabled();
 
-    expect(await readDesign(request)).not.toEqual(before);
+    expect(await readDesign(request, testMap.id)).not.toEqual(before);
 
     await page.reload();
     await page.getByRole("button", { name: "Address", exact: true }).click();
@@ -71,7 +72,7 @@ test("a change in the card designer is saved for the account", async ({ page, re
     // shipped default is what it was drawing. Not "Reset card": that is the
     // designer's blank canvas, a card with no blocks at all.
     const cardLayout = isSavedCardLayout(before) ? before : defaultCardLayout();
-    const restore = await request.patch("/api/account/card-design", { data: { cardLayout } });
+    const restore = await request.patch(`/api/maps/${testMap.id}/card-design`, { data: { cardLayout } });
     expect(restore.ok(), await restore.text()).toBe(true);
   }
 });

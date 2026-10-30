@@ -97,6 +97,12 @@ export const RATE_LIMITS = {
   billing: { per: "user", limit: 10, windowMs: 10 * MINUTE },
   /** Changing the password, which checks the current one. */
   password: { per: "user", limit: 5, windowMs: 15 * MINUTE },
+  /**
+   * Sending a team invite, first time or again. Each one mails an address the
+   * sender chose, so it is held to a handful an hour like the auth emails are;
+   * a Pro team fills its ten seats well inside it.
+   */
+  invite: { per: "user", limit: 20, windowMs: HOUR },
 } as const satisfies Record<string, RatePolicy>;
 
 export type RatePolicyName = keyof typeof RATE_LIMITS;

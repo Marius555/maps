@@ -9,6 +9,7 @@ import { withKeptPlan } from "@/lib/billing/plan-change";
 import { hasLapsed } from "@/lib/billing/standing";
 import { env } from "@/lib/env";
 import { PLAN_FEATURES, PLAN_LIMITS, type PlanId } from "@/lib/limits/plans";
+import type { WorkspaceId } from "./context";
 import { PlanFeatureError, type GatedFeature } from "./errors";
 
 /*
@@ -20,6 +21,7 @@ export {
   MAX_GROUPS_PER_MAP,
   PLAN_FEATURES,
   PLAN_LIMITS,
+  SEAT_LIMITS,
   SESSION_LIMITS,
   type PlanId,
 } from "@/lib/limits/plans";
@@ -42,10 +44,10 @@ export function planAllows(plan: PlanId, feature: GatedFeature): boolean {
  * plan for something else pays nothing to ask again here.
  */
 export async function assertPlanFeature(
-  userId: string,
+  workspaceId: WorkspaceId,
   feature: GatedFeature,
 ): Promise<void> {
-  const plan = await getUserPlan(userId);
+  const plan = await getUserPlan(workspaceId);
 
   if (!planAllows(plan, feature)) {
     throw new PlanFeatureError(feature, plan);
@@ -163,7 +165,7 @@ function asPlan(value: string | null | undefined): PlanId | null {
 }
 
 /**
- * Which plan an account is on, read from the `subscriptions` table the billing
+ * Which plan a workspace is on — its owner's subscription — read from the `subscriptions` table the billing
  * webhook writes.
  *
  * `cache()` keeps it to one read per request even when several creates check it.
@@ -188,14 +190,14 @@ function asPlan(value: string | null | undefined): PlanId | null {
  * one the customer paid this period for, granted until `keptUntil`. It only ever
  * raises what a live subscription grants — see `withKeptPlan`.
  */
-export const getUserPlan = cache(async (userId: string): Promise<PlanId> => {
+export const getUserPlan = cache(async (workspaceId: WorkspaceId): Promise<PlanId> => {
   // TEMPORARY — see planChecksDisabled above. Skips the read as well as the check.
   if (planChecksDisabled()) return "pro";
 
   const result = await admin.tablesDB.listRows<SubscriptionRow>({
     databaseId: env.databaseId,
     tableId: TABLES.subscriptions,
-    queries: [Query.equal("userId", userId), Query.limit(1)],
+    queries: [Query.equal("userId", workspaceId), Query.limit(1)],
   });
 
   const subscription = result.rows[0];

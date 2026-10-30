@@ -32,12 +32,12 @@ import { PageTitle } from "@/components/ui/page-title";
 import { loadAnalytics, type AnalyticsData } from "@/lib/analytics/load";
 import { readRange, type AnalyticsRange } from "@/lib/analytics/range";
 import { requireUser } from "@/lib/auth/current-user";
-import { repoContext } from "@/lib/repositories/context";
+import type { RepoContext } from "@/lib/repositories/context";
 import { NotFoundError, planFeatureNote } from "@/lib/repositories/errors";
-import { loadMap } from "@/lib/repositories/load-map";
 import { listAllPlaces } from "@/lib/repositories/places.repository";
 import { getUserPlan, planAllows } from "@/lib/repositories/plan-limits";
 import type { AppMap, Place } from "@/lib/repositories/types";
+import { loadMapAccess } from "@/lib/team/resolve";
 import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 
 export const metadata: Metadata = { title: "Analytics" };
@@ -79,14 +79,28 @@ export default async function MapAnalyticsPage(
   const user = await requireUser();
 
   /*
-   * The plan first, before anything is read.
+   * Which workspace the map is in, before anything else — it decides whose plan
+   * this tab is measured against: the map's owner's, not the visitor's own.
+   * The `try` wraps only the fetch, and the JSX is returned after it (see below).
+   */
+  let access: { ctx: RepoContext; map: AppMap };
+
+  try {
+    access = await loadMapAccess(user.id, id);
+  } catch (error) {
+    if (error instanceof NotFoundError) notFound();
+    throw error;
+  }
+
+  /*
+   * The plan first, before anything else is read.
    *
    * Not only so the tab can refuse: `load` below is the most expensive read in
    * the dashboard — every location on the map, plus a quarter of rollups — and
    * doing it to draw a locked panel would be paying the whole cost of the feature
    * to say it is not included.
    */
-  const plan = await getUserPlan(user.id);
+  const plan = await getUserPlan(access.ctx.workspaceId);
   const measured = planAllows(plan, "analytics");
 
   /*
@@ -98,7 +112,7 @@ export default async function MapAnalyticsPage(
   let data: LoadedAnalytics;
 
   try {
-    data = await load(user.id, id, range, measured);
+    data = await load(access, range, measured);
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
     throw error;
@@ -233,16 +247,13 @@ type LoadedAnalytics = {
  * find.
  */
 async function load(
-  userId: string,
-  mapId: string,
+  { ctx, map }: { ctx: RepoContext; map: AppMap },
   range: ReturnType<typeof readRange>,
   measured: boolean,
 ): Promise<LoadedAnalytics> {
-  const ctx = repoContext(userId);
+  const mapId = map.id;
 
   if (!measured) {
-    const map = await loadMap(userId, mapId);
-
     return {
       map,
       places: [],
@@ -252,16 +263,14 @@ async function load(
   }
 
   /*
-   * All three at once. `loadAnalytics` takes the locations as a promise and
+   * Both at once. `loadAnalytics` takes the locations as a promise and
    * only awaits them to build the view, so its own reads no longer wait out a
    * paged read of every location first. The promise is in this `Promise.all`
    * too, which is what keeps a failed read from becoming an unhandled rejection.
    */
   const placesRead = listAllPlaces(ctx, mapId);
 
-  const [map, places, analytics] = await Promise.all([
-    // Primitives, not the context: `loadMap` memoises on argument identity.
-    loadMap(userId, mapId),
+  const [places, analytics] = await Promise.all([
     placesRead,
     loadAnalytics(ctx, mapId, range, placesRead, new Date()),
   ]);

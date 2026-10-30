@@ -11,7 +11,7 @@ import { buildSnapshot } from "@/lib/snapshot/build";
 import { uploadSnapshot } from "@/lib/snapshot/storage";
 import { effectiveCardLayout } from "@/lib/card/designer-status";
 import { getCardDesign } from "./card-design.repository";
-import type { RepoContext } from "./context";
+import type { RepoContext, WorkspaceId } from "./context";
 import { PublishOverLimitError } from "./errors";
 import { listAllGroups } from "./groups.repository";
 import { toAppMap } from "./mappers";
@@ -71,11 +71,12 @@ export async function publishMap(
    * Ownership is checked in the same batch as the reads, not ahead of them —
    * nothing below runs, and nothing is generated, unless `getMap` resolved.
    *
-   * The plan is the map's owner's rather than the caller's, because the automatic
-   * sheet sync republishes with no session — and the badge is the owner's
-   * plan's answer. `ctx.userId` *is* the owner here: `getMap` refuses any map
-   * whose `userId` differs, which is what lets this read join the batch rather
-   * than wait for the map row to name its owner.
+   * The plan and the card design are the map's workspace's rather than the
+   * caller's — a member publishing a team's map publishes it under the team's
+   * plan, and the automatic sheet sync republishes with no session at all.
+   * `ctx.workspaceId` *is* the map's owner for anyone who got this far: `getMap`
+   * refuses any map whose `userId` differs, which is what lets these reads join
+   * the batch rather than wait for the map row to name its owner.
    */
   const [map, places, shapes, groups, cardDesign, plan] = await Promise.all([
     getMap(ctx, mapId),
@@ -84,10 +85,10 @@ export async function publishMap(
     // Only their colours are published, never their ids — see buildSnapshot.
     listAllGroups(ctx, mapId),
     getCardDesign(ctx),
-    getUserPlan(ctx.userId),
+    getUserPlan(ctx.workspaceId),
   ]);
 
-  await assertPublishable(map.userId, mapId, plan, places.length, shapes.length);
+  await assertPublishable(ctx.workspaceId, mapId, plan, places.length, shapes.length);
 
   const generatedAt = new Date().toISOString();
   const { snapshot, skipped } = buildSnapshot(
@@ -141,7 +142,7 @@ export async function publishMap(
  * same rule.
  */
 async function assertPublishable(
-  userId: string,
+  workspaceId: WorkspaceId,
   mapId: string,
   plan: PlanId,
   placeCount: number,
@@ -157,7 +158,7 @@ async function assertPublishable(
     throw new PublishOverLimitError("shapes", shapeCount, limits.shapes, plan);
   }
 
-  if (!(await holdsPublishSlot(userId, mapId, limits.maps))) {
+  if (!(await holdsPublishSlot(workspaceId, mapId, limits.maps))) {
     throw new PublishOverLimitError("maps", 0, limits.maps, plan);
   }
 }

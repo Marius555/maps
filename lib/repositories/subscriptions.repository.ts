@@ -7,6 +7,7 @@ import { TABLES } from "@/lib/appwrite/config";
 import { toRepositoryError } from "@/lib/appwrite/errors";
 import type { KeptPlan, SubscriptionState } from "@/lib/billing/types";
 import { env } from "@/lib/env";
+import type { WorkspaceId } from "./context";
 import { ownerPermissions } from "./maps.repository";
 import { PLAN_LIMITS, type PlanId } from "./plan-limits";
 
@@ -61,16 +62,20 @@ export type Subscription = SubscriptionState & {
   kept: KeptPlan | null;
 };
 
-/** The account's subscription, or null for one that has never bought anything. */
+/**
+ * The workspace's subscription — its owner's — or null for one that has never
+ * bought anything. Billing is always the signed-in person's own workspace, so
+ * callers pass `ownWorkspace(user.id)`; the type is what makes them say so.
+ */
 export async function getSubscription(
-  userId: string,
+  workspaceId: WorkspaceId,
 ): Promise<Subscription | null> {
   try {
-    const row = await findRow(userId);
+    const row = await findRow(workspaceId);
     if (!row) return null;
 
     return {
-      userId,
+      userId: workspaceId,
       plan:
         row.plan && row.plan in PLAN_LIMITS ? (row.plan as PlanId) : "free",
       // Widened rather than validated: the column is an enum, so anything in it

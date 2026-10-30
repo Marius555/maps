@@ -1,6 +1,6 @@
 import { geocoderFailure } from "@/lib/api/geocoder-errors";
 import { ok } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withMapAuth } from "@/lib/api/route";
 import { getGeocoder } from "@/lib/geocoding";
 import { getMap } from "@/lib/repositories/maps.repository";
 import {
@@ -22,12 +22,12 @@ type Params = { id: string };
  * day's shared budget to its last credit rather than standing aside at the reserve
  * — a sweep nobody asked for can wait, a person typing cannot.
  */
-export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
+export const POST = withMapAuth<Params>(async ({ request, params, ctx }) => {
   await getMap(ctx, params.id);
 
   const input = await parseBody(request, geocodeSearchSchema);
 
-  await assertLookupHeadroom(ctx.userId, 1, "interactive");
+  await assertLookupHeadroom(ctx.workspaceId, 1, "interactive");
 
   try {
     const candidates = await getGeocoder().search({
@@ -38,7 +38,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
 
     // After the answer, never around the request: a lookup the upstream refused
     // is not one the customer should have billed against their month.
-    await recordLookups(ctx.userId, 1);
+    await recordLookups(ctx.workspaceId, 1);
 
     return ok({ candidates });
   } catch (error) {

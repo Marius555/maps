@@ -24,7 +24,7 @@ operator console.
 
 | Set in `.env` | Unlocks |
 |---|---|
-| `E2E_EMAIL_2` / `E2E_PASSWORD_2` — a second confirmed account | `api-security.spec.ts`'s cross-account checks; `plan-limits.spec.ts` |
+| `E2E_EMAIL_2` / `E2E_PASSWORD_2` — a second confirmed account | `api-security.spec.ts`'s cross-account checks; `plan-limits.spec.ts`; `team.spec.ts` (needs a second seat too: `DISABLE_ALL_PLAN=true` or a paid main account) |
 | `DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD` — a development-only console login, any address and password you like; `next dev` accepts it and a production build ignores it | `admin.spec.ts` (signed in), `notifications.spec.ts`, `news.spec.ts` |
 | `E2E_UNVERIFIED_EMAIL` / `E2E_UNVERIFIED_PASSWORD` — an account that signed up and never confirmed | `unverified.spec.ts` |
 
@@ -71,6 +71,7 @@ npx playwright show-report
 | `publish`, `embed`, `analytics` | The snapshot contract: search, tag narrowing, republish to the same URL, designer settings, the domain allowlist, attribution, **no metered call in the visitor's path**; one analytics beacon per session |
 | `account`, `admin`, `notifications`, `news` | Profile and theme; the console's guard; a notification and a news post round-trip |
 | `mobile-editor` (Pixel 7) | The editor's sheet, add-by-search and publish at phone width |
+| `team` (its own project, after `chromium`) | Team seats with both accounts: invite from Settings → Team, join by the link, a viewer's 403s, promotion, map routes across a team switch, leaving, the invitation list, removal, a mismatched address, a revoked link. Its own project because `api-security` needs the two accounts to be strangers; teardown takes the team apart if a run dies |
 | `docs-screenshots/capture` | Not a test: retakes the /docs screenshots. Runs only as `npm run docs:screenshots`, and skips itself in a normal run |
 
 ## How it is put together

@@ -1,8 +1,9 @@
 import { fail, ok } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withPersonalAuth } from "@/lib/api/route";
 import { markDeletionStarted } from "@/lib/auth/account";
 import { BillingError, getBilling } from "@/lib/billing";
 import { billingStanding } from "@/lib/billing/standing";
+import { ownWorkspace } from "@/lib/repositories/context";
 import { listOwnedMapIds } from "@/lib/repositories/account-deletion.repository";
 import { getSubscription } from "@/lib/repositories/subscriptions.repository";
 import { deleteAccountSchema } from "@/lib/validation/account.schema";
@@ -23,7 +24,7 @@ import { deleteAccountSchema } from "@/lib/validation/account.schema";
  * The steps that do the deleting are `./step/route.ts`. This one marks the
  * account as confirmed, and they refuse without that mark.
  */
-export const POST = withAuth(
+export const POST = withPersonalAuth(
   async ({ request, user, ctx }) => {
     const { email } = await parseBody(request, deleteAccountSchema);
 
@@ -33,7 +34,7 @@ export const POST = withAuth(
       return fail("validation_failed", message, 422, { email: [message] });
     }
 
-    const subscription = await getSubscription(user.id);
+    const subscription = await getSubscription(ownWorkspace(user.id));
 
     if (subscription?.billingSubscriptionId && billingStanding(subscription) !== "none") {
       try {

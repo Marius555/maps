@@ -8,9 +8,11 @@ import { BrandLogo } from "@/components/brand/brand-logo";
 import { IconButton } from "@/components/ui/icon-button";
 import type { AuthUser } from "@/lib/auth/types";
 import type { PlanId } from "@/lib/repositories/plan-limits";
+import type { WorkspaceSummary } from "@/lib/team/types";
 import { UserMenu } from "../user-menu";
 import { useSidebar } from "./sidebar-context";
 import { SidebarNav } from "./sidebar-nav";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
 /**
  * The same nav as a left drawer, below `md`.
@@ -19,7 +21,21 @@ import { SidebarNav } from "./sidebar-nav";
  * header without prop-drilling. Choosing a destination closes it — a drawer left
  * open over the page it just navigated to is the classic mobile-nav bug.
  */
-export function SidebarMobile({ user, plan }: { user: AuthUser; plan: PlanId }) {
+export function SidebarMobile({
+  user,
+  plan,
+  accountPlan,
+  personalPlan,
+  workspaces,
+  activeWorkspaceId,
+}: {
+  user: AuthUser;
+  plan: PlanId;
+  accountPlan: PlanId;
+  personalPlan: PlanId;
+  workspaces: readonly WorkspaceSummary[];
+  activeWorkspaceId: string;
+}) {
   const { isMobileOpen, setMobileOpen } = useSidebar();
 
   return (
@@ -41,6 +57,15 @@ export function SidebarMobile({ user, plan }: { user: AuthUser; plan: PlanId }) 
           </Drawer.Header>
 
           <Drawer.Body className="min-h-0 flex-1">
+            {workspaces.length > 1 ? (
+              <div className="pb-2">
+                <WorkspaceSwitcher
+                  workspaces={workspaces}
+                  activeWorkspaceId={activeWorkspaceId}
+                  onNavigate={() => setMobileOpen(false)}
+                />
+              </div>
+            ) : null}
             <SidebarNav
               isCollapsed={false}
               onNavigate={() => setMobileOpen(false)}
@@ -50,7 +75,8 @@ export function SidebarMobile({ user, plan }: { user: AuthUser; plan: PlanId }) 
           <Drawer.Footer className="flex-col items-stretch">
             <UserMenu
               user={user}
-              plan={plan}
+              plan={accountPlan}
+              personalPlan={personalPlan}
               onNavigate={() => setMobileOpen(false)}
             />
           </Drawer.Footer>

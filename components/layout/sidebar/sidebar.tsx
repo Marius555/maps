@@ -10,10 +10,12 @@ import { BrandLogo } from "@/components/brand/brand-logo";
 import { IconButton } from "@/components/ui/icon-button";
 import type { AuthUser } from "@/lib/auth/types";
 import type { PlanId } from "@/lib/repositories/plan-limits";
+import type { WorkspaceSummary } from "@/lib/team/types";
 import { hidesAppNav } from "@/lib/layout/app-nav";
 import { UserMenu } from "../user-menu";
 import { useSidebar } from "./sidebar-context";
 import { SidebarNav } from "./sidebar-nav";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
 /**
  * The desktop sidebar.
@@ -34,7 +36,21 @@ import { SidebarNav } from "./sidebar-nav";
  * `overflow-hidden` is what makes the clip clean. It is safe for the user menu
  * and the tooltips because React Aria portals both out of this subtree.
  */
-export function Sidebar({ user, plan }: { user: AuthUser; plan: PlanId }) {
+export function Sidebar({
+  user,
+  plan,
+  accountPlan,
+  personalPlan,
+  workspaces,
+  activeWorkspaceId,
+}: {
+  user: AuthUser;
+  plan: PlanId;
+  accountPlan: PlanId;
+  personalPlan: PlanId;
+  workspaces: readonly WorkspaceSummary[];
+  activeWorkspaceId: string;
+}) {
   const { isCollapsed, toggleCollapsed } = useSidebar();
   const pathname = usePathname();
 
@@ -103,12 +119,27 @@ export function Sidebar({ user, plan }: { user: AuthUser; plan: PlanId }) {
         />
       </div>
 
+      {workspaces.length > 1 ? (
+        <div className="px-2 pt-1">
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            isCollapsed={isCollapsed}
+          />
+        </div>
+      ) : null}
+
       <ScrollShadow className="min-h-0 flex-1 px-2 py-2" hideScrollBar>
         <SidebarNav isCollapsed={isCollapsed} />
       </ScrollShadow>
 
       <div className="p-2">
-        <UserMenu user={user} plan={plan} isCollapsed={isCollapsed} />
+        <UserMenu
+          user={user}
+          plan={accountPlan}
+          personalPlan={personalPlan}
+          isCollapsed={isCollapsed}
+        />
       </div>
     </aside>
   );

@@ -1,5 +1,5 @@
 import { fail, ok } from "@/lib/api/responses";
-import { withAuth } from "@/lib/api/route";
+import { withMapAuth } from "@/lib/api/route";
 import { assertUploadSize } from "@/lib/api/upload-size";
 import {
   clearPlaceLogo,
@@ -20,7 +20,7 @@ type Params = { id: string; placeId: string };
  * straight from the browser through us to Appwrite Storage; nothing touches
  * disk here.
  */
-export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
+export const POST = withMapAuth<Params>(async ({ request, params, ctx }) => {
   assertUploadSize(request, "logo");
 
   let entry: FormDataEntryValue | null;
@@ -42,6 +42,6 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
   return ok({ place: await setPlaceLogo(ctx, params.id, params.placeId, entry) });
 }, { rateLimit: "upload" });
 
-export const DELETE = withAuth<Params>(async ({ params, ctx }) =>
+export const DELETE = withMapAuth<Params>(async ({ params, ctx }) =>
   ok({ place: await clearPlaceLogo(ctx, params.id, params.placeId) }),
 );

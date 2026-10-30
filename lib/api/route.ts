@@ -11,8 +11,16 @@ import { env } from "@/lib/env";
 import { RATE_LIMITS, type RatePolicyName } from "@/lib/limits/rate";
 import { clientIp } from "@/lib/rate-limit/ip";
 import { rateLimit } from "@/lib/rate-limit/limiter";
-import { repoContext, type RepoContext } from "@/lib/repositories/context";
-import { RateLimitError, RepositoryError } from "@/lib/repositories/errors";
+import { ownerContext, type RepoContext } from "@/lib/repositories/context";
+import {
+  NotFoundError,
+  RateLimitError,
+  RepositoryError,
+  RoleRequiredError,
+} from "@/lib/repositories/errors";
+import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/team/active-cookie";
+import { resolveActiveContext, resolveMapContext } from "@/lib/team/resolve";
+import { can } from "@/lib/team/roles";
 import type { ApiFieldErrors } from "./error-codes";
 import { fail } from "./responses";
 import { assertSameOrigin } from "./same-origin";
@@ -27,11 +35,28 @@ export type Handler<Params> = (args: {
 type RouteArgs<Params> = { params: Promise<Params> };
 
 /**
- * Wraps a route handler with the six things every one of them does: refuse a
+ * Which workspace a route works in — lib/team/resolve.ts has the three answers.
+ *
+ * - `"map"`: the workspace that owns `params.id`. Every `/api/maps/[id]/**`
+ *   route, and `lib/api/route-scopes.test.ts` holds them to it.
+ * - `"active"` (the default): the one the dashboard is switched to.
+ * - `"none"`: the person's own — account, billing, notifications, and the
+ *   team routes that act on the person rather than a workspace (accepting an
+ *   invite, leaving, switching).
+ *
+ * The default is the one that fails closed. A map-scoped route left on
+ * `"active"` resolves the wrong workspace and `getMap` answers 404; it can
+ * never reach a map the caller is not in.
+ */
+export type WorkspaceScope = "active" | "map" | "none";
+
+/**
+ * Wraps a route handler with the seven things every one of them does: refuse a
  * write another website made the browser send (`./same-origin.ts`), resolve the
  * caller, refuse a write from an account that has not confirmed its address,
- * await the params promise, build a repo context, and map thrown errors onto the
- * JSON envelope.
+ * await the params promise, resolve which workspace the request is about and the
+ * caller's role in it (`options.workspace`), refuse a viewer's write, and map
+ * thrown errors onto the JSON envelope.
  *
  * `requireUser()` here is the actual authorization check. proxy.ts only decides
  * whether to bother rendering — it authorizes nothing, and a forged cookie has to
@@ -55,7 +80,7 @@ type RouteArgs<Params> = { params: Promise<Params> };
  */
 export function withAuth<Params = Record<string, never>>(
   handler: Handler<Params>,
-  options: { allowUnverified?: boolean; rateLimit?: PolicyPer<"user"> } = {},
+  options: AuthOptions = {},
 ) {
   return async (
     request: NextRequest,
@@ -71,12 +96,92 @@ export function withAuth<Params = Record<string, never>>(
       if (!options.allowUnverified) assertEmailVerified(user, request.method);
 
       const params = ((await args?.params) ?? {}) as Params;
+      const scope = options.workspace ?? "active";
+      const ctx = await contextFor(scope, request, user.id, params);
 
-      return await handler({ request, params, user, ctx: repoContext(user.id) });
+      assertRoleAllows(ctx, scope, request.method);
+
+      return await handler({ request, params, user, ctx });
     } catch (error) {
       return toErrorResponse(error);
     }
   };
+}
+
+type AuthOptions = {
+  allowUnverified?: boolean;
+  rateLimit?: PolicyPer<"user">;
+  workspace?: WorkspaceScope;
+};
+
+/**
+ * `withAuth` for every route under `/api/maps/[id]`: the workspace is whoever
+ * owns that map, and the caller's role there decides what they may do. The
+ * `id` param is required by the type, so a route that has none cannot use it.
+ * `lib/api/route-scopes.test.ts` holds every map route to this wrapper.
+ */
+export function withMapAuth<Params extends { id: string }>(
+  handler: Handler<Params>,
+  options: Omit<AuthOptions, "workspace"> = {},
+) {
+  return withAuth<Params>(handler, { ...options, workspace: "map" });
+}
+
+/**
+ * `withAuth` for routes about the person rather than a workspace's data — the
+ * account, billing, notifications, accepting an invite, leaving a team. The
+ * context is their own workspace and the viewer gate does not apply.
+ */
+export function withPersonalAuth<Params = Record<string, never>>(
+  handler: Handler<Params>,
+  options: Omit<AuthOptions, "workspace"> = {},
+) {
+  return withAuth<Params>(handler, { ...options, workspace: "none" });
+}
+
+async function contextFor(
+  scope: WorkspaceScope,
+  request: NextRequest,
+  userId: string,
+  params: unknown,
+): Promise<RepoContext> {
+  if (scope === "none") return ownerContext(userId);
+
+  if (scope === "map") {
+    const mapId = (params as { id?: unknown } | null)?.id;
+
+    if (typeof mapId !== "string" || !mapId) {
+      throw new NotFoundError("That map doesn't exist.");
+    }
+
+    return (await resolveMapContext(userId, mapId)).ctx;
+  }
+
+  // `cookies` is always there on a real NextRequest; the optional chain is for
+  // the plain `Request` the wrapper's own tests hand it.
+  return resolveActiveContext(userId, request.cookies?.get(ACTIVE_WORKSPACE_COOKIE)?.value);
+}
+
+/**
+ * **The viewer gate: a viewer changes nothing in a workspace, and this one check
+ * is why.** It sits beside the email gate for the reason that one does — every
+ * authenticated route passes through here, so a route written next month is
+ * covered by having been written normally. Finer rules (only an admin deletes a
+ * map, only the owner manages admins) are `can`/`canManage` calls inside the
+ * repositories; this is the floor under them.
+ *
+ * `"none"` routes are exempt because they act on the person, never on a
+ * workspace's data — and a viewer must still be able to leave, switch teams
+ * and accept an invite.
+ */
+function assertRoleAllows(ctx: RepoContext, scope: WorkspaceScope, method: string): void {
+  if (scope === "none" || isReadMethod(method)) return;
+
+  if (!can(ctx.role, "edit")) throw new RoleRequiredError();
+}
+
+function isReadMethod(method: string): boolean {
+  return method === "GET" || method === "HEAD" || method === "OPTIONS";
 }
 
 /**
@@ -144,7 +249,7 @@ type PolicyPer<Per extends string> = {
  * gate makes above.
  */
 function defaultUserPolicy(method: string): PolicyPer<"user"> {
-  return method === "GET" || method === "HEAD" || method === "OPTIONS" ? "read" : "write";
+  return isReadMethod(method) ? "read" : "write";
 }
 
 export function toErrorResponse(error: unknown): NextResponse {

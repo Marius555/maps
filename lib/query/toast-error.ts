@@ -3,6 +3,7 @@
 import { toast } from "@heroui/react";
 
 import { ApiError } from "./fetcher";
+import { isRoleRequired } from "./role-required-toast";
 
 /**
  * Say a failure out loud when there is no dialog left to say it in.
@@ -20,6 +21,9 @@ import { ApiError } from "./fetcher";
  * did not happen, and the server's own message fills in why when it has one.
  */
 export function toastError(error: unknown, title: string): void {
+  // Already said, once, by the MutationCache — lib/query/role-required-toast.ts.
+  if (isRoleRequired(error)) return;
+
   toast.danger(title, {
     description:
       error instanceof ApiError

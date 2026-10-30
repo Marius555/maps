@@ -1,5 +1,5 @@
 import { fail, noContent } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withPersonalAuth } from "@/lib/api/route";
 import {
   accountHasPassword,
   changePassword,
@@ -26,7 +26,7 @@ import { changePasswordSchema } from "@/lib/validation/account.schema";
  * Both refusals come back as field errors, so the message lands under the box it
  * is about rather than at the top of the form.
  */
-export const PATCH = withAuth(async ({ request, user }) => {
+export const PATCH = withPersonalAuth(async ({ request, user }) => {
   const input = await parseBody(request, changePasswordSchema);
 
   rateLimit("password", user.id);

@@ -4,6 +4,7 @@ import { VerifyEmailBanner } from "@/components/verify-email/verify-email-banner
 import type { AuthUser } from "@/lib/auth/types";
 import type { TutorialId } from "@/lib/onboarding/tutorials";
 import type { PlanId } from "@/lib/repositories/plan-limits";
+import type { WorkspaceSummary } from "@/lib/team/types";
 import { MobileHeader } from "./mobile-header";
 import { MobileHeaderSlotProvider } from "./mobile-header-slot";
 import { PageMain } from "./page-transition/page-main";
@@ -61,13 +62,25 @@ import { SidebarMobile } from "./sidebar/sidebar-mobile";
 export function AppShell({
   user,
   plan,
+  accountPlan,
+  personalPlan,
+  workspaces,
+  activeWorkspaceId,
   defaultCollapsed,
   defaultMapId,
   tutorials,
   children,
 }: {
   user: AuthUser;
+  /** The switched-to workspace's plan — the badge beside the product name. */
   plan: PlanId;
+  /** The person's own plan — billing is always their own account. */
+  accountPlan: PlanId;
+  /** The best plan they work under — what Contact support checks. */
+  personalPlan: PlanId;
+  /** Their own workspace and every team they joined, for the switcher. */
+  workspaces: readonly WorkspaceSummary[];
+  activeWorkspaceId: string;
   defaultCollapsed: boolean;
   defaultMapId: string | null;
   /** The onboarding overlays this account has not closed yet. */
@@ -83,8 +96,22 @@ export function AppShell({
         data-app-frame=""
         className="flex h-[100dvh] min-h-0 flex-none overflow-hidden"
       >
-        <Sidebar user={user} plan={plan} />
-        <SidebarMobile user={user} plan={plan} />
+        <Sidebar
+          user={user}
+          plan={plan}
+          accountPlan={accountPlan}
+          personalPlan={personalPlan}
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+        />
+        <SidebarMobile
+          user={user}
+          plan={plan}
+          accountPlan={accountPlan}
+          personalPlan={personalPlan}
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+        />
         <NotificationsDrawer />
 
         {/* The provider wraps the header *and* the page, because the trigger a

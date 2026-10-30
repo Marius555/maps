@@ -9,11 +9,12 @@ import { env } from "@/lib/env";
 import { publishingMapIds } from "@/lib/limits/publish-slots";
 import { deleteSnapshots } from "@/lib/snapshot/storage";
 import { randomSuffix, slugify } from "@/lib/utils/slug";
+import { can } from "@/lib/team/roles";
 import { CUSTOM_PIN_PREFIX } from "@/packages/shared/pin-icons";
 import type { CreateMapInput, UpdateMapInput } from "@/lib/validation/map.schema";
-import type { RepoContext } from "./context";
+import type { RepoContext, WorkspaceId } from "./context";
 import { listPlaceFileIds, removeStorageFiles } from "./place-files";
-import { ConflictError, NotFoundError, PlanLimitError } from "./errors";
+import { ConflictError, NotFoundError, PlanLimitError, RoleRequiredError } from "./errors";
 import { toAppMap } from "./mappers";
 import { PLAN_LIMITS, getUserPlan, rollBackIfOverLimit } from "./plan-limits";
 import type { AppMap, MapRow } from "./types";
@@ -25,7 +26,7 @@ const SLUG_ATTEMPTS = 3;
  * Row permissions the owner gets on everything they create: **none**.
  *
  * Every read and write in the app goes through the admin client inside
- * /lib/repositories, scoped by `ctx.userId`, so a permission on the row buys the
+ * /lib/repositories, scoped by `ctx.workspaceId`, so a permission on the row buys the
  * app nothing. What it did buy was a hole: the session cookie is the real
  * Appwrite session secret, its owner can copy it out of devtools, and with it
  * call Appwrite's REST API directly. A row the user may `update` is therefore a
@@ -48,7 +49,7 @@ export async function listMaps(ctx: RepoContext): Promise<AppMap[]> {
       databaseId: env.databaseId,
       tableId: TABLES.maps,
       queries: [
-        Query.equal("userId", ctx.userId),
+        Query.equal("userId", ctx.workspaceId),
         Query.orderDesc("$createdAt"),
         Query.limit(MAX_MAPS_PER_PAGE),
       ],
@@ -61,26 +62,43 @@ export async function listMaps(ctx: RepoContext): Promise<AppMap[]> {
 }
 
 /**
- * A map that exists but belongs to someone else is reported as missing, never as
- * forbidden. A 403 would confirm the id is real; a 404 leaks nothing.
+ * A map that exists but belongs to another workspace is reported as missing,
+ * never as forbidden. A 403 would confirm the id is real; a 404 leaks nothing.
+ *
+ * `ctx.workspaceId` is the map's owner for anybody allowed to see it —
+ * `resolveMapContext` (lib/team/resolve.ts) builds a member's context from the
+ * map itself — so this one comparison is still the whole access check for every
+ * map and everything on it. A route resolved against the wrong workspace fails
+ * here, closed.
  */
 export async function getMap(ctx: RepoContext, mapId: string): Promise<AppMap> {
-  let row: MapRow;
+  const map = await readMapForAccess(mapId);
 
+  if (map.userId !== ctx.workspaceId) throw new NotFoundError(MAP_NOT_FOUND);
+
+  return map;
+}
+
+const MAP_NOT_FOUND = "That map doesn't exist.";
+
+/**
+ * The map row with **no** access check — for `resolveMapContext` alone, which
+ * reads it to learn whose workspace the map is in before it can know whether
+ * the caller is allowed in. Everything else calls `getMap`.
+ */
+export async function readMapForAccess(mapId: string): Promise<AppMap> {
   try {
-    row = await admin.tablesDB.getRow<MapRow>({
+    const row = await admin.tablesDB.getRow<MapRow>({
       databaseId: env.databaseId,
       tableId: TABLES.maps,
       rowId: mapId,
     });
+
+    return toAppMap(row);
   } catch (error) {
-    if (isNotFound(error)) throw new NotFoundError("That map doesn't exist.");
+    if (isNotFound(error)) throw new NotFoundError(MAP_NOT_FOUND);
     throw toRepositoryError(error);
   }
-
-  if (row.userId !== ctx.userId) throw new NotFoundError("That map doesn't exist.");
-
-  return toAppMap(row);
 }
 
 /**
@@ -104,7 +122,7 @@ export async function sidebarMapId(
       databaseId: env.databaseId,
       tableId: TABLES.maps,
       queries: [
-        Query.equal("userId", ctx.userId),
+        Query.equal("userId", ctx.workspaceId),
         Query.select(["$id"]),
         Query.orderDesc("$updatedAt"),
         Query.limit(MAX_MAPS_PER_PAGE),
@@ -125,7 +143,7 @@ export async function countMaps(ctx: RepoContext): Promise<number> {
     const result = await admin.tablesDB.listRows<MapRow>({
       databaseId: env.databaseId,
       tableId: TABLES.maps,
-      queries: [Query.equal("userId", ctx.userId), Query.limit(1)],
+      queries: [Query.equal("userId", ctx.workspaceId), Query.limit(1)],
       total: true,
     });
 
@@ -147,7 +165,7 @@ export async function countMaps(ctx: RepoContext): Promise<number> {
  * newer than maps it outranks.
  */
 export async function holdsPublishSlot(
-  userId: string,
+  workspaceId: WorkspaceId,
   mapId: string,
   count: number,
 ): Promise<boolean> {
@@ -156,7 +174,7 @@ export async function holdsPublishSlot(
       databaseId: env.databaseId,
       tableId: TABLES.maps,
       queries: [
-        Query.equal("userId", userId),
+        Query.equal("userId", workspaceId),
         Query.orderAsc("$createdAt"),
         Query.orderAsc("$id"),
         Query.select(["$id", "publishedAt"]),
@@ -179,7 +197,7 @@ export async function createMap(
   ctx: RepoContext,
   input: CreateMapInput,
 ): Promise<AppMap> {
-  const plan = await getUserPlan(ctx.userId);
+  const plan = await getUserPlan(ctx.workspaceId);
   const limit = PLAN_LIMITS[plan].maps;
 
   if ((await countMaps(ctx)) >= limit) {
@@ -199,7 +217,7 @@ export async function createMap(
         tableId: TABLES.maps,
         rowId: ID.unique(),
         data: {
-          userId: ctx.userId,
+          userId: ctx.workspaceId,
           name: input.name,
           slug,
           style: input.style,
@@ -212,7 +230,7 @@ export async function createMap(
           appearance: "{}",
           allowedDomains: [],
         },
-        permissions: ownerPermissions(ctx.userId),
+        permissions: ownerPermissions(ctx.workspaceId),
       });
 
       await rollBackIfOverLimit({
@@ -334,6 +352,12 @@ async function clearFromPlaces(
 }
 
 export async function deleteMap(ctx: RepoContext, mapId: string): Promise<void> {
+  // A whole map — its locations, photos, analytics and the live snapshot on a
+  // customer's site — is an admin's call, not an editor's (lib/team/roles.ts).
+  if (!can(ctx.role, "deleteMap")) {
+    throw new RoleRequiredError("Only an admin or the owner can delete a map.");
+  }
+
   await getMap(ctx, mapId);
 
   let fileIds: string[];

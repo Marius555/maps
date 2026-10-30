@@ -94,6 +94,28 @@ export const LOOKUP_LIMITS = {
 } as const satisfies Record<PlanId, { perMonth: number }>;
 
 /**
+ * How many people may have access to a workspace: the owner, every member, and
+ * every invite not yet accepted. Viewers count — a seat is a person who can see
+ * the maps, whatever they may do to them.
+ *
+ * **Its own table, for the reason `LOOKUP_LIMITS` is** — the exact-shape test on
+ * `PLAN_LIMITS` — and because a seat is not a thing on a map. Free is one seat:
+ * the owner alone, so a free account cannot invite anybody, though anybody on
+ * any plan can be invited into a paid workspace.
+ *
+ * Enforced where an invite is created (owner + members + live invites) and where
+ * one is accepted (owner + members — the invite being accepted already held its
+ * seat). After a downgrade nobody is removed: the members who joined first keep
+ * their roles and the rest read as viewers until someone leaves
+ * (`lib/limits/seat-slots.ts`). docs/notes/team.md.
+ */
+export const SEAT_LIMITS = {
+  free: { seats: 1 },
+  starter: { seats: 3 },
+  pro: { seats: 10 },
+} as const satisfies Record<PlanId, { seats: number }>;
+
+/**
  * What a plan can do, as against how much of it. §6's table is quantities; this
  * is the on/off half, kept beside it so a plan is described in one place.
  *

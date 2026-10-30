@@ -3,7 +3,7 @@ import { z } from "zod";
 import { cardLayoutSchema } from "./card-layout.schema";
 
 /**
- * What `PATCH /api/account/card-design` accepts.
+ * What `PATCH /api/maps/[id]/card-design` accepts.
  *
  * A schema of its own rather than reusing `updateMapSchema`'s `cardLayout`
  * field: the design is no longer part of a map at all (see

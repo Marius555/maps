@@ -1,5 +1,5 @@
 import { ok } from "@/lib/api/responses";
-import { withAuth } from "@/lib/api/route";
+import { withMapAuth } from "@/lib/api/route";
 import { deleteGroupContents } from "@/lib/repositories/groups.repository";
 
 type Params = { id: string; groupId: string };
@@ -18,7 +18,7 @@ type Params = { id: string; groupId: string };
  * Answers with the counts so the client can say what it removed rather than
  * guessing from whatever it happened to have cached.
  */
-export const DELETE = withAuth<Params>(async ({ params, ctx }) => {
+export const DELETE = withMapAuth<Params>(async ({ params, ctx }) => {
   const counts = await deleteGroupContents(ctx, params.id, params.groupId);
 
   return ok(counts);

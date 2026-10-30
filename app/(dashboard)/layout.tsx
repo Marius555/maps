@@ -8,9 +8,10 @@ import {
 } from "@/components/layout/sidebar/sidebar-cookies";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { unseenTutorials } from "@/lib/auth/tutorial";
-import { repoContext } from "@/lib/repositories/context";
+import { ownWorkspace, type RepoContext } from "@/lib/repositories/context";
 import { sidebarMapId } from "@/lib/repositories/maps.repository";
 import { getUserPlan } from "@/lib/repositories/plan-limits";
+import { listWorkspacesFor, loadActiveContext, personalPlan } from "@/lib/team/resolve";
 
 /**
  * The real guard. proxy.ts only checks whether a session cookie is present —
@@ -29,15 +30,28 @@ export default async function DashboardLayout({
   const jar = await cookies();
   const isCollapsed = jar.get(SIDEBAR_COOKIE)?.value === "1";
 
+  // The workspace the dashboard is switched to — the person's own unless they
+  // picked a team (lib/team/resolve.ts). Everything the chrome says about "this
+  // plan" and "this map" is that workspace's.
+  const ctx = await loadActiveContext(user.id);
+
   /*
-   * Resolved here rather than per page, because the chrome wears it: the badge
-   * beside the product name and the account row in the user menu both say which
-   * plan this is. `getUserPlan` is `cache()`d per request, so a page that already
-   * needed the plan for a limit pays nothing for this.
+   * Resolved here rather than per page, because the chrome wears them:
+   *
+   * - `plan` — the badge beside the product name: the switched-to workspace's.
+   * - `accountPlan` — the person's own, for the Upgrade row: billing is always
+   *   their own account, whatever team they are looking at.
+   * - `personalPlan` — the best plan they work under, for Contact support.
+   *
+   * `getUserPlan` and the membership reads are `cache()`d per request, so a page
+   * that already needed one of these pays nothing for it again.
    */
-  const [plan, mapId, tutorials] = await Promise.all([
-    getUserPlan(user.id),
-    sidebarMap(user.id, jar.get(SIDEBAR_MAP_COOKIE)?.value || null),
+  const [plan, accountPlan, bestPlan, workspaces, mapId, tutorials] = await Promise.all([
+    getUserPlan(ctx.workspaceId),
+    getUserPlan(ownWorkspace(user.id)),
+    personalPlan(user.id),
+    listWorkspacesFor(user.id, user.name || user.email),
+    sidebarMap(ctx, jar.get(SIDEBAR_MAP_COOKIE)?.value || null),
     // For the overlays that follow the owner between pages. Cached per request,
     // so a page asking about its own overlays reads the prefs no second time.
     unseenTutorials(user.id),
@@ -47,9 +61,14 @@ export default async function DashboardLayout({
     <AppShell
       user={user}
       plan={plan}
+      accountPlan={accountPlan}
+      personalPlan={bestPlan}
+      workspaces={workspaces}
+      activeWorkspaceId={ctx.workspaceId}
       defaultCollapsed={isCollapsed}
       defaultMapId={mapId}
-      tutorials={tutorials}
+      // The overlays walk through creating and editing; a viewer does neither.
+      tutorials={ctx.role === "viewer" ? [] : tutorials}
     >
       {children}
     </AppShell>
@@ -58,17 +77,17 @@ export default async function DashboardLayout({
 
 /**
  * The map whose section the sidebar keeps on pages outside a map — the last one
- * opened here if this account owns it, else its most recently edited one. See
- * `sidebarMapId`.
+ * opened here if it is in the switched-to workspace, else that workspace's most
+ * recently edited one. See `sidebarMapId`.
  *
  * A failed read falls back to the cookie as it stands, which the sidebar
- * already treats as a hint: it asks for the map through the owner-scoped query
- * every map page uses and hides the section if that fails. A hiccup here must
- * cost the shortcut, not every page in the dashboard.
+ * already treats as a hint: it asks for the map through the access-checked
+ * query every map page uses and hides the section if that fails. A hiccup here
+ * must cost the shortcut, not every page in the dashboard.
  */
-async function sidebarMap(userId: string, remembered: string | null): Promise<string | null> {
+async function sidebarMap(ctx: RepoContext, remembered: string | null): Promise<string | null> {
   try {
-    return await sidebarMapId(repoContext(userId), remembered);
+    return await sidebarMapId(ctx, remembered);
   } catch (error) {
     console.error("Couldn't choose the sidebar's map:", error);
 

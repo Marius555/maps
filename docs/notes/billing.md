@@ -10,6 +10,7 @@ The page itself is described in `docs/notes/settings.md`.
 
 ## Invariants
 
+- **A subscription belongs to a workspace, and a workspace is one person's account**, so nothing here changed for teams: `getSubscription` and `getUserPlan` take a `WorkspaceId`, billing pages and routes pass `ownWorkspace(user.id)`, and a member is billed nothing — the owner's plan covers the team. `docs/notes/team.md`.
 - **A plan's *ceiling* must still be profitable.** `LOOKUP_LIMITS` is sized above
   full entitlement so it never refuses a customer using what they paid for; that is
   only safe while the worst case still costs less than the plan earns. Move one

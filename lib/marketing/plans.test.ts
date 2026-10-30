@@ -18,7 +18,7 @@ vi.mock("@/lib/env", () => ({
 
 vi.mock("@/lib/appwrite/admin", () => ({ admin: { tablesDB: {} } }));
 
-const { LOOKUP_LIMITS, PLAN_FEATURES, PLAN_LIMITS } = await import(
+const { LOOKUP_LIMITS, PLAN_FEATURES, PLAN_LIMITS, SEAT_LIMITS } = await import(
   "@/lib/repositories/plan-limits"
 );
 type PlanId = keyof typeof PLAN_LIMITS;
@@ -65,6 +65,14 @@ describe("marketing plans", () => {
    */
   it.each(MARKETING_PLANS)("quotes $id's real lookup allowance", (plan) => {
     expect(plan.lookups).toBe(LOOKUP_LIMITS[plan.id].perMonth);
+  });
+
+  /*
+   * Seats live in their own table too, for the same reason, and the same thing is
+   * at stake: this is the number the invite dialog's refusal quotes.
+   */
+  it.each(MARKETING_PLANS)("quotes $id's real seat count", (plan) => {
+    expect(plan.seats).toBe(SEAT_LIMITS[plan.id].seats);
   });
 
   it.each(MARKETING_PLANS)("prints $id's price as the amount it charts", (plan) => {

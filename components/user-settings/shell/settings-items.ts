@@ -9,6 +9,7 @@
 export const SETTINGS_ITEMS = [
   { href: "/settings/general", label: "General" },
   { href: "/settings/account", label: "Account" },
+  { href: "/settings/team", label: "Team" },
   { href: "/settings/billing", label: "Billing" },
   { href: "/settings/usage", label: "Usage" },
 ] as const;

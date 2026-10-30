@@ -14,6 +14,7 @@ export const TEMPLATES = [
   { key: "welcome", label: "Welcome" },
   { key: "reset", label: "Password reset" },
   { key: "support", label: "Support request" },
+  { key: "invite", label: "Team invite" },
 ] as const;
 
 export type TemplateDay = { day: string } & Record<string, number | string>;

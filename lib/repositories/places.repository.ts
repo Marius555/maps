@@ -265,7 +265,7 @@ export async function assertPlaceHeadroom(
   mapId: string,
   adding: number,
 ): Promise<number> {
-  const plan = await getUserPlan(ctx.userId);
+  const plan = await getUserPlan(ctx.workspaceId);
   const limit = PLAN_LIMITS[plan].places;
   const existing = await countPlaces(ctx, mapId);
 
@@ -283,7 +283,7 @@ export async function createPlace(
 ): Promise<Place> {
   await getMap(ctx, mapId);
 
-  const plan = await getUserPlan(ctx.userId);
+  const plan = await getUserPlan(ctx.workspaceId);
   const limit = PLAN_LIMITS[plan].places;
 
   if ((await countPlaces(ctx, mapId)) >= limit) {
@@ -322,7 +322,7 @@ export async function createPlace(
         // nothing to the column.
         ...(input.color ? { color: input.color } : {}),
       },
-      permissions: ownerPermissions(ctx.userId),
+      permissions: ownerPermissions(ctx.workspaceId),
     });
   } catch (error) {
     throw toRepositoryError(error);
@@ -352,11 +352,11 @@ export async function createPlaces(
   await getMap(ctx, mapId);
   if (inputs.length === 0) return [];
 
-  const plan = await getUserPlan(ctx.userId);
+  const plan = await getUserPlan(ctx.workspaceId);
   const limit = PLAN_LIMITS[plan].places;
   const existing = await assertPlaceHeadroom(ctx, mapId, inputs.length);
 
-  const permissions = ownerPermissions(ctx.userId);
+  const permissions = ownerPermissions(ctx.workspaceId);
   const created: Place[] = [];
 
   try {

@@ -69,7 +69,7 @@ export async function saveSheetLink(
   input: SaveSheetLinkInput,
 ): Promise<SheetLink> {
   await getMap(ctx, mapId);
-  await assertPlanFeature(ctx.userId, "sheetSync");
+  await assertPlanFeature(ctx.workspaceId, "sheetSync");
 
   const data = {
     sheetId: input.sheetId,
@@ -101,8 +101,8 @@ export async function saveSheetLink(
           databaseId: env.databaseId,
           tableId: TABLES.sheetLinks,
           rowId: ID.unique(),
-          data: { userId: ctx.userId, mapId, ...data },
-          permissions: ownerPermissions(ctx.userId),
+          data: { userId: ctx.workspaceId, mapId, ...data },
+          permissions: ownerPermissions(ctx.workspaceId),
         });
 
     return toSheetLink(row);
@@ -122,7 +122,7 @@ export async function setSheetAutoSync(
   // Switching it on is the plan decision; switching it off never is. Without
   // this a downgraded account could turn its automatic sync back on, and the cron
   // would visit the link every run only for the step to refuse it.
-  if (autoSync) await assertPlanFeature(ctx.userId, "sheetSync");
+  if (autoSync) await assertPlanFeature(ctx.workspaceId, "sheetSync");
 
   try {
     const existing = await findRow(mapId);

@@ -1,5 +1,5 @@
 import { fail, ok } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withPersonalAuth } from "@/lib/api/route";
 import {
   BillingError,
   getBilling,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/billing";
 import { pendingKept, planChange } from "@/lib/billing/plan-change";
 import { billingStanding } from "@/lib/billing/standing";
+import { ownWorkspace } from "@/lib/repositories/context";
 import {
   getSubscription,
   upsertSubscription,
@@ -40,9 +41,9 @@ import { changePlanSchema } from "@/lib/validation/billing.schema";
  * the same values rather than racing them — and it never touches the kept plan,
  * which only this route writes.
  */
-export const PATCH = withAuth(async ({ request, user }) => {
+export const PATCH = withPersonalAuth(async ({ request, user }) => {
   const input = await parseBody(request, changePlanSchema);
-  const subscription = await getSubscription(user.id);
+  const subscription = await getSubscription(ownWorkspace(user.id));
 
   const standing = billingStanding(subscription);
 
@@ -176,8 +177,8 @@ export const PATCH = withAuth(async ({ request, user }) => {
  * reads as `active` until `ends_at`: the `cancelled → active` mapping in
  * `lib/billing/lemon.ts` is what keeps the plan they paid for until then.
  */
-export const DELETE = withAuth(async ({ user }) => {
-  const subscription = await getSubscription(user.id);
+export const DELETE = withPersonalAuth(async ({ user }) => {
+  const subscription = await getSubscription(ownWorkspace(user.id));
 
   if (!subscription?.billingSubscriptionId || billingStanding(subscription) === "none") {
     return fail("conflict", "There's no running plan on this account to cancel.", 409);

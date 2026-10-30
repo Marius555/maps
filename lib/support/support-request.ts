@@ -5,8 +5,9 @@ import type { AuthUser } from "@/lib/auth/types";
 import { BRAND } from "@/lib/brand";
 import { sendEmail } from "@/lib/email/resend";
 import { supportRequestMessage } from "@/lib/email/templates/support-request";
-import { RepositoryError } from "@/lib/repositories/errors";
-import { assertPlanFeature, getUserPlan } from "@/lib/repositories/plan-limits";
+import { PlanFeatureError, RepositoryError } from "@/lib/repositories/errors";
+import { planAllows } from "@/lib/repositories/plan-limits";
+import { personalPlan } from "@/lib/team/resolve";
 import { subjectLabel, type SupportRequestInput } from "@/lib/validation/support.schema";
 import { isTooSoon } from "./throttle";
 
@@ -49,7 +50,13 @@ export async function sendSupportRequest({
     );
   }
 
-  if (input.kind === "support") await assertPlanFeature(user.id, "support");
+  // The person's best plan rather than their own workspace's: somebody working
+  // inside a paid team is entitled to email support about it.
+  const plan = await personalPlan(user.id);
+
+  if (input.kind === "support" && !planAllows(plan, "support")) {
+    throw new PlanFeatureError("support", plan);
+  }
 
   const prefs: Record<string, unknown> = await admin.users.getPrefs({
     userId: user.id,
@@ -80,7 +87,7 @@ export async function sendSupportRequest({
       email: user.email,
       name: user.name,
       userId: user.id,
-      plan: await getUserPlan(user.id),
+      plan,
       sentAt,
     }),
   });

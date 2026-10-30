@@ -10,6 +10,7 @@ export const API_ERROR_CODES = [
   "plan_limit_reached",
   "plan_feature_required",
   "email_unverified",
+  "role_required",
   "conflict",
   "rate_limited",
   "internal_error",

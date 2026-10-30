@@ -105,8 +105,8 @@ export function CardDesigner({
   // Only Auto consults this, and it is the dashboard's resolved theme rather
   // than the OS's preference — see `cardThemeClass`.
   const prefersDark = usePrefersDark();
-  const { data: design = initialCardDesign } = useCardDesign(initialCardDesign);
-  const updateCardDesign = useUpdateCardDesign();
+  const { data: design = initialCardDesign } = useCardDesign(initialMap.id, initialCardDesign);
+  const updateCardDesign = useUpdateCardDesign(initialMap.id);
 
   /*
    * An account that has never saved a design opens onto **the same card its

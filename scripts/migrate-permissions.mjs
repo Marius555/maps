@@ -61,7 +61,10 @@ if (missing.length > 0) {
 const DATABASE_ID = process.env.DATABASE_ID;
 const PAGE_SIZE = 100;
 
-/** Every table a row was ever created in with `ownerPermissions`. */
+/**
+ * Every table a row was ever created in with `ownerPermissions` — and the two
+ * team tables, which never had any, listed so a run proves they still have none.
+ */
 const OWNED_TABLES = [
   "maps",
   "places",
@@ -70,6 +73,8 @@ const OWNED_TABLES = [
   "sheetLinks",
   "cardDesigns",
   "subscriptions",
+  "memberships",
+  "invites",
 ];
 
 const BUCKETS = [

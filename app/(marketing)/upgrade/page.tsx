@@ -8,6 +8,7 @@ import {
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { BillingError, getBilling } from "@/lib/billing";
 import { billingStanding } from "@/lib/billing/standing";
+import { ownWorkspace } from "@/lib/repositories/context";
 import { getSubscription } from "@/lib/repositories/subscriptions.repository";
 import { checkoutSchema } from "@/lib/validation/billing.schema";
 
@@ -65,7 +66,7 @@ export default async function UpgradePage(props: PageProps<"/upgrade">) {
    * beside the first, charged separately. Their plan is moved in place from
    * Settings → Billing instead, which is where this sends them.
    */
-  if (billingStanding(await getSubscription(user.id)) === "switchable") {
+  if (billingStanding(await getSubscription(ownWorkspace(user.id))) === "switchable") {
     redirect("/settings/billing");
   }
 

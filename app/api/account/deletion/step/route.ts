@@ -1,5 +1,5 @@
 import { fail, ok } from "@/lib/api/responses";
-import { withAuth } from "@/lib/api/route";
+import { withPersonalAuth } from "@/lib/api/route";
 import { runDeletionStep } from "@/lib/account-deletion/step";
 import { deletionStoreFor } from "@/lib/account-deletion/store";
 import { deletionStartedAt } from "@/lib/auth/account";
@@ -16,7 +16,7 @@ const CONFIRMATION_MS = 24 * 60 * 60_000;
  * confirmed (see `markDeletionStarted`), runs one step, and on the last one
  * clears the cookie. By then the login it names no longer exists.
  */
-export const POST = withAuth(
+export const POST = withPersonalAuth(
   async ({ user, ctx }) => {
     const started = await deletionStartedAt(user.id);
     const age = started ? Date.now() - Date.parse(started) : Number.POSITIVE_INFINITY;

@@ -4,6 +4,7 @@ import { MutationCache, QueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "./fetcher";
 import { markServerRenderStale } from "./server-render-staleness";
+import { toastRoleRequired } from "./role-required-toast";
 import { toastEmailUnverified } from "./verify-email-toast";
 
 /**
@@ -29,7 +30,9 @@ export function makeQueryClient(): QueryClient {
      */
     mutationCache: new MutationCache({
       onError: (error) => {
+        // The two gates in `withAuth`, each said once whatever mutation met it.
         toastEmailUnverified(error);
+        toastRoleRequired(error);
       },
       onSuccess: () => {
         markServerRenderStale();

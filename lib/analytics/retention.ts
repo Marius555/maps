@@ -8,6 +8,7 @@ import {
   readDaySessions,
   storeDailyRollup,
 } from "@/lib/repositories/analytics.repository";
+import { asWorkspaceId } from "@/lib/repositories/context";
 import {
   getUserPlan,
   SESSION_LIMITS,
@@ -60,7 +61,10 @@ export async function purgeExpiredSessions(input: {
   let resumeFrom = input.cursor;
 
   for (const map of maps) {
-    const cutoff = retentionCutoff(await getUserPlan(map.ownerId), input.now);
+    const cutoff = retentionCutoff(
+      await getUserPlan(asWorkspaceId(map.ownerId)),
+      input.now,
+    );
 
     for (;;) {
       // Checked only after some work, so every step makes progress.

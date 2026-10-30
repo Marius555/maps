@@ -3,6 +3,7 @@
 import type { PostHog } from "posthog-js";
 
 import type { AuthUser } from "@/lib/auth/types";
+import { redactEventUrls } from "./redact";
 
 /**
  * Product analytics for the dashboard and the marketing site — **never the
@@ -31,7 +32,8 @@ import type { AuthUser } from "@/lib/auth/types";
  * no consent banner.
  *
  * The operator console and the dev pages are dropped in `before_send` so they
- * never land in the customer funnel.
+ * never land in the customer funnel, and invite tokens are cut out of every
+ * URL that is kept.
  */
 const projectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
 const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
@@ -72,8 +74,12 @@ export function loadPostHog(): Promise<PostHog | null> {
         persistence: "memory",
         capture_exceptions: true,
         debug: process.env.NODE_ENV === "development",
+        // Invite links carry a working token in their path; it never leaves
+        // the browser (lib/posthog/redact.ts).
         before_send: (event) =>
-          event && isIgnoredPath(event.properties?.$current_url) ? null : event,
+          !event || isIgnoredPath(event.properties?.$current_url)
+            ? null
+            : redactEventUrls(event),
       });
       return posthog;
     })

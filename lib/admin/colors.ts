@@ -49,6 +49,9 @@ export const TEMPLATE_COLOR: Record<string, string> = {
   welcome: YELLOW,
   reset: VIOLET,
   support: MAGENTA,
+  // A fifth series, so outside the four-way order above: blue is the hue the
+  // three-way splits lead with, and stays distinct from all four beside it.
+  invite: BLUE,
 };
 
 export const PLAN_COLOR: Record<string, string> = {

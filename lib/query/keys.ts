@@ -20,8 +20,13 @@ export const queryKeys = {
   },
   /** The map's link to a Google Sheet, or null — see lib/sheet-sync. */
   sheetLink: (mapId: string) => ["maps", mapId, "sheetLink"] as const,
-  /** One design for the whole account — see lib/repositories/card-design.repository.ts. */
-  cardDesign: ["cardDesign"] as const,
+  /**
+   * The card design of the workspace a map is in — one per workspace (see
+   * lib/repositories/card-design.repository.ts), keyed by map because the map is
+   * what names the workspace. Maps in one workspace share the design, so a save
+   * refreshes every key ending in "cardDesign".
+   */
+  cardDesign: (mapId: string) => ["maps", mapId, "cardDesign"] as const,
   /** One page of the account's invoices, as the provider lists them. */
   invoices: (page: number) => ["invoices", page] as const,
   /** Who redeemed one discount code, a page at a time (operator console). */

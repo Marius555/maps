@@ -7,6 +7,7 @@ import {
   planLimitUsage,
   publishOverLimitMessage,
 } from "./errors";
+import { ownerContext, ownWorkspace } from "./context";
 import { PLAN_LIMITS } from "./plan-limits";
 
 /**
@@ -39,9 +40,9 @@ vi.mock("@/lib/appwrite/admin", () => ({
   },
 }));
 
-const USER_ID = "user-1";
+const USER_ID = ownWorkspace("user-1");
 const MAP_ID = "map-1";
-const ctx = { userId: USER_ID };
+const ctx = ownerContext(USER_ID);
 
 /** How many places the map already has. Set per test. */
 let existingPlaceCount = 0;
@@ -843,8 +844,8 @@ describe("DISABLE_ALL_PLAN", () => {
     vi.stubEnv("DISABLE_ALL_PLAN", "yes");
     const { getUserPlan } = await planLimits();
 
-    await getUserPlan("user-a");
-    await getUserPlan("user-b");
+    await getUserPlan(ownWorkspace("user-a"));
+    await getUserPlan(ownWorkspace("user-b"));
 
     expect(console.warn).toHaveBeenCalledTimes(1);
     expect(vi.mocked(console.warn).mock.calls[0]?.[0]).toContain("DISABLE_ALL_PLAN");

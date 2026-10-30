@@ -80,6 +80,7 @@ import {
   type ShapeKind,
 } from "@/packages/shared/shapes";
 import { DEFAULT_SHAPE_OPACITY } from "@/lib/validation/shape.schema";
+import { useCan } from "@/components/team/role-context";
 import { EditorSidebar } from "./editor-sidebar";
 import {
   LazyClusterIconDialog,
@@ -142,10 +143,13 @@ export function MapEditor({
    * — a pin you just made, invisible until a reload.
    */
   const { data: map = initialMap } = useMap(initialMap.id, initialMap);
+  // A team viewer opens the same editor with nothing in it that changes the
+  // map (components/team/role-context.tsx); the server refuses the rest.
+  const canEdit = useCan("edit");
   const { data: places = [] } = usePlaces(map.id, initialPlaces);
   const { data: storedShapes = [] } = useShapes(map.id, initialShapes);
   const { data: groups = [] } = useGroups(map.id, initialGroups);
-  const { data: cardDesign = initialCardDesign } = useCardDesign(initialCardDesign);
+  const { data: cardDesign = initialCardDesign } = useCardDesign(map.id, initialCardDesign);
   usePrefetchEditorDialogs();
 
   /*
@@ -1397,19 +1401,24 @@ export function MapEditor({
           appearance={appearance}
           limits={limits}
           routesNote={routesNote}
+          readOnly={!canEdit}
+          // An address search spends a lookup from the team's allowance and
+          // exists to add what it finds, so a viewer gets neither.
           search={
-            <MapSearch
-              mapId={map.id}
-              headroom={limits.places}
-              onPick={(candidate) => mapHandle.current?.flyTo(candidate)}
-              onAdd={(candidate) => {
-                // The whole match, so this pin skips the reverse lookup it would
-                // otherwise make to learn what we already know — and keeps the
-                // postcode and landmark the search already told us.
-                void addPlace(candidate, candidate);
-                mapHandle.current?.flyTo(candidate);
-              }}
-            />
+            canEdit ? (
+              <MapSearch
+                mapId={map.id}
+                headroom={limits.places}
+                onPick={(candidate) => mapHandle.current?.flyTo(candidate)}
+                onAdd={(candidate) => {
+                  // The whole match, so this pin skips the reverse lookup it would
+                  // otherwise make to learn what we already know — and keeps the
+                  // postcode and landmark the search already told us.
+                  void addPlace(candidate, candidate);
+                  mapHandle.current?.flyTo(candidate);
+                }}
+              />
+            ) : undefined
           }
           onPickIcon={startAdding}
           onStopAdding={() => setMode("browse")}
@@ -1515,7 +1524,7 @@ export function MapEditor({
              card, opening the one field behind it — see `cardSlotOf`. The map
              itself, not just its id, because the tags slot's quick-add writes
              the map's own `tagGroups`. */
-          cardSlots={{ map }}
+          cardSlots={canEdit ? { map } : undefined}
           onSelectPlace={selectPlace}
           onEditPlace={setEditingId}
           /*
@@ -1539,7 +1548,9 @@ export function MapEditor({
             setMode("browse");
             void addPlace(coords, undefined, addIcon);
           }}
-          onMovePlace={movePlace}
+          // Absent, the canvas makes no pin draggable — a viewer looks, and a
+          // drag the server would refuse is a pin that jumps back.
+          onMovePlace={canEdit ? movePlace : undefined}
           onReady={handleReady}
           shapes={{
             shapes,

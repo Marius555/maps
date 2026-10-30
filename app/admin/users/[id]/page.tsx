@@ -114,6 +114,32 @@ export default async function AdminAccountPage(props: PageProps<"/admin/users/[i
         ]}
       />
 
+      <StatStrip
+        label="Team"
+        stats={[
+          {
+            label: "Seats",
+            value: of(account.seats),
+            source: counted(
+              "The owner, rows in memberships for this workspace, and its invites that have not expired — what the invite route counts.",
+            ),
+            note: overNote(account.seats, "Within the plan"),
+          },
+          {
+            label: "Pending invites",
+            value: formatCount(account.team.liveInvites),
+            source: counted("Rows in invites for this workspace whose expiry is still ahead."),
+            note: "Each holds a seat until accepted or expired",
+          },
+          {
+            label: "Teams joined",
+            value: formatCount(account.team.memberOf),
+            source: counted("Rows in memberships naming this account as the member."),
+            note: account.team.memberOf > 0 ? "Works in other people's workspaces" : "Only its own",
+          },
+        ]}
+      />
+
       <SectionCard
         title="Maps"
         hint="Oldest first is the order a plan's map count is applied in."

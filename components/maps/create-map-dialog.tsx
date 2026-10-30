@@ -8,6 +8,7 @@ import {
   useEmailUnverified,
   VerifyEmailNotice,
 } from "@/components/verify-email/verify-email-notice";
+import { useCan } from "@/components/team/role-context";
 import { CreateMapForm } from "./create-map-form";
 
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
@@ -56,6 +57,11 @@ export function CreateMapDialog({
   const [isOpen, setIsOpen] = useState(false);
   const unverified = useEmailUnverified();
   const noteId = useId();
+  // A viewer of a team cannot add to it. No button at all rather than a grey
+  // one: the maps list says why in its own words (MapListEmpty).
+  const canCreate = useCan("edit");
+
+  if (!canCreate) return null;
 
   return (
     <div className={`flex flex-col gap-2 ${ALIGN[align]}`}>

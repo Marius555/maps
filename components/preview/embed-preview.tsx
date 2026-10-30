@@ -258,7 +258,7 @@ export function EmbedPreview({
   // The account's own card design — same source publishing itself reads from
   // (lib/repositories/publish.repository.ts), so this preview shows the same
   // card that publish would actually write, not a second guess at it.
-  const { data: design = NO_CARD_DESIGN } = useCardDesign(cardDesign);
+  const { data: design = NO_CARD_DESIGN } = useCardDesign(map.id, cardDesign);
 
   const snapshot = useMemo(
     () =>

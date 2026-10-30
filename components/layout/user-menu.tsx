@@ -72,11 +72,15 @@ const ROUTES: Record<string, string> = {
 export function UserMenu({
   user,
   plan,
+  personalPlan,
   isCollapsed = false,
   onNavigate,
 }: {
   user: AuthUser;
+  /** The person's own plan: Upgrade is about their own account, whatever team is open. */
   plan: PlanId;
+  /** The best plan they work under: a member of a paid team may email support. */
+  personalPlan: PlanId;
   isCollapsed?: boolean;
   onNavigate?: () => void;
 }) {
@@ -85,7 +89,7 @@ export function UserMenu({
 
   const initials = initialsOf(user.name, user.email);
   const isTopPlan = plan === "pro";
-  const isFree = plan === "free";
+  const isFree = personalPlan === "free";
   // The kind outlives the open flag, so the dialog keeps its title while it closes.
   const [supportKind, setSupportKind] = useState<SupportKind>("bug");
   const [isSupportOpen, setSupportOpen] = useState(false);

@@ -10,6 +10,8 @@ import type { RepoContext } from "./context";
 import { deleteMap, getMap, listMaps } from "./maps.repository";
 import { deleteNotificationsForUser } from "./notifications.repository";
 import { deletePlacesById } from "./places.repository";
+import { deleteInvitesForWorkspace } from "./invites.repository";
+import { deleteMembershipsFor } from "./memberships.repository";
 
 /**
  * Everything an account owns, removed, for `lib/account-deletion/step.ts`.
@@ -139,18 +141,30 @@ export async function deleteEmptiedMap(ctx: RepoContext, mapId: string): Promise
 
 /**
  * The rows keyed to the account rather than to a map: its card design, its
- * lookup meter, its subscription record, the notifications sent to it alone.
- * The last thing before the login goes.
+ * lookup meter, its subscription record, the notifications sent to it alone —
+ * and its team: every membership in its workspace, every invite still out from
+ * it, and every membership it held in somebody else's. The last thing before
+ * the login goes.
+ *
+ * The team rows are here, not first, for the reason the order exists at all: a
+ * step cut off by the host leaves the account resumable, and until the maps are
+ * gone the members are still looking at them. The delete dialog has already
+ * told the owner how many people lose access (docs/notes/team.md).
+ *
+ * `ctx` is the person's own workspace — `deletionStoreFor` is only ever handed
+ * `ownerContext(user.id)` — so `workspaceId` and `actorId` are the same id.
  */
 export async function deleteAccountRows(ctx: RepoContext): Promise<void> {
-  await deleteNotificationsForUser(ctx.userId);
+  await deleteNotificationsForUser(ctx.actorId);
+  await deleteMembershipsFor(ctx.actorId);
+  await deleteInvitesForWorkspace(ctx.workspaceId);
 
   try {
     for (const tableId of [TABLES.cardDesigns, TABLES.usage, TABLES.subscriptions]) {
       await admin.tablesDB.deleteRows({
         databaseId: env.databaseId,
         tableId,
-        queries: [Query.equal("userId", ctx.userId)],
+        queries: [Query.equal("userId", ctx.workspaceId)],
       });
     }
   } catch (error) {

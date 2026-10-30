@@ -5,6 +5,7 @@ import {
   LOOKUP_LIMITS,
   PLAN_FEATURES,
   PLAN_LIMITS,
+  SEAT_LIMITS,
   SESSION_LIMITS,
   type PlanId,
 } from "@/lib/limits/plans";
@@ -17,6 +18,8 @@ import {
   type AccountIdentity,
   type AccountSubscription,
 } from "@/lib/repositories/admin/account";
+import { readAccountTeam, type AccountTeam } from "@/lib/repositories/admin/team";
+import { asWorkspaceId } from "@/lib/repositories/context";
 import { getUserPlan } from "@/lib/repositories/plan-limits";
 import { usageMonth } from "@/lib/repositories/usage.repository";
 
@@ -61,6 +64,9 @@ export type AccountLimits = {
   features: (typeof PLAN_FEATURES)[PlanId];
   maps: Usage;
   lookups: Usage;
+  /** Owner + members + live invites, against the plan's seats. */
+  seats: Usage;
+  team: AccountTeam;
   mapRows: AccountMapRow[];
   /** How many limits the account is past, across everything above. */
   overCount: number;
@@ -73,11 +79,12 @@ export async function loadAccountLimits(userId: string): Promise<AccountLimits |
   if (!user) return null;
 
   const month = usageMonth();
-  const [plan, subscription, lookups, maps] = await Promise.all([
-    getUserPlan(userId),
+  const [plan, subscription, lookups, maps, team] = await Promise.all([
+    getUserPlan(asWorkspaceId(userId)),
     readAccountSubscription(userId),
     readAccountLookups(userId, month),
     readAccountMaps(userId, `${month}-01`),
+    readAccountTeam(userId),
   ]);
 
   const limits = PLAN_LIMITS[plan];
@@ -103,10 +110,12 @@ export async function loadAccountLimits(userId: string): Promise<AccountLimits |
 
   const mapUsage = usage(maps.length, limits.maps);
   const lookupUsage = usage(lookups, LOOKUP_LIMITS[plan].perMonth);
+  const seatUsage = usage(1 + team.members + team.liveInvites, SEAT_LIMITS[plan].seats);
 
   const overCount =
     (mapUsage.over ? 1 : 0) +
     (lookupUsage.over ? 1 : 0) +
+    (seatUsage.over ? 1 : 0) +
     mapRows.reduce((sum, row) => sum + (row.places.over ? 1 : 0) + (row.shapes.over ? 1 : 0), 0);
 
   return {
@@ -116,6 +125,8 @@ export async function loadAccountLimits(userId: string): Promise<AccountLimits |
     features: PLAN_FEATURES[plan],
     maps: mapUsage,
     lookups: lookupUsage,
+    seats: seatUsage,
+    team,
     mapRows,
     overCount,
   };

@@ -16,7 +16,7 @@ import { readEmbedSettings } from "@/lib/validation/embed-settings.schema";
 import { readCsvText } from "@/lib/import/sources/csv";
 import { ImportSourceError } from "@/lib/import/sources/types";
 import { buildTable } from "@/lib/import/table";
-import { repoContext } from "@/lib/repositories/context";
+import { asWorkspaceId, systemContext, type WorkspaceId } from "@/lib/repositories/context";
 import { removeStorageFiles } from "@/lib/repositories/place-files";
 import { RepositoryError, planFeatureMessage } from "@/lib/repositories/errors";
 import { getMap, updateMap } from "@/lib/repositories/maps.repository";
@@ -164,11 +164,13 @@ async function step(
     deadline: number;
   },
 ): Promise<{ status: SheetSyncStatus; report: SheetSyncReport; more: boolean }> {
-  const ctx = repoContext(link.userId);
+  // The owner's rights, whoever made the link: a member who linked the sheet
+  // and has since left must not take the sync down with them.
+  const ctx = systemContext(asWorkspaceId(link.userId));
 
   // Checked every step, not only when the link was made: an account that has
   // since dropped to Free keeps its link, and the link stops spending.
-  const plan = await getUserPlan(link.userId);
+  const plan = await getUserPlan(ctx.workspaceId);
   if (!planAllows(plan, "sheetSync")) {
     return {
       status: "failed",
@@ -321,7 +323,7 @@ async function step(
    * ---------------------------------------------------------------- */
 
   const lookups = await lookUpAddresses(
-    link.userId,
+    ctx.workspaceId,
     [
       ...updatesThisStep
         .filter((update) => update.needsGeocode)
@@ -569,7 +571,7 @@ type LookupOutcome = {
  * presses. That is what this bounds.
  */
 async function lookUpAddresses(
-  userId: string,
+  userId: WorkspaceId,
   addresses: string[],
   deadline: number,
   failedLookups: SheetLink["failedLookups"],

@@ -55,7 +55,7 @@ export async function getCardDesign(
   ctx: RepoContext,
 ): Promise<Record<string, unknown>> {
   try {
-    const row = await findRow(ctx.userId);
+    const row = await findRow(ctx.workspaceId);
     return parseCardLayout(row?.cardLayout);
   } catch (error) {
     throw toRepositoryError(error);
@@ -72,7 +72,7 @@ export async function saveCardDesign(
   cardLayout: CardLayout,
 ): Promise<Record<string, unknown>> {
   try {
-    const row = await findRow(ctx.userId);
+    const row = await findRow(ctx.workspaceId);
     const data = { cardLayout: JSON.stringify(cardLayout) };
 
     if (row) {
@@ -87,8 +87,8 @@ export async function saveCardDesign(
         databaseId: env.databaseId,
         tableId: TABLES.cardDesigns,
         rowId: ID.unique(),
-        data: { userId: ctx.userId, ...data },
-        permissions: ownerPermissions(ctx.userId),
+        data: { userId: ctx.workspaceId, ...data },
+        permissions: ownerPermissions(ctx.workspaceId),
       });
     }
 

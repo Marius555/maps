@@ -8,6 +8,8 @@ import {
   VerifyEmailNotice,
 } from "@/components/verify-email/verify-email-notice";
 import { track } from "@/lib/posthog/client";
+import { useCan } from "@/components/team/role-context";
+import { ViewOnlyNotice } from "@/components/team/view-only-notice";
 import { usePublishMap } from "@/lib/query/publish";
 import { toastProblem } from "@/lib/query/toast-error";
 import { isEmailUnverified } from "@/lib/query/verify-email-toast";
@@ -36,6 +38,8 @@ export function PublishAction({ mapId }: { mapId: string }) {
   const publish = usePublishMap(mapId);
   const unverified = useEmailUnverified();
   const noteId = useId();
+  // A team viewer reaches this page for the snippet, not to publish.
+  const canPublish = useCan("edit");
 
   const onPress = async () => {
     try {
@@ -49,6 +53,8 @@ export function PublishAction({ mapId }: { mapId: string }) {
       if (!isEmailUnverified(error)) toastProblem("Couldn’t publish", error);
     }
   };
+
+  if (!canPublish) return <ViewOnlyNotice />;
 
   return (
     <div className="space-y-3">

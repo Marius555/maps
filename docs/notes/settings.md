@@ -19,6 +19,7 @@ columns. Forms that should stay narrow cap themselves (`sm:max-w-md`,
 
 ## Invariants
 
+- **Settings → Team is about the switched-to workspace; every other section is about the person.** Billing and Usage differ on purpose: Billing is always your own account, Usage is the open team's (it is pooled across its members). `docs/notes/team.md`.
 - **Nothing on these pages moves when it is touched.** `.steady` on the
   settings layout root switches off HeroUI's press scale and keeps a pending
   button at its width (`app/globals.css`). **A dialog portals out of that root**,

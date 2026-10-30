@@ -14,8 +14,9 @@ import { SettingsSection } from "@/components/user-settings/section/settings-sec
 import { accountHasPassword } from "@/lib/auth/account";
 import { requireUser } from "@/lib/auth/current-user";
 import { listAccountSessions } from "@/lib/auth/sessions";
-import { repoContext } from "@/lib/repositories/context";
+import { ownerContext, ownWorkspace } from "@/lib/repositories/context";
 import { countMaps } from "@/lib/repositories/maps.repository";
+import { listMembers } from "@/lib/repositories/memberships.repository";
 
 export const metadata: Metadata = { title: "Account settings" };
 
@@ -31,10 +32,14 @@ export const metadata: Metadata = { title: "Account settings" };
 export default async function AccountSettingsPage() {
   const user = await requireUser();
 
-  const [hasPassword, sessions, mapCount] = await Promise.all([
+  const [hasPassword, sessions, mapCount, members] = await Promise.all([
     accountHasPassword(user.id),
     listAccountSessions(),
-    countMaps(repoContext(user.id)),
+    // The deletion dialog names what goes with the account: its own maps, never
+    // a team's it was only a member of.
+    countMaps(ownerContext(user.id)),
+    // And who works on those maps: they lose access with the account.
+    listMembers(ownWorkspace(user.id)),
   ]);
 
   const others = sessions.filter((session) => !session.current).length;
@@ -60,7 +65,11 @@ export default async function AccountSettingsPage() {
       <SettingsSection title="Delete account">
         <SettingsRows>
           <SettingsRow {...DELETE_ACCOUNT_ROW}>
-            <DeleteAccountButton email={user.email} mapCount={mapCount} />
+            <DeleteAccountButton
+              email={user.email}
+              mapCount={mapCount}
+              memberCount={members.length}
+            />
           </SettingsRow>
         </SettingsRows>
       </SettingsSection>

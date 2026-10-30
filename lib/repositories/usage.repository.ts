@@ -5,6 +5,7 @@ import { ID, Query, type Models } from "node-appwrite";
 import { admin } from "@/lib/appwrite/admin";
 import { TABLES } from "@/lib/appwrite/config";
 import { env } from "@/lib/env";
+import type { WorkspaceId } from "./context";
 import { DailyBudgetError, LookupLimitError } from "./errors";
 import { LOOKUP_LIMITS, getUserPlan, type PlanId } from "./plan-limits";
 
@@ -175,12 +176,12 @@ export type LookupUsage = {
  * to state it. Never throws: a usage panel that takes the page down with it is
  * worse than a usage panel that is absent.
  */
-export async function getLookupUsage(userId: string): Promise<LookupUsage> {
-  const plan = await getUserPlan(userId);
+export async function getLookupUsage(workspaceId: WorkspaceId): Promise<LookupUsage> {
+  const plan = await getUserPlan(workspaceId);
   const limit = LOOKUP_LIMITS[plan].perMonth;
 
   try {
-    return { plan, used: await readCount(userId, usageMonth()), limit };
+    return { plan, used: await readCount(workspaceId, usageMonth()), limit };
   } catch {
     return { plan, used: 0, limit };
   }
@@ -201,18 +202,18 @@ export async function getLookupUsage(userId: string): Promise<LookupUsage> {
  * batch starts rather than in the middle of it.
  */
 export async function assertLookupHeadroom(
-  userId: string,
+  workspaceId: WorkspaceId,
   count: number,
   kind: SpendKind,
 ): Promise<void> {
   if (meterDisabled() || count <= 0) return;
 
-  const plan = await getUserPlan(userId);
+  const plan = await getUserPlan(workspaceId);
   const limit = LOOKUP_LIMITS[plan].perMonth;
 
   try {
     const [used, pooled] = await Promise.all([
-      readCount(userId, usageMonth()),
+      readCount(workspaceId, usageMonth()),
       readCount(POOL, usageDay()),
     ]);
 
@@ -252,11 +253,11 @@ export async function assertLookupHeadroom(
  * a failed request — losing the answer the customer waited for in order to report
  * that we failed to write down that they got it.
  */
-export async function recordLookups(userId: string, count: number): Promise<void> {
+export async function recordLookups(workspaceId: WorkspaceId, count: number): Promise<void> {
   if (meterDisabled() || count <= 0) return;
 
   await Promise.all([
-    bump(userId, usageMonth(), count),
+    bump(workspaceId, usageMonth(), count),
     bump(POOL, usageDay(), count),
   ]);
 }
@@ -275,7 +276,7 @@ export async function recordLookups(userId: string, count: number): Promise<void
  * reached — the same rule the routes followed with one call at the end.
  */
 export function lookupMeter(
-  userId: string,
+  workspaceId: WorkspaceId,
   every = 5,
 ): { spent: (count?: number) => Promise<void>; flush: () => Promise<void> } {
   let pending = 0;
@@ -286,7 +287,7 @@ export function lookupMeter(
     const count = pending;
     pending = 0;
 
-    await recordLookups(userId, count);
+    await recordLookups(workspaceId, count);
   };
 
   return {

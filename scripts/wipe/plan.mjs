@@ -32,6 +32,11 @@ const ROW_POLICY = {
   emailLog: "all",
   promotions: "all",
   news: "all",
+  // A membership survives only when both ends do: a kept owner's team loses
+  // the people who are being deleted, and a kept member loses deleted teams.
+  memberships: "membership",
+  // An invite out from a kept workspace stays; one from a deleted one goes.
+  invites: "workspaceId",
 };
 
 /** A snapshot's folder on R2 is a map id: ID.unique(), 20 lowercase hex characters. */
@@ -101,6 +106,10 @@ function keeps(policy, row, keep) {
       return keep.mapIds.has(row.mapId);
     case "audienceUserId":
       return row.audience === "user" && keep.userIds.has(row.audienceUserId);
+    case "membership":
+      return keep.userIds.has(row.workspaceId) && keep.userIds.has(row.userId);
+    case "workspaceId":
+      return keep.userIds.has(row.workspaceId);
     default:
       return false;
   }

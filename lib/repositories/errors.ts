@@ -72,6 +72,55 @@ export function emailUnverifiedMessage(email: string): string {
   return `${emailUnverifiedNote(email)} Open it, then try again.`;
 }
 
+/**
+ * Thrown when somebody's role in a workspace does not include what they tried
+ * — a viewer saving a location, an editor deleting a map, an admin promoting
+ * someone to admin.
+ *
+ * Its own code rather than `forbidden`, for the reason `email_unverified` has
+ * one: the client answers it differently. "You don't have access to that" ends
+ * a conversation; this one names who can change it, and the dashboard shows it
+ * as one consistent toast wherever an edit was refused (lib/query/client.ts).
+ */
+export class RoleRequiredError extends RepositoryError {
+  constructor(
+    message = "Your role on this team can't change that. Ask an admin for editor access.",
+  ) {
+    super("role_required", message, 403);
+  }
+}
+
+/**
+ * Thrown when a workspace has no seat left for another invite or member.
+ *
+ * Its own class rather than a fourth `LimitedResource`, because the way out is
+ * not "delete a seat": it is removing a person or revoking an invite, and the
+ * copy has to say so. The code is `plan_limit_reached` — the client's handling
+ * of that code is exactly right here (toast the message, offer the upgrade).
+ */
+export class SeatLimitError extends RepositoryError {
+  constructor(
+    readonly limit: number,
+    readonly plan: PlanId,
+  ) {
+    super("plan_limit_reached", seatLimitMessage(limit, plan), 403);
+  }
+}
+
+/** The fact on its own, for the note beside the Invite button. */
+export function seatLimitNote(limit: number, plan: PlanId): string {
+  if (limit === 1) return `The ${plan} plan is for one person.`;
+
+  return `You've used all ${formatCount(limit)} seats included on the ${plan} plan.`;
+}
+
+/** The same fact with the ways out, which is what a refusal owes. */
+export function seatLimitMessage(limit: number, plan: PlanId): string {
+  if (limit === 1) return `${seatLimitNote(limit, plan)} Upgrade to invite people.`;
+
+  return `${seatLimitNote(limit, plan)} Remove someone or revoke an invite to add another, or upgrade for more.`;
+}
+
 export class NotFoundError extends RepositoryError {
   constructor(message = "We couldn't find that.") {
     super("not_found", message, 404);

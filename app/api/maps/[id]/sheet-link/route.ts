@@ -1,5 +1,5 @@
 import { noContent, ok } from "@/lib/api/responses";
-import { parseBody, withAuth } from "@/lib/api/route";
+import { parseBody, withMapAuth } from "@/lib/api/route";
 import { NotFoundError } from "@/lib/repositories/errors";
 import {
   deleteSheetLink,
@@ -22,14 +22,14 @@ type Params = { id: string };
  * "not linked" is the ordinary state of nearly every map and the Locations page
  * asks on every load — a 404 there would be an error nobody made.
  */
-export const GET = withAuth<Params>(async ({ params, ctx }) => {
+export const GET = withMapAuth<Params>(async ({ params, ctx }) => {
   const link = await getSheetLink(ctx, params.id);
 
   return ok({ link: link ? toSheetLinkView(link) : null });
 });
 
 /** Link, or re-link, after an import that asked to keep the map in sync. */
-export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
+export const POST = withMapAuth<Params>(async ({ request, params, ctx }) => {
   const input = await parseBody(request, saveSheetLinkSchema);
   const link = await saveSheetLink(ctx, params.id, input);
 
@@ -37,7 +37,7 @@ export const POST = withAuth<Params>(async ({ request, params, ctx }) => {
 });
 
 /** The automatic-sync switch. */
-export const PATCH = withAuth<Params>(async ({ request, params, ctx }) => {
+export const PATCH = withMapAuth<Params>(async ({ request, params, ctx }) => {
   const input = await parseBody(request, updateSheetLinkSchema);
   const link = await setSheetAutoSync(ctx, params.id, input.autoSync);
 
@@ -47,7 +47,7 @@ export const PATCH = withAuth<Params>(async ({ request, params, ctx }) => {
 });
 
 /** Unlink. The locations stay. */
-export const DELETE = withAuth<Params>(async ({ params, ctx }) => {
+export const DELETE = withMapAuth<Params>(async ({ params, ctx }) => {
   await deleteSheetLink(ctx, params.id);
 
   return noContent();

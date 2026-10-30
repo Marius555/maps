@@ -1,5 +1,5 @@
 import { noContent } from "@/lib/api/responses";
-import { withAuth } from "@/lib/api/route";
+import { withPersonalAuth } from "@/lib/api/route";
 import { markTutorialsSeen } from "@/lib/auth/tutorial";
 import { TUTORIAL_IDS } from "@/lib/onboarding/tutorials";
 
@@ -10,7 +10,7 @@ import { TUTORIAL_IDS } from "@/lib/onboarding/tutorials";
  *
  * Open to an unconfirmed account for the per-overlay route's reason.
  */
-export const POST = withAuth(
+export const POST = withPersonalAuth(
   async ({ user }) => {
     await markTutorialsSeen(user.id, TUTORIAL_IDS);
     return noContent();

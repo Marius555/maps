@@ -6,7 +6,16 @@ import { useState } from "react";
 import { DeleteAccountDialog } from "./delete-account-dialog";
 
 /** The row's control. Opens the dialog, where everything else happens. */
-export function DeleteAccountButton({ email, mapCount }: { email: string; mapCount: number }) {
+export function DeleteAccountButton({
+  email,
+  mapCount,
+  memberCount,
+}: {
+  email: string;
+  mapCount: number;
+  /** People on this account's team, who lose access with it. */
+  memberCount: number;
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -18,6 +27,7 @@ export function DeleteAccountButton({ email, mapCount }: { email: string; mapCou
       <DeleteAccountDialog
         email={email}
         mapCount={mapCount}
+        memberCount={memberCount}
         isOpen={isOpen}
         onOpenChange={setIsOpen}
       />

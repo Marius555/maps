@@ -4,6 +4,8 @@ import { SearchX } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAddressResolution } from "@/components/editor/use-address-resolution";
+import { useCan } from "@/components/team/role-context";
+import { ViewOnlyNotice } from "@/components/team/view-only-notice";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
 import { PageTitle } from "@/components/ui/page-title";
@@ -56,6 +58,7 @@ export function PlacesManager({
   initialTagIds?: readonly string[];
 }) {
   const { data: map = initialMap } = useMap(initialMap.id, initialMap);
+  const canEdit = useCan("edit");
   const { data: places = [] } = usePlaces(initialMap.id, initialPlaces);
 
   const [query, setQuery] = useState("");
@@ -177,6 +180,8 @@ export function PlacesManager({
     <div className="space-y-6">
       <PageTitle>Locations</PageTitle>
 
+      <ViewOnlyNotice what="these locations" />
+
       <PlacesToolbar
         query={query}
         filter={filter}
@@ -184,13 +189,16 @@ export function PlacesManager({
         tagIds={tagIds}
         hasPlaces={places.length > 0}
         actions={
-          <>
-            <VocabularyButton map={map} places={places} onEditPlace={setEditingId} />
-            <SheetSyncButton mapId={map.id} initialLink={initialSheetLink} />
-            <LinkButton variant="secondary" href={`/maps/${map.id}/places/import`}>
-              Import locations
-            </LinkButton>
-          </>
+          // A team viewer sees the list and nothing that changes it.
+          canEdit ? (
+            <>
+              <VocabularyButton map={map} places={places} onEditPlace={setEditingId} />
+              <SheetSyncButton mapId={map.id} initialLink={initialSheetLink} />
+              <LinkButton variant="secondary" href={`/maps/${map.id}/places/import`}>
+                Import locations
+              </LinkButton>
+            </>
+          ) : undefined
         }
         onQueryChange={setQuery}
         onFilterChange={setFilter}

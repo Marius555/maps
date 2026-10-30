@@ -3,15 +3,14 @@ import { notFound } from "next/navigation";
 
 import { MapEditor } from "@/components/editor/map-editor";
 import { EditorTutorials } from "@/components/onboarding/editor-tutorials";
+import { RoleProvider } from "@/components/team/role-context";
 import { Container } from "@/components/ui/container";
 import { PageTitle } from "@/components/ui/page-title";
 import { requireUser } from "@/lib/auth/current-user";
 import { unseenTutorials } from "@/lib/auth/tutorial";
 import { getCardDesign } from "@/lib/repositories/card-design.repository";
-import { repoContext } from "@/lib/repositories/context";
 import { NotFoundError } from "@/lib/repositories/errors";
 import { listAllGroups } from "@/lib/repositories/groups.repository";
-import { loadMap } from "@/lib/repositories/load-map";
 import { listAllPlaces } from "@/lib/repositories/places.repository";
 import {
   PLAN_FEATURES,
@@ -19,6 +18,7 @@ import {
   getUserPlan,
 } from "@/lib/repositories/plan-limits";
 import { listAllShapes } from "@/lib/repositories/shapes.repository";
+import { loadMapAccess } from "@/lib/team/resolve";
 
 export async function generateMetadata(
   props: PageProps<"/maps/[id]">,
@@ -27,7 +27,7 @@ export async function generateMetadata(
 
   try {
     const user = await requireUser();
-    const map = await loadMap(user.id, id);
+    const { map } = await loadMapAccess(user.id, id);
     return { title: map.name };
   } catch {
     return { title: "Map" };
@@ -37,17 +37,16 @@ export async function generateMetadata(
 export default async function MapEditorPage(props: PageProps<"/maps/[id]">) {
   const { id } = await props.params;
   const user = await requireUser();
-  const ctx = repoContext(user.id);
 
   // The try only wraps the fetch. Rendering happens after it: React doesn't
   // render children eagerly, so a catch around JSX would never fire anyway.
   let data: Awaited<ReturnType<typeof loadEditor>>;
 
   try {
-    data = await loadEditor(ctx, id, user.id);
+    data = await loadEditor(user.id, id);
   } catch (error) {
-    // A map that doesn't exist and a map owned by someone else are the same
-    // answer here, by design.
+    // A map that doesn't exist and a map in a workspace this person is not in
+    // are the same answer here, by design.
     if (error instanceof NotFoundError) notFound();
     throw error;
   }
@@ -60,6 +59,7 @@ export default async function MapEditorPage(props: PageProps<"/maps/[id]">) {
     // taller instead of scrolling. See the height note in map-editor.tsx.
     // Tighter on a phone, where every pixel of padding is a pixel of map: the
     // height there subtracts exactly this `py-2`.
+    <RoleProvider role={data.role}>
     <Container className="flex min-h-0 flex-col max-md:px-2 max-md:py-2">
       {/* The map's own name, since this page is the map. Every other section
           names itself; this one would only be "Map". */}
@@ -86,27 +86,27 @@ export default async function MapEditorPage(props: PageProps<"/maps/[id]">) {
         card={data.tutorials.includes("card")}
       />
     </Container>
+    </RoleProvider>
   );
 }
 
-async function loadEditor(
-  ctx: ReturnType<typeof repoContext>,
-  mapId: string,
-  userId: string,
-) {
-  const [map, places, shapes, groups, cardDesign, plan, tutorials] =
-    await Promise.all([
-      loadMap(userId, mapId),
-      listAllPlaces(ctx, mapId),
-      listAllShapes(ctx, mapId),
-      listAllGroups(ctx, mapId),
-      getCardDesign(ctx),
-      getUserPlan(userId),
-      unseenTutorials(userId),
-    ]);
+async function loadEditor(userId: string, mapId: string) {
+  // Access first: it names the workspace every read below is scoped to, and
+  // whose plan the limits are — the map's, not the visitor's own.
+  const { map, ctx } = await loadMapAccess(userId, mapId);
+  const [places, shapes, groups, cardDesign, plan, tutorials] = await Promise.all([
+    listAllPlaces(ctx, mapId),
+    listAllShapes(ctx, mapId),
+    listAllGroups(ctx, mapId),
+    getCardDesign(ctx),
+    getUserPlan(ctx.workspaceId),
+    unseenTutorials(userId),
+  ]);
 
   return {
-    tutorials,
+    // The overlays walk through editing, so a viewer is shown none of them.
+    tutorials: ctx.role === "viewer" ? [] : tutorials,
+    role: ctx.role,
     map,
     places,
     shapes,

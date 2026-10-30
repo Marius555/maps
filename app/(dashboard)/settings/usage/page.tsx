@@ -4,10 +4,10 @@ import Link from "next/link";
 import { UsageGrid } from "@/components/account/usage-grid";
 import { SettingsSection } from "@/components/user-settings/section/settings-section";
 import { requireUser } from "@/lib/auth/current-user";
-import { repoContext } from "@/lib/repositories/context";
 import { listMapSummaries } from "@/lib/repositories/map-summary.repository";
 import { getUserPlan } from "@/lib/repositories/plan-limits";
 import { getLookupUsage } from "@/lib/repositories/usage.repository";
+import { loadActiveContext } from "@/lib/team/resolve";
 
 export const metadata: Metadata = { title: "Usage" };
 
@@ -27,11 +27,14 @@ export const metadata: Metadata = { title: "Usage" };
  */
 export default async function UsageSettingsPage() {
   const user = await requireUser();
+  // The workspace the dashboard is switched to: a team's usage is the team's,
+  // pooled across everyone in it, and every member may see it.
+  const ctx = await loadActiveContext(user.id);
 
   const [plan, usage, summaries] = await Promise.all([
-    getUserPlan(user.id),
-    getLookupUsage(user.id),
-    listMapSummaries(repoContext(user.id)),
+    getUserPlan(ctx.workspaceId),
+    getLookupUsage(ctx.workspaceId),
+    listMapSummaries(ctx),
   ]);
 
   return (
