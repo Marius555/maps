@@ -17,7 +17,7 @@ export function usePublishMap(mapId: string) {
       // The response carries the updated row, so publishedAt and snapshotUrl
       // land in the cache without a refetch.
       queryClient.setQueryData(queryKeys.maps.detail(map.id), map);
-      // No list cached means nothing to patch — see useCreateMap in ./maps.ts.
+      // No list cached means nothing to patch — see addMapToCachedList in ./maps.ts.
       queryClient.setQueryData<AppMap[]>(queryKeys.maps.list(), (maps) =>
         maps?.map((existing) => (existing.id === map.id ? map : existing)),
       );

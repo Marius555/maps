@@ -93,7 +93,8 @@ emails.
 - **Resending a confirmation is throttled on the account, not only in memory.**
   `verifyEmailSentAt` on the prefs (one a minute, five a day, stamped after a send
   went) is what holds across a restart and a second instance; the in-memory
-  `authEmailCooldown` is what gives the button its 429 and countdown. Prefs are
+  `authEmailCooldown` is what gives the button its 429 and its "you can ask for
+  another in N seconds" — the button itself has no countdown. Prefs are
   merged, never written over.
 - **Signup asks for no name.** The account starts as the part of its address
   before the `@` (`nameFromEmail`) and is renamed in Settings → General.
@@ -603,11 +604,13 @@ it could be pressed into somebody's inbox. Now there are three layers:
 - `lib/auth/verify-throttle.ts`, on the account's prefs: one a minute, five a
   day, checked inside `after` and refused silently, because the 204 is already
   written and must not differ by account. Signup stamps it too, and primes the
-  in-memory minute, so a press straight after signup gets a countdown rather
-  than a 204 for a link the prefs then drop.
-- The button itself: a disabled "Send again in 0:42" kept in `localStorage`
-  (`components/verify-email/resend-cooldown.ts`), so a reload does not hand it
-  back early.
+  in-memory minute, so a press straight after signup gets the 429's "you can ask
+  for another in 42 seconds" rather than a 204 for a link the prefs then drop.
+- The button itself is **always pressable and has no countdown** (since
+  2026-11-01). It used to be a disabled "Send again in 0:42" kept in
+  `localStorage`, and a clock running down on a button about email read as an
+  email that would go out at zero — which nothing ever sent. A press inside the
+  minute shows the server's own wording, from the 429 above.
 
 ## The session lookup is cached
 

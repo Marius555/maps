@@ -5,8 +5,6 @@ import { MailCheck } from "lucide-react";
 
 import { ErrorMessage } from "@/components/ui/error-message";
 import { useResendVerification } from "@/lib/query/auth";
-import { ApiError } from "@/lib/query/fetcher";
-import { formatWait, startResendCooldown, useResendCooldown } from "./resend-cooldown";
 
 /**
  * Send the confirmation link again, to an address we already know.
@@ -21,11 +19,15 @@ import { formatWait, startResendCooldown, useResendCooldown } from "./resend-coo
  *
  * The route behind both is the same `POST /api/auth/verify-email`: one link a
  * minute and three a quarter hour per address in memory, and one a minute and
- * five a day on the account itself (`lib/auth/verify-throttle.ts`), which is the
- * half that survives a restart. **The button keeps the same minute**, as a
- * countdown that a reload does not reset (`resend-cooldown.ts`) — a live button
- * the server can only refuse used to read as one that could be pressed forever.
- * A 429 starts the countdown from the server's own `Retry-After`.
+ * five a day on the account itself (`lib/auth/verify-throttle.ts`).
+ *
+ * **Always pressable, with no countdown.** It used to sit disabled as "Send
+ * again in 0:59", and a clock running down on a button about email reads as an
+ * email that will go out when it reaches zero — which nothing ever sent. Now it
+ * is one button, pressed when the owner wants another link. A press inside the
+ * server's minute sends nothing and says how long is left, in the server's own
+ * words, through the error line (signup primes that minute, so this holds
+ * straight after signup too).
  *
  * `align` exists because the two callers sit differently: in the banner it is one
  * control in a row of text and hugs the start, while on `/verify-email?status=sent`
@@ -43,21 +45,7 @@ export function ResendLinkButton({
   align?: "start" | "center";
 }) {
   const resend = useResendVerification();
-  const wait = useResendCooldown(email);
   const centred = align === "center";
-
-  const send = () =>
-    resend.mutate(
-      { email },
-      {
-        onSuccess: () => startResendCooldown(email, COOLDOWN_MS),
-        onError: (error) => {
-          if (error instanceof ApiError && error.status === 429) {
-            startResendCooldown(email, error.retryAfterMs ?? COOLDOWN_MS);
-          }
-        },
-      },
-    );
 
   return (
     <div
@@ -81,14 +69,10 @@ export function ResendLinkButton({
         size={size}
         variant={variant}
         isPending={resend.isPending}
-        isDisabled={wait > 0}
-        onPress={send}
+        onPress={() => resend.mutate({ email })}
       >
-        {wait > 0 ? `Send again in ${formatWait(wait)}` : "Send a new link"}
+        Send a new link
       </Button>
     </div>
   );
 }
-
-/** The server's own minimum gap between two links (`authEmailCooldown`). */
-const COOLDOWN_MS = 60_000;

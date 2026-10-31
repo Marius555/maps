@@ -21,16 +21,9 @@ import { useCardDesign, useUpdateCardDesign } from "@/lib/query/card-design";
 import { usePlaces } from "@/lib/query/places";
 import { toastError } from "@/lib/query/toast-error";
 import type { AppMap, Place } from "@/lib/repositories/types";
-import {
-  readCardLayout,
-  sameCardLayout,
-} from "@/lib/validation/card-layout.schema";
-import {
-  defaultCardLayout,
-  emptyCardLayout,
-  isSavedCardLayout,
-  type CardLayout,
-} from "@/packages/shared/card-layout";
+import { effectiveCardLayout } from "@/lib/card/designer-status";
+import { sameCardLayout } from "@/lib/validation/card-layout.schema";
+import { emptyCardLayout, type CardLayout } from "@/packages/shared/card-layout";
 import { resolvePin } from "@/packages/shared/pin-icons";
 import { pinColorOfChips, tagChipsOf } from "@/packages/shared/tags";
 import { previewChips } from "@/lib/card/preview-chips";
@@ -110,26 +103,18 @@ export function CardDesigner({
 
   /*
    * An account that has never saved a design opens onto **the same card its
-   * published map already draws**, and that is a correction.
+   * published map already draws** — `starterCardLayout()`, through the one seam
+   * every renderer reads (`effectiveCardLayout`). A blank canvas here used to be
+   * the one screen in the app disagreeing with the card it exists to show.
    *
-   * This used to fall back to `emptyCardLayout()`, on the reasoning that
-   * opening a designer onto a card "already half-built by nobody" is confusing.
-   * The premise was wrong in one specific way: that card is not built by
-   * nobody, it is what the product does. A live unconfigured site publishes
-   * `defaultCardLayout()` through `resolveCardLayout` — name, address,
-   * description, tags, hours, links, photo — so a blank canvas here was the one
-   * screen in the app disagreeing with the thing it exists to show. An owner
-   * arriving to "design my card" was told their card was empty when it was not.
-   *
-   * `isSavedCardLayout` is still what separates the two cases, and still has to
-   * be: a card somebody deliberately *cleared* round-trips as three empty zones
-   * and must come back empty, not be quietly refilled. That is the invariant in
-   * docs/notes/cards.md — these functions may change what a fresh card is, never
-   * what a saved one becomes.
+   * `isSavedCardLayout`, inside that seam, is what separates the two cases, and
+   * has to be: a card somebody deliberately *cleared* round-trips as three empty
+   * zones and must come back empty, not be quietly refilled. That is the
+   * invariant in docs/notes/cards.md — these functions may change what a fresh
+   * card is, never what a saved one becomes.
    */
   const saved = useMemo(
-    () =>
-      isSavedCardLayout(design) ? readCardLayout(design) : defaultCardLayout(),
+    () => effectiveCardLayout(design),
     [design],
   );
 

@@ -29,10 +29,14 @@ export function AdminMobileNav({ email }: { email: string }) {
           placement="bottom"
           onPress={() => setOpen(true)}
         />
-        <span className="truncate text-sm font-semibold tracking-tight text-foreground">
-          <BrandLogo />
+        {/* At the far end, opposite the menu button — the same as the
+            dashboard's own mobile header (components/layout/mobile-header.tsx). */}
+        <span className="ms-auto flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-semibold tracking-tight text-foreground">
+            <BrandLogo />
+          </span>
+          <AdminBadge />
         </span>
-        <AdminBadge />
       </header>
 
       <Drawer.Backdrop isOpen={isOpen} onOpenChange={setOpen}>

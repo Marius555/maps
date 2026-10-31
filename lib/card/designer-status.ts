@@ -1,5 +1,7 @@
 import { readCardLayout } from "@/lib/validation/card-layout.schema";
-import type { CardLayout } from "@/packages/shared/card-layout";
+import { isSavedCardLayout, type CardLayout } from "@/packages/shared/card-layout";
+
+import { starterCardLayout } from "./starter-layout";
 
 /**
  * The layout a card should actually be drawn with.
@@ -8,18 +10,20 @@ import type { CardLayout } from "@/packages/shared/card-layout";
  * (the live popup), components/preview/embed-preview.tsx (the preview) and
  * lib/repositories/publish.repository.ts (what gets published). One function
  * rather than three calls to `readCardLayout`, so there is one place to change
- * what "the card for this account" means — which is exactly what it was for
- * while the designer was switched off behind a flag here.
+ * what "the card for this account" means.
+ *
+ * An account that has never saved a design draws `starterCardLayout()` — and
+ * publishes it explicitly, because it is not the embed's own default
+ * (lib/card/starter-layout.ts says why that default must stay as it is). A
+ * design somebody *saved*, including one they cleared to three empty zones,
+ * is read as stored: `isSavedCardLayout` is what tells the two apart, the same
+ * check the designer opens with.
  *
  * The stored blob is raw JSON straight off the row, so this has to be the thing
- * that never throws: an account that has never opened the designer stores
- * nothing at all, and `resolveCardLayout({})` answers `defaultCardLayout()` —
- * which `buildSnapshot`'s `cardLayoutField` then omits from the snapshot
- * entirely, so the embed falls back to its *own* copy of that default and the
- * two renderers agree by construction with nothing added to a published map.
+ * that never throws — `readCardLayout` degrades anything to something drawable.
  */
 export function effectiveCardLayout(
   stored: Record<string, unknown> | null | undefined,
 ): CardLayout {
-  return readCardLayout(stored ?? {});
+  return isSavedCardLayout(stored) ? readCardLayout(stored ?? {}) : starterCardLayout();
 }

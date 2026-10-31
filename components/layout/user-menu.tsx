@@ -35,8 +35,8 @@ import { UserMenuTheme } from "./user-menu-theme";
  * an icon too, which gave them all the same weight and made none of them easier
  * to find.
  *
- * **The theme sits under the email**, as one row of Light / System / Dark —
- * `UserMenuTheme`. It is here as well as in Settings → General because it is
+ * **The theme opens the rows below the divider under the email**, as one
+ * Theme row whose submenu holds Light / System / Dark — `UserMenuTheme`. It is here as well as in Settings → General because it is
  * the one setting people reach for mid-task; both read `lib/theme/theme-choice.ts`,
  * so they cannot disagree. `ThemeSync`, not this menu, follows the OS while the
  * choice is "System".
@@ -45,7 +45,7 @@ import { UserMenuTheme } from "./user-menu-theme";
  * support address with a subject that says which kind, which plan and which
  * topic (`lib/support/support-request.ts`), so the inbox can be triaged by
  * subject alone. Contact support is a paid-plan row: on Free it stays visible
- * but disabled, with a "Paid only" chip on the same line (a second line of
+ * but disabled, with a "Paid" chip on the same line (a second line of
  * reason made it the tallest row in the menu), and the route refuses it too. Report a
  * bug is on every plan. The dialog is rendered beside the menu, not in it,
  * since the menu closes as soon as a row is chosen.
@@ -165,9 +165,9 @@ export function UserMenu({
               <Header>{user.email}</Header>
             </Dropdown.Section>
 
-            <UserMenuTheme />
-
             <Separator />
+
+            <UserMenuTheme />
 
             {/* The only way into Settings. It is not a sidebar item: the sidebar
                 is about the map you are working on, and this is about the person,
@@ -197,7 +197,7 @@ export function UserMenu({
                   <Label>Contact support</Label>
                   {isFree ? (
                     <Chip size="sm" variant="soft">
-                      <Chip.Label>Paid only</Chip.Label>
+                      <Chip.Label>Paid</Chip.Label>
                     </Chip>
                   ) : null}
                 </div>

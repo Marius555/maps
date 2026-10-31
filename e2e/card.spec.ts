@@ -1,5 +1,6 @@
 import type { APIRequestContext } from "@playwright/test";
-import { defaultCardLayout, isSavedCardLayout } from "../packages/shared/card-layout";
+import { starterCardLayout } from "../lib/card/starter-layout";
+import { isSavedCardLayout } from "../packages/shared/card-layout";
 import { addPlace } from "./support/api";
 import { expect, test } from "./support/fixtures";
 
@@ -69,9 +70,9 @@ test("a change in the card designer is saved for the account", async ({ page, re
     await expect(page.getByRole("checkbox", { name: "Bold" })).toBeChecked({ checked: !wasBold });
   } finally {
     // Put the account back. One that had never saved a design read as `{}`; the
-    // shipped default is what it was drawing. Not "Reset card": that is the
+    // starter card (lib/card/starter-layout.ts) is what it was drawing. Not "Reset card": that is the
     // designer's blank canvas, a card with no blocks at all.
-    const cardLayout = isSavedCardLayout(before) ? before : defaultCardLayout();
+    const cardLayout = isSavedCardLayout(before) ? before : starterCardLayout();
     const restore = await request.patch(`/api/maps/${testMap.id}/card-design`, { data: { cardLayout } });
     expect(restore.ok(), await restore.text()).toBe(true);
   }

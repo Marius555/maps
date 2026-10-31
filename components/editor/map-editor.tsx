@@ -15,6 +15,7 @@ import { useRouteRequest } from "@/components/map/routes/use-route-request";
 import { useRoutability } from "@/components/map/routes/use-routability";
 import { SelectionBar } from "@/components/map/selection-bar";
 import { BulkTagMenu } from "@/components/tags/bulk-tag-menu";
+import { WORLD_BOUNDS } from "@/lib/config";
 import type { GeocodeCandidate } from "@/lib/geocoding/types";
 import { isDefaultView } from "@/lib/map/default-view";
 import { mapThemeClass } from "@/lib/map/style";
@@ -483,7 +484,7 @@ export function MapEditor({
    * must not change after: dragging a pin changes `places`, and re-deciding
    * would describe a camera move that already happened.
    */
-  const [openingBounds] = useState<ShapeBounds | null>(() =>
+  const [contentBounds] = useState<ShapeBounds | null>(() =>
     isDefaultView(map)
       ? selectionBounds({
           points: places,
@@ -492,12 +493,22 @@ export function MapEditor({
       : null,
   );
 
-  /**
-   * Pre-armed when the map was already born framed, which leaves the effect
-   * below covering the one case construction cannot: a map that had nothing on
-   * it when it mounted, whose owner then drops their first location.
+  /*
+   * A default-view map with nothing on it — every brand-new map — opens on the
+   * whole world fitted to the canvas, not on `DEFAULT_CENTER`'s fixed zoom,
+   * which crops it on most frames (lib/config.ts, WORLD_BOUNDS).
    */
-  const hasFramed = useRef(openingBounds !== null);
+  const openingBounds =
+    contentBounds ?? (isDefaultView(map) ? WORLD_BOUNDS : null);
+
+  /**
+   * Pre-armed when the map was already born framed on its *content*, which
+   * leaves the effect below covering the one case construction cannot: a map
+   * that had nothing on it when it mounted, whose owner then drops their first
+   * location. The world fallback deliberately does not arm it — that first pin
+   * still has to be flown to.
+   */
+  const hasFramed = useRef(contentBounds !== null);
 
   useEffect(() => {
     if (hasFramed.current || !isMapReady) return;

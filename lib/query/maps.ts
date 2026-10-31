@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 
 import type { AppMap } from "@/lib/repositories/types";
 import type { CreateMapInput, UpdateMapInput } from "@/lib/validation/map.schema";
@@ -24,6 +29,34 @@ export function useMap(mapId: string, initialData?: AppMap) {
   });
 }
 
+/**
+ * Puts a newly created map at the top of the cached maps list.
+ *
+ * Patch the maps list only if it is cached. Every updater of that key returns
+ * `undefined` when there is no list, which TanStack treats as "leave it
+ * alone". Defaulting to `[]` instead *created* the list as empty: open the
+ * editor straight from a link, change the theme, go to the maps page, and it
+ * drew "no maps" — `useMaps` ignores the server's `initialData` once a cache
+ * entry exists — until the 30s staleTime ran out.
+ */
+export function addMapToCachedList(queryClient: QueryClient, map: AppMap): void {
+  queryClient.setQueryData<AppMap[]>(
+    queryKeys.maps.list(),
+    (maps) => maps && [map, ...maps],
+  );
+}
+
+/**
+ * Creates a map and caches it as a detail — the editor and the sidebar's map
+ * name read it from there with no round trip.
+ *
+ * **The list is not patched here.** This resolves while the maps page is still
+ * on screen and the navigation to the editor has not committed, and patching
+ * the list then redrew that page under the pending dialog: on a first map the
+ * empty state — which holds the dialog — gave way to the list, so the dialog
+ * vanished and the list flashed before the editor. The caller patches it with
+ * `addMapToCachedList` once the list has left the screen (`create-map-form.tsx`).
+ */
 export function useCreateMap() {
   const queryClient = useQueryClient();
 
@@ -36,18 +69,6 @@ export function useCreateMap() {
         })
       ).map,
     onSuccess: (map) => {
-      /*
-       * Patch the maps list only if it is cached. Every updater of that key
-       * returns `undefined` when there is no list, which TanStack treats as "leave
-       * it alone". Defaulting to `[]` instead *created* the list as empty: open
-       * the editor straight from a link, change the theme, go to the maps page,
-       * and it drew "no maps" — `useMaps` ignores the server's `initialData`
-       * once a cache entry exists — until the 30s staleTime ran out.
-       */
-      queryClient.setQueryData<AppMap[]>(
-        queryKeys.maps.list(),
-        (maps) => maps && [map, ...maps],
-      );
       queryClient.setQueryData(queryKeys.maps.detail(map.id), map);
     },
   });

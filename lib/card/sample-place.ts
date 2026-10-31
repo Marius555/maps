@@ -31,7 +31,8 @@ import type { Place } from "@/lib/repositories/types";
  * ceiling (CLAUDE.md §4). `block-labels.ts` is kept out of it for the same
  * reason — English the dashboard needs and the embed must never ship.
  *
- * The content is chosen so every block on `defaultCardLayout()` draws something
+ * The content is chosen so every block on `defaultCardLayout()` (and so on the
+ * starter card an unsaved account opens on, ./starter-layout.ts) draws something
  * rather than its empty reservation: a name, a street address with a town and a
  * postcode, a description long enough to show the clamp, a week with one closed
  * day, and all four link targets. Two things are deliberately left out:

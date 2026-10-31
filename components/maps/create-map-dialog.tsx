@@ -9,6 +9,7 @@ import {
   VerifyEmailNotice,
 } from "@/components/verify-email/verify-email-notice";
 import { useCan } from "@/components/team/role-context";
+import { warmFirstMap } from "@/lib/map/warm-map";
 import { CreateMapForm } from "./create-map-form";
 
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
@@ -70,7 +71,12 @@ export function CreateMapDialog({
       <span data-tutorial="create-map" className="flex">
         <Button
           variant={variant}
-          onPress={() => setIsOpen(true)}
+          onPress={() => {
+            // The map this creates is known already; start loading it while
+            // the name is typed. See lib/map/warm-map.ts.
+            warmFirstMap();
+            setIsOpen(true);
+          }}
           isDisabled={unverified}
           aria-describedby={unverified ? noteId : undefined}
           className="w-40"
@@ -91,7 +97,10 @@ export function CreateMapDialog({
           <ResponsiveDialog.Heading>Create map</ResponsiveDialog.Heading>
         </ResponsiveDialog.Header>
         <ResponsiveDialog.Body>
-          <CreateMapForm onCreated={() => setIsOpen(false)} />
+          {/* No onCreated close: the dialog stays up, pending, until the
+              editor route replaces this page — closing it first flashed the
+              maps list. See create-map-form.tsx. */}
+          <CreateMapForm />
         </ResponsiveDialog.Body>
       </ResponsiveDialog>
     </div>

@@ -34,3 +34,21 @@ export const DEFAULT_CENTER = {
   lng: 0,
   zoom: 1,
 } as const;
+
+/**
+ * What an empty map that is still on `DEFAULT_CENTER` is actually framed on in
+ * the editor: the populated world, fitted to whatever size the canvas is.
+ *
+ * `DEFAULT_CENTER`'s fixed zoom 1 is a 1024px-tall world, which a ~800px editor
+ * frame crops and a phone crops to one continent — a new map read as "zoomed
+ * in". A box adapts to the canvas instead. South −58 / north 78 leave out
+ * Antarctica and the high Arctic, which Mercator would otherwise spend most of
+ * the frame on. `DEFAULT_CENTER` itself is unchanged: it is what
+ * `isDefaultView` compares stored maps against.
+ */
+export const WORLD_BOUNDS = {
+  west: -180,
+  south: -58,
+  east: 180,
+  north: 78,
+} as const;

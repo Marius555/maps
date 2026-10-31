@@ -12,8 +12,10 @@ import { dismissTutorial, isTutorialDismissed } from "./tutorial-store";
  * The overlays that follow the owner between pages rather than belonging to
  * one. Mounted once, in the dashboard shell, which stays up across navigations.
  *
- * - **Coming back from the card designer** — to whatever page, since the
- *   sidebar's Publish link is on all of them — draws "Ready to publish?".
+ * - **Coming back from the card designer** — to any of the map's own pages,
+ *   since the sidebar's Publish link is on all of them — draws "Ready to
+ *   publish?". Never on the maps list or anywhere outside a map: there the
+ *   only overlay is "Create your first map", and Publish belongs to a map.
  * - **Reaching a page an arrow points at** counts that arrow as seen, however
  *   the owner got there: the arrow's whole job was getting them to it. For the
  *   card this also keeps its overlay off the page they come back to.
@@ -55,9 +57,17 @@ export function TutorialRouteWatcher({ pending }: { pending: readonly TutorialId
   // Not on Publish itself: the effect above is about to count it as found, and
   // the overlay would flash for a frame first.
   const showPublish =
-    returnedFromCard && pending.includes("publish") && !inSection(pathname, "publish");
+    returnedFromCard &&
+    pending.includes("publish") &&
+    inMap(pathname) &&
+    !inSection(pathname, "publish");
 
   return showPublish ? <Tutorial id="publish" /> : null;
+}
+
+/** Whether `pathname` is one of a map's own pages, `/maps/x` or below it. */
+function inMap(pathname: string): boolean {
+  return /^\/maps\/[^/]+(\/|$)/.test(pathname);
 }
 
 /** Whether `pathname` is inside a map's `section` page, e.g. `/maps/x/card`. */

@@ -9,6 +9,7 @@ import {
   revokeSession,
 } from "@/lib/auth/account";
 import { rateLimit } from "@/lib/rate-limit/limiter";
+import { RateLimitError } from "@/lib/repositories/errors";
 import { consumeToken, createVerificationLink } from "@/lib/auth/tokens";
 import { mayResendVerification, stampVerificationSent } from "@/lib/auth/verify-throttle";
 import { greetingName } from "@/lib/email/greeting";
@@ -122,8 +123,21 @@ export const POST = withoutAuth(async (request) => {
   const { email } = await parseBody(request, forgotPasswordSchema);
 
   // The minute first: a second press inside it is refused without spending one
-  // of the quarter hour's three.
-  rateLimit("authEmailCooldown", `verify:${email.toLowerCase()}`);
+  // of the quarter hour's three. Its refusal is the only thing that tells the
+  // button how long is left — the button has no countdown of its own any more
+  // (components/verify-email/resend-link-button.tsx) — so it says so in words.
+  try {
+    rateLimit("authEmailCooldown", `verify:${email.toLowerCase()}`);
+  } catch (error) {
+    if (!(error instanceof RateLimitError)) throw error;
+    // Always seconds: the wait is at most the minute, and `waitPhrase` rounds
+    // 59.6s up to "1 minute", which reads oddly after "less than a minute ago".
+    const seconds = Math.min(60, Math.max(1, Math.ceil(error.retryAfterSeconds)));
+    throw new RateLimitError(
+      error.retryAfterSeconds,
+      `A link went out less than a minute ago. You can ask for another in ${String(seconds)} ${seconds === 1 ? "second" : "seconds"}.`,
+    );
+  }
   rateLimit("authEmailAddress", `verify:${email.toLowerCase()}`);
 
   // After the response, for the reason forgot-password documents at length: an

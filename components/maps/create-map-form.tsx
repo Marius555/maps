@@ -3,6 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@heroui/react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useTransition } from "react";
 import { useForm } from "react-hook-form";
 
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -12,7 +14,7 @@ import { DEFAULT_CENTER } from "@/lib/config";
 // there is no theme to read here any more.
 import { DEFAULT_MAP_STYLE } from "@/lib/map/style";
 import { track } from "@/lib/posthog/client";
-import { useCreateMap } from "@/lib/query/maps";
+import { addMapToCachedList, useCreateMap } from "@/lib/query/maps";
 import { applyFieldErrors } from "@/lib/query/form-errors";
 import {
   createMapSchema,
@@ -44,12 +46,37 @@ export function CreateMapForm({ onCreated }: { onCreated?: () => void }) {
     },
   });
 
+  /*
+   * The navigation runs in a transition so the button stays pending until the
+   * editor route commits. Closing the dialog first — what this used to do —
+   * showed the maps list for the whole server round trip and then jumped to the
+   * editor; left open, the dialog unmounts with the list the moment the
+   * editor's skeleton replaces it.
+   */
+  const [isNavigating, startNavigation] = useTransition();
+
+  /*
+   * The new map joins the cached maps list only when this form unmounts —
+   * which is when the editor replaces the maps page. Added any earlier, the
+   * list redrew underneath the pending dialog, and on a first map the empty
+   * state holding the dialog gave way to the list: the dialog vanished and the
+   * maps page flashed before the editor. See `useCreateMap`.
+   */
+  const queryClient = useQueryClient();
+  const createdMap = createMap.data;
+  useEffect(() => {
+    if (!createdMap) return;
+    return () => addMapToCachedList(queryClient, createdMap);
+  }, [createdMap, queryClient]);
+
   const onSubmit = handleSubmit(async (values) => {
     try {
       const map = await createMap.mutateAsync(values);
       track("map_created", { default_style: values.style });
+      startNavigation(() => {
+        router.push(`/maps/${map.id}`);
+      });
       onCreated?.();
-      router.push(`/maps/${map.id}`);
     } catch (error) {
       applyFieldErrors(error, setError);
     }
@@ -68,7 +95,7 @@ export function CreateMapForm({ onCreated }: { onCreated?: () => void }) {
         autoFocus
       />
 
-      <Button type="submit" fullWidth isPending={isSubmitting}>
+      <Button type="submit" fullWidth isPending={isSubmitting || isNavigating}>
         Create map
       </Button>
     </form>

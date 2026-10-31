@@ -10,7 +10,6 @@ import { AuthDivider } from "@/components/auth/auth-divider";
 import { GoogleButton } from "@/components/auth/google-button";
 import { LegalConsentNotice } from "@/components/brand/legal-consent-notice";
 import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
-import { startResendCooldown } from "@/components/verify-email/resend-cooldown";
 import { track } from "@/lib/posthog/client";
 import { useSignup } from "@/lib/query/auth";
 import { applyFieldErrors } from "@/lib/query/form-errors";
@@ -49,9 +48,6 @@ export function SignupForm({ redirectTo = null }: { redirectTo?: string | null }
     try {
       await signup.mutateAsync(values);
       track("user_signed_up");
-      // The first link is already on its way, so the next screen's "Send a new
-      // link" starts on the server's minute rather than live.
-      startResendCooldown(values.email, 60_000);
       // Somewhere that asked to have them back — `/connect/wordpress` — shows its
       // own "check your inbox" and carries on once they have.
       router.replace(redirectTo ?? "/verify-email?status=sent");

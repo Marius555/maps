@@ -65,7 +65,7 @@ deploy. Names in use:
   the maps list's arrow at Create map; the editor's two at the pin button and Locations on an
   empty map, or its one at Card once the map has a saved location (the first dropped pin
   swaps them live, and an import lands on the second); and "Ready to publish?" at Publish,
-  drawn by the dashboard shell on whatever page the owner reaches on leaving `/card`. Unset
+  drawn by the dashboard shell on whichever of the map's own pages the owner reaches on leaving `/card` (never the maps list). Unset
   or `false`, each is drawn until the account closes it once — and the maps list's only while
   the account has no map and a confirmed address, since it points at a button the email gate
   greys. "Seen" is one pref per overlay on the Appwrite user (`mapsTutorialSeenAt`,

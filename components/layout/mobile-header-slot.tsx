@@ -10,8 +10,8 @@ import {
 import { createPortal } from "react-dom";
 
 /**
- * A place for a page to put its own control **in the mobile header**, beside the
- * hamburger.
+ * A place for a page to put its own control **in the mobile header**, at the
+ * far end of the row just before the product name.
  *
  * Below `md` the app has exactly one horizontal band of chrome, and everything
  * that opens something lives in it — the nav drawer's trigger is there and a
@@ -67,9 +67,10 @@ export function MobileHeaderSlotProvider({
 export function MobileHeaderSlot() {
   const { setNode } = useContext(MobileHeaderSlotContext);
 
-  // `ms-auto` is what pushes it to the far end of the row — the trigger sits
-  // opposite the hamburger rather than beside the product name.
-  return <div ref={setNode} className="ms-auto flex items-center gap-1" />;
+  // No `ms-auto` of its own: `MobileHeader` puts it in the far-end group with
+  // the brand, opposite the hamburger. Two `ms-auto` children would split the
+  // free space between them.
+  return <div ref={setNode} className="flex items-center gap-1 empty:hidden" />;
 }
 
 /** A page's end of it. Renders nothing until the header has mounted. */

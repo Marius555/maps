@@ -24,10 +24,13 @@ const EDITOR_PATH = /^\/maps\/[^/]+\/?$/;
  * No bottom border: the header shares the page background, so the chrome reads as
  * one surface instead of a stack of strips.
  *
- * The far end of the row is a slot (`MobileHeaderSlot`), so a page that has one
+ * **The hamburger at one end, the product name and plan at the other** — the
+ * same arrangement the map editor's locations strip has always had, so the brand
+ * is in one place on every page of the phone layout.
+ *
+ * Just before the brand is a slot (`MobileHeaderSlot`), so a page that has one
  * thing to open can put its trigger on this line instead of growing a bar of its
- * own — the card designer's panel is the first. Empty on every other page, which
- * costs a flex box with nothing in it.
+ * own. Empty today, which costs a flex box with nothing in it.
  *
  * **Not on the map editor.** There the locations sheet's peek strip carries the
  * same three things — the hamburger at one end, the name and plan at the other
@@ -43,8 +46,12 @@ export function MobileHeader({ plan }: { plan: PlanId }) {
   return (
     <header className="flex min-h-14 items-center gap-2 px-2 md:hidden">
       <NavMenuButton />
-      <MobileBrand plan={plan} />
-      <MobileHeaderSlot />
+      {/* One `ms-auto` group, so the slot and the brand share the far end
+          rather than splitting the free space between two of them. */}
+      <span className="ms-auto flex min-w-0 items-center gap-2">
+        <MobileHeaderSlot />
+        <MobileBrand plan={plan} />
+      </span>
     </header>
   );
 }

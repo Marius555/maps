@@ -32,6 +32,16 @@ export function loadMapStyle(
   return fetchStyle(url).then((style) => applyAppearance(style, appearance!));
 }
 
+/**
+ * Starts the style download ahead of the map that will need it, so the map's
+ * own `loadMapStyle` finds it cached (or, for a plain map MapLibre fetches
+ * itself, in the HTTP cache). Fire-and-forget: a failure is not cached, so the
+ * real load simply tries again. Dashboard-only; the embed never calls it.
+ */
+export function preloadMapStyle(url: string): void {
+  fetchStyle(url).catch(() => {});
+}
+
 function fetchStyle(url: string): Promise<Record<string, unknown>> {
   const cached = cache.get(url);
   if (cached) return cached;

@@ -56,8 +56,18 @@ building the same card from the same functions in `packages/shared/`.
   becomes. **Quietly editing a design somebody made is the one thing these functions must
   never do** — including opening a panel, which is why `nearestStop` lights the closest
   tile **without writing it back**.
-- **The designer opens onto `defaultCardLayout()`, not onto a blank card**, because that is
-  what an unconfigured account's published map already draws. It used to open onto
+- **An account with no saved design draws and publishes `starterCardLayout()`
+  (`lib/card/starter-layout.ts`), not `defaultCardLayout()`.** Since 2026-11-01: a 220×300
+  card of photo (a third), logo (L, right, half over the photo), address and a full-width
+  pill button. It goes through `effectiveCardLayout`, the one seam the designer, the editor
+  popup, the Publish preview and publishing all read, and it is written into the snapshot
+  explicitly because it is not the default. **`defaultCardLayout()` must not change**: it is
+  what the embed draws for a snapshot with no `cardLayout`, which is every map published by an
+  unconfigured account before the starter existed, and editing it would redesign those live
+  maps on the next embed deploy. The starter lives in `lib/card/` so the embed carries none
+  of it.
+- **The designer opens onto that starter, not onto a blank card**, because that is
+  what an unconfigured account's published map draws. It used to open onto
   `emptyCardLayout()`, on the reasoning that a card "half-built by nobody" is confusing —
   and the premise was wrong: it is not built by nobody, it is what the product does, so a
   blank canvas was the one screen in the app disagreeing with the thing it exists to show.
