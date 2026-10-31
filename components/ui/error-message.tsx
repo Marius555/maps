@@ -3,6 +3,7 @@
 import { Alert } from "@heroui/react";
 
 import { ApiError } from "@/lib/query/fetcher";
+import { isRoleRequired } from "@/lib/query/role-required-toast";
 import { isEmailUnverified } from "@/lib/query/verify-email-toast";
 
 /**
@@ -34,6 +35,10 @@ import { isEmailUnverified } from "@/lib/query/verify-email-toast";
 export function ErrorMessage({ error }: { error: unknown }) {
   if (!error) return null;
   if (isEmailUnverified(error)) return null;
+  // The role gate is said the same way, once, by its own central toast
+  // (lib/query/role-required-toast.ts). Measured: a team viewer saving the
+  // Edit location dialog drew the toast and this alert with the same sentence.
+  if (isRoleRequired(error)) return null;
 
   const message = resolveMessage(error);
 
