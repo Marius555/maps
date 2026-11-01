@@ -648,7 +648,11 @@ Three changes answered it, one per failure:
    checkbox to show. Test keys answer `action: "test"` and
    `hostname: "localhost"` whatever was asked, which is why neither is compared.
    Resend-verification is not covered: it only mails an account that already
-   exists and is throttled on the account itself.
+   exists and is throttled on the account itself. **The site key must reach the
+   build.** The first production deploy shipped a bundle without it, while the
+   server had both keys, and every signup was refused.
+   `scripts/deploy-site.mjs` now refuses that pairing (`docs/notes/deploy.md`,
+   "The build's environment").
 2. **Confirm by button press.** See the invariant. The page carries a live
    secret in its URL now, as `/reset-password` always did, so
    `lib/posthog/redact.ts` strips `secret=` from every URL property, which

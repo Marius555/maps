@@ -46,7 +46,8 @@
  * environment. Nothing is written to disk. A variable stored as *secret* reads
  * back empty: that is an error for a `NEXT_PUBLIC_*` one (the browser would get
  * an empty value) and a warning for anything else, which the server still reads
- * at runtime.
+ * at runtime. **Every page is read** — Appwrite lists 25 by default — and a short
+ * read fails the build rather than shipping a bundle missing a public key.
  *
  * ## Environment (deploy credentials — never on the site)
  *
@@ -62,11 +63,17 @@ import { tmpdir } from "node:os";
 import { basename, join, relative, sep } from "node:path";
 import { gzipSync } from "node:zlib";
 
-import { AppwriteException, Client, Sites } from "node-appwrite";
+import { AppwriteException, Client, Query, Sites } from "node-appwrite";
 import { InputFile } from "node-appwrite/file";
 
 const DEPLOY_WAIT_MS = 15 * 60_000;
 const OUTPUT_DIRECTORY = "./.next";
+
+/**
+ * Site variables per request. Appwrite's default page is 25, and reading one page
+ * silently dropped 11 of 36 from every build — the Turnstile site key among them.
+ */
+const VARIABLES_PAGE = 100;
 
 /** Public files the deployed site must not carry; gitignored, so absent in CI anyway. */
 const PUBLIC_EXCLUDED = new Set(["tiles"]);
@@ -188,9 +195,30 @@ async function ensureSsr(site) {
  * Build
  * ------------------------------------------------------------------ */
 
+/** Every one of the site's variables — Appwrite lists 25 unless asked for more. */
+async function allSiteVariables(siteId) {
+  const variables = [];
+  let total = Infinity;
+
+  while (variables.length < total) {
+    const page = await sites.listVariables({
+      siteId,
+      queries: [Query.limit(VARIABLES_PAGE), Query.offset(variables.length)],
+    });
+    total = page.total;
+    if (page.variables.length === 0) break;
+    variables.push(...page.variables);
+  }
+
+  if (variables.length < total) {
+    fail(`Read ${variables.length} of the site's ${total} variables; refusing to build with the rest missing.`);
+  }
+  return variables;
+}
+
 /** The site's variables, as the build's environment. */
 async function siteEnvironment(siteId) {
-  const { variables } = await sites.listVariables({ siteId });
+  const variables = await allSiteVariables(siteId);
   const env = {};
   const unreadable = [];
 
@@ -205,6 +233,16 @@ async function siteEnvironment(siteId) {
       `${publicUnreadable.join(", ")} ${publicUnreadable.length === 1 ? "is" : "are"} stored as secret on the site, so the build cannot read ${publicUnreadable.length === 1 ? "it" : "them"} — and the browser would get an empty value. Recreate as non-secret: a NEXT_PUBLIC_ value is public by definition.`,
     );
   }
+  // The server reads the secret at runtime and checks every signup; the browser
+  // gets the site key only from this build. One without the other refuses
+  // every signup and password reset — it did, for an afternoon on 2026-11-01.
+  const keys = new Set(variables.map(({ key }) => key));
+  if (keys.has("TURNSTILE_SECRET_KEY") && !env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim()) {
+    fail(
+      "TURNSTILE_SECRET_KEY is on the site but NEXT_PUBLIC_TURNSTILE_SITE_KEY is not readable by the build, so the browser would send no token and every signup would be refused. Set the site key as a non-secret variable, or remove both.",
+    );
+  }
+
   if (unreadable.length > 0) {
     console.warn(`  note    secret, so absent at build (the server still reads them): ${unreadable.join(", ")}`);
   }

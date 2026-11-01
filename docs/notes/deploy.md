@@ -12,6 +12,9 @@
   setting back unchanged.
 - **`NEXT_PUBLIC_*` site variables stay non-secret.** The build reads them from the site, and a
   secret variable reads back empty.
+- **The build reads every site variable, page by page.** Appwrite lists 25 unless asked for more,
+  and a short read now fails the build. Reading one page took down signup for an afternoon; see
+  "The build's environment".
 - **No `.env*` file travels in the upload.** Next copies them into `.next/standalone`, and the
   script drops them.
 - **The package stays under Appwrite's ~30MB cap.** `deploy-site.mjs` fails before uploading
@@ -107,6 +110,23 @@ holds only four deploy secrets: endpoint, project id, site id, and a key with `s
 The server still reads its variables at runtime from the same place.
 `UPLOAD_EMBED_ON_BUILD=true` on the site makes `postbuild` upload the embed from the workflow,
 as it was meant to from the host.
+
+**Until 2026-11-01 the build saw only 25 of the site's variables.** `sites.listVariables` was
+called once, and Appwrite's default page is 25. The site had 34 variables from 2026-10-15, then
+36. So every build since then missed `NEXT_PUBLIC_GAZETTEER_URL`, `NEXT_PUBLIC_COLLECT_URL` and
+`UPLOAD_EMBED_ON_BUILD`. Nobody noticed:
+
+- server code reads a `NEXT_PUBLIC_*` value at runtime when the build did not inline it;
+- the client fell back to the dashboard's own origin;
+- the embed on the CDN stayed at its 2026-10-20 upload.
+
+The Turnstile pair, added that day, landed among the missing too. The browser bundle had no site
+key and sent no token. The server read both keys at runtime and refused every signup and password
+reset, from the 12:28 UTC deploy until the fix.
+
+The script now reads every page and fails on a short read. It also refuses to build when
+`TURNSTILE_SECRET_KEY` is on the site without a readable `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, the one
+pairing where a missing public value is an outage rather than a fallback.
 
 ## Checking a deploy
 
