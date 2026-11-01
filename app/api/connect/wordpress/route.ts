@@ -1,10 +1,10 @@
 import { ok } from "@/lib/api/responses";
 import { parseBody, withPersonalAuth } from "@/lib/api/route";
-import { allowSite, siteHost } from "@/lib/connect/wordpress";
+import { prepareMapForSites } from "@/lib/connect/connect-map";
+import { siteHost } from "@/lib/connect/wordpress";
 import { embedScriptUrl } from "@/lib/embed/snippet";
-import { createMap, getMap, updateMap } from "@/lib/repositories/maps.repository";
+import { createMap, getMap } from "@/lib/repositories/maps.repository";
 import { RoleRequiredError } from "@/lib/repositories/errors";
-import { publishMap } from "@/lib/repositories/publish.repository";
 import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/team/active-cookie";
 import { resolveActiveContext, resolveMapContext } from "@/lib/team/resolve";
 import { can } from "@/lib/team/roles";
@@ -52,19 +52,18 @@ export const POST = withPersonalAuth(async ({ request, user }) => {
     throw new RoleRequiredError("Connecting a map publishes it, which needs editor access on its team.");
   }
 
-  let map =
+  const chosen =
     "create" in input.map
       ? // Parsed again for the defaults the Maps page's form gets: style, centre, zoom.
         await createMap(ctx, createMapSchema.parse({ name: input.map.name }))
       : await getMap(ctx, input.map.id);
 
-  const allowed = allowSite(map.allowedDomains, host);
-  if (allowed.kind === "added") {
-    map = await updateMap(ctx, map.id, { allowedDomains: allowed.domains });
-  }
-
-  const publish = !map.publishedAt || allowed.kind === "added";
-  if (publish) map = (await publishMap(ctx, map.id, origin)).map;
+  const { map, published: publish, siteRefused } = await prepareMapForSites(
+    ctx,
+    chosen,
+    [host],
+    origin,
+  );
 
   return ok({
     map: {
@@ -76,7 +75,7 @@ export const POST = withPersonalAuth(async ({ request, user }) => {
     },
     published: publish,
     /** The site could not be added because the list is full; the map won't show there. */
-    siteRefused: allowed.kind === "full",
+    siteRefused,
   });
   // The publish route's limit, because this can publish.
 }, { rateLimit: "publish" });

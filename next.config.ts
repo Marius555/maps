@@ -38,10 +38,11 @@ const adminHeaders = [
  * Sent on every response; the admin block below overrides the framing rule with
  * DENY for its own paths.
  *
- * - Framing is `'self'`, not `'none'`: the publish preview draws the embed in
- *   `srcdoc` iframes on our own pages. Nothing frames the dashboard from another
- *   site — the embed is a module script on the customer's page, never an iframe,
- *   and the WordPress plugin opens `/connect/wordpress` as a page.
+ * - Framing (`framingHeaders`, below) is `'self'`, not `'none'`: the publish
+ *   preview draws the embed in `srcdoc` iframes on our own pages. The one other
+ *   site that frames the dashboard is the Shopify admin, which `proxy.ts` lets in
+ *   per shop — the embed is a module script on the customer's page, never an
+ *   iframe, and the WordPress plugin opens `/connect/wordpress` as a page.
  * - `Referrer-Policy` because the password-reset secret sits in its page's URL,
  *   and a full URL must not leave for another origin in a `Referer` header.
  * - HSTS without `preload`: preload is a list that takes months to leave.
@@ -49,12 +50,26 @@ const adminHeaders = [
  *   script each need a carve-out, and a CSP that is wrong breaks the editor.
  */
 const securityHeaders = [
-  { key: "X-Frame-Options", value: "SAMEORIGIN" },
-  { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
+];
+
+/**
+ * The site-wide framing rule, kept apart because the Shopify app is
+ * the one thing allowed to frame the dashboard (docs/notes/shopify.md).
+ *
+ * A header set here beats the same header set by a route handler — measured:
+ * the bounce page's per-shop `frame-ancestors` came back as `'self'` — so it is
+ * not sent at all on `/shopify/**` (those routes set their own) or on a document
+ * the Shopify admin loaded (`embedded=1`). `proxy.ts` runs on every such
+ * document and sends either the shop's admin, with a verified token, or this
+ * same `'self'` rule — so no path is left frameable by omission.
+ */
+const framingHeaders = [
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
 ];
 
 /**
@@ -77,6 +92,17 @@ const nextConfig: NextConfig = {
    * refused the Authorization header with a 400, which is how it was found).
    */
   skipTrailingSlashRedirect: true,
+
+  /*
+   * `next dev` only: browser warnings and errors are printed in the terminal.
+   *
+   * The Shopify app runs inside the Shopify admin's iframe, where DevTools are
+   * one more context switch away and the CLI's session log is what anyone reads.
+   * An uncaught error there makes Next's HMR client reload the page on every
+   * update, which looks like an endless reload loop with no cause in sight
+   * (docs/notes/shopify.md). Off unless set (Next 16.2+).
+   */
+  logging: { browserToTerminal: "warn" },
 
   env: {
     NEXT_PUBLIC_APP_VERSION: build.version,
@@ -157,6 +183,11 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
+      {
+        source: "/:path((?!shopify(?:/|$)).*)",
+        missing: [{ type: "query", key: "embedded", value: "1" }],
+        headers: framingHeaders,
+      },
       { source: "/embed/:path*", headers: embedCorsHeaders },
       { source: "/maplibre/:path*", headers: embedCorsHeaders },
       // The gazetteer the embed's search fetches, on the same argument: static

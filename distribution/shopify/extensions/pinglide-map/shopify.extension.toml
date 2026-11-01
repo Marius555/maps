@@ -1,0 +1,7 @@
+# The storefront half of the Shopify app: a "Pinglide map" block merchants add
+# in the theme editor (App Store requirement 5.1.1 — theme changes go through a
+# theme app extension, never through editing theme files).
+name = "Pinglide map"
+handle = "pinglide-map"
+type = "theme"
+uid = "f795966e-19be-fb1e-833d-9f558e4c0a2b5e4edc08"

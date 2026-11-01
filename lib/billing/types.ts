@@ -30,6 +30,17 @@ import type { PlanId } from "@/lib/repositories/plan-limits";
 /** Monthly or yearly. The two shapes a plan is sold in. */
 export type BillingCadence = "monthly" | "yearly";
 
+/**
+ * Who bills a subscription: Lemon Squeezy for the web app, Shopify for a shop
+ * that installed the Shopify app (which must bill through Shopify — App Store
+ * requirement 1.2.1). Absent on a row means Lemon Squeezy, which is every row
+ * written before Shopify existed. Hand-kept in step with `BILLING_PROVIDERS`
+ * in `scripts/appwrite-schema.mjs`.
+ */
+export const BILLING_PROVIDERS = ["lemon", "shopify"] as const;
+
+export type BillingProviderId = (typeof BILLING_PROVIDERS)[number];
+
 /** A plan somebody can actually buy. `free` is not one of them. */
 export type PaidPlanId = Exclude<PlanId, "free">;
 
@@ -85,6 +96,11 @@ export type SubscriptionState = {
    * grants, which is `plan` alone.
    */
   cadence: BillingCadence | null;
+  /**
+   * Who bills it. Optional, and absent means Lemon Squeezy: the Lemon adapter
+   * never sets it, so nothing on the web path changed when Shopify arrived.
+   */
+  provider?: BillingProviderId;
 };
 
 /** What a plan switch asks the provider for. */

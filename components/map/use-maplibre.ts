@@ -8,6 +8,7 @@ import {
 } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { DEFAULT_MAX_FIT_ZOOM } from "@/lib/config";
 import { effectiveAppearance } from "@/lib/map/appearance";
 import { carryRuntimeLayers } from "@/lib/map/carry-style";
 import { resolveStyleUrl, type MapStyleKey } from "@/lib/map/style";
@@ -543,9 +544,6 @@ export function useMaplibre(
 
   return { map: mapRef, isReady, isUnsupported };
 }
-
-/** What the editor has always framed at, and so what everything else gets. */
-const DEFAULT_MAX_FIT_ZOOM = 14;
 
 /** One comparable string for "what the canvas is showing". */
 function lookKey(styleUrl: string, appearance: MapAppearance | null): string {

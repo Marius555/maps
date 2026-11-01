@@ -134,6 +134,13 @@ export function UserMenu({
         <Dropdown.Popover placement="top start" className="min-w-56">
           <Dropdown.Menu
             onAction={async (key) => {
+              // Inside Shopify a plan is bought on Shopify's own page, in the
+              // admin's top window (docs/notes/shopify.md, "Billing").
+              if (key === "upgrade" && user.shopify) {
+                window.open(user.shopify.pricingUrl, "_top");
+                return;
+              }
+
               const route = ROUTES[String(key)];
 
               if (route) {
@@ -209,13 +216,19 @@ export function UserMenu({
             </Dropdown.Item>
 
             {/* Directly above Log out, so the one row that ends the session is
-                set apart from everything that does not. */}
-            <Separator />
+                set apart from everything that does not. Not inside Shopify:
+                there is no session of ours to end — Shopify signs the merchant
+                in, and out. */}
+            {user.shopify ? null : (
+              <>
+                <Separator />
 
-            <Dropdown.Item id="logout" textValue="Log out" variant="danger">
-              <LogOut aria-hidden="true" className="size-4" />
-              <Label>Log out</Label>
-            </Dropdown.Item>
+                <Dropdown.Item id="logout" textValue="Log out" variant="danger">
+                  <LogOut aria-hidden="true" className="size-4" />
+                  <Label>Log out</Label>
+                </Dropdown.Item>
+              </>
+            )}
           </Dropdown.Menu>
         </Dropdown.Popover>
       </Dropdown>

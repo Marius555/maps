@@ -64,6 +64,8 @@ export const SUBSCRIPTION_STATUSES = [
 ];
 // Hand-copied from lib/billing/types.ts's BillingCadence, on the same terms.
 export const BILLING_CADENCES = ["monthly", "yearly"];
+// Hand-copied from lib/billing/types.ts's BILLING_PROVIDERS, on the same terms.
+export const BILLING_PROVIDERS = ["lemon", "shopify"];
 // Hand-copied from lib/notifications/types.ts, on the same terms.
 export const NOTIFICATION_KINDS = ["info", "success", "warning"];
 export const NOTIFICATION_AUDIENCES = ["all", "plan", "user"];
@@ -478,6 +480,10 @@ export const TABLES = [
       enumeration("keptPlan", PAID_PLANS),
       enumeration("keptCadence", BILLING_CADENCES),
       datetime("keptUntil"),
+      // Who bills this subscription. Optional with no default: absent is
+      // Lemon Squeezy, which is every row written before Shopify billing
+      // existed. Shopify rows are written by lib/billing/shopify-pricing.ts.
+      enumeration("provider", BILLING_PROVIDERS),
     ],
     indexes: [
       { key: "idx_subs_userId", type: "unique", columns: ["userId"], orders: ["asc"] },
@@ -490,6 +496,14 @@ export const TABLES = [
         type: "key",
         columns: ["billingCustomerId"],
         orders: ["asc"],
+      },
+      // The Shopify billing sweep: Shopify-billed rows whose period ends soon,
+      // re-read before they lapse (lib/shopify/plan-sync.ts).
+      {
+        key: "idx_subs_provider_period",
+        type: "key",
+        columns: ["provider", "currentPeriodEnd"],
+        orders: ["asc", "asc"],
       },
     ],
   },
@@ -879,6 +893,50 @@ export const TABLES = [
       },
       // "Invitations for you": every invite addressed to one confirmed address.
       { key: "idx_invites_email", type: "key", columns: ["email"], orders: ["asc"] },
+    ],
+  },
+  {
+    // A Shopify shop that installed the app, and the workspace it is.
+    //
+    // One row per shop, ever: a reinstall reuses it (clearing `uninstalledAt`),
+    // so a merchant who comes back within Shopify's 48 hours finds their maps.
+    // `workspaceId` is an Appwrite user made at install, with no password and
+    // no email of its own — nobody signs in as it; the ID token resolves to it
+    // (docs/notes/shopify.md). `email` is the shop's contact address, kept for
+    // display and support only.
+    //
+    // No access token column, deliberately: every Admin API call happens with a
+    // merchant in the app, so a token is exchanged when needed and held only in
+    // memory (lib/shopify/admin-api.ts). Admin client only, no permissions —
+    // the `memberships` posture.
+    id: "shopifyShops",
+    name: "Shopify shops",
+    columns: [
+      varchar("shop", 255, { required: true }),
+      // gid://shopify/Shop/<n> — what the Partner API names a shop by.
+      varchar("shopGid", 64),
+      varchar("workspaceId", 36, { required: true }),
+      varchar("name", 255),
+      varchar("email", 320),
+      varchar("primaryDomain", 255),
+      datetime("installedAt", { required: true }),
+      datetime("uninstalledAt"),
+      // When the plan was last read from Shopify — the App Home re-reads it
+      // when this is older than a few hours.
+      datetime("planCheckedAt"),
+      // Set by the shop/redact webhook; the hourly sweep deletes the
+      // workspace once it has passed.
+      datetime("redactAfter"),
+    ],
+    indexes: [
+      { key: "idx_shopify_shop", type: "unique", columns: ["shop"], orders: ["asc"] },
+      {
+        key: "idx_shopify_workspace",
+        type: "unique",
+        columns: ["workspaceId"],
+        orders: ["asc"],
+      },
+      { key: "idx_shopify_redact", type: "key", columns: ["redactAfter"], orders: ["asc"] },
     ],
   },
 ];

@@ -27,6 +27,8 @@ export const queryKeys = {
    * refreshes every key ending in "cardDesign".
    */
   cardDesign: (mapId: string) => ["maps", mapId, "cardDesign"] as const,
+  /** Whether a map is on its Shopify shop's storefront list — docs/notes/shopify.md. */
+  shopifyStorefront: (mapId: string) => ["maps", mapId, "shopifyStorefront"] as const,
   /** One page of the account's invoices, as the provider lists them. */
   invoices: (page: number) => ["invoices", page] as const,
   /** Who redeemed one discount code, a page at a time (operator console). */

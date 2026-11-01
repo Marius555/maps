@@ -8,6 +8,7 @@ import { UnauthorizedError } from "@/lib/repositories/errors";
 import { readsAsVerified } from "./email-gate";
 import { forgetSession, readCachedUser, rememberUser } from "./identity-cache";
 import { readSessionSecret } from "./session-cookie";
+import { shopifyUserFromRequest } from "./shopify-user";
 import type { AuthUser } from "./types";
 
 /**
@@ -21,11 +22,20 @@ import type { AuthUser } from "./types";
  *   minute does not ask Appwrite again. A sidebar navigation re-renders the page,
  *   not the layout, and used to pay a serial round trip before any of the page's
  *   own reads could start. Read that file before relying on how fresh this is.
+ *
+ * Two credentials, tried in order: our session cookie (the web app), then a
+ * Shopify ID token (a page inside the Shopify admin, where the cookie is never
+ * sent — `./shopify-user.ts`). A request carries one or the other; the cookie
+ * goes first so nothing on the web path changed.
  */
 export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   const secret = await readSessionSecret();
-  if (!secret) return null;
+  const fromCookie = secret ? await cookieUser(secret) : null;
 
+  return fromCookie ?? shopifyUserFromRequest();
+});
+
+async function cookieUser(secret: string): Promise<AuthUser | null> {
   const cached = readCachedUser(secret);
   if (cached) return cached;
 
@@ -53,7 +63,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
     }
     throw error;
   }
-});
+}
 
 export async function requireUser(): Promise<AuthUser> {
   const user = await getCurrentUser();

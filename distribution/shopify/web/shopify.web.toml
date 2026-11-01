@@ -1,0 +1,10 @@
+# `shopify app dev` starts this as the app's web process and tunnels to it.
+# It is our own dev server, started from the repo root — scripts/shopify-dev.mjs
+# points APP_URL at the tunnel so links, same-origin checks and the bounce page
+# use the address the admin actually loads.
+name = "pinglide-site"
+roles = ["frontend", "backend"]
+webhooks_path = "/api/webhooks/shopify"
+
+[commands]
+dev = "node ../../../scripts/shopify-dev.mjs"

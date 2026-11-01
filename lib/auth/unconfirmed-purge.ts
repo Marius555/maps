@@ -4,6 +4,7 @@ import { runDeletionStep } from "@/lib/account-deletion/step";
 import { deletionStoreFor } from "@/lib/account-deletion/store";
 import { listOwnedMapIds } from "@/lib/repositories/account-deletion.repository";
 import { ownerContext, ownWorkspace } from "@/lib/repositories/context";
+import { findShopByWorkspace } from "@/lib/repositories/shopify-shops.repository";
 import { getSubscription } from "@/lib/repositories/subscriptions.repository";
 import { listUnconfirmedUsers } from "./account";
 import { emailGateActive, readsAsVerified } from "./email-gate";
@@ -31,7 +32,9 @@ const store: UnconfirmedPurgeStore = {
 
   async mustKeep(userId) {
     if ((await listOwnedMapIds(ownerContext(userId))).length > 0) return true;
-    return (await getSubscription(ownWorkspace(userId))) !== null;
+    if ((await getSubscription(ownWorkspace(userId))) !== null) return true;
+    // A Shopify shop's account has no address to confirm (createShopAccount).
+    return (await findShopByWorkspace(ownWorkspace(userId))) !== null;
   },
 
   async deleteAccount(userId) {

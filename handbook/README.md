@@ -82,6 +82,8 @@ If `UPLOAD_EMBED_ON_BUILD=true` is set, every `npm run build` also runs `deploy:
 | Command | What it does | Needs |
 |---|---|---|
 | `npm run build:wordpress` | Zips `distribution/wordpress/pinglide` into `public/downloads/pinglide-wordpress.zip`. Every build does this too. | |
+| `npm run shopify:dev` | Runs the Shopify app locally: starts the site behind a temporary public address and installs the development app on your Shopify development store. See `docs/notes/shopify.md`. | |
+| `npm run shopify:deploy` | Sends the Shopify app settings and the "Pinglide map" theme block to Shopify. Run it after changing anything in `distribution/shopify`. | |
 
 **Test it locally (no WordPress account, no Docker):**
 

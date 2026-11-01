@@ -167,6 +167,31 @@ export async function listUnconfirmedUsers(input: {
   return users.map((user) => ({ id: user.$id, emailVerified: user.emailVerification }));
 }
 
+/**
+ * The account a Shopify shop's workspace lives in, made when the shop installs
+ * the app (`lib/shopify/install.ts`, docs/notes/shopify.md).
+ *
+ * **No email and no password**: nobody ever signs in as it. A merchant reaches
+ * it from inside the Shopify admin, where a Shopify ID token resolves to it, so
+ * there is nothing to log in with and nothing to reset. Marked verified because
+ * the email gate is about our own signups — and because the daily purge of
+ * unconfirmed accounts would otherwise delete a shop that had not made a map
+ * within the week (it also keeps any account a shop row names, belt and braces).
+ */
+export async function createShopAccount(name: string): Promise<string> {
+  const account = await admin.users.create({
+    userId: ID.unique(),
+    name: name.slice(0, 128),
+  });
+
+  await admin.users.updateEmailVerification({
+    userId: account.$id,
+    emailVerification: true,
+  });
+
+  return account.$id;
+}
+
 /** Flips `emailVerification` after a confirmation link has been spent. */
 export async function markEmailVerified(userId: string): Promise<AuthUser> {
   const account = await admin.users.updateEmailVerification({

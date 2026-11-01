@@ -12,7 +12,10 @@ emails.
   dashboard layout's `getCurrentUser()` and `requireUser()` in every `withAuth`
   handler all read it. Any flow that creates a session somewhere else — the
   Appwrite Web SDK's own storage above all — produces a user who is signed in on
-  the client and signed out everywhere that decides anything.
+  the client and signed out everywhere that decides anything. **The one other
+  credential is the Shopify ID token**, for pages inside the Shopify admin's
+  iframe, where this cookie is never sent; `getCurrentUser()` tries the cookie
+  first, and the token never becomes a cookie (docs/notes/shopify.md).
 - **`createOAuth2Token`, never `createOAuth2Session`.** The session variant asks
   Appwrite to set its own cookie on its own domain, which is precisely the
   invisible-session failure above.

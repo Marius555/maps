@@ -15,7 +15,7 @@ import { useRouteRequest } from "@/components/map/routes/use-route-request";
 import { useRoutability } from "@/components/map/routes/use-routability";
 import { SelectionBar } from "@/components/map/selection-bar";
 import { BulkTagMenu } from "@/components/tags/bulk-tag-menu";
-import { WORLD_BOUNDS } from "@/lib/config";
+import { DEFAULT_MAX_FIT_ZOOM, WORLD_BOUNDS } from "@/lib/config";
 import type { GeocodeCandidate } from "@/lib/geocoding/types";
 import { isDefaultView } from "@/lib/map/default-view";
 import { mapThemeClass } from "@/lib/map/style";
@@ -529,7 +529,12 @@ export function MapEditor({
     // This one *does* fly. It is a response to something the user just did, and
     // a jump would leave them wondering where their map went — unlike the
     // opening frame, which has no previous view to travel from.
-    mapHandle.current?.fitBounds(bounds);
+    //
+    // To the zoom a reload would open this map at, not the handle's own 17: a
+    // first location is nearly always one pin, a zero-area box, so the cap *is*
+    // the zoom, and 17 landed at building level with nothing around the pin to
+    // see — then the next reload framed the same pin at 14.
+    mapHandle.current?.fitBounds(bounds, { maxZoom: DEFAULT_MAX_FIT_ZOOM });
   }, [isMapReady, map, places, shapes]);
 
   /*

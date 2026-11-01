@@ -52,3 +52,15 @@ export const WORLD_BOUNDS = {
   east: 180,
   north: 78,
 } as const;
+
+/**
+ * How close the editor's canvas frames its content when it opens on it, which
+ * for a single location is the zoom it opens at (components/map/use-maplibre.ts).
+ *
+ * Here rather than beside that hook because the editor reads it too: the flight
+ * to a new map's first location has to land on the view a reload will open on.
+ * It used to fly to 17 — building level, nothing around the pin to see — and
+ * the next reload opened at 14. That hook imports MapLibre at module load, which
+ * cannot server-render, so the number cannot live there and be shared.
+ */
+export const DEFAULT_MAX_FIT_ZOOM = 14;

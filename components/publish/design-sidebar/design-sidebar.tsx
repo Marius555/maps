@@ -5,6 +5,7 @@ import { ChevronLeft, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { StorefrontPanel } from "@/components/shopify/storefront-panel";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { PropertyFold } from "@/components/ui/properties/property-fold";
@@ -273,6 +274,8 @@ export function DesignSidebar({
           </p>
         ) : null}
 
+        {/* Renders only inside the Shopify admin. */}
+        <StorefrontPanel mapId={map.id} />
         <ShareDialog
           map={map}
           places={places}

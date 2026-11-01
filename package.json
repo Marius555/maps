@@ -13,6 +13,8 @@
     "build:embed": "vite build --config embed/vite.config.mts && node scripts/copy-maplibre-worker.mjs && node scripts/check-embed-size.mjs && node scripts/write-embed-version.mjs",
     "check:embed-size": "node scripts/check-embed-size.mjs",
     "build:wordpress": "node scripts/build-wordpress-plugin.mjs",
+    "shopify:dev": "npx -y @shopify/cli@5.0.0 app dev --path distribution/shopify",
+    "shopify:deploy": "npx -y @shopify/cli@5.0.0 app deploy --path distribution/shopify",
     "build:gazetteer": "node scripts/build-gazetteer.mjs",
     "build:world-dots": "node scripts/build-world-dots.mjs",
     "build:disposable-domains": "node scripts/build-disposable-domains.mjs",

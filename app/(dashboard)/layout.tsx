@@ -6,7 +6,10 @@ import {
   SIDEBAR_COOKIE,
   SIDEBAR_MAP_COOKIE,
 } from "@/components/layout/sidebar/sidebar-cookies";
+import { ShopifyAppBridge } from "@/components/shopify/app-bridge";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { currentIdToken } from "@/lib/auth/shopify-user";
+import { env } from "@/lib/env";
 import { unseenTutorials } from "@/lib/auth/tutorial";
 import { ownWorkspace, type RepoContext } from "@/lib/repositories/context";
 import { sidebarMapId } from "@/lib/repositories/maps.repository";
@@ -23,7 +26,13 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    // From inside the Shopify admin with a shop that has no workspace yet (or
+    // any more): the App Home installs it. It bounces for a fresh token, since
+    // a redirected document carries none (docs/notes/shopify.md).
+    const shopify = await currentIdToken();
+    redirect(shopify ? `/shopify?embedded=1&shop=${shopify.shop}` : "/login");
+  }
 
   // Read server-side so the sidebar renders at its stored width on the first
   // paint. Doing this on the client would render expanded and then snap shut.
@@ -58,20 +67,24 @@ export default async function DashboardLayout({
   ]);
 
   return (
-    <AppShell
-      user={user}
-      plan={plan}
-      accountPlan={accountPlan}
-      personalPlan={bestPlan}
-      workspaces={workspaces}
-      activeWorkspaceId={ctx.workspaceId}
-      defaultCollapsed={isCollapsed}
-      defaultMapId={mapId}
-      // The overlays walk through creating and editing; a viewer does neither.
-      tutorials={ctx.role === "viewer" ? [] : tutorials}
-    >
-      {children}
-    </AppShell>
+    <>
+      {/* Only inside the Shopify admin (docs/notes/shopify.md). */}
+      {user.shopify ? <ShopifyAppBridge clientId={env.shopifyClientId} /> : null}
+      <AppShell
+        user={user}
+        plan={plan}
+        accountPlan={accountPlan}
+        personalPlan={bestPlan}
+        workspaces={workspaces}
+        activeWorkspaceId={ctx.workspaceId}
+        defaultCollapsed={isCollapsed}
+        defaultMapId={mapId}
+        // The overlays walk through creating and editing; a viewer does neither.
+        tutorials={ctx.role === "viewer" ? [] : tutorials}
+      >
+        {children}
+      </AppShell>
+    </>
   );
 }
 

@@ -1,0 +1,49 @@
+# The Pinglide Shopify app (docs/notes/shopify.md).
+#
+# The app itself is the Next.js site at the repo root — the admin pages, the App
+# Home (app/shopify/route.ts) and the webhooks all run there, on Appwrite Sites.
+# This folder holds only what Shopify keeps: this configuration and the theme
+# app extension. `npm run shopify:deploy` pushes both; once deployed, Shopify's
+# copy is what merchants get.
+#
+# This is the development app (the one `shopify app dev` installs on the dev
+# store). The production app gets its own `shopify.app.production.toml` when it
+# is created for the App Store submission.
+
+client_id = "9f5f7dafc4c98c5b372c8087f8d4b29d"
+name = "pinglide"
+# The site's root. proxy.ts sends `/?shop=…` to the App Home (/shopify), so
+# the landing page stays static for everybody else. `shopify app dev` swaps
+# this for its tunnel while it runs.
+application_url = "https://pinglide.com/"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[access_scopes]
+# Shopify managed installation: these are granted before the app first loads,
+# so the first load is the install (lib/shopify/install.ts). None yet — the app
+# writes only its own app-data metafield, which needs no scope. Ask for the
+# least: requesting what the app does not use fails App Store review.
+scopes = ""
+
+[auth]
+redirect_urls = ["https://pinglide.com/shopify"]
+
+[webhooks]
+api_version = "2026-10"
+
+  # Relative to application_url, so `shopify app dev` points them at its tunnel.
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/api/webhooks/shopify"
+
+  # The three every App Store app must answer.
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/api/webhooks/shopify"
+
+[pos]
+embedded = false

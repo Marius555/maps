@@ -112,8 +112,14 @@ export type MapHandle = {
    * `animate: false` is for framing that happens *on open* rather than in answer
    * to a click — there is no previous view to travel from, so the flight is a
    * journey nobody asked for and a delay before the map is usable.
+   *
+   * `maxZoom` caps how close a small box is framed; 17 when absent. A single
+   * pin is a zero-area box, so for one pin this *is* the zoom it lands on.
    */
-  fitBounds: (bounds: ShapeBounds, options?: { animate?: boolean }) => void;
+  fitBounds: (
+    bounds: ShapeBounds,
+    options?: { animate?: boolean; maxZoom?: number },
+  ) => void;
   /**
    * What a point on the screen is, geographically. `null` when that point is not
    * over the map at all — which is what a pin dragged out of the toolbar and
@@ -870,9 +876,17 @@ export default function MapCanvasImpl({
             padding: 64,
             // A degenerate box — a polygon whose points all coincide — has zero
             // area and would otherwise zoom to maximum.
-            maxZoom: 17,
-            duration:
-              options?.animate === false || prefersReducedMotion ? 0 : 700,
+            maxZoom: options?.maxZoom ?? 17,
+            /*
+             * No duration when animated: MapLibre derives one from the distance,
+             * so a short hop stays short and a flight in from the whole world
+             * can be followed. A fixed 700ms crossed fifteen zoom levels in a
+             * blur ("it flies so fast I can barely see"). The embed answers its
+             * cluster expansion the same way (docs/notes/publish-and-embed.md).
+             */
+            ...(options?.animate === false || prefersReducedMotion
+              ? { duration: 0 }
+              : {}),
             essential: true,
           },
         );
@@ -890,7 +904,9 @@ export default function MapCanvasImpl({
           zoom: Math.max(instance.getZoom(), options?.zoom ?? 15),
           // The flight is decoration for anyone who asked not to have it — the
           // point is arriving, so under reduced motion it just arrives.
-          duration: prefersReducedMotion ? 0 : 700,
+          // Otherwise no duration, so MapLibre derives it from the distance —
+          // see `fitBounds` above.
+          ...(prefersReducedMotion ? { duration: 0 } : {}),
           // Marks the movement as essential so the browser's own reduced-motion
           // handling does not cancel it and leave the camera where it was.
           essential: true,

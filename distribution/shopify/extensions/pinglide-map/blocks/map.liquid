@@ -1,0 +1,140 @@
+{%- comment -%}
+  A Pinglide map on a Shopify storefront (docs/notes/shopify.md, "Storefront").
+
+  Nothing here calls us when a visitor loads the page (CLAUDE.md §2). The map
+  list is an app-data metafield the app writes when a map is put on the
+  storefront — `app.metafields.pinglide.maps`:
+
+    { "default": "<mapId>", "script": "https://cdn.pinglide.com/embed/v1/map.js",
+      "maps": { "<mapId>": { "name": "…", "snapshot": "https://cdn.pinglide.com/…" } } }
+
+  — and the page loads `map.js` and the live snapshot from the CDN, exactly as a
+  pasted snippet does. The markup is the WordPress block's (render.php):
+  `script[type=text/plain][data-snapshot]` beside a canvas the embed sizes from
+  `data-height`, with a scoped `!important` rule for the phone height. No embed
+  change, so the embed's own-code budget is untouched.
+
+  "Map code" picks one of several maps; empty shows the app's default.
+{%- endcomment -%}
+
+{%- liquid
+  assign data = app.metafields.pinglide.maps.value
+  assign code = block.settings.map_code | strip
+  if code == blank
+    assign code = data.default
+  endif
+  assign map = data.maps[code]
+  assign script_url = data.script | default: 'https://cdn.pinglide.com/embed/v1/map.js'
+  assign id = 'pinglide-' | append: block.id
+  assign height = block.settings.height
+  assign phone_height = block.settings.phone_height
+-%}
+
+{%- if map and map.snapshot != blank -%}
+  <div id="{{ id }}" class="pinglide-map" {{ block.shopify_attributes }}>
+    <style>
+      #{{ id }}{overflow:hidden}
+      #{{ id }} .pinglide-map__canvas{height:{{ height }}px!important}
+      {%- if block.settings.different_phone_height %}
+        @media (max-width:749px){#{{ id }} .pinglide-map__canvas{height:{{ phone_height }}px!important}}
+      {%- endif %}
+    </style>
+    <script
+      type="text/plain"
+      data-snapshot="{{ map.snapshot | escape }}"
+      data-target="#{{ id }}-canvas"
+      data-height="{{ height }}"
+      {%- if block.settings.eager %} data-eager{% endif -%}
+    ></script>
+    <div id="{{ id }}-canvas" class="pinglide-map__canvas"></div>
+  </div>
+  <script type="module" src="{{ script_url | escape }}"></script>
+
+  {%- if request.design_mode -%}
+    {%- comment -%}
+      The theme editor re-renders a section in place, and a module runs once,
+      so a re-rendered block would stay empty. In the editor only, load map.js
+      again under a fresh query string: a new module instance boots every
+      `script[data-snapshot]` it has not mounted (embed/src/boot.ts).
+    {%- endcomment -%}
+    <script>
+      (function () {
+        if (window.__pinglideEditorReboot) return;
+        window.__pinglideEditorReboot = true;
+        var src = {{ script_url | json }};
+        var n = 0;
+        document.addEventListener("shopify:section:load", function () {
+          n += 1;
+          import(src + (src.indexOf("?") < 0 ? "?" : "&") + "r=" + n).catch(function () {});
+        });
+      })();
+    </script>
+  {%- endif -%}
+{%- elsif request.design_mode -%}
+  {%- comment -%}
+    Not set up yet. Merchants see a picture of a map and where to go; visitors
+    see nothing at all — no empty box with margins on a live page.
+  {%- endcomment -%}
+  <div class="pinglide-map pinglide-map--setup" {{ block.shopify_attributes }} style="position:relative;height:{{ height }}px;overflow:hidden;border-radius:8px;background:#e9edf0">
+    <img src="{{ 'placeholder.jpg' | asset_url }}" alt="" loading="lazy" width="1920" height="480" style="width:100%;height:100%;object-fit:cover;display:block">
+    <div style="position:absolute;inset:auto 16px 16px 16px;max-width:420px;padding:16px;border-radius:8px;background:#fff;color:#1a1a1a;font:14px/1.45 system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.12)">
+      {%- if code != blank and data.maps -%}
+        <strong style="display:block;margin-bottom:4px">No map with the code “{{ code | escape }}”</strong>
+        Check the code in Pinglide, or clear it to show your default map.
+      {%- else -%}
+        <strong style="display:block;margin-bottom:4px">Choose a map for this block</strong>
+        Open Pinglide, pick a map and press <em>Show on storefront</em>. It appears here.
+      {%- endif -%}
+      <a href="https://{{ shop.permanent_domain }}/admin/apps/pinglide/maps" target="_top" style="display:inline-block;margin-top:8px;color:#1a5fd6">Open Pinglide</a>
+    </div>
+    <small style="position:absolute;top:8px;right:8px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.85);color:#333;font:11px system-ui,sans-serif">© OpenStreetMap contributors</small>
+  </div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Pinglide map",
+  "target": "content",
+  "settings": [
+    {
+      "type": "text",
+      "id": "map_code",
+      "label": "Map code",
+      "info": "Leave empty to show your default map. For another map, copy its code from Pinglide's Show on storefront."
+    },
+    {
+      "type": "range",
+      "id": "height",
+      "label": "Height",
+      "min": 240,
+      "max": 1200,
+      "step": 10,
+      "unit": "px",
+      "default": 520
+    },
+    {
+      "type": "checkbox",
+      "id": "different_phone_height",
+      "label": "Use a different height on phones",
+      "default": false
+    },
+    {
+      "type": "range",
+      "id": "phone_height",
+      "label": "Height on phones",
+      "min": 240,
+      "max": 1200,
+      "step": 10,
+      "unit": "px",
+      "default": 420
+    },
+    {
+      "type": "checkbox",
+      "id": "eager",
+      "label": "Load the map straight away",
+      "info": "Off, the map loads as visitors scroll near it, which keeps the page fast.",
+      "default": false
+    }
+  ]
+}
+{% endschema %}

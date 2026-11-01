@@ -1,0 +1,7 @@
+{
+  "name": "pinglide-shopify",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Shopify app configuration and theme app extension. No dependencies: the CLI runs through npx from the root scripts (npm run shopify:dev / shopify:deploy).",
+  "type": "module"
+}

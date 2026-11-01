@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { SUBSCRIPTION_STATUSES as SCHEMA_STATUSES, PLANS } from "@/scripts/appwrite-schema.mjs";
+import {
+  BILLING_PROVIDERS as SCHEMA_PROVIDERS,
+  SUBSCRIPTION_STATUSES as SCHEMA_STATUSES,
+  PLANS,
+} from "@/scripts/appwrite-schema.mjs";
 import { MARKETING_PLANS } from "@/lib/marketing/plans";
-import { SUBSCRIPTION_STATUSES } from "./types";
+import { BILLING_PROVIDERS, SUBSCRIPTION_STATUSES } from "./types";
 
 /**
  * The seam between the TypeScript vocabulary and the database's own enum.
@@ -21,6 +25,12 @@ describe("subscription statuses", () => {
     expect([...SUBSCRIPTION_STATUSES].sort()).toEqual(
       [...(SCHEMA_STATUSES as string[])].sort(),
     );
+  });
+});
+
+describe("billing providers", () => {
+  it("are exactly the ones the column accepts", () => {
+    expect([...BILLING_PROVIDERS].sort()).toEqual([...(SCHEMA_PROVIDERS as string[])].sort());
   });
 });
 

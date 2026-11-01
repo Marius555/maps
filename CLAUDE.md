@@ -143,6 +143,17 @@ and is not done. Signup and Google sign-in now honour `?next=` for it. Its publi
 `/for/wordpress`, reached from the navbar's **Integrations** menu, which lists
 `lib/marketing/integrations.ts`. `docs/notes/distribution.md`.
 
+**A Shopify App Store app is in progress (2026-11-01), and it is not a thin wrapper.** The
+App Store requires billing through Shopify, an app embedded in the admin and no reliance on
+third-party cookies, so **the existing editor runs inside the Shopify admin's iframe**,
+authenticated by a **Shopify ID token** — a second credential beside our cookie, verified in
+`proxy.ts` and `getCurrentUser()`, never turned into a cookie. Each installed shop is its own
+workspace (an Appwrite user with no email or password, made on the App Home's first load);
+plans are Shopify App Pricing ($19 / $39), re-read from the Partner API because Shopify sends no
+billing webhooks; the storefront map is a theme app block reading an app-data metafield, with
+the WordPress block's markup and **no embed change**. No Admin API token is stored. Config and
+the block live in `/distribution/shopify`. `docs/notes/shopify.md`.
+
 **Team seats are the fourth call made against rivals, and they override §11** ("teams and
 permissions"). Every rival sells seats; a brand's map is worked on by more than one person.
 The owner invites by email from **Settings → Team** as admin, editor or viewer; the invitee
@@ -191,6 +202,8 @@ npm run test         # vitest run
 npm run e2e          # playwright, against next dev as the E2E_EMAIL account — e2e/README.md
 npm run docs:screenshots  # retake the /docs screenshots from the running app (both themes) — docs/notes/marketing.md
 npm run build:wordpress  # zip distribution/wordpress/pinglide -> public/downloads (also on prebuild)
+npm run shopify:dev      # shopify app dev: next dev behind the CLI's tunnel, dev app on the dev store — docs/notes/shopify.md
+npm run shopify:deploy   # push distribution/shopify (app config + theme block) to Shopify
 npm run build:embed  # vite build → public/embed, copy MapLibre runtime, check size, write version.json
 npm run release -- patch|minor|major  # bump, CHANGELOG, commit + tag (never pushes) — docs/notes/versioning.md
 npm run setup:appwrite  # create missing tables/columns/indexes from scripts/appwrite-schema.mjs
@@ -355,6 +368,11 @@ one exists: `docs/notes/environment.md`.
   password never has to be written down. Opens the console even with the `ADMIN_*` three
   unset. **Inert in a production build** by the same `NODE_ENV` check; `docs/notes/admin.md`.
 
+- Server-only, optional: `SHOPIFY_CLIENT_ID` + `SHOPIFY_CLIENT_SECRET` — **both or no
+  Shopify**: unset, no ID token verifies and the App Home and webhook refuse everybody. The
+  secret signs every ID token and webhook. `SHOPIFY_APP_HANDLE` (default `pinglide`), and
+  `SHOPIFY_PARTNER_API_TOKEN` / `SHOPIFY_PARTNER_ID` / `SHOPIFY_APP_ID` for plan
+  reconciliation — unset, Shopify plans are never re-read. `docs/notes/shopify.md`.
 - Server-only, optional: `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`, `ADMIN_SESSION_SECRET` — the
   operator console at `/admin`. **All three or no console**: unset, both its pages and its
   login route 404. The password is only ever a scrypt hash (`npm run admin:hash`), in a
@@ -476,6 +494,7 @@ you are working in the area — most of them exist to stop a specific bug coming
 | `scripts/deploy-site.mjs`, `.github/workflows/deploy.yml`, `output`/`typescript` in `next.config.ts` | `docs/notes/deploy.md` |
 | `scripts/release.mjs`, `scripts/upload-cdn.mjs`, `scripts/build-info.mjs`, `embed/channel.mjs`, `lib/version.ts`, `app/api/version/**`, `CHANGELOG.md` | `docs/notes/versioning.md` |
 | `distribution/**`, `lib/connect/**`, `components/connect/**`, `app/(auth)/connect/**`, `app/api/connect/**`, `lib/auth/oauth-next.ts` | `docs/notes/distribution.md` |
+| `distribution/shopify/**`, `lib/shopify/**`, `lib/auth/shopify-user.ts`, `app/shopify/**`, `app/api/webhooks/shopify/**`, `app/api/cron/shopify/**`, `app/api/maps/[id]/shopify-storefront/**`, `components/shopify/**`, `lib/billing/shopify-pricing.ts`, the Shopify half of `proxy.ts` | `docs/notes/shopify.md` |
 | `lib/team/**`, `lib/repositories/{memberships,invites}.repository.ts`, `lib/repositories/context.ts`, `app/api/{team,invites,workspaces}/**`, `app/(auth)/invite/**`, `app/(dashboard)/settings/team/**`, `components/team/**`, `components/user-settings/team/**`, the scopes in `lib/api/route.ts` | `docs/notes/team.md` |
 | `app/admin/**`, `app/(auth)/login/admin/**`, `app/api/admin/**`, `components/admin/**`, `lib/admin/**`, `lib/repositories/admin/**`, `lib/api-usage/**`, `lib/repositories/{api-calls,email-log}.repository.ts` | `docs/notes/admin.md` |
 

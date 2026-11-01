@@ -27,4 +27,5 @@ export const TABLES = {
   news: "news",
   memberships: "memberships",
   invites: "invites",
+  shopifyShops: "shopifyShops",
 } as const;

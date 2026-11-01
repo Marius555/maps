@@ -29,6 +29,12 @@
  * signup (docs/notes/auth.md, "Bot signups"). The site decides who goes; this
  * only drives the steps.
  *
+ * **And, every run, the Shopify sweep** (`/api/cron/shopify`,
+ * lib/shopify/plan-sync.ts): Shopify App Pricing sends no webhooks, so plans it
+ * changed or is about to renew are re-read from the Partner API here, and shops
+ * it asked us to erase are deleted. At most `SHOPIFY_BUDGET_MS`; a site with no
+ * Shopify app answers at once.
+ *
  * No dependencies: Node's own `fetch` is enough, and a function with no
  * `node_modules` deploys in seconds and has nothing to patch.
  *
@@ -52,6 +58,8 @@ const RETENTION_HOUR_UTC = 3;
 const RETENTION_BUDGET_MS = 120_000;
 /** The most of that run the unconfirmed-account purge may take. */
 const UNCONFIRMED_BUDGET_MS = 60_000;
+/** The most of every run the Shopify sweep may take. */
+const SHOPIFY_BUDGET_MS = 60_000;
 
 const syncDueMaps = async ({ res, log, error }) => {
   const appUrl = (process.env.APP_URL ?? "").replace(/\/+$/, "");
@@ -91,6 +99,8 @@ const syncDueMaps = async ({ res, log, error }) => {
     await purgeExpiredSessions(call, Date.now() + RETENTION_BUDGET_MS, { log, error });
     await purgeUnconfirmedAccounts(call, Date.now() + UNCONFIRMED_BUDGET_MS, { log, error });
   }
+
+  await sweepShopify(call, Date.now() + SHOPIFY_BUDGET_MS, { log, error });
 
   const { mapIds } = await call("GET");
   const summary = [];
@@ -176,6 +186,35 @@ async function purgeUnconfirmedAccounts(call, deadline, { log, error }) {
   log(
     `Unconfirmed accounts: ${deleted} deleted, ${kept} kept${more ? ", stopped at the budget; the next purge carries on" : ""}.`,
   );
+}
+
+/**
+ * Re-read Shopify plans and erase shops Shopify asked us to, step by step. A
+ * failure is logged and dropped: the next hour's run finds the same work.
+ */
+async function sweepShopify(call, deadline, { log, error }) {
+  let refreshed = 0;
+  let redacted = 0;
+  let failed = 0;
+  let more = false;
+
+  try {
+    do {
+      const step = await call("POST", {}, "/api/cron/shopify");
+      refreshed += step.refreshed;
+      redacted += step.redacted;
+      failed += step.failed;
+      more = step.more;
+    } while (more && Date.now() < deadline);
+  } catch (cause) {
+    error(`Shopify sweep: ${cause instanceof Error ? cause.message : String(cause)}`);
+  }
+
+  if (refreshed || redacted || failed || more) {
+    log(
+      `Shopify sweep: ${refreshed} plans re-read, ${redacted} shops erased, ${failed} failed${more ? ", stopped at the budget; the next run carries on" : ""}.`,
+    );
+  }
 }
 
 export default syncDueMaps;

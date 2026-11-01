@@ -202,4 +202,32 @@ export const env = {
       yearly: process.env.LEMON_VARIANT_PRO_YEARLY ?? "",
     },
   },
+  /**
+   * The Shopify app (docs/notes/shopify.md). **Both or no Shopify**: unset, no
+   * ID token verifies, the App Home and the webhook refuse everybody, and the
+   * dashboard is exactly the web app it was.
+   *
+   * The client id is not secret — App Bridge reads it from the page — but it is
+   * unprefixed and rendered by the server, so the build never needs it. The
+   * secret signs every ID token and every webhook, and must never reach a client.
+   */
+  shopifyClientId: process.env.SHOPIFY_CLIENT_ID ?? "",
+  shopifyClientSecret: process.env.SHOPIFY_CLIENT_SECRET ?? "",
+  /**
+   * The app's handle in admin URLs (`/apps/<handle>`, `/charges/<handle>/…`), as
+   * the Partner Dashboard shows it. Defaulted, because it is the app's name.
+   */
+  shopifyAppHandle: process.env.SHOPIFY_APP_HANDLE || "pinglide",
+  /**
+   * The Partner API, which is where Shopify App Pricing reports a shop's plan
+   * (it stopped sending subscription webhooks on 2026-04-28). A Partner API
+   * client token from the Partner Dashboard, the partner id, and the app's
+   * numeric id. Unset, plans are not reconciled and every shop
+   * reads as whatever its last stored state was — never as paid by default.
+   * The partner id is the number in the Partner Dashboard's URL, not the Dev
+   * Dashboard's organisation id.
+   */
+  shopifyPartnerApiToken: process.env.SHOPIFY_PARTNER_API_TOKEN ?? "",
+  shopifyPartnerId: process.env.SHOPIFY_PARTNER_ID ?? "",
+  shopifyAppId: process.env.SHOPIFY_APP_ID ?? "",
 } as const;

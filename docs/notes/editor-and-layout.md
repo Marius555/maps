@@ -430,6 +430,13 @@ rewritten; it is the record of why this area is shaped as it is.
   optimistic patch had landed, and the pin flashed back to where it was dragged from. The
   marker diff effect now depends on `canMove`, not on `onMove` — see the note on its
   dependencies in `use-place-markers.ts`.
+- **Editor flights take MapLibre's distance-derived duration, never a fixed one, and a new
+  map's first location lands at `DEFAULT_MAX_FIT_ZOOM` (14, `lib/config.ts`).** `MapHandle`'s
+  `flyTo` and `fitBounds` pass `duration` only as `0` (reduced motion, `animate: false`).
+  The first-location framing passes `maxZoom` because a single pin is a zero-area box, so the
+  cap *is* the zoom, and it must equal the one a reload opens at. A dropped pin's ripple
+  waits for `moveend` if the camera is moving. See "The first pin flew to building level in
+  700ms" below.
 
 ### Verifying a map in the browser
 
@@ -698,3 +705,29 @@ Two things this deliberately does not do. It does not serve dev over HTTPS — t
 real bug and would be one on any origin the moment something else is gated. And it does not
 touch `scripts/migrate-categories-to-tags.mjs`, which also calls `randomUUID`: that is a
 Node CLI script, where it has always existed and always will.
+
+## The first pin flew to building level in 700ms
+
+Reported from inside Shopify on 2026-11-01. The owner said there was "no fly animation
+when I drop pin, or at least it flies so fast I can barely see", and that it zoomed in "so
+hard that I can't see anything around". It was not a Shopify bug. It showed there first
+because every installed shop starts with one empty map, and this happens only on a map's
+first location.
+
+A default-view map with nothing on it opens on `WORLD_BOUNDS`. The first location triggers
+the editor's one-time framing flight, `mapHandle.fitBounds(bounds)` in `map-editor.tsx`.
+Three things then went wrong at once:
+
+- **The zoom came from a guard.** One pin is a zero-area box, so `fitBounds` zooms to its
+  `maxZoom`. That was 17, a guard meant for a degenerate polygon. A reload opened the same
+  map at 14 (`maxFitZoom` in `use-maplibre.ts`), so the flight and the reload disagreed.
+- **The duration was fixed.** The handle passed `duration: 700`. From zoom ≈1.5 to 17 is
+  fifteen levels in 0.7s. The embed had already fixed the same complaint for cluster
+  expansion by letting MapLibre derive the duration from the distance
+  (docs/notes/publish-and-embed.md). The editor now does the same.
+- **The ripple was spent mid-flight.** `playDrop` ran when the server's row replaced the
+  optimistic one, which is during the flight. The 420ms ripple was over before the camera
+  landed. `MapHandle.ripple` had always waited for `moveend`; the drop path now does too.
+
+`focusGroup` on a one-pin group still frames at the handle's default 17. It is a pick rather
+than a drop, and nobody has complained about it.

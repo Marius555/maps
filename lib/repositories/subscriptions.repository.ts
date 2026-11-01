@@ -40,6 +40,7 @@ export type SubscriptionRow = Models.Row & {
   keptPlan?: string | null;
   keptCadence?: string | null;
   keptUntil?: string | null;
+  provider?: string | null;
 };
 
 async function findRow(userId: string): Promise<SubscriptionRow | null> {
@@ -91,6 +92,8 @@ export async function getSubscription(
         row.cadence === "monthly" || row.cadence === "yearly" ? row.cadence : null,
       updatedAt: row.$updatedAt,
       kept: keptOf(row),
+      // Absent is Lemon Squeezy — every row written before Shopify billing.
+      provider: row.provider === "shopify" ? "shopify" : "lemon",
     };
   } catch (error) {
     throw toRepositoryError(error);
@@ -143,6 +146,9 @@ export async function upsertSubscription(
     billingSubscriptionId: state.billingSubscriptionId,
     currentPeriodEnd: state.currentPeriodEnd,
     cadence: state.cadence,
+    // Written only when the caller names one, so the Lemon webhook — which
+    // never does — leaves absent meaning what it always meant.
+    ...(state.provider ? { provider: state.provider } : {}),
     ...(kept === undefined
       ? {}
       : {
@@ -173,6 +179,36 @@ export async function upsertSubscription(
       data: { userId: state.userId, ...data },
       permissions: ownerPermissions(state.userId),
     });
+  } catch (error) {
+    throw toRepositoryError(error);
+  }
+}
+
+/**
+ * Shopify-billed workspaces whose running plan ends before `horizon` — the
+ * hourly sweep re-reads them from Shopify before `getUserPlan` would let them
+ * lapse, because Shopify sends nothing when it renews one
+ * (lib/shopify/plan-sync.ts).
+ */
+export async function listShopifySubscriptionsEndingBefore(
+  horizon: Date,
+  limit: number,
+): Promise<WorkspaceId[]> {
+  try {
+    const result = await admin.tablesDB.listRows<SubscriptionRow>({
+      databaseId: env.databaseId,
+      tableId: TABLES.subscriptions,
+      queries: [
+        Query.equal("provider", "shopify"),
+        Query.equal("status", "active"),
+        Query.isNotNull("currentPeriodEnd"),
+        Query.lessThan("currentPeriodEnd", horizon.toISOString()),
+        Query.orderAsc("currentPeriodEnd"),
+        Query.limit(limit),
+      ],
+    });
+
+    return result.rows.map((row) => row.userId as WorkspaceId);
   } catch (error) {
     throw toRepositoryError(error);
   }

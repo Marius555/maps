@@ -193,7 +193,18 @@ export function usePlaceMarkers({
 
       // Only a location someone just placed, and only once — see
       // lib/map/dropped-pins.ts for why creation is the wrong signal for this.
-      if (takeDropped(place.id)) playDrop(element);
+      //
+      // After any flight in progress has landed, as `MapHandle.ripple` waits:
+      // a new map's first location is flown to, and the 420ms ripple used to be
+      // spent mid-flight, over before the pin stopped under the eye. `moveend`
+      // also fires for a flight the user cuts short by dragging.
+      if (takeDropped(place.id)) {
+        if (instance.isMoving()) {
+          instance.once("moveend", () => playDrop(element));
+        } else {
+          playDrop(element);
+        }
+      }
 
       // A drag ends with a mouseup on the element, which the browser then
       // reports as a click. Without this flag, dropping a pin would also

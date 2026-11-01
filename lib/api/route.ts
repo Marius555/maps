@@ -17,7 +17,9 @@ import {
   RateLimitError,
   RepositoryError,
   RoleRequiredError,
+  UnauthorizedError,
 } from "@/lib/repositories/errors";
+import { bearerToken } from "@/lib/shopify/id-token";
 import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/team/active-cookie";
 import { resolveActiveContext, resolveMapContext } from "@/lib/team/resolve";
 import { can } from "@/lib/team/roles";
@@ -103,9 +105,22 @@ export function withAuth<Params = Record<string, never>>(
 
       return await handler({ request, params, user, ctx });
     } catch (error) {
-      return toErrorResponse(error);
+      return withShopifyRetry(request, error, toErrorResponse(error));
     }
   };
+}
+
+/**
+ * A 401 to a request that came from inside the Shopify admin asks App Bridge
+ * to fetch a fresh ID token and send the request again — the one-minute token
+ * can expire between being issued and arriving (docs/notes/shopify.md).
+ */
+function withShopifyRetry(request: NextRequest, error: unknown, response: NextResponse): NextResponse {
+  if (error instanceof UnauthorizedError && bearerToken(request.headers?.get("authorization"))) {
+    response.headers.set("X-Shopify-Retry-Invalid-Session-Request", "1");
+  }
+
+  return response;
 }
 
 type AuthOptions = {
