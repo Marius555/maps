@@ -10,9 +10,14 @@ import { stampVerificationSent } from "@/lib/auth/verify-throttle";
 import { greetingName } from "@/lib/email/greeting";
 import { sendEmail } from "@/lib/email/resend";
 import { verifyEmailMessage } from "@/lib/email/templates/verify-email";
+import { assertHuman } from "@/lib/turnstile/human-check";
 import { signupServerSchema } from "@/lib/validation/auth.server.schema";
 
 export const POST = withoutAuth(async (request) => {
+  // Before the body: a refused bot costs neither an account nor the DNS and
+  // DeBounce lookups the schema makes (lib/turnstile/human-check.ts).
+  await assertHuman(request);
+
   const input = await parseBody(request, signupServerSchema);
   const { user, session } = await registerUser(
     input,

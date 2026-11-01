@@ -103,6 +103,18 @@ export const env = {
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   emailFrom: process.env.RESEND_FROM || "onboarding@resend.dev",
   /**
+   * Cloudflare Turnstile's secret, which checks the token the signup and
+   * forgot-password forms send (`lib/turnstile/human-check.ts`). Its public half
+   * is `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, because the browser renders the widget.
+   *
+   * **Both or the check is off**, never a lockout: a secret with no site key
+   * would refuse every signup, since no form could ever produce a token. Unset
+   * is a clone or a self-hosted install, which is the email gate's posture with
+   * no Resend key. Development uses Cloudflare's always-pass test pair; the real
+   * pair is bound to pinglide.com and refuses localhost.
+   */
+  turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY ?? "",
+  /**
    * The origin every emailed link is built from.
    *
    * **Configured, never read off the request's `Host` header.** Forgot-password

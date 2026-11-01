@@ -8,6 +8,7 @@ import { createResetLink } from "@/lib/auth/tokens";
 import { greetingName } from "@/lib/email/greeting";
 import { sendEmail } from "@/lib/email/resend";
 import { resetPasswordMessage } from "@/lib/email/templates/reset-password";
+import { assertHuman } from "@/lib/turnstile/human-check";
 import { forgotPasswordSchema } from "@/lib/validation/auth.schema";
 
 /**
@@ -33,6 +34,10 @@ import { forgotPasswordSchema } from "@/lib/validation/auth.schema";
  * account, the link is on its way", which is exactly what this does.
  */
 export const POST = withoutAuth(async (request) => {
+  // A refusal here describes the caller, never the address, so it may differ
+  // from the 204 the way the 429 below may (lib/turnstile/human-check.ts).
+  await assertHuman(request);
+
   const { email } = await parseBody(request, forgotPasswordSchema);
 
   // Before the response, deliberately: a 429 is the one answer this route is

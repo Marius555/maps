@@ -18,7 +18,7 @@ import { welcomeMessage } from "./welcome";
  * HTML shows the text part and a text part with no URL in it is a dead end.
  */
 
-const LINK = "https://example.com/api/auth/verify-email?userId=u1&secret=s1";
+const LINK = "https://example.com/verify-email?userId=u1&secret=s1";
 
 const MESSAGES = [
   ["verify", verifyEmailMessage({ name: "Ada", url: LINK })],

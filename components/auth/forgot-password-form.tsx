@@ -6,6 +6,8 @@ import { MailCheck } from "lucide-react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 
+import { TurnstileSlot } from "@/components/auth/turnstile/turnstile-slot";
+import { useTurnstile } from "@/components/auth/turnstile/use-turnstile";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { FormTextField } from "@/components/ui/form-field";
 import { useForgotPassword } from "@/lib/query/auth";
@@ -17,6 +19,11 @@ import {
 
 export function ForgotPasswordForm() {
   const forgot = useForgotPassword();
+  const {
+    containerRef: turnstileRef,
+    getToken: getHumanToken,
+    reset: resetHumanCheck,
+  } = useTurnstile("forgot_password");
 
   const {
     control,
@@ -31,8 +38,10 @@ export function ForgotPasswordForm() {
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      await forgot.mutateAsync(values);
+      await forgot.mutateAsync({ input: values, humanToken: await getHumanToken() });
     } catch (error) {
+      // Spent on this attempt whatever went wrong; the next press needs a new one.
+      resetHumanCheck();
       applyFieldErrors(error, setError);
     }
   });
@@ -79,6 +88,8 @@ export function ForgotPasswordForm() {
         autoComplete="email"
         autoFocus
       />
+
+      <TurnstileSlot ref={turnstileRef} />
 
       <Button type="submit" fullWidth isPending={isSubmitting}>
         Email me a link

@@ -79,6 +79,22 @@ emails.
   the domain does not exist, or it has published nowhere to deliver. The
   alternative is a DNS wobble becoming a signup outage. The live lookup
   (`liveSaysDisposable`) keeps the same rule: a timeout or a bad answer is a pass.
+- **The bot check fails open on Cloudflare, closed on a bad token.** Signup and
+  forgot-password call `assertHuman` first (`lib/turnstile/human-check.ts`). A
+  missing, forged, expired or spent token is a 403 `human_check_failed`; a
+  timeout, a 5xx, `internal-error` or a secret Cloudflare does not recognise lets
+  the request through and logs it — a bot cannot make Cloudflare wobble, so
+  failing closed would only ever hurt people. Both keys or the check is off; one
+  key alone is off too, never a lockout. See *Bot signups* below.
+- **The confirmation link never confirms on a GET.** It opens `/verify-email`,
+  and the Confirm button there posts to `/api/auth/verify-email/confirm`. Mail
+  scanners open every link in a message; a link that confirmed on arrival let
+  them confirm bot signups for strangers, who then got the Welcome email too.
+  `GET /api/auth/verify-email` only forwards older links to the page.
+- **Unconfirmed accounts are deleted after seven days — only while the email
+  gate is on, and never one that owns a map or has a subscription row.** With
+  no Resend key an unconfirmed account is a working one. The daily step is
+  `lib/auth/unconfirmed-purge-step.ts`, driven by the scheduled function.
 - **Mail servers are judged against a curated list, never the vendored one.**
   `yandex.net` is on the vendored list; matching MX hosts against it would refuse
   every business on Yandex 360, and Cloudflare Email Routing and Google Workspace
@@ -586,6 +602,62 @@ a domain with no deploy, which is what you want when a real customer is locked
 out at 2am. `KEEP` in `scripts/build-disposable-domains.mjs` is the durable one:
 a name there survives the next regeneration, which the environment variable's
 effect does not depend on but a colleague's memory does.
+
+## Bot signups (2026-11)
+
+From 2026-10-24, before the site was announced anywhere, 127 accounts arrived in
+nine days, peaking at 34 on 29 October. None ever confirmed. The addresses were
+real people's at Hotmail, Gmail, Yahoo and assorted companies, plus Gmail dot
+variants of one inbox (`agihiquziy39@` and `a.g.i.h.i.quziy.39@`), so every
+address check passed them, correctly. It was **signup bombing**: strangers'
+addresses typed into every form a bot can find, to bury something in their
+inbox. A new domain is found within minutes through Certificate Transparency
+logs; "not published" does not mean "not discovered".
+
+**How it was traced, since the obvious tool is missing.** `users.listLogs` 404s
+on this Appwrite plan, and a session's IP is our server's (see the invariants),
+so neither the bot's address nor Appwrite's audit trail is available. What was:
+
+- every one of the 127 had exactly one session, created within 5 seconds of the
+  account — the shape `/api/auth/signup` leaves — and a `verify` row in
+  `emailLog` within 60 seconds, matched on the masked recipient. So they came
+  through our form, not straight at Appwrite's API with the public project id;
+- the forwarded browser strings were fake: 99 claimed Chrome 142, a year old,
+  and the rest Internet Explorer 5–8 on Windows XP and 2000, or nothing;
+- all 27 password-reset emails in the same window went to these addresses;
+- four company addresses were confirmed in the minute they were created and
+  never used again — their mail scanners opening the link, which confirmed on
+  GET then, and which mailed each of them the Welcome as well.
+
+About 158 unwanted emails left our domain. Nothing got in, because an
+unconfirmed account cannot write; the cost was sending reputation, and the
+email gate makes that load-bearing: a confirmation in junk is a customer who
+cannot use the product.
+
+Three changes answered it, one per failure:
+
+1. **Cloudflare Turnstile on signup and forgot-password** — the two forms that
+   mail a stranger. Managed mode with `appearance: "interaction-only"`: invisible
+   unless Cloudflare wants a click, then a checkbox directly above the button.
+   The token travels in `x-turnstile-token`, so neither form's Zod schema
+   changed. No npm wrapper (§3): `components/auth/turnstile/` is the loader, a
+   hook and a slot. The widget's sitekey is bound to pinglide.com, so
+   development uses Cloudflare's always-pass test pair, which also keeps the
+   e2e suite working; `2x0000000000000000000000000000000AA` as the secret makes
+   every check fail, and `3x00000000000000000000FF` as the sitekey forces the
+   checkbox to show. Test keys answer `action: "test"` and
+   `hostname: "localhost"` whatever was asked, which is why neither is compared.
+   Resend-verification is not covered: it only mails an account that already
+   exists and is throttled on the account itself.
+2. **Confirm by button press.** See the invariant. The page carries a live
+   secret in its URL now, as `/reset-password` always did, so
+   `lib/posthog/redact.ts` strips `secret=` from every URL property, which
+   closed the reset page's leak too.
+3. **The daily purge.** The bot accounts were deleted by hand on 2026-11-01,
+   with the five real ones left. From then on, anything unconfirmed after seven
+   days goes in the 03:00 UTC run of the scheduled function. The cursor moves
+   only past *kept* accounts, because Appwrite refuses a cursor naming a deleted
+   row. A real person who misses the week signs up again.
 
 ## The throttle is friction, not a guarantee — except on resend
 

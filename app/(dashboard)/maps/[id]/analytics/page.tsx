@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 
 import {
   MeasurementOffEmpty,
-  NoVisitsYetEmpty,
   NotPublishedEmpty,
   PlanRequiredEmpty,
 } from "@/components/analytics/analytics-empty";
@@ -67,6 +66,8 @@ export const metadata: Metadata = { title: "Analytics" };
  * then the tables in one tabbed card. Every card is drawn only when it has
  * something in it, and its neighbour takes the room — `PairRow` and
  * `BreakdownGrid` hold that rule, `detail-tabs.tsx` holds it for the tables.
+ * The exception is a period with no visits at all: the four headline cards,
+ * Traffic and the rates are drawn at zero and nothing below them is.
  */
 export default async function MapAnalyticsPage(
   props: PageProps<"/maps/[id]/analytics">,
@@ -143,8 +144,6 @@ export default async function MapAnalyticsPage(
         <NotPublishedEmpty mapId={map.id} />
       ) : !isMeasuring ? (
         <MeasurementOffEmpty mapId={map.id} />
-      ) : !analytics.view.hasData ? (
-        <NoVisitsYetEmpty range={RANGE_LABELS[range]} />
       ) : (
         <Report map={map} data={analytics} range={range} tab={tab} />
       )}
@@ -167,6 +166,34 @@ function Report({
   const rangeLabel = RANGE_LABELS[range];
   const hasEngagement = engagementSeries(view).length > 0;
 
+  const traffic = (
+    <TrafficCard
+      daily={view.daily}
+      totals={{
+        sessions: view.totals.sessions.value,
+        visitors: view.totals.visitors.value,
+        opens: view.totals.opens.value,
+        searches: view.totals.searches.value,
+      }}
+      range={rangeLabel}
+    />
+  );
+
+  /*
+   * A quiet period is a dashboard at zero, not an empty state: the headline
+   * row, the traffic line and the rates say "nothing happened" in the same
+   * places they say everything else. The cards below them have nothing to
+   * break down, so they wait for visits.
+   */
+  if (!view.hasData) {
+    return (
+      <div className="space-y-4 pb-16">
+        <KpiStrip view={view} range={range} />
+        <PairRow main={traffic} side={<RatesCard view={view} includeEmpty />} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 pb-16">
       {data.truncated ? (
@@ -179,18 +206,7 @@ function Report({
       <KpiStrip view={view} range={range} />
 
       <PairRow
-        main={
-          <TrafficCard
-            daily={view.daily}
-            totals={{
-              sessions: view.totals.sessions.value,
-              visitors: view.totals.visitors.value,
-              opens: view.totals.opens.value,
-              searches: view.totals.searches.value,
-            }}
-            range={rangeLabel}
-          />
-        }
+        main={traffic}
         side={ratesOf(view).length > 0 ? <RatesCard view={view} /> : null}
       />
 

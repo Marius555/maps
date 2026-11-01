@@ -268,6 +268,23 @@ export class RateLimitError extends RepositoryError {
   }
 }
 
+/**
+ * Thrown when a form that mails a stranger arrives without a passing Cloudflare
+ * Turnstile token — `lib/turnstile/human-check.ts`.
+ *
+ * Its own code rather than a `ForbiddenError` because the remedy is different:
+ * nothing about the account or the address is wrong, the check above the
+ * button simply has not finished or has to be done again, and the form resets
+ * the widget on any failure so a second press gets a fresh token.
+ */
+export class HumanCheckError extends RepositoryError {
+  constructor(
+    message = "We couldn't confirm you're a person. Try again — if it keeps happening, reload the page.",
+  ) {
+    super("human_check_failed", message, 403);
+  }
+}
+
 /** "12 seconds", "3 minutes" — rounded up, never "0 seconds". */
 export function waitPhrase(seconds: number): string {
   const whole = Math.max(1, Math.ceil(seconds));

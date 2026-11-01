@@ -136,6 +136,13 @@ and a second function would be a second deploy for one HTTP loop.
 `docs/notes/analytics.md`, "Retention". Redeploying the function
 (`npm run setup:sheet-sync`) is what turns the purge on.
 
+**And, in that same run, the unconfirmed-account purge** (since 2026-11-01): after
+the sessions it walks `POST /api/cron/unconfirmed-accounts { cursor }` for at most
+a minute, until a step answers `more: false`. That deletes accounts that never
+confirmed their address in a week, which are mostly bots signing strangers up.
+The site decides who goes (`lib/auth/unconfirmed-purge-step.ts`); the function
+only drives the steps. `docs/notes/auth.md`, "Bot signups".
+
 Every cron call requires `Authorization: Bearer $CRON_SECRET`
 (`lib/api/cron-auth.ts`), and all of them refuse when `CRON_SECRET` is unset on
 the site. An open trigger would let a stranger spend

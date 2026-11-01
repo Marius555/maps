@@ -71,7 +71,14 @@ route, with no exemption list, because everything that must answer an unconfirme
 banner explaining the freeze can render, and **the gate switches itself off when
 `RESEND_API_KEY` is unset**, since a link nobody can send would lock every account forever.
 This overrides §13.4 knowingly; the argument and the three places the UI says so are in
-`docs/notes/auth.md`.
+`docs/notes/auth.md`. **Since a signup-bombing bot arrived (2026-10-24, 127 accounts in nine
+days)**, three more things are in place:
+- **Cloudflare Turnstile guards signup and forgot-password.** It fails open on a Cloudflare
+  outage and closed on a bad token.
+- **The emailed link confirms only on a button press**, because mail scanners open links.
+- **Accounts left unconfirmed for seven days are deleted daily**, only while the gate is on.
+
+`docs/notes/auth.md`, "Bot signups".
 
 **Auth and transactional email are done, and are the first of Week 4 to land.** A split
 `app/(auth)` group — a drawn map panel on one half, the form on the other — carrying
@@ -298,6 +305,10 @@ one exists: `docs/notes/environment.md`.
   never on show; one on screen at a time; the overlay's "Don't show tips again" writes all four). Not production-inert: it bypasses nothing.
 - Server-only, optional: `ANALYTICS_SALT` — salts the anonymous monthly visitor key behind
   unique and returning visitors; unset, derived from `APPWRITE_API_KEY`.
+- Optional, together: `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` — the bot check
+  on signup and forgot-password. **Both or it is off.** Production's pair lives only on the
+  Site (the site key as a non-secret variable, so the build can inline it). Develop with
+  Cloudflare's always-pass test pair, because the real key refuses localhost.
 - Browser-safe, optional: `NEXT_PUBLIC_COLLECT_URL` — where a published map posts what its
   visitors did. Unset means the dashboard's own origin, which is what makes development and
   self-hosting work with no config. **Absolute, always**: the embed runs on a customer's
@@ -779,7 +790,7 @@ HeroUI defaults are the starting point, not the destination. Pick a type pairing
 - Zod schema per feature in `/lib/validation`, used by both React Hook Form and the server action. Never validate only on the client.
 - Every Appwrite call is wrapped in a repository method with an explicit return type.
 - Appwrite secrets are server-only. The browser SDK gets the public endpoint and project ID, nothing else.
-- Feature branches, conventional commits.
+- Commit straight to `main` — never create a branch, local or remote. Conventional commits.
 - Write tests for: CSV column mapping, geocode result handling, plan-limit enforcement, snapshot generation. Skip tests for UI layout.
 
 ---

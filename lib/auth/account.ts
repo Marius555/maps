@@ -144,6 +144,29 @@ export async function findUserByEmail(
   return users[0] ?? null;
 }
 
+/**
+ * Accounts that never confirmed their address and were made before
+ * `registeredBefore`, a page at a time — what `lib/auth/unconfirmed-purge.ts`
+ * deletes. Raw `emailVerification`, deliberately not `readsAsVerified`: the
+ * caller decides what a development bypass means for deleting anything.
+ */
+export async function listUnconfirmedUsers(input: {
+  registeredBefore: string;
+  cursor: string | null;
+  limit: number;
+}): Promise<{ id: string; emailVerified: boolean }[]> {
+  const { users } = await admin.users.list({
+    queries: [
+      Query.equal("emailVerification", false),
+      Query.lessThan("registration", input.registeredBefore),
+      Query.limit(input.limit),
+      ...(input.cursor ? [Query.cursorAfter(input.cursor)] : []),
+    ],
+  });
+
+  return users.map((user) => ({ id: user.$id, emailVerified: user.emailVerification }));
+}
+
 /** Flips `emailVerification` after a confirmation link has been spent. */
 export async function markEmailVerified(userId: string): Promise<AuthUser> {
   const account = await admin.users.updateEmailVerification({

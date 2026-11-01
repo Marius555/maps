@@ -2,106 +2,55 @@ import { after, NextResponse } from "next/server";
 
 import { noContent } from "@/lib/api/responses";
 import { parseBody, withoutAuth } from "@/lib/api/route";
-import {
-  findUserByEmail,
-  isEmailVerified,
-  markEmailVerified,
-  revokeSession,
-} from "@/lib/auth/account";
+import { findUserByEmail } from "@/lib/auth/account";
 import { rateLimit } from "@/lib/rate-limit/limiter";
 import { RateLimitError } from "@/lib/repositories/errors";
-import { consumeToken, createVerificationLink } from "@/lib/auth/tokens";
+import { createVerificationLink } from "@/lib/auth/tokens";
 import { mayResendVerification, stampVerificationSent } from "@/lib/auth/verify-throttle";
 import { greetingName } from "@/lib/email/greeting";
 import { sendEmail } from "@/lib/email/resend";
 import { verifyEmailMessage } from "@/lib/email/templates/verify-email";
-import { welcomeMessage } from "@/lib/email/templates/welcome";
 import { env } from "@/lib/env";
 import { forgotPasswordSchema } from "@/lib/validation/auth.schema";
 
 /**
- * The target of the link in the confirmation email, and the button that sends a
+ * Where confirmation links pointed until 2026-11-01, and the button that sends a
  * fresh one.
  *
- * **GET redirects to a page and never renders an error itself.** The person
- * clicking has no idea they are hitting an API route, so a JSON envelope here
- * would be the flow's one dead end; `/verify-email` owns every outcome the user
- * sees, and this handler's whole vocabulary is a `status` query parameter.
+ * **GET confirms nothing any more; it forwards to the page.** It used to spend
+ * the token and confirm the address on the spot, and company mail scanners —
+ * which open every link in a message to check it — confirmed bot signups for
+ * strangers that way, who then got a Welcome email as well. New links point at
+ * `/verify-email` itself, where a Confirm button posts to
+ * `/api/auth/verify-email/confirm`; this forward keeps links already sitting in
+ * inboxes (they last 24 hours) working, and costs nothing to keep.
  *
- * **It redirects to `/verify-email`, not to `/maps`, and that is deliberate.**
- * The session cookie is `sameSite: "strict"` and the click arrives from a mail
- * client, which makes it a cross-site navigation — a classification browsers
- * carry through a server redirect chain. Sending them straight to `/maps` would
- * hand `proxy.ts` a request with no cookie visible on it and bounce a
- * just-verified user to the login page. `/verify-email` is outside the proxy's
- * matcher, so it renders, and the button on it is a same-site navigation that
- * does carry the cookie.
- *
- * **A spent token on an already-confirmed account lands on "ok", not "expired".**
- * Mail scanners and link previewers open the link before the person does, which
- * confirms the address and spends the single-use token — so the person's own
- * first press used to say "expired" about an account that had just been
- * confirmed. The link already names the user, so saying they are confirmed tells
- * its holder nothing new.
+ * **It redirects to `/verify-email`, never to `/maps`.** The click arrives from a
+ * mail client, a cross-site navigation that browsers carry through a redirect
+ * chain, so the Strict session cookie is not visible on it; `/verify-email` is
+ * outside `proxy.ts`'s matcher and renders regardless (docs/notes/auth.md, *The
+ * SameSite trap*).
  */
 export const GET = withoutAuth(async (request) => {
   const url = new URL(request.url);
   const userId = url.searchParams.get("userId");
   const secret = url.searchParams.get("secret");
 
-  const landing = (status: "ok" | "expired") =>
-    NextResponse.redirect(new URL(`/verify-email?status=${status}`, env.appUrl));
+  const target = new URL("/verify-email", env.appUrl);
 
-  if (!userId || !secret) return landing("expired");
-
-  try {
-    const session = await consumeToken(
-      userId,
-      secret,
-      request.headers.get("user-agent") ?? undefined,
-    );
-    const user = await markEmailVerified(userId);
-
-    // Confirming does **not** sign this browser in, and the session the token
-    // bought is thrown away. A link is a credential for whoever holds it, and
-    // anybody can get one for their own account — so a link that signed in
-    // whoever clicked it would let a stranger send theirs to someone else and
-    // have that person working, unknowingly, inside the stranger's account
-    // (login CSRF). The common case loses nothing: whoever signed up in this
-    // browser still holds the cookie signup set, which this redirect never
-    // touches. A different browser lands signed out and logs in once.
-    await revokeSession(session.secret);
-
-    // The welcome only now — at signup it would have arrived alongside the
-    // confirmation email saying overlapping things and competing for the click.
-    //
-    // `after` rather than a floating promise: this is a redirect, so the user is
-    // gone the instant it is written, and on a serverless host a bare `void`
-    // send would be cut off with the invocation.
-    after(() =>
-      sendEmail({
-        template: "welcome",
-        to: user.email,
-        ...welcomeMessage({
-          name: greetingName(user.name, user.email),
-          // Not `/maps`: a press in a mail client is cross-site, the Strict
-          // session cookie stays behind, and `proxy.ts` answers with the login
-          // form. This page is outside its matcher and links on same-site.
-          url: `${env.appUrl}/verify-email?status=ok`,
-        }),
-      }),
-    );
-
-    return landing("ok");
-  } catch {
-    return landing((await isEmailVerified(userId)) ? "ok" : "expired");
+  if (userId && secret) {
+    target.searchParams.set("userId", userId);
+    target.searchParams.set("secret", secret);
+  } else {
+    target.searchParams.set("status", "expired");
   }
+
+  return NextResponse.redirect(target);
 }, { rateLimit: "authToken" });
 
 /**
- * Link checkers ask with HEAD, and Next answers a HEAD by running GET — which
- * would spend the token on a request nobody sees the answer to. This one spends
- * nothing.
+ * Link checkers ask with HEAD, and Next answers a HEAD by running GET. Nothing
+ * is spent by either now, but a HEAD has no use for the redirect.
  */
 export function HEAD() {
   return new Response(null, { status: 200 });

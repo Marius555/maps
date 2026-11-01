@@ -30,8 +30,15 @@ type RateEntry = {
  * A share with nothing to divide by is left out rather than drawn as 0%, and
  * the card itself is not drawn when all three are — see `ratesOf`.
  */
-export function RatesCard({ view }: { view: AnalyticsView }) {
-  const entries = ratesOf(view);
+export function RatesCard({
+  view,
+  includeEmpty = false,
+}: {
+  view: AnalyticsView;
+  /** A period with no visits: every share drawn at 0% rather than left out. */
+  includeEmpty?: boolean;
+}) {
+  const entries = ratesOf(view, { includeEmpty });
 
   return (
     <SectionCard
@@ -83,8 +90,14 @@ export function RatesCard({ view }: { view: AnalyticsView }) {
   );
 }
 
-/** The shares worth drawing — every one with a denominator. */
-export function ratesOf(view: AnalyticsView): RateEntry[] {
+/**
+ * The shares worth drawing — every one with a denominator, or all of them with
+ * `includeEmpty`, for a period with no visits where 0 of 0 is the true answer.
+ */
+export function ratesOf(
+  view: AnalyticsView,
+  { includeEmpty = false }: { includeEmpty?: boolean } = {},
+): RateEntry[] {
   const all: RateEntry[] = [
     {
       key: "bounce",
@@ -113,5 +126,5 @@ export function ratesOf(view: AnalyticsView): RateEntry[] {
     },
   ];
 
-  return all.filter((entry) => entry.rate.share !== null);
+  return includeEmpty ? all : all.filter((entry) => entry.rate.share !== null);
 }

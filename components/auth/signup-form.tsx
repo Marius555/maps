@@ -8,6 +8,8 @@ import { useForm } from "react-hook-form";
 
 import { AuthDivider } from "@/components/auth/auth-divider";
 import { GoogleButton } from "@/components/auth/google-button";
+import { TurnstileSlot } from "@/components/auth/turnstile/turnstile-slot";
+import { useTurnstile } from "@/components/auth/turnstile/use-turnstile";
 import { LegalConsentNotice } from "@/components/brand/legal-consent-notice";
 import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
 import { track } from "@/lib/posthog/client";
@@ -19,6 +21,11 @@ import { signupSchema, type SignupInput } from "@/lib/validation/auth.schema";
 export function SignupForm({ redirectTo = null }: { redirectTo?: string | null }) {
   const router = useRouter();
   const signup = useSignup();
+  const {
+    containerRef: turnstileRef,
+    getToken: getHumanToken,
+    reset: resetHumanCheck,
+  } = useTurnstile("signup");
 
   const {
     control,
@@ -46,13 +53,17 @@ export function SignupForm({ redirectTo = null }: { redirectTo?: string | null }
    */
   const onSubmit = handleSubmit(async (values) => {
     try {
-      await signup.mutateAsync(values);
+      await signup.mutateAsync({ input: values, humanToken: await getHumanToken() });
       track("user_signed_up");
       // Somewhere that asked to have them back — `/connect/wordpress` — shows its
       // own "check your inbox" and carries on once they have.
       router.replace(redirectTo ?? "/verify-email?status=sent");
       router.refresh();
     } catch (error) {
+      // The token was spent on this attempt whatever went wrong, so the next
+      // press needs a new one.
+      resetHumanCheck();
+
       // The login form's rule: what just failed is a toast, and a field-level
       // 422 (a throwaway address, a taken one) still lands on its field.
       if (!applyFieldErrors(error, setError)) {
@@ -108,6 +119,8 @@ export function SignupForm({ redirectTo = null }: { redirectTo?: string | null }
             </Link>
           </p>
         </div>
+
+        <TurnstileSlot ref={turnstileRef} />
 
         <Button type="submit" fullWidth isPending={isSubmitting}>
           Create account

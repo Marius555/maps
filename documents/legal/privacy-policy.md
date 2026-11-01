@@ -26,7 +26,7 @@ people on a large scale (Article 37(1) GDPR). We will review that as the Service
 | What we do | Personal data | Legal basis | How long we keep it |
 |---|---|---|---|
 | **Run your account** | Name, email address, password (stored only as a salted Argon2 hash, never readable), your Plan and account settings. If you choose "Continue with Google": the account identifier, name and email address Google shares with us | (b) contract | For the life of your account, then as in §8 |
-| **Sign you in and keep accounts secure** | Session records: IP address, browser, operating system, device type, country, and times. The sign-in cookie (see the [Cookie Policy]({{legal.cookiesUrl}})). Records of password-reset and email-confirmation requests | (f) our legitimate interest in keeping the Service and accounts secure | Session records until the session ends or expires (at most 1 year); security records up to 12 months |
+| **Sign you in and keep accounts secure** | Session records: IP address, browser, operating system, device type, country, and times. The sign-in cookie (see the [Cookie Policy]({{legal.cookiesUrl}})). Records of password-reset and email-confirmation requests. When you sign up or ask for a password reset, the signals Cloudflare Turnstile checks to tell people from automated programs: IP address and characteristics of your browser and device | (f) our legitimate interest in keeping the Service and accounts secure | Session records until the session ends or expires (at most 1 year); security records up to 12 months |
 | **Send service emails** — confirming your address, resetting your password, and notices about your account, billing and changes to our terms | Email address, name, message content, delivery status | (b) contract; (c) legal obligation, for notices the law requires | Delivery logs as kept by our email provider, which deletes them automatically after a short period (currently 30 days) |
 | **Host what you put into the Service** | Customer Content, which may include personal data such as contact names, phone numbers, email addresses and photos | We process it for our customer under our [Data Processing Agreement]({{legal.dpaUrl}}). For your own details in it: (b) contract | As set out in §8 |
 | **Bill paid Plans** | The Merchant of Record handles payment details — we never see card numbers. We receive: name, email address, company name, billing country and address, VAT number, Plan, amounts and subscription status | (b) contract; (c) accounting and tax law | Accounting records for 10 years, as Lithuanian accounting law requires; the rest for the life of your account |
@@ -66,7 +66,7 @@ Plan; and from your browser, when you use our website and dashboard.
 | Plus Five Five, Inc. (Resend) | Sending service emails | United States | EU Standard Contractual Clauses and the EU-US Data Privacy Framework |
 | PostHog Inc. | Measuring how our website and dashboard are used, and reporting errors | European Union — Frankfurt, Germany | EU hosting; EU Standard Contractual Clauses under PostHog's data processing agreement for any access from outside the EEA |
 | Geoapify GmbH | Placing addresses you import on the map, and calculating routes you draw | Germany and Finland | European Economic Area |
-| Cloudflare, Inc. | Storing and delivering published map files | Global network; United States company | EU Standard Contractual Clauses and the EU-US Data Privacy Framework |
+| Cloudflare, Inc. | Storing and delivering published map files; checking that sign-up and password-reset requests come from people (Turnstile) | Global network; United States company | EU Standard Contractual Clauses and the EU-US Data Privacy Framework |
 
 **Independent controllers**, whose own privacy policies apply:
 
@@ -130,6 +130,10 @@ days; we then delete account data and Customer Content within the following 60 d
 expire no later than 30 days after that (Terms of Service §13.7). The exceptions are accounting
 records, which we keep for 10 years, and data needed for a legal claim, which we keep for as long as
 the claim requires.
+
+An account whose email address is not confirmed within 7 days of signing up is deleted
+automatically, together with everything stored for it. Until an address is confirmed, the account
+cannot create anything, so nothing of yours is lost; you can sign up again at any time.
 
 ## 9. Your rights
 

@@ -26,7 +26,7 @@ operator console.
 |---|---|
 | `E2E_EMAIL_2` / `E2E_PASSWORD_2` — a second confirmed account | `api-security.spec.ts`'s cross-account checks; `plan-limits.spec.ts`; `team.spec.ts` (needs a second seat too: `DISABLE_ALL_PLAN=true` or a paid main account) |
 | `DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD` — a development-only console login, any address and password you like; `next dev` accepts it and a production build ignores it | `admin.spec.ts` (signed in), `notifications.spec.ts`, `news.spec.ts` |
-| `E2E_UNVERIFIED_EMAIL` / `E2E_UNVERIFIED_PASSWORD` — an account that signed up and never confirmed | `unverified.spec.ts` |
+| `E2E_UNVERIFIED_EMAIL` / `E2E_UNVERIFIED_PASSWORD` — an account that signed up and never confirmed. **The daily purge deletes it seven days after signup** (`docs/notes/auth.md`, "Bot signups"); sign it up again when `unverified.spec.ts` starts failing to log in | `unverified.spec.ts` |
 
 Against a production build or a deployed site the development admin does not
 exist; set `E2E_ADMIN_PASSWORD` to the real console's plain password instead

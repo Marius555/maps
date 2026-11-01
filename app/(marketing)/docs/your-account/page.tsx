@@ -117,9 +117,11 @@ export default function YourAccountPage() {
 
       <DocsSection id="confirming" title="Confirming your email">
         <p>
-          Until you confirm, nothing saves. No email? Check spam, or press{" "}
+          Until you confirm, nothing saves. Open the link we email you and press{" "}
+          <strong>Confirm email</strong>. No email? Check spam, or press{" "}
           <strong>Send a new link</strong> in the banner. Links last 24 hours and
-          work once.
+          work once. An address left unconfirmed for 7 days is deleted with its
+          account; sign up again if that happens.
         </p>
       </DocsSection>
 

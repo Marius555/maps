@@ -16,6 +16,9 @@ import type { Delta } from "@/lib/analytics/view";
  * new, not about the map, and the chip says the true thing.
  */
 export function TrendChip({ delta }: { delta: Delta }) {
+  // Nothing now and nothing before: a quiet stretch, not a new map.
+  if (delta.value === 0 && delta.previous === 0) return null;
+
   if (delta.change === null) {
     return (
       <Chip size="sm" variant="soft" color="default">

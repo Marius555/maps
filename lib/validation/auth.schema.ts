@@ -62,6 +62,16 @@ export const forgotPasswordSchema = z.object({
   email: z.email("Enter a valid email address."),
 });
 
+/**
+ * The two halves of a confirmation link, posted by the page's Confirm button
+ * (`/api/auth/verify-email/confirm`). Not-empty only, for `oauthSessionSchema`'s
+ * reason: the token's shape is Appwrite's.
+ */
+export const confirmEmailSchema = z.object({
+  userId: z.string().min(1),
+  secret: z.string().min(1),
+});
+
 export const resetPasswordSchema = z
   .object({
     userId: z.string().min(1),
@@ -82,4 +92,5 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type SignupInput = z.infer<typeof signupSchema>;
 export type OAuthSessionInput = z.infer<typeof oauthSessionSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ConfirmEmailInput = z.infer<typeof confirmEmailSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

@@ -4,7 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { AuthUser } from "@/lib/auth/types";
 import { identifyUser, resetUser } from "@/lib/posthog/client";
+import { TURNSTILE_HEADER } from "@/lib/turnstile/header";
 import type {
+  ConfirmEmailInput,
   ForgotPasswordInput,
   LoginInput,
   OAuthSessionInput,
@@ -56,13 +58,24 @@ export function useLogin() {
   });
 }
 
+/**
+ * The Turnstile token as the header the server reads
+ * (`lib/turnstile/human-check.ts`). Absent when the form has none — no site key
+ * configured, or the widget never answered — and the server decides what that
+ * means.
+ */
+function humanCheckHeader(humanToken: string | null): Record<string, string> {
+  return humanToken ? { [TURNSTILE_HEADER]: humanToken } : {};
+}
+
 export function useSignup() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: SignupInput) =>
+    mutationFn: ({ input, humanToken }: { input: SignupInput; humanToken: string | null }) =>
       apiFetch<{ user: AuthUser }>("/api/auth/signup", {
         method: "POST",
+        headers: humanCheckHeader(humanToken),
         body: JSON.stringify(input),
       }),
     onSuccess: ({ user }) => {
@@ -110,9 +123,16 @@ export async function exchangeOAuthToken(
 
 export function useForgotPassword() {
   return useMutation({
-    mutationFn: (input: ForgotPasswordInput) =>
+    mutationFn: ({
+      input,
+      humanToken,
+    }: {
+      input: ForgotPasswordInput;
+      humanToken: string | null;
+    }) =>
       apiFetch<void>("/api/auth/forgot-password", {
         method: "POST",
+        headers: humanCheckHeader(humanToken),
         body: JSON.stringify(input),
       }),
   });
@@ -131,6 +151,25 @@ export function useResetPassword() {
       identifyUser(user);
       queryClient.setQueryData(queryKeys.me, { user });
     },
+    retry: false,
+  });
+}
+
+/**
+ * Spends a confirmation link's token — the Confirm button on `/verify-email`.
+ *
+ * Always answers with where to land rather than failing, so the button has one
+ * path (`app/api/auth/verify-email/confirm/route.ts`). `retry: false` because
+ * the token is single-use: a retry can only turn an honest answer into a
+ * confusing one.
+ */
+export function useConfirmEmail() {
+  return useMutation({
+    mutationFn: (input: ConfirmEmailInput) =>
+      apiFetch<{ status: "ok" | "expired" }>("/api/auth/verify-email/confirm", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
     retry: false,
   });
 }

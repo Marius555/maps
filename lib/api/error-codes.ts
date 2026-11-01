@@ -13,6 +13,7 @@ export const API_ERROR_CODES = [
   "role_required",
   "conflict",
   "rate_limited",
+  "human_check_failed",
   "internal_error",
 ] as const;
 

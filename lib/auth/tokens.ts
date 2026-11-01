@@ -57,9 +57,18 @@ async function createLink(
   return url.toString();
 }
 
-/** Confirms an address. Points at the route handler, which redirects to the page. */
+/**
+ * Confirms an address. Points at the *page*, whose Confirm button does the
+ * confirming — never at something that confirms on a GET.
+ *
+ * Company mail scanners open every link in an incoming message to check it.
+ * While this pointed at a route that confirmed on GET, a scanner confirmed four
+ * bot signups in the minute they were made, and each of those strangers then
+ * got the Welcome email as well (docs/notes/auth.md, "Bot signups"). A scanner
+ * loads a page; it does not press its buttons.
+ */
 export function createVerificationLink(userId: string): Promise<string> {
-  return createLink(userId, "/api/auth/verify-email", VERIFY_TTL_SECONDS);
+  return createLink(userId, "/verify-email", VERIFY_TTL_SECONDS);
 }
 
 /** Points at the *page*, because the user has a form to fill in before anything happens. */

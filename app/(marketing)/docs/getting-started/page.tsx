@@ -44,8 +44,8 @@ export default function GettingStartedPage() {
 
           <DocsStep title="Confirm your email">
             <p>
-              Open the link we email you, then press{" "}
-              <strong>Go to your maps</strong>.
+              Open the link we email you, press <strong>Confirm email</strong>,
+              then <strong>Go to your maps</strong>.
             </p>
           </DocsStep>
         </DocsSteps>

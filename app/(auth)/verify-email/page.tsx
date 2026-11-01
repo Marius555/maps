@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { ResendVerificationForm } from "@/components/auth/resend-verification-form";
 import { LinkButton } from "@/components/ui/link-button";
+import { ConfirmEmailButton } from "@/components/verify-email/confirm-email-button";
 import { ResendLinkButton } from "@/components/verify-email/resend-link-button";
 import { getCurrentUser } from "@/lib/auth/current-user";
 
@@ -13,8 +14,16 @@ export const metadata: Metadata = {
 };
 
 /**
- * Where `/api/auth/verify-email` sends people, and the whole vocabulary of that
- * route's outcomes.
+ * Where the confirmation email's link lands, and the whole vocabulary of the
+ * confirm route's outcomes.
+ *
+ * With `userId` and `secret` on it this is the link itself, and it shows one
+ * button: confirming is a press that posts to `/api/auth/verify-email/confirm`,
+ * never something a page load does, because company mail scanners load every
+ * link in a message (docs/notes/auth.md, "Bot signups"). The secret in this URL
+ * is a live credential, which is why the page is `noindex`, the site sends
+ * `Referrer-Policy: strict-origin-when-cross-origin`, and PostHog strips
+ * `secret=` before an event leaves the browser (`lib/posthog/redact.ts`).
  *
  * **This page exists because the session cookie is `sameSite: "strict"`.** The
  * click arrives from a mail client, which makes it a cross-site navigation —
@@ -28,14 +37,32 @@ export const metadata: Metadata = {
  * indistinguishable to the person holding the link and the way out of all three
  * is the same.
  *
- * `sent` is the odd one out: it is not an outcome of that route at all, it is
+ * `sent` is the odd one out: it is not an outcome of the confirm route at all, it is
  * where signup lands. The visitor is **signed in** when they see it, which is why
  * it is the one branch that can name the address instead of asking for it, and the
  * one that needs no link off it — the others end on *Back to log in* because their
  * visitor may be anybody.
  */
 export default async function VerifyEmailPage(props: PageProps<"/verify-email">) {
-  const { status } = await props.searchParams;
+  const { status, userId, secret } = await props.searchParams;
+
+  // The emailed link itself. Confirming takes a press, never a page load, so a
+  // mail scanner that opens the link confirms nothing (confirm-email-button.tsx).
+  if (typeof userId === "string" && userId && typeof secret === "string" && secret) {
+    return (
+      <AuthShell
+        title="Confirm your email"
+        description="One press and your account is ready to build maps."
+        footer={
+          <Link href="/login" className="text-foreground underline">
+            Back to log in
+          </Link>
+        }
+      >
+        <ConfirmEmailButton userId={userId} secret={secret} />
+      </AuthShell>
+    );
+  }
 
   if (status === "ok") {
     return (

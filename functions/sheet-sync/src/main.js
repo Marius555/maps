@@ -22,6 +22,13 @@
  * Appwrite picks the minute within each hour, so one run starts in that hour;
  * were two ever to, the second would find nothing left.
  *
+ * **And, in that same run, the unconfirmed-account purge.** After the sessions,
+ * it walks `/api/cron/unconfirmed-accounts` (lib/auth/unconfirmed-purge-step.ts)
+ * for at most `UNCONFIRMED_BUDGET_MS`, deleting accounts that never confirmed
+ * their address in a week — mostly bots typing strangers' addresses into
+ * signup (docs/notes/auth.md, "Bot signups"). The site decides who goes; this
+ * only drives the steps.
+ *
  * No dependencies: Node's own `fetch` is enough, and a function with no
  * `node_modules` deploys in seconds and has nothing to patch.
  *
@@ -43,6 +50,8 @@ const MAX_STEPS_PER_MAP = 400;
 const RETENTION_HOUR_UTC = 3;
 /** The most of one run the purge may take before the sync gets the rest. */
 const RETENTION_BUDGET_MS = 120_000;
+/** The most of that run the unconfirmed-account purge may take. */
+const UNCONFIRMED_BUDGET_MS = 60_000;
 
 const syncDueMaps = async ({ res, log, error }) => {
   const appUrl = (process.env.APP_URL ?? "").replace(/\/+$/, "");
@@ -80,6 +89,7 @@ const syncDueMaps = async ({ res, log, error }) => {
 
   if (new Date().getUTCHours() === RETENTION_HOUR_UTC) {
     await purgeExpiredSessions(call, Date.now() + RETENTION_BUDGET_MS, { log, error });
+    await purgeUnconfirmedAccounts(call, Date.now() + UNCONFIRMED_BUDGET_MS, { log, error });
   }
 
   const { mapIds } = await call("GET");
@@ -138,6 +148,34 @@ async function purgeExpiredSessions(call, deadline, { log, error }) {
   }
 
   log(`Session retention: ${purgedDays} map-days purged${cursor ? ", stopped at the budget; the next purge starts over" : ""}.`);
+}
+
+/**
+ * Delete accounts left unconfirmed for a week, step by step. A failure is
+ * logged and dropped: tomorrow's run starts again from the top, and anything
+ * not reached today is simply a day older then.
+ */
+async function purgeUnconfirmedAccounts(call, deadline, { log, error }) {
+  let cursor = null;
+  let deleted = 0;
+  let kept = 0;
+  let more = false;
+
+  try {
+    do {
+      const step = await call("POST", { cursor }, "/api/cron/unconfirmed-accounts");
+      deleted += step.deleted;
+      kept += step.kept;
+      cursor = step.cursor;
+      more = step.more;
+    } while (more && Date.now() < deadline);
+  } catch (cause) {
+    error(`Unconfirmed accounts: ${cause instanceof Error ? cause.message : String(cause)}`);
+  }
+
+  log(
+    `Unconfirmed accounts: ${deleted} deleted, ${kept} kept${more ? ", stopped at the budget; the next purge carries on" : ""}.`,
+  );
 }
 
 export default syncDueMaps;

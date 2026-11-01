@@ -153,12 +153,13 @@ export default function VisitorAnalyticsPage() {
               "Measurement is off",
               "Press Turn it on, switch on measurement and publish again.",
             ],
-            [
-              "No visits in the last 30 days",
-              "All set up — figures appear once somebody loads the map.",
-            ],
           ]}
         />
+        <p>
+          A period with no visits isn’t empty: the headline figures, Traffic and
+          How it’s working show zeros, and the rest of the report appears once
+          somebody loads the map in that period.
+        </p>
       </DocsSection>
 
       <DocsSection id="limits" title="How many visits are recorded">

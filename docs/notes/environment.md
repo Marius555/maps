@@ -146,6 +146,18 @@ deploy. Names in use:
   composes a link. **Since 2026-10-16 a production server refuses to start without it** (`lib/env.ts`,
   `next build` exempt): the old silent fallback to localhost put localhost links in customers'
   inboxes with nothing in any log, and localhost on a production server is warned about.
+- Optional, together: `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (browser-safe) and `TURNSTILE_SECRET_KEY`
+  (server-only). These are the Cloudflare Turnstile pair behind the bot check on signup and
+  forgot-password (`lib/turnstile/human-check.ts`). **Both or the check is off**: one alone
+  is off too, with a warning, because a secret with no site key would refuse every signup.
+  - **Production:** the pair is widget "Pinglide sign-up", bound to pinglide.com. It lives
+    only on the Appwrite site, and the site key must be a **non-secret** variable, because
+    `deploy-site.mjs` reads site variables into the build, which inlines it.
+  - **Development:** use Cloudflare's always-pass test pair, `1x00000000000000000000AA` /
+    `1x0000000000000000000000000000000AA`, because the real key refuses localhost.
+  - **Testing the failure paths locally:** `2x0000000000000000000000000000000AA` as the secret
+    fails every check, and `3x00000000000000000000FF` as the site key forces the checkbox.
+  - Why it exists: `docs/notes/auth.md`, "Bot signups".
 - Optional, server-only: `EMAIL_DOMAIN_ALLOWLIST` — a comma-separated list of domains that may
   sign up whatever the disposable-address check thinks of them. **Unset is the normal state**
   and means the vendored list decides. It exists because
