@@ -25,6 +25,7 @@ export function SignupForm({ redirectTo = null }: { redirectTo?: string | null }
     containerRef: turnstileRef,
     getToken: getHumanToken,
     reset: resetHumanCheck,
+    tickPrompt,
   } = useTurnstile("signup");
 
   const {
@@ -52,8 +53,13 @@ export function SignupForm({ redirectTo = null }: { redirectTo?: string | null }
    * same-site and the cookie would be sent either way.
    */
   const onSubmit = handleSubmit(async (values) => {
+    // An unticked checkbox is answered under it, not by a request the server
+    // can only refuse.
+    const human = await getHumanToken();
+    if (human.status === "needs-click") return;
+
     try {
-      await signup.mutateAsync({ input: values, humanToken: await getHumanToken() });
+      await signup.mutateAsync({ input: values, humanToken: human.token });
       track("user_signed_up");
       // Somewhere that asked to have them back — `/connect/wordpress` — shows its
       // own "check your inbox" and carries on once they have.
@@ -120,7 +126,7 @@ export function SignupForm({ redirectTo = null }: { redirectTo?: string | null }
           </p>
         </div>
 
-        <TurnstileSlot ref={turnstileRef} />
+        <TurnstileSlot ref={turnstileRef} tickPrompt={tickPrompt} submitLabel="Create account" />
 
         <Button type="submit" fullWidth isPending={isSubmitting}>
           Create account

@@ -19,6 +19,10 @@ export type TurnstileRenderOptions = {
   callback?: (token: string) => void;
   "expired-callback"?: () => void;
   "error-callback"?: (errorCode: string) => void;
+  /** The checkbox is about to show: Cloudflare wants a click before a token. */
+  "before-interactive-callback"?: () => void;
+  /** The checkbox has been dealt with, one way or the other. */
+  "after-interactive-callback"?: () => void;
 };
 
 export type TurnstileApi = {

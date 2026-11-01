@@ -647,6 +647,10 @@ Three changes answered it, one per failure:
    every check fail, and `3x00000000000000000000FF` as the sitekey forces the
    checkbox to show. Test keys answer `action: "test"` and
    `hostname: "localhost"` whatever was asked, which is why neither is compared.
+   A press while the checkbox waits unticked never reaches the server. The form
+   says, under the box, to tick it and press the button again. Without that, the
+   press waited ten seconds for a token that could not come, and the server's
+   "reload the page" was wrong advice.
    Resend-verification is not covered: it only mails an account that already
    exists and is throttled on the account itself. **The site key must reach the
    build.** The first production deploy shipped a bundle without it, while the

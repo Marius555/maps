@@ -23,6 +23,7 @@ export function ForgotPasswordForm() {
     containerRef: turnstileRef,
     getToken: getHumanToken,
     reset: resetHumanCheck,
+    tickPrompt,
   } = useTurnstile("forgot_password");
 
   const {
@@ -37,8 +38,13 @@ export function ForgotPasswordForm() {
   });
 
   const onSubmit = handleSubmit(async (values) => {
+    // An unticked checkbox is answered under it, not by a request the server
+    // can only refuse.
+    const human = await getHumanToken();
+    if (human.status === "needs-click") return;
+
     try {
-      await forgot.mutateAsync({ input: values, humanToken: await getHumanToken() });
+      await forgot.mutateAsync({ input: values, humanToken: human.token });
     } catch (error) {
       // Spent on this attempt whatever went wrong; the next press needs a new one.
       resetHumanCheck();
@@ -89,7 +95,7 @@ export function ForgotPasswordForm() {
         autoFocus
       />
 
-      <TurnstileSlot ref={turnstileRef} />
+      <TurnstileSlot ref={turnstileRef} tickPrompt={tickPrompt} submitLabel="Email me a link" />
 
       <Button type="submit" fullWidth isPending={isSubmitting}>
         Email me a link
