@@ -24,7 +24,7 @@
  * The subscription was cancelled before the first step (`POST
  * /api/account/deletion`), so no charge can land while this runs.
  *
- * Pure orchestration over a `DeletionStore`, so the order and the budget are
+ * Pure orchestration over a `DeletionStore`, so the order and the budget are w
  * tested without Appwrite (`step.test.ts`).
  */
 
