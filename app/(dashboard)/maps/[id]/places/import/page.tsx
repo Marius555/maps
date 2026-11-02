@@ -86,6 +86,8 @@ export default async function ImportPage(
           map={map}
           headroom={{ plan, limit: PLAN_LIMITS[plan].places, used }}
           canSyncSheets={planAllows(plan, "sheetSync")}
+          // From the page's own user, so the Shopify card is in the first paint.
+          isShopify={Boolean(user.shopify)}
         />
       ) : (
         <ViewOnlyEmpty

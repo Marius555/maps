@@ -23,11 +23,16 @@ automatically_update_urls_on_dev = true
 include_config_on_deploy = true
 
 [access_scopes]
-# Shopify managed installation: these are granted before the app first loads,
-# so the first load is the install (lib/shopify/install.ts). None yet — the app
-# writes only its own app-data metafield, which needs no scope. Ask for the
-# least: requesting what the app does not use fails App Store review.
+# Shopify managed installation: required scopes are granted before the app
+# first loads, so the first load is the install (lib/shopify/install.ts). None
+# are required — the storefront block needs only the app's own metafield and
+# metaobjects, which need no scope. Ask for the least: requesting what the app
+# does not use fails App Store review.
 scopes = ""
+# Asked for only when a merchant presses the button that needs one, in
+# Shopify's own dialog (App Bridge Scopes API, lib/shopify/app-bridge-scopes.ts):
+# read_locations for "Import from Shopify" in the import wizard.
+optional_scopes = ["read_locations"]
 
 [auth]
 redirect_urls = ["https://pinglide.com/shopify"]

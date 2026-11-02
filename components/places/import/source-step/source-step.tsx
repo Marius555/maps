@@ -5,6 +5,7 @@ import { useState } from "react";
 import { MAX_SOURCE_ROWS } from "@/lib/import/limits";
 import { finishSource, readFile, type LoadedSource } from "@/lib/import/read-source";
 import { readGoogleSheet } from "@/lib/import/sources/google-sheet";
+import { readShopifyLocations } from "@/lib/import/sources/shopify-locations";
 import { ImportSourceError } from "@/lib/import/sources/types";
 import type { SheetReference } from "@/lib/import/sheet-url";
 import { toastProblem } from "@/lib/query/toast-error";
@@ -12,6 +13,7 @@ import { useImportStore } from "@/lib/stores/import-store";
 import { FileDrop } from "./file-drop";
 import { SheetPicker } from "./sheet-picker";
 import { SheetUrlForm } from "./sheet-url-form";
+import { ShopifyLocationsPanel } from "./shopify-locations-panel";
 import { SourceChoice, type SourceTab } from "./source-choice";
 import { SourceFacts } from "./source-facts";
 
@@ -27,15 +29,18 @@ export function SourceStep({
   mapId,
   headroom,
   isReady,
+  isShopify = false,
 }: {
   mapId: string;
   headroom: { plan: string; limit: number; used: number };
   /** False until the wizard's persisted run has loaded; see `ImportWizard`. */
   isReady: boolean;
+  /** Inside the Shopify admin: the store's own locations are offered, first. */
+  isShopify?: boolean;
 }) {
   const setSource = useImportStore((state) => state.setSource);
 
-  const [tab, setTab] = useState<SourceTab>("file");
+  const [tab, setTab] = useState<SourceTab>(isShopify ? "shopify-locations" : "file");
   const [isBusy, setIsBusy] = useState(false);
 
   // Kept so switching sheets can re-read the same workbook without a re-pick.
@@ -107,6 +112,11 @@ export function SourceStep({
       sheet: reference,
     }));
 
+  const onPickShopify = () =>
+    void load("Couldn't read your Shopify locations", async () =>
+      finishSource(await readShopifyLocations(mapId), "shopify-locations"),
+    );
+
   return (
     /*
      * No panel around the step: it sits on the page (one ground per screen —
@@ -131,6 +141,11 @@ export function SourceStep({
             isDisabled={!isReady}
             onSubmit={onPickGoogleSheet}
           />
+        }
+        shopifyPanel={
+          isShopify ? (
+            <ShopifyLocationsPanel isBusy={isBusy} isDisabled={!isReady} onImport={onPickShopify} />
+          ) : undefined
         }
       />
 

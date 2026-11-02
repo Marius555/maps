@@ -1,10 +1,10 @@
 "use client";
 
 import { Radio, RadioGroup } from "@heroui/react";
-import { FileSpreadsheet, Sheet, type LucideIcon } from "lucide-react";
+import { FileSpreadsheet, Sheet, Store, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-export type SourceTab = "file" | "google-sheet";
+export type SourceTab = "file" | "google-sheet" | "shopify-locations";
 
 const SOURCES: readonly {
   id: SourceTab;
@@ -12,6 +12,14 @@ const SOURCES: readonly {
   description: string;
   icon: LucideIcon;
 }[] = [
+  // First, because inside the Shopify admin it is the one most people want —
+  // and only there: it is offered only when `shopifyPanel` is passed.
+  {
+    id: "shopify-locations",
+    label: "Shopify locations",
+    description: "Your store's own",
+    icon: Store,
+  },
   {
     id: "file",
     label: "Upload a file",
@@ -27,7 +35,8 @@ const SOURCES: readonly {
 ];
 
 /**
- * Two ways in, as two cards.
+ * Two ways in, as two cards — three inside the Shopify admin, where the store's
+ * own locations come first.
  *
  * A HeroUI `RadioGroup`, the pattern `appearance-picker.tsx` uses: arrow keys
  * move between the two and a screen reader hears one question with two answers.
@@ -46,16 +55,21 @@ export function SourceChoice({
   onChange,
   filePanel,
   sheetPanel,
+  shopifyPanel,
 }: {
   current: SourceTab;
   onChange: (tab: SourceTab) => void;
   filePanel: ReactNode;
   sheetPanel: ReactNode;
+  /** The store's own locations — passed only inside the Shopify admin. */
+  shopifyPanel?: ReactNode;
 }) {
   const panels: Record<SourceTab, ReactNode> = {
     file: filePanel,
     "google-sheet": sheetPanel,
+    "shopify-locations": shopifyPanel,
   };
+  const sources = SOURCES.filter((source) => panels[source.id] !== undefined);
 
   return (
     <div className="space-y-4">
@@ -64,9 +78,9 @@ export function SourceChoice({
         orientation="horizontal"
         value={current}
         onChange={(value) => onChange(value as SourceTab)}
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+        className={`grid grid-cols-1 gap-3 ${sources.length > 2 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
       >
-        {SOURCES.map((source) => (
+        {sources.map((source) => (
           <Radio key={source.id} value={source.id} className="group w-full min-w-0">
             <Radio.Content className="flex w-full min-w-0 items-center gap-3 rounded-xl border border-border px-4 py-3 transition-[background-color,box-shadow] duration-[var(--duration-fast)] group-data-[hovered=true]:bg-surface/60 group-data-[selected=true]:bg-surface group-data-[selected=true]:shadow-sm group-data-[focus-visible=true]:outline-2 group-data-[focus-visible=true]:outline-offset-2 group-data-[focus-visible=true]:outline-focus">
               <span
@@ -109,7 +123,7 @@ export function SourceChoice({
        * tabs this replaced in docs/notes/editor-and-layout.md.
        */}
       <div className="grid">
-        {SOURCES.map((source) => {
+        {sources.map((source) => {
           const isActive = source.id === current;
 
           return (

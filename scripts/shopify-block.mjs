@@ -1,21 +1,22 @@
 /**
- * Write the theme block for one Shopify app — dev or production — from its
- * template (docs/notes/shopify.md, "Two apps, one block").
+ * Write the theme block for the Shopify app from its template
+ * (docs/notes/shopify.md, "The block is generated").
  *
- *   node scripts/shopify-block.mjs dev
- *   node scripts/shopify-block.mjs production
+ *   node scripts/shopify-block.mjs            # the only app in apps.json
+ *   node scripts/shopify-block.mjs <name>     # one of several, by its key
  *
- * Run by `npm run shopify:dev`, `shopify:deploy` and `shopify:deploy:production`
- * before the CLI, so it is rarely typed by hand.
+ * Run by `npm run shopify:dev` and `shopify:deploy` before the CLI, so it is
+ * rarely typed by hand.
  *
  * **Why a template at all.** The block's "Map" picker names the app-owned
  * metaobject type in full, `app--<numeric app id>--map`, because Shopify
  * refuses the `$app:map` shorthand inside a schema (it works in Liquid only,
- * measured 2026-11-02). The dev and production apps are two apps with two ids,
- * but the CLI deploys the one extension folder to whichever app the config
- * names — so a committed id would break the picker on the other app. The
- * template holds `__PINGLIDE_APP_ID__` and `__PINGLIDE_APP_HANDLE__`; the
- * values per app are in distribution/shopify/apps.json.
+ * measured 2026-11-02). There is one app today — "pinglide" is both the App
+ * Store app and the one `shopify app dev` previews on the dev store — but the
+ * CLI deploys the one extension folder to whichever app a config names, so a
+ * second app (a separate dev app, say) would break the picker with a committed
+ * id. The template holds `__PINGLIDE_APP_ID__` and `__PINGLIDE_APP_HANDLE__`;
+ * the values per app are in distribution/shopify/apps.json.
  *
  * The output, extensions/pinglide-map/blocks/map.liquid, is gitignored: edit
  * distribution/shopify/block-templates/map.liquid instead.
@@ -29,12 +30,14 @@ const TEMPLATE = `${shopify}block-templates/map.liquid`;
 const OUTPUT = `${shopify}extensions/pinglide-map/blocks/map.liquid`;
 const APPS = `${shopify}apps.json`;
 
-const name = process.argv[2];
 const apps = JSON.parse(readFileSync(APPS, "utf8"));
-const app = apps[name];
+const names = Object.keys(apps);
+// No name needed while there is only one app.
+const name = process.argv[2] ?? (names.length === 1 ? names[0] : undefined);
+const app = name ? apps[name] : undefined;
 
 if (!app) {
-  fail(`Name the app: ${Object.keys(apps).join(" or ")} (from distribution/shopify/apps.json).`);
+  fail(`Name the app: ${names.join(" or ")} (from distribution/shopify/apps.json).`);
 }
 
 if (!/^\d+$/.test(app.appId ?? "")) {

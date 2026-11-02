@@ -1,6 +1,7 @@
 import "server-only";
 
 import { env } from "@/lib/env";
+import { grantsScopes } from "./scopes";
 import { parseShopDomain } from "./shop-domain";
 
 /**
@@ -56,13 +57,27 @@ export type AdminSession = { shop: string; accessToken: string; scope: string };
  * An Admin API session for `shop`, exchanging `idToken` for an offline access
  * token unless a live one is cached. The caller has already verified the ID
  * token and taken `shop` from it.
+ *
+ * `scopes` names what the caller is about to need. **An optional scope granted
+ * after the token was cached is not on it** — the merchant pressed Allow a
+ * moment ago — so a cached token that lacks one is exchanged afresh, which
+ * returns the grants as they stand now. The session may still lack it (the
+ * merchant declined); the caller checks `grantsScopes` on the result.
  */
-export async function adminSession(shop: string, idToken: string): Promise<AdminSession> {
+export async function adminSession(
+  shop: string,
+  idToken: string,
+  { scopes = [] }: { scopes?: readonly string[] } = {},
+): Promise<AdminSession> {
   const domain = parseShopDomain(shop);
   if (!domain) throw new ShopifyApiError("Not a shop domain.", 400);
 
   const cached = tokens.get(domain);
-  if (cached && (cached.expiresAt === null || cached.expiresAt - EXPIRY_MARGIN_MS > Date.now())) {
+  if (
+    cached &&
+    (cached.expiresAt === null || cached.expiresAt - EXPIRY_MARGIN_MS > Date.now()) &&
+    grantsScopes(cached.scope, scopes)
+  ) {
     return { shop: domain, accessToken: cached.token, scope: cached.scope };
   }
 

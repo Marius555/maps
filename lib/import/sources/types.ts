@@ -35,5 +35,5 @@ export type SourceTable = {
  */
 export class ImportSourceError extends Error {}
 
-export const SOURCE_KINDS = ["csv", "xlsx", "xml", "google-sheet"] as const;
+export const SOURCE_KINDS = ["csv", "xlsx", "xml", "google-sheet", "shopify-locations"] as const;
 export type SourceKind = (typeof SOURCE_KINDS)[number];

@@ -13,17 +13,30 @@
  * Wrapped in try/catch: localStorage throws outright in some privacy modes, and
  * a broken theme must not take the page down with it.
  *
+ * **Inside the Shopify admin it is always light** (docs/notes/shopify.md): the
+ * admin around it is light, and a dark app in its frame — "System" on a dark
+ * OS — reads as somebody else's page. Every document the admin loads carries
+ * `embedded=1`, so that is the test, and `data-theme-lock` tells `applyTheme`
+ * to keep it light for the life of the page (soft navigations drop the query).
+ *
  * `suppressHydrationWarning` on <html> is required — this script mutates the
  * element the server just rendered.
  */
 const THEME_SCRIPT = `
 (function(){try{
+  var root = document.documentElement;
+  if (/[?&]embedded=1(&|$)/.test(location.search)) {
+    root.setAttribute("data-theme-lock", "light");
+    root.classList.add("light");
+    root.setAttribute("data-theme", "light");
+    return;
+  }
   var stored = localStorage.getItem("heroui-theme") || "system";
   var resolved = stored === "system"
     ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
     : stored;
-  document.documentElement.classList.add(resolved);
-  document.documentElement.setAttribute("data-theme", resolved);
+  root.classList.add(resolved);
+  root.setAttribute("data-theme", resolved);
 }catch(e){}})();
 `;
 

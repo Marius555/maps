@@ -68,8 +68,11 @@ export function resolveTheme(choice: ThemeChoice): ResolvedTheme {
  * the MutationObserver `usePrefersDark` watches for nothing — every map on the
  * page listens to that.
  */
-export function applyTheme(resolved: ResolvedTheme): void {
+export function applyTheme(choice: ResolvedTheme): void {
   const root = document.documentElement;
+  // Inside the Shopify admin the pre-paint script locked it light, and nothing
+  // — an OS switch, another tab's choice — may change that (theme-script.tsx).
+  const resolved: ResolvedTheme = root.dataset.themeLock === "light" ? "light" : choice;
   const applied = root.dataset.theme;
 
   if (applied === resolved && root.classList.contains(resolved)) return;

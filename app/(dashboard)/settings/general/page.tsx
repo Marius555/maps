@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { AppearancePicker } from "@/components/user-settings/general/appearance-picker";
 import { ProfileForm } from "@/components/user-settings/general/profile-form";
@@ -14,6 +15,10 @@ export const metadata: Metadata = { title: "General settings" };
  */
 export default async function GeneralSettingsPage() {
   const user = await requireUser();
+
+  // A shop has no General: no address it signs in with, a name that is
+  // Shopify's, and no theme — the app is always light inside the admin.
+  if (user.shopify) redirect("/settings/billing");
 
   return (
     <>

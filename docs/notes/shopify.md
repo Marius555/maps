@@ -64,11 +64,21 @@ and the admin side is the Next.js site.
   definition in two steps: TOML first with no setting using it, restart, then the setting.
 - **The block's schema names the metaobject type in full: `app--<app id>--map`.** Shopify
   refuses `$app:map` in a schema (measured 2026-11-02, with the definition present) — the
-  `$app:` prefix works in Liquid only. The dev and production apps have different ids, so
-  **the block is generated per app**: edit `distribution/shopify/block-templates/map.liquid`,
-  never `extensions/pinglide-map/blocks/map.liquid` (gitignored, written by
-  `scripts/shopify-block.mjs` from `distribution/shopify/apps.json`, which every
-  `shopify:*` script runs first). See "Two apps, one block".
+  `$app:` prefix works in Liquid only. So **the block is generated**: edit
+  `distribution/shopify/block-templates/map.liquid`, never
+  `extensions/pinglide-map/blocks/map.liquid` (gitignored, written by
+  `scripts/shopify-block.mjs` from `distribution/shopify/apps.json`, which every `shopify:*`
+  script runs first). See "The block is generated".
+- **One app** (decided 2026-11-02): "pinglide" (client id `9f5f7d…`, app id 442457194497) is the
+  App Store app *and* what `shopify app dev` runs. `app dev` applies its config — the tunnel URL
+  included — to the dev store only; other stores get what `shopify app deploy` released. The
+  Site's `SHOPIFY_CLIENT_ID` / `SHOPIFY_APP_ID` are this app's.
+- **`application_url` stays the site's root**, `https://pinglide.com/`. The admin appends its
+  own path to it on a deep link or reload (`/apps/pinglide/maps/x` loads `…/maps/x`), so a path
+  there (`/shopify`) would break every one; `proxy.ts` sends `/?shop=…` to the App Home instead.
+- **Inside the admin the app is light, always.** `theme-script.tsx` locks `<html>` light on an
+  `embedded=1` document (`data-theme-lock`) and `applyTheme` honours the lock; there is no theme
+  row in the account menu and no General section in Settings for a shop.
 - **A shop never meets Lemon Squeezy.** Settings → Billing draws `ShopifyPlan` for a shop and
   reads nothing from Lemon; every Lemon billing route asks `refuseShopifyBilled`
   (`lib/billing/shopify-billed.ts`) before touching the provider; `/upgrade` sends a shop back
@@ -76,7 +86,10 @@ and the admin side is the Next.js site.
   is offered on every plan, Pro included** — in Billing and in the account menu — because a
   shop must be able to downgrade without contacting us (1.2.3). Any new upgrade link points at
   `/settings/billing`, never `/pricing` (euros, Lemon checkout).
-- **A shop's Settings are General, Billing and Usage** (`settingsItemsFor`). Account (password,
+- **A shop's Settings are Billing and Usage** (`settingsItemsFor`), and `/settings` opens at
+  Billing (`settingsHomeFor`) — the admin's own "Settings" link included. General redirects a
+  shop to Billing: its profile is "the address you sign in with" (a shop has none, and its name
+  is Shopify's) and its other half is the theme, which is locked light. Account (password,
   devices, delete) and Team 404 for a shop: there is no password or session of ours to show,
   `listAccountSessions` throws without a cookie, and deleting the workspace while the app is
   installed would orphan the shop row — the deletion route refuses a shop and points at
@@ -97,8 +110,12 @@ and the admin side is the Next.js site.
   `SUBSCRIPTION_FROZEN` event, so a re-read with no event keeps a stored freeze.
 - **Webhooks: raw body, HMAC, then parse, and answer inside five seconds.** `shop/redact` only
   stamps the row; the hourly sweep deletes in bounded steps.
-- **Request no scope the app does not use.** `access_scopes` is empty: the app-data metafield
-  needs none. Asking for more fails review.
+- **Request no scope the app does not use, and none at install.** `scopes = ""`: the app-data
+  metafield and metaobjects need none. Every scope a feature needs is an **optional** scope
+  (`optional_scopes`, `lib/shopify/scopes.ts`), asked for in Shopify's own dialog when the
+  merchant presses the button that needs it (App Bridge Scopes API,
+  `lib/shopify/app-bridge-scopes.ts`), and checked again on the server against the token's real
+  grants. Today that is `read_locations`, for "Import from Shopify". Asking for more fails review.
 
 ## How a request gets in
 
@@ -125,8 +142,32 @@ bearer token, so App Bridge fetches a fresh one and repeats the request.
 password**, marked verified — nobody signs in as it. Its id is the workspace, so every
 repository, limit, publish and analytics path works unchanged (`ownerContext`). The
 unconfirmed-account purge keeps any account a shop row names. All of a shop's staff act as
-the owner; teams are not offered inside Shopify — Settings shows a shop General, Billing and
-Usage only, and Account and Team 404 (Invariants).
+the owner; teams are not offered inside Shopify — Settings shows a shop Billing and Usage
+only, General redirects to Billing, and Account and Team 404 (Invariants).
+
+## Import from Shopify
+
+The import wizard's first step offers a shop a third source, **Shopify locations**, first and
+selected (`source-step/shopify-locations-panel.tsx`). Pressing **Import from Shopify**:
+
+1. asks for `read_locations` if the shop has not granted it — `shopify.scopes.query()`, then
+   `shopify.scopes.request()`, Shopify's own dialog (`lib/shopify/app-bridge-scopes.ts`). A
+   decline is an import error that says to press again and choose Allow;
+2. `GET /api/maps/[id]/import/shopify-locations` exchanges the ID token for an Admin API token —
+   **afresh when the cached one lacks the scope**, because a token cached before the grant
+   does not carry it (`adminSession`'s `scopes`) — refuses with a 403 if the grant is still
+   missing, and reads every active, non-legacy location (`lib/shopify/locations.ts`, paged at
+   250, capped at 5,000);
+3. answers a `SourceTable` (`shopifyLocationsTable`): Name, Address, City, Region, Postcode,
+   Country, Phone, Latitude, Longitude — headers the detector maps on its own (tested).
+   Fulfillment-service locations (an app's warehouse) and ones with no address are left out;
+   Shopify's coordinates come along, so those rows cost no lookups, and a 0,0 is treated as
+   none.
+
+From there it is the ordinary import — mapping, review, bulk create — so the locations land in
+the Locations tab and the editor's list like any file's rows (the bulk create invalidates
+`queryKeys.places.all`). Nothing is stored about the source: importing again adds the
+locations again, and there is no sync.
 
 ## Billing
 
@@ -243,40 +284,38 @@ host and republishes. An empty site list means every site and never warns.
 ## Developing
 
 ```
-npm run shopify:dev                # writes the dev block, then shopify app dev (CLI 5.0.0 via npx)
-npm run shopify:deploy             # writes the dev block, pushes config + extension to the dev app
-npm run shopify:deploy:production  # writes the production block, deploys with --config production
+npm run shopify:dev      # writes the block, then shopify app dev (CLI 5.0.0 via npx) on the dev store
+npm run shopify:deploy   # writes the block, then releases config + extension to every store
 ```
 
-### Two apps, one block
+Without a terminal to answer its prompt, release with
+`npx -y @shopify/cli@5.0.0 app deploy --path distribution/shopify --allow-updates` after
+`node scripts/shopify-block.mjs`.
 
-The CLI deploys the one extension folder to whichever app the config names, but the block's
-schema has to carry that app's numeric id (Invariants). So the block's source is
-`distribution/shopify/block-templates/map.liquid`, holding two placeholders — the app id
-and the app handle (the setup card's "Open Pinglide" link) — and
-`node scripts/shopify-block.mjs <dev|production>` writes `blocks/map.liquid` from it with the
-values in `distribution/shopify/apps.json`. The numeric id is the number in the app's Partner
-Dashboard URL, not the client id. The script refuses an app with no id, and a template that
-holds a placeholder other than exactly once. The output is gitignored, so a fresh checkout has
-no block until one of the `shopify:*` scripts (or the script itself) has run — run it before
-`shopify theme check` too.
+### The block is generated
 
-### Before the production app ships
+The block's schema has to carry the app's numeric id (Invariants). So its source is
+`distribution/shopify/block-templates/map.liquid`, holding two placeholders — the app id and
+the app handle (the setup card's "Open Pinglide" link) — and `node scripts/shopify-block.mjs`
+writes `blocks/map.liquid` from it with the values in `distribution/shopify/apps.json` (one app
+today, so no name is needed; with several, pass its key). The numeric id is the number in the
+app's Partner Dashboard URL, not the client id. The script refuses an app with no id, and a
+template that holds a placeholder other than exactly once. The output is gitignored, so a fresh
+checkout has no block until one of the `shopify:*` scripts (or the script itself) has run — run
+it before `shopify theme check` too.
 
-Measured 2026-11-02: production runs the latest commit and answers **404 on every Shopify
-route** — nothing below is in place yet.
+### What the live app needs
 
-1. Create the production app in the Partner Dashboard; commit `shopify.app.production.toml`
-   with `application_url = "https://pinglide.com/shopify"` — straight to the App Home, which
-   saves the `/` → `/shopify` redirect on every app open (the dev config stays on `/`, because
-   the CLI swaps in its tunnel's root). Write its numeric id into `apps.json`.
-2. App Pricing: plans `free`, `starter`, `pro`, monthly and yearly, at the prices in
-   `SHOPIFY_PRICES`; welcome link `/shopify`.
-3. On the Appwrite Site: `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `SHOPIFY_APP_HANDLE`, and
-   **all three** of `SHOPIFY_PARTNER_API_TOKEN` / `SHOPIFY_PARTNER_ID` / `SHOPIFY_APP_ID` —
-   without them a shop that pays stays on Free (`reconcileShopPlan` returns early).
-4. `npm run shopify:deploy:production`, then `npm run setup:sheet-sync` for the hourly sweep.
-5. Check: `curl -I "https://pinglide.com/shopify/session-token?shop=<shop>.myshopify.com"` is a 200.
+1. On the Appwrite Site: `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` (**as a secret**), and
+   **all three** of `SHOPIFY_PARTNER_API_TOKEN` (secret) / `SHOPIFY_PARTNER_ID` /
+   `SHOPIFY_APP_ID` — without them a shop that pays stays on Free (`reconcileShopPlan` returns
+   early). `SHOPIFY_APP_HANDLE` only if the handle stops being `pinglide`. The Site reads them
+   on its next deploy.
+2. App Pricing in the Partner Dashboard: plans whose handles start `free`, `starter`, `pro`,
+   monthly and yearly, at the prices in `SHOPIFY_PRICES`; no trial (Free is the trial).
+3. `npm run shopify:deploy` after any change under `distribution/shopify`, and
+   `npm run setup:sheet-sync` after any change to the hourly function.
+4. Check: `curl -I "https://pinglide.com/shopify/session-token?shop=<shop>.myshopify.com"` is a 200.
 
 `shopify app dev` starts `scripts/shopify-dev.mjs` as the app's web process — `npm run dev`
 with `APP_URL` pointed at the CLI's tunnel — and installs the dev app on the dev store.

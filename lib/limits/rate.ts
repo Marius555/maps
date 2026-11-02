@@ -93,6 +93,8 @@ export const RATE_LIMITS = {
   sheetSync: { per: "user", limit: 10, windowMs: HOUR },
   /** Reading a Google Sheet to import it. */
   sheetImport: { per: "user", limit: 20, windowMs: 10 * MINUTE },
+  /** Reading the shop's Shopify locations to import them — one Admin API read a press. */
+  shopifyImport: { per: "user", limit: 20, windowMs: 10 * MINUTE },
   /** Anything that calls the payment provider. */
   billing: { per: "user", limit: 10, windowMs: 10 * MINUTE },
   /** Changing the password, which checks the current one. */

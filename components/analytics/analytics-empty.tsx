@@ -62,12 +62,21 @@ export function PlanRequiredEmpty({ note }: { note: string }) {
   );
 }
 
-export function NotPublishedEmpty({ mapId }: { mapId: string }) {
+/**
+ * Inside the Shopify admin there is no snippet to paste: a map reaches the
+ * store through Publish's "Show on storefront" and the theme block, so the
+ * sentence says that instead (docs/notes/shopify.md, "Storefront").
+ */
+export function NotPublishedEmpty({ mapId, isShopify = false }: { mapId: string; isShopify?: boolean }) {
   return (
     <EmptyState
       icon={Rocket}
       title="Nothing to measure yet"
-      description="This map isn't on a website yet, so there's nobody using it. Publish it and paste the snippet into your site, then come back here."
+      description={
+        isShopify
+          ? "This map isn't on your store yet, so there's nobody using it. Open Publish, show it on your storefront and add the block to your theme, then come back here."
+          : "This map isn't on a website yet, so there's nobody using it. Publish it and paste the snippet into your site, then come back here."
+      }
       action={
         <Link
           href={`/maps/${mapId}/publish`}

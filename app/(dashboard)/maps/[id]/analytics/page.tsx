@@ -141,7 +141,7 @@ export default async function MapAnalyticsPage(
       {!analytics ? (
         <PlanRequiredEmpty note={planFeatureNote("analytics", plan)} />
       ) : !map.publishedAt ? (
-        <NotPublishedEmpty mapId={map.id} />
+        <NotPublishedEmpty mapId={map.id} isShopify={Boolean(user.shopify)} />
       ) : !isMeasuring ? (
         <MeasurementOffEmpty mapId={map.id} />
       ) : (

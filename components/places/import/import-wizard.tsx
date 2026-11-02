@@ -61,11 +61,14 @@ export function ImportWizard({
   map,
   headroom,
   canSyncSheets,
+  isShopify = false,
 }: {
   map: AppMap;
   headroom: ImportHeadroom;
   /** Whether the plan includes keeping a map in sync with a Google Sheet. */
   canSyncSheets: boolean;
+  /** Inside the Shopify admin, which offers the store's own locations first. */
+  isShopify?: boolean;
 }) {
   const router = useRouter();
   const bulkCreate = useBulkCreatePlaces(map.id);
@@ -463,6 +466,7 @@ export function ImportWizard({
                 mapId={map.id}
                 headroom={headroom}
                 isReady={isReady}
+                isShopify={isShopify}
               />
             ) : null}
 

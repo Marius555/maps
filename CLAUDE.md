@@ -203,8 +203,7 @@ npm run e2e          # playwright, against next dev as the E2E_EMAIL account —
 npm run docs:screenshots  # retake the /docs screenshots from the running app (both themes) — docs/notes/marketing.md
 npm run build:wordpress  # zip distribution/wordpress/pinglide -> public/downloads (also on prebuild)
 npm run shopify:dev      # shopify app dev: next dev behind the CLI's tunnel, dev app on the dev store — docs/notes/shopify.md
-npm run shopify:deploy   # push distribution/shopify (app config + theme block) to Shopify
-npm run shopify:deploy:production  # the same for the production app; the block is generated per app — docs/notes/shopify.md
+npm run shopify:deploy   # push distribution/shopify (app config + theme block) to Shopify; the block is generated — docs/notes/shopify.md
 npm run build:embed  # vite build → public/embed, copy MapLibre runtime, check size, write version.json
 npm run release -- patch|minor|major  # bump, CHANGELOG, commit + tag (never pushes) — docs/notes/versioning.md
 npm run setup:appwrite  # create missing tables/columns/indexes from scripts/appwrite-schema.mjs

@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { SupportRequestDialog } from "@/components/support/support-request-dialog";
+import { settingsHomeFor } from "@/components/user-settings/shell/settings-items";
 
 import type { AuthUser } from "@/lib/auth/types";
 import { BRAND } from "@/lib/brand";
@@ -39,7 +40,8 @@ import { UserMenuTheme } from "./user-menu-theme";
  * Theme row whose submenu holds Light / System / Dark — `UserMenuTheme`. It is here as well as in Settings → General because it is
  * the one setting people reach for mid-task; both read `lib/theme/theme-choice.ts`,
  * so they cannot disagree. `ThemeSync`, not this menu, follows the OS while the
- * choice is "System".
+ * choice is "System". Inside the Shopify admin there is no theme row: the app
+ * is locked light there.
  *
  * **Contact support and Report a bug open one form in two kinds**, mailed to the
  * support address with a subject that says which kind, which plan and which
@@ -143,7 +145,9 @@ export function UserMenu({
                 return;
               }
 
-              const route = ROUTES[String(key)];
+              // A shop's Settings start at Billing: it has no General.
+              const route =
+                key === "settings" ? settingsHomeFor(Boolean(user.shopify)) : ROUTES[String(key)];
 
               if (route) {
                 onNavigate?.();
@@ -176,7 +180,9 @@ export function UserMenu({
 
             <Separator />
 
-            <UserMenuTheme />
+            {/* Not inside Shopify: the app is always light there, like the
+                admin around it (components/providers/theme-script.tsx). */}
+            {user.shopify ? null : <UserMenuTheme />}
 
             {/* The only way into Settings. It is not a sidebar item: the sidebar
                 is about the map you are working on, and this is about the person,
