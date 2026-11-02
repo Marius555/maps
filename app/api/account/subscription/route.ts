@@ -8,6 +8,7 @@ import {
   type SubscriptionState,
 } from "@/lib/billing";
 import { pendingKept, planChange } from "@/lib/billing/plan-change";
+import { refuseShopifyBilled } from "@/lib/billing/shopify-billed";
 import { billingStanding } from "@/lib/billing/standing";
 import { ownWorkspace } from "@/lib/repositories/context";
 import {
@@ -44,6 +45,9 @@ import { changePlanSchema } from "@/lib/validation/billing.schema";
 export const PATCH = withPersonalAuth(async ({ request, user }) => {
   const input = await parseBody(request, changePlanSchema);
   const subscription = await getSubscription(ownWorkspace(user.id));
+
+  const shopify = refuseShopifyBilled(subscription);
+  if (shopify) return shopify;
 
   const standing = billingStanding(subscription);
 
@@ -179,6 +183,9 @@ export const PATCH = withPersonalAuth(async ({ request, user }) => {
  */
 export const DELETE = withPersonalAuth(async ({ user }) => {
   const subscription = await getSubscription(ownWorkspace(user.id));
+
+  const shopify = refuseShopifyBilled(subscription);
+  if (shopify) return shopify;
 
   if (!subscription?.billingSubscriptionId || billingStanding(subscription) === "none") {
     return fail("conflict", "There's no running plan on this account to cancel.", 409);

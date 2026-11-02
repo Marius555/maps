@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 import {
   INVITATIONS_SECTION,
@@ -33,6 +34,9 @@ export const metadata: Metadata = { title: "Team settings" };
  */
 export default async function TeamSettingsPage() {
   const user = await requireUser();
+
+  // Teams are not offered inside the Shopify admin (`settingsItemsFor`).
+  if (user.shopify) notFound();
   const ctx = await loadActiveContext(user.id);
 
   const [team, workspaces, invitations] = await Promise.all([

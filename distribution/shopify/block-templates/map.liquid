@@ -8,8 +8,12 @@
   - the "Map" setting, a picker of `$app:map` metaobjects — one per map, with
     `name` (what the picker lists) and `snapshot` (its live snapshot URL). The
     schema has to name the type in full, `app--<app id>--map`: Shopify refuses
-    `$app:map` there (it works in Liquid only), so the id is this app's and a
-    second app (production) needs its own;
+    `$app:map` there (it works in Liquid only), so the id is the app's own and
+    differs between the dev and production apps. **This file is a template**:
+    `scripts/shopify-block.mjs` writes it to the extension's `blocks/map.liquid`
+    with the app id and app handle placeholders filled in for the app being run
+    or deployed (distribution/shopify/apps.json). Edit this file, never the
+    generated one;
   - the app-data metafield `app.metafields.pinglide.maps`, for the default map
     shown while the picker is empty, and where `map.js` lives:
 
@@ -112,7 +116,7 @@
     <div style="max-width:380px">
       <strong style="display:block;margin-bottom:4px;font-size:15px">Choose a map for this block</strong>
       Open Pinglide, pick a map and press <em>Show on storefront</em>. It appears here.
-      <a href="https://{{ shop.permanent_domain }}/admin/apps/pinglide/maps" target="_top" style="display:block;margin-top:12px;color:#005bd3">Open Pinglide</a>
+      <a href="https://{{ shop.permanent_domain }}/admin/apps/__PINGLIDE_APP_HANDLE__/maps" target="_top" style="display:block;margin-top:12px;color:#005bd3">Open Pinglide</a>
     </div>
   </div>
 {%- endif -%}
@@ -126,7 +130,7 @@
       "type": "metaobject",
       "id": "map",
       "label": "Map",
-      "metaobject_type": "app--442457194497--map",
+      "metaobject_type": "app--__PINGLIDE_APP_ID__--map",
       "info": "Empty shows your default map. A map is listed here once you press Show on storefront for it in Pinglide."
     },
     {

@@ -14,6 +14,16 @@ import type { BillingCadence, PaidPlanId, SubscriptionState } from "./types";
  * `starter` and `pro`, each sold monthly and yearly (docs/notes/shopify.md).
  */
 
+/**
+ * What Shopify charges for each plan, in USD (App Pricing is USD only). The
+ * prices themselves live in the Partner Dashboard; these are only for saying
+ * them in Settings → Billing, so keep the two in step.
+ */
+export const SHOPIFY_PRICES = {
+  starter: { monthly: "$19 a month", yearly: "$190 a year" },
+  pro: { monthly: "$39 a month", yearly: "$390 a year" },
+} as const satisfies Record<PaidPlanId, Record<BillingCadence, string>>;
+
 /** The fields of the Partner API's `ActiveSubscription` this reads. */
 export type ShopifyActiveSubscription = {
   /** `EVERY_30_DAYS` or `ANNUAL` (`AppPricingInterval`). */

@@ -4,6 +4,7 @@ import { Button } from "@heroui/react";
 import { Store } from "lucide-react";
 
 import { pickerName } from "@/lib/shopify/storefront-maps";
+import { DomainMissing } from "./domain-missing";
 import { StorefrontStep } from "./storefront-step";
 import type { useStorefront } from "./use-storefront";
 
@@ -21,7 +22,7 @@ import type { useStorefront } from "./use-storefront";
  * `read_themes`, which the app does not ask for.
  */
 export function StorefrontSteps({ storefront }: { storefront: ReturnType<typeof useStorefront> }) {
-  const { status, primary, onShow, onRemove, isShowing, busy } = storefront;
+  const { status, primary, onShow, onFixDomain, onRemove, isShowing, busy } = storefront;
   const current = status.data;
 
   return (
@@ -60,6 +61,14 @@ export function StorefrontSteps({ storefront }: { storefront: ReturnType<typeof 
               ) : (
                 <NotDefault isDisabled={busy} onMakeDefault={() => onShow(true)} />
               )}
+              {current.domainMissing ? (
+                <DomainMissing
+                  storeHost={current.storeHost}
+                  isDisabled={busy}
+                  isPending={isShowing}
+                  onFix={onFixDomain}
+                />
+              ) : null}
             </StorefrontStep>
           ) : (
             <StorefrontStep number={1} title="Show this map on your storefront" state="current">

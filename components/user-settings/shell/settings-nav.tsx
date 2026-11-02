@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 
-import { SETTINGS_ITEMS } from "./settings-items";
+import { settingsItemsFor } from "./settings-items";
 import { SettingsNavItem } from "./settings-nav-item";
 
 /**
@@ -18,14 +18,18 @@ import { SettingsNavItem } from "./settings-nav-item";
  *
  * The strip bleeds to the page edge (`-mx-4 px-4`) so a label that runs off
  * screen reads as "more this way" rather than as clipped.
+ *
+ * `isShopify` drops the sections a shop inside the Shopify admin does not get
+ * (`settingsItemsFor`). A prop from the layout rather than `useMe()`, so the
+ * first paint already has the right list and nothing shifts when it arrives.
  */
-export function SettingsNav() {
+export function SettingsNav({ isShopify = false }: { isShopify?: boolean }) {
   const pathname = usePathname();
 
   return (
     <nav aria-label="Settings" className="md:sticky md:top-6 md:w-44 md:shrink-0 md:self-start">
       <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:pb-0">
-        {SETTINGS_ITEMS.map((item) => (
+        {settingsItemsFor(isShopify).map((item) => (
           <li key={item.href} className="shrink-0">
             <SettingsNavItem item={item} isActive={pathname.startsWith(item.href)} />
           </li>

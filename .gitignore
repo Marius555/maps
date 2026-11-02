@@ -66,3 +66,7 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# The Shopify theme block, generated per app by scripts/shopify-block.mjs from
+# distribution/shopify/block-templates/map.liquid (docs/notes/shopify.md).
+/distribution/shopify/extensions/pinglide-map/blocks/map.liquid

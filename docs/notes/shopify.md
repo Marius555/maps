@@ -62,10 +62,29 @@ and the admin side is the Next.js site.
   push that would create a metaobject definition.** A block naming a type the shop does not have
   yet fails that push ("metaobject_type is invalid") and the definition is never made. Add a
   definition in two steps: TOML first with no setting using it, restart, then the setting.
-- **The block's schema names the metaobject type in full: `app--442457194497--map`.** Shopify
+- **The block's schema names the metaobject type in full: `app--<app id>--map`.** Shopify
   refuses `$app:map` in a schema (measured 2026-11-02, with the definition present) — the
-  `$app:` prefix works in Liquid only. That number is the **dev** app's id, so the production
-  app (`shopify.app.production.toml`) needs its own id written there before it ships.
+  `$app:` prefix works in Liquid only. The dev and production apps have different ids, so
+  **the block is generated per app**: edit `distribution/shopify/block-templates/map.liquid`,
+  never `extensions/pinglide-map/blocks/map.liquid` (gitignored, written by
+  `scripts/shopify-block.mjs` from `distribution/shopify/apps.json`, which every
+  `shopify:*` script runs first). See "Two apps, one block".
+- **A shop never meets Lemon Squeezy.** Settings → Billing draws `ShopifyPlan` for a shop and
+  reads nothing from Lemon; every Lemon billing route asks `refuseShopifyBilled`
+  (`lib/billing/shopify-billed.ts`) before touching the provider; `/upgrade` sends a shop back
+  to Settings → Billing. Off-platform billing is an App Store rejection (1.2.1). **Change plan
+  is offered on every plan, Pro included** — in Billing and in the account menu — because a
+  shop must be able to downgrade without contacting us (1.2.3). Any new upgrade link points at
+  `/settings/billing`, never `/pricing` (euros, Lemon checkout).
+- **A shop's Settings are General, Billing and Usage** (`settingsItemsFor`). Account (password,
+  devices, delete) and Team 404 for a shop: there is no password or session of ours to show,
+  `listAccountSessions` throws without a cookie, and deleting the workspace while the app is
+  installed would orphan the shop row — the deletion route refuses a shop and points at
+  uninstalling, which `shop/redact` follows.
+- **The storefront's address is read from Shopify on every storefront request**
+  (`readStorefront`'s `storeHost`), never trusted from the shop row, which install alone used
+  to write. A map whose restricted site list leaves it out is blank on the store; the Publish
+  steps say so (`domainMissing`) and one press re-POSTs, which adds it and republishes.
 - **A Shopify shop's first and last funnel steps are sent by the server**
   (`lib/posthog/server.ts`, `lib/shopify/funnel.ts`): `user_signed_up` (`method: "shopify"`)
   once, when `provisionShop` creates the shop, and `checkout_completed`
@@ -106,7 +125,8 @@ bearer token, so App Bridge fetches a fresh one and repeats the request.
 password**, marked verified — nobody signs in as it. Its id is the workspace, so every
 repository, limit, publish and analytics path works unchanged (`ownerContext`). The
 unconfirmed-account purge keeps any account a shop row names. All of a shop's staff act as
-the owner; teams are not offered inside Shopify.
+the owner; teams are not offered inside Shopify — Settings shows a shop General, Billing and
+Usage only, and Account and Team 404 (Invariants).
 
 ## Billing
 
@@ -116,8 +136,10 @@ Shopify App Pricing: plans defined in the Partner Dashboard with handles `free`,
 downgrades and proration. **It sends no webhooks** (stopped 2026-04-28), so
 `lib/shopify/plan-sync.ts` re-reads `activeSubscription` from the Partner API:
 
-1. on the App Home, when the stored answer is older than 6 hours, and always after the
-   merchant chose a plan (`plan_handle` on the welcome URL);
+1. on the App Home: **waited for** right after the merchant chose a plan (`plan_handle` on the
+   welcome URL), so the maps list shows what they bought; and, when the stored answer is older
+   than 6 hours, **in `after()`**, once the redirect has gone — the Partner API used to sit in
+   the way of opening the app, up to its 10s timeout;
 2. every hour, for shops with a subscription event in the last 3 hours;
 3. every hour, for Shopify plans ending within 2 days — a renewal moves the end date and
    nothing else would say so.
@@ -128,6 +150,13 @@ never reads as free. A plan set to cancel ends exactly when Shopify says.
 
 The sweep is `POST /api/cron/shopify`, driven by the existing hourly function
 (functions/sheet-sync) — **redeploy it with `npm run setup:sheet-sync`** after changing it.
+
+**Inside the app, Settings → Billing is Shopify's** (`components/user-settings/billing/shopify/`):
+the plan, Shopify's price for it in USD (`SHOPIFY_PRICES`, which must match the Partner
+Dashboard), a paused notice for a frozen subscription, and **Change plan**, which opens the
+plan page above in the top window. No renewal date — the stored end carries the renewal
+margin, and we cannot tell a renewing plan from one set to cancel. Invoices are Shopify's, in
+the merchant's own admin.
 
 ## Storefront
 
@@ -186,8 +215,19 @@ and the app asks for no scope (above). So one button is filled at a time, decide
 so nothing resets it. The "Ready to publish?" tip has a Shopify wording too (`PUBLISH_SHOPIFY`
 in `components/onboarding/callouts.ts`), because the default one promises code to paste.
 
-Not done yet: a deleted map is not taken off the list or out of the picker; its block shows
-nothing to visitors. A renamed map's picker entry follows on the next `GET`.
+**A deleted map comes off the storefront** (`lib/shopify/storefront-cleanup.ts`): the map
+route's DELETE, inside the admin, schedules the removal from the list and the picker in
+`after()`, with the request's ID token read beforehand. Best effort — the map is already gone,
+and a failure leaves the block showing the default, or nothing, as before. Deleted from the web
+app (no ID token), it stays listed until "Remove" or a delete from inside Shopify. A renamed
+map's picker entry follows on the next `GET`.
+
+**A custom domain connected later.** `primaryDomain` used to be read only at install, and the
+embed checks a restricted site list against the visitor's host, so a store that connected
+`www.brand.com` afterwards showed a blank block. `readStorefront` now reads
+`shop { primaryDomain { host } }` on every call (no scope), the route updates the shop row
+when it moved, and `domainMissing` drives a warning under step 1 with a button that adds the
+host and republishes. An empty site list means every site and never warns.
 
 ## Lifecycle (webhooks)
 
@@ -203,9 +243,40 @@ nothing to visitors. A renamed map's picker entry follows on the next `GET`.
 ## Developing
 
 ```
-npm run shopify:dev      # shopify app dev on distribution/shopify (CLI 5.0.0 via npx)
-npm run shopify:deploy   # push the app config and the theme extension to Shopify
+npm run shopify:dev                # writes the dev block, then shopify app dev (CLI 5.0.0 via npx)
+npm run shopify:deploy             # writes the dev block, pushes config + extension to the dev app
+npm run shopify:deploy:production  # writes the production block, deploys with --config production
 ```
+
+### Two apps, one block
+
+The CLI deploys the one extension folder to whichever app the config names, but the block's
+schema has to carry that app's numeric id (Invariants). So the block's source is
+`distribution/shopify/block-templates/map.liquid`, holding two placeholders — the app id
+and the app handle (the setup card's "Open Pinglide" link) — and
+`node scripts/shopify-block.mjs <dev|production>` writes `blocks/map.liquid` from it with the
+values in `distribution/shopify/apps.json`. The numeric id is the number in the app's Partner
+Dashboard URL, not the client id. The script refuses an app with no id, and a template that
+holds a placeholder other than exactly once. The output is gitignored, so a fresh checkout has
+no block until one of the `shopify:*` scripts (or the script itself) has run — run it before
+`shopify theme check` too.
+
+### Before the production app ships
+
+Measured 2026-11-02: production runs the latest commit and answers **404 on every Shopify
+route** — nothing below is in place yet.
+
+1. Create the production app in the Partner Dashboard; commit `shopify.app.production.toml`
+   with `application_url = "https://pinglide.com/shopify"` — straight to the App Home, which
+   saves the `/` → `/shopify` redirect on every app open (the dev config stays on `/`, because
+   the CLI swaps in its tunnel's root). Write its numeric id into `apps.json`.
+2. App Pricing: plans `free`, `starter`, `pro`, monthly and yearly, at the prices in
+   `SHOPIFY_PRICES`; welcome link `/shopify`.
+3. On the Appwrite Site: `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `SHOPIFY_APP_HANDLE`, and
+   **all three** of `SHOPIFY_PARTNER_API_TOKEN` / `SHOPIFY_PARTNER_ID` / `SHOPIFY_APP_ID` —
+   without them a shop that pays stays on Free (`reconcileShopPlan` returns early).
+4. `npm run shopify:deploy:production`, then `npm run setup:sheet-sync` for the hourly sweep.
+5. Check: `curl -I "https://pinglide.com/shopify/session-token?shop=<shop>.myshopify.com"` is a 200.
 
 `shopify app dev` starts `scripts/shopify-dev.mjs` as the app's web process — `npm run dev`
 with `APP_URL` pointed at the CLI's tunnel — and installs the dev app on the dev store.

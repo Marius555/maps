@@ -48,8 +48,11 @@ export function PlanRequiredEmpty({ note }: { note: string }) {
       title="Analytics is on the paid plans"
       description={`${note} Upgrade to see what visitors search for, which locations they open and where they are. Free maps aren't measured, so figures start from the day you upgrade.`}
       action={
+        // Settings → Billing, not `/pricing`: a signed-in owner changes plan
+        // there, and inside the Shopify admin it is the page that leads to
+        // Shopify's plan page — `/pricing` sells Lemon checkouts in euros.
         <Link
-          href="/pricing"
+          href="/settings/billing"
           className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-foreground"
         >
           See plans

@@ -1,6 +1,7 @@
 import { fail, ok } from "@/lib/api/responses";
 import { withPersonalAuth } from "@/lib/api/route";
 import { BillingError, getBilling, type SubscriptionDetails } from "@/lib/billing";
+import { refuseShopifyBilled } from "@/lib/billing/shopify-billed";
 import { billingStanding } from "@/lib/billing/standing";
 import { ownWorkspace } from "@/lib/repositories/context";
 import {
@@ -20,6 +21,9 @@ import {
  */
 export const POST = withPersonalAuth(async ({ user }) => {
   const subscription = await getSubscription(ownWorkspace(user.id));
+
+  const shopify = refuseShopifyBilled(subscription);
+  if (shopify) return shopify;
 
   if (!subscription?.billingSubscriptionId || billingStanding(subscription) === "none") {
     return fail(

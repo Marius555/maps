@@ -54,7 +54,9 @@ import { UserMenuTheme } from "./user-menu-theme";
  * it is the honest invitation, and it opens Settings → Billing where a plan is
  * changed. On Pro there is nothing above to sell, and an accented invitation to
  * buy what you have already bought is worse than no row at all — billing is one
- * click further, inside Settings.
+ * click further, inside Settings. **Inside Shopify the row opens Shopify's plan
+ * page and stays on Pro, as Change plan**: a shop must be able to downgrade
+ * without contacting us (App Store requirement 1.2.3).
  *
  * **Settings and Upgrade go through the router, not `href`.** An `href` item is
  * a React Aria link, and with no `RouterProvider` in the app React Aria follows
@@ -183,12 +185,14 @@ export function UserMenu({
               <Label>Settings</Label>
             </Dropdown.Item>
 
-            {isTopPlan ? null : (
-              <Dropdown.Item id="upgrade" textValue="Upgrade plan">
+            {isTopPlan && !user.shopify ? null : (
+              <Dropdown.Item id="upgrade" textValue={isTopPlan ? "Change plan" : "Upgrade plan"}>
                 {/* Tinted rather than given a variant: `menuItemVariants` offers
                     `default` and `danger` only, and danger is the wrong word for
-                    this entirely. */}
-                <Label className="text-accent">Upgrade plan</Label>
+                    this entirely. Inside Shopify it stays on Pro as Change plan:
+                    a shop must be able to downgrade without asking us (App
+                    Store requirement 1.2.3), and Shopify's page is where. */}
+                <Label className="text-accent">{isTopPlan ? "Change plan" : "Upgrade plan"}</Label>
               </Dropdown.Item>
             )}
 

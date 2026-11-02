@@ -7,6 +7,7 @@ import {
 } from "@/components/billing/upgrade-notice";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { BillingError, getBilling } from "@/lib/billing";
+import { isShopifyBilled } from "@/lib/billing/shopify-billed";
 import { billingStanding } from "@/lib/billing/standing";
 import { ownWorkspace } from "@/lib/repositories/context";
 import { getSubscription } from "@/lib/repositories/subscriptions.repository";
@@ -66,9 +67,16 @@ export default async function UpgradePage(props: PageProps<"/upgrade">) {
    * beside the first, charged separately. Their plan is moved in place from
    * Settings → Billing instead, which is where this sends them.
    */
-  if (billingStanding(await getSubscription(ownWorkspace(user.id))) === "switchable") {
-    redirect("/settings/billing");
-  }
+  const subscription = await getSubscription(ownWorkspace(user.id));
+
+  if (billingStanding(subscription) === "switchable") redirect("/settings/billing");
+
+  /*
+   * **A Shopify shop never reaches our checkout.** Shopify bills it (App Store
+   * requirement 1.2.1), and Settings → Billing is where it changes plan, on
+   * Shopify's own page (docs/notes/shopify.md, "Billing").
+   */
+  if (user.shopify || isShopifyBilled(subscription)) redirect("/settings/billing");
 
   /*
    * The `try` wraps only the call and returns no JSX. React renders children

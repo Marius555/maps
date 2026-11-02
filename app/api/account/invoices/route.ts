@@ -3,6 +3,7 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/api/responses";
 import { withPersonalAuth } from "@/lib/api/route";
 import { BillingError, getBilling } from "@/lib/billing";
+import { isShopifyBilled } from "@/lib/billing/shopify-billed";
 import { ownWorkspace } from "@/lib/repositories/context";
 import { getSubscription } from "@/lib/repositories/subscriptions.repository";
 
@@ -22,7 +23,8 @@ export const GET = withPersonalAuth(async ({ request, user }) => {
   const page = pageSchema.parse(request.nextUrl.searchParams.get("page") ?? 1);
   const subscription = await getSubscription(ownWorkspace(user.id));
 
-  if (!subscription?.billingSubscriptionId) {
+  // Shopify keeps a shop's invoices in its own admin; ours would be Lemon's.
+  if (!subscription?.billingSubscriptionId || isShopifyBilled(subscription)) {
     return ok({ invoices: [], page: 1, lastPage: 1 });
   }
 

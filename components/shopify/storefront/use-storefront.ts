@@ -68,6 +68,29 @@ export function useStorefront(
       },
     );
 
+  // The same POST as Show on storefront, which adds the store's address to the
+  // site list and republishes; it keeps whichever map is the default.
+  const onFixDomain = () =>
+    show.mutate(
+      { makeDefault: false },
+      {
+        onSuccess: (result) => {
+          if (result.siteRefused || result.domainMissing) {
+            toast.warning("Your store's address couldn't be added", {
+              description:
+                "Your map's site list is full. Remove a site under Embed code and domains, then try again.",
+            });
+            return;
+          }
+
+          toast.success("Store address added", {
+            description: `Published with ${result.storeHost} on the map's site list.`,
+          });
+        },
+        onError: (error) => toastError(error, "Couldn't add your store's address"),
+      },
+    );
+
   const onRemove = () =>
     remove.mutate(undefined, {
       onSuccess: () => toast.success("Removed from your storefront"),
@@ -78,6 +101,7 @@ export function useStorefront(
     status,
     primary,
     onShow,
+    onFixDomain,
     onRemove,
     isShowing: show.isPending,
     busy: show.isPending || remove.isPending,

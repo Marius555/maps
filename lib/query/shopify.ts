@@ -13,6 +13,13 @@ export type StorefrontStatus = {
   name: string;
   /** The theme editor, opened with the Pinglide block added. */
   addBlockUrl: string;
+  /** The storefront's public host, as Shopify has it now. */
+  storeHost: string;
+  /**
+   * On the storefront, but the map's site list leaves out the store's address,
+   * so the map would be blank there. Showing it again adds the address.
+   */
+  domainMissing: boolean;
   /** Present after a POST: whether putting it there published the map. */
   published?: boolean;
   /** Present after a POST: the allowlist was full, so the store's domain could not be added. */

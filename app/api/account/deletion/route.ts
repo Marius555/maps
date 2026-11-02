@@ -26,6 +26,20 @@ import { deleteAccountSchema } from "@/lib/validation/account.schema";
  */
 export const POST = withPersonalAuth(
   async ({ request, user, ctx }) => {
+    /*
+     * A Shopify shop's workspace lives as long as the app is installed: deleting
+     * it here would leave the shop's row pointing at an account that is gone.
+     * Uninstalling is the way out, and `shop/redact` erases everything 48 hours
+     * later (docs/notes/shopify.md, "Lifecycle").
+     */
+    if (user.shopify) {
+      return fail(
+        "conflict",
+        "To delete your Pinglide data, uninstall Pinglide from your Shopify admin. Everything is erased 48 hours later.",
+        409,
+      );
+    }
+
     const { email } = await parseBody(request, deleteAccountSchema);
 
     if (email.toLowerCase() !== user.email.toLowerCase()) {

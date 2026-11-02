@@ -1,0 +1,12 @@
+{
+  "dev": {
+    "config": "shopify.app.toml",
+    "appId": "442457194497",
+    "handle": "pinglide"
+  },
+  "production": {
+    "config": "shopify.app.production.toml",
+    "appId": "",
+    "handle": "pinglide"
+  }
+}

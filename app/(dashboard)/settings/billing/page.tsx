@@ -5,11 +5,13 @@ import { ActivationWatch } from "@/components/billing/activation-watch";
 import { CurrentPlan } from "@/components/user-settings/billing/current-plan";
 import { InvoiceTable } from "@/components/user-settings/billing/invoice-table";
 import { PaymentMethod } from "@/components/user-settings/billing/payment-method";
+import { ShopifyPlan } from "@/components/user-settings/billing/shopify/shopify-plan";
 import { SettingsSection } from "@/components/user-settings/section/settings-section";
 import { requireUser } from "@/lib/auth/current-user";
 import { getBilling } from "@/lib/billing";
 import { withKnownCadence } from "@/lib/billing/known-cadence";
 import { paidOffer, pendingKept } from "@/lib/billing/plan-change";
+import { isShopifyBilled } from "@/lib/billing/shopify-billed";
 import { billingStanding } from "@/lib/billing/standing";
 import { LEGAL_DETAILS } from "@/lib/legal/values";
 import { ownWorkspace } from "@/lib/repositories/context";
@@ -48,6 +50,23 @@ export default async function BillingSettingsPage(props: PageProps<"/settings/bi
   const { checkout } = await props.searchParams;
 
   const [plan, stored] = await Promise.all([getUserPlan(ownWorkspace(user.id)), getSubscription(ownWorkspace(user.id))]);
+
+  // Inside the Shopify admin, Shopify bills the shop: its own page, and no
+  // Lemon read at all (`ShopifyPlan`; docs/notes/shopify.md, "Billing").
+  if (user.shopify) {
+    const isPaused = isShopifyBilled(stored) && stored?.status === "paused";
+
+    return (
+      <SettingsSection title="Plan">
+        <ShopifyPlan
+          plan={isPaused && stored ? stored.plan : plan}
+          cadence={isShopifyBilled(stored) ? (stored?.cadence ?? null) : null}
+          isPaused={isPaused}
+          pricingUrl={user.shopify.pricingUrl}
+        />
+      </SettingsSection>
+    );
+  }
   const subscriptionId = stored?.billingSubscriptionId ?? "";
 
   const [details, firstPage] = subscriptionId

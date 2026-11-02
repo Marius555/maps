@@ -7,7 +7,7 @@ import { embedScriptUrl } from "@/lib/embed/snippet";
 import { env } from "@/lib/env";
 import { NotFoundError, UnauthorizedError } from "@/lib/repositories/errors";
 import { getMap } from "@/lib/repositories/maps.repository";
-import { findShop, type ShopifyShop } from "@/lib/repositories/shopify-shops.repository";
+import { findShop, updateShop, type ShopifyShop } from "@/lib/repositories/shopify-shops.repository";
 import type { AppMap } from "@/lib/repositories/types";
 import { adminSession, type AdminSession } from "@/lib/shopify/admin-api";
 import {
@@ -17,6 +17,7 @@ import {
   upsertStorefrontMapEntry,
   writeStorefrontMaps,
 } from "@/lib/shopify/storefront";
+import { hostsMissing } from "@/lib/shopify/storefront-domains";
 import {
   pickerName,
   withoutStorefrontMap,
@@ -33,6 +34,9 @@ import { storefrontMapSchema } from "@/lib/validation/shopify.schema";
  *   It also heals what the theme block reads, writing only what differs: a
  *   `script` left pointing at a dead dev tunnel, and a missing or misnamed
  *   picker entry (maps shown before the picker existed, maps renamed since).
+ *   And it reports `domainMissing`: the storefront's address, read fresh from
+ *   Shopify, is not on the map's restricted site list — a custom domain
+ *   connected after the map went on — which a POST fixes.
  * - `POST` — put it there: let the shop's domains through a restricted
  *   allowlist, publish when needed (`prepareMapForSites`, the WordPress
  *   connect's rules), then add it to the app-data metafield and to the block's
@@ -57,14 +61,44 @@ async function shopifyContext(user: AuthUser): Promise<{ shop: ShopifyShop; sess
   return { shop, session: await adminSession(shop.shop, idToken.token) };
 }
 
-function status(map: AppMap, shop: ShopifyShop, onStorefront: boolean, isDefault: boolean) {
-  return { onStorefront, isDefault, name: map.name, addBlockUrl: addBlockUrl(shop.shop) };
+function status(
+  map: AppMap,
+  shop: ShopifyShop,
+  { onStorefront, isDefault, storeHost }: { onStorefront: boolean; isDefault: boolean; storeHost: string },
+) {
+  return {
+    onStorefront,
+    isDefault,
+    name: map.name,
+    addBlockUrl: addBlockUrl(shop.shop),
+    storeHost,
+    // On the storefront, but its site list leaves out where the storefront is:
+    // the embed would refuse to draw it there (`hostsMissing`).
+    domainMissing: onStorefront && hostsMissing(map.allowedDomains, [shop.shop, storeHost]).length > 0,
+  };
+}
+
+/**
+ * Keep the shop row's `primaryDomain` in step with what Shopify just said. The
+ * row is otherwise written only at install, and a custom domain is often
+ * connected later. Best effort: the answer this request gives uses the fresh
+ * host either way.
+ */
+async function rememberStoreHost(shop: ShopifyShop, storeHost: string): Promise<void> {
+  if (storeHost === shop.primaryDomain) return;
+
+  try {
+    await updateShop(shop.id, { primaryDomain: storeHost });
+  } catch (error) {
+    console.error(`[shopify] couldn't record ${shop.shop}'s new domain ${storeHost}:`, error);
+  }
 }
 
 export const GET = withMapAuth<{ id: string }>(async ({ params, user, ctx }) => {
   const map = await getMap(ctx, params.id);
   const { shop, session } = await shopifyContext(user);
-  const { installationId, data, entry } = await readStorefront(session, map.id);
+  const { installationId, data, entry, storeHost } = await readStorefront(session, map.id);
+  await rememberStoreHost(shop, storeHost);
   const listed = data?.maps[map.id];
 
   if (listed) {
@@ -78,7 +112,7 @@ export const GET = withMapAuth<{ id: string }>(async ({ params, user, ctx }) => 
     }
   }
 
-  return ok(status(map, shop, Boolean(listed), data?.default === map.id));
+  return ok(status(map, shop, { onStorefront: Boolean(listed), isDefault: data?.default === map.id, storeHost }));
 });
 
 export const POST = withMapAuth<{ id: string }>(
@@ -90,14 +124,19 @@ export const POST = withMapAuth<{ id: string }>(
     // would then load `map.js` from (`appOrigin`, lib/shopify/bounce.ts).
     const origin = env.appUrl;
 
+    // Read first, for the storefront's address as Shopify has it now — not the
+    // one the shop row remembers from install (`readStorefront`).
+    const current = await getMap(ctx, params.id);
+    const { installationId, data, storeHost } = await readStorefront(session, current.id);
+    await rememberStoreHost(shop, storeHost);
+
     const { map, published, siteRefused } = await prepareMapForSites(
       ctx,
-      await getMap(ctx, params.id),
-      [shop.shop, shop.primaryDomain],
+      current,
+      [shop.shop, storeHost],
       origin,
     );
 
-    const { installationId, data } = await readStorefront(session, map.id);
     const entry = { name: map.name, snapshot: map.snapshotUrl ?? "" };
     const next = withStorefrontMap(data, map.id, entry, {
       makeDefault: input.makeDefault,
@@ -109,7 +148,7 @@ export const POST = withMapAuth<{ id: string }>(
     if (entry.snapshot) await upsertStorefrontMapEntry(session, map.id, entry);
 
     return ok({
-      ...status(map, shop, true, next.default === map.id),
+      ...status(map, shop, { onStorefront: true, isDefault: next.default === map.id, storeHost }),
       published,
       siteRefused,
     });
@@ -122,10 +161,10 @@ export const DELETE = withMapAuth<{ id: string }>(async ({ params, user, ctx }) 
   const map = await getMap(ctx, params.id);
   const { shop, session } = await shopifyContext(user);
 
-  const { installationId, data, entry } = await readStorefront(session, map.id);
+  const { installationId, data, entry, storeHost } = await readStorefront(session, map.id);
   const next = withoutStorefrontMap(data, map.id);
   if (next) await writeStorefrontMaps(session, installationId, next);
   if (entry) await deleteStorefrontMapEntry(session, entry.id);
 
-  return ok(status(map, shop, false, false));
+  return ok(status(map, shop, { onStorefront: false, isDefault: false, storeHost }));
 });

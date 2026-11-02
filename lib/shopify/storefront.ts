@@ -29,19 +29,32 @@ const MAP_TYPE = "$app:map";
 export type StorefrontMapEntry = { id: string; name: string | null };
 
 /**
- * The metafield, and this map's `$app:map` entry, in one request — every
- * handler of the storefront route needs both.
+ * The metafield, this map's `$app:map` entry and the storefront's address, in
+ * one request — every handler of the storefront route needs all three.
+ *
+ * `storeHost` is read fresh every time rather than trusted from the shop row,
+ * which is written only at install: a merchant who connects a custom domain
+ * afterwards would otherwise be shown on a domain the map's site list does not
+ * name (`hostsMissing`). It needs no access scope.
  */
 export async function readStorefront(
   session: AdminSession,
   mapId: string,
-): Promise<{ installationId: string; data: StorefrontMaps | null; entry: StorefrontMapEntry | null }> {
+): Promise<{
+  installationId: string;
+  data: StorefrontMaps | null;
+  entry: StorefrontMapEntry | null;
+  /** The storefront's public host — a custom domain, or the shop domain. */
+  storeHost: string;
+}> {
   const result = await adminGraphql<{
+    shop: { primaryDomain: { host: string } | null };
     currentAppInstallation: { id: string; metafield: { value: string } | null };
     metaobjectByHandle: { id: string; name: { value: string | null } | null } | null;
   }>(
     session,
     `query PinglideStorefrontMap($handle: MetaobjectHandleInput!) {
+      shop { primaryDomain { host } }
       currentAppInstallation {
         id
         metafield(namespace: "${NAMESPACE}", key: "${KEY}") { value }
@@ -60,6 +73,7 @@ export async function readStorefront(
     installationId: result.currentAppInstallation.id,
     data: parseStorefrontMaps(result.currentAppInstallation.metafield?.value),
     entry: entry ? { id: entry.id, name: entry.name?.value ?? null } : null,
+    storeHost: result.shop.primaryDomain?.host?.toLowerCase() || session.shop,
   };
 }
 

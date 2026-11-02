@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 import { DeleteAccountButton } from "@/components/user-settings/account/delete-account/delete-account-button";
 import { PasswordForm } from "@/components/user-settings/account/password-form";
@@ -31,6 +32,10 @@ export const metadata: Metadata = { title: "Account settings" };
  */
 export default async function AccountSettingsPage() {
   const user = await requireUser();
+
+  // A shop inside the Shopify admin has no password or session of ours, and
+  // its data goes when the app is uninstalled (`settingsItemsFor`).
+  if (user.shopify) notFound();
 
   const [hasPassword, sessions, mapCount, members] = await Promise.all([
     accountHasPassword(user.id),
