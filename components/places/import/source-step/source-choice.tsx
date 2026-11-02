@@ -18,7 +18,7 @@ const SOURCES: readonly {
     id: "shopify-locations",
     // Short: three cards share a row, and "Shopify locations" was cut off there.
     label: "Shopify",
-    description: "Your store's locations",
+    description: "Your locations",
     icon: Store,
   },
   {
