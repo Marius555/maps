@@ -62,6 +62,10 @@ and the admin side is the Next.js site.
   push that would create a metaobject definition.** A block naming a type the shop does not have
   yet fails that push ("metaobject_type is invalid") and the definition is never made. Add a
   definition in two steps: TOML first with no setting using it, restart, then the setting.
+  **The dev store also keeps the running session's scopes**: an optional scope added to the TOML
+  while `app dev` runs is not declared there, and `shopify.scopes.request` throws "should be a
+  subset of the declared optional access scopes: []" (2026-11-02) — even after `app deploy`
+  released it to every other store. Restart `npm run shopify:dev`.
 - **The block's schema names the metaobject type in full: `app--<app id>--map`.** Shopify
   refuses `$app:map` in a schema (measured 2026-11-02, with the definition present) — the
   `$app:` prefix works in Liquid only. So **the block is generated**: edit
@@ -310,12 +314,18 @@ it before `shopify theme check` too.
    **all three** of `SHOPIFY_PARTNER_API_TOKEN` (secret) / `SHOPIFY_PARTNER_ID` /
    `SHOPIFY_APP_ID` — without them a shop that pays stays on Free (`reconcileShopPlan` returns
    early). `SHOPIFY_APP_HANDLE` only if the handle stops being `pinglide`. The Site reads them
-   on its next deploy.
-2. App Pricing in the Partner Dashboard: plans whose handles start `free`, `starter`, `pro`,
+   on its next deploy. **`SHOPIFY_PARTNER_ID` is the number in a `partners.shopify.com/<id>/…`
+   URL — 5295851 — not the Dev Dashboard's organisation id (244455299, the one
+   `shopify app info` prints)**; the Partner API is served at that Partners id. Set on the Site
+   2026-11-02, with the client secret made a secret; the API token is still owed.
+2. Distribution: **Public** (Partners → the app → Distribution). It cannot be changed once
+   chosen, and Shopify App Pricing and the Partner API's `activeSubscription` work for public
+   apps only.
+3. App Pricing in the Partner Dashboard: plans whose handles start `free`, `starter`, `pro`,
    monthly and yearly, at the prices in `SHOPIFY_PRICES`; no trial (Free is the trial).
-3. `npm run shopify:deploy` after any change under `distribution/shopify`, and
+4. `npm run shopify:deploy` after any change under `distribution/shopify`, and
    `npm run setup:sheet-sync` after any change to the hourly function.
-4. Check: `curl -I "https://pinglide.com/shopify/session-token?shop=<shop>.myshopify.com"` is a 200.
+5. Check: `curl -I "https://pinglide.com/shopify/session-token?shop=<shop>.myshopify.com"` is a 200.
 
 `shopify app dev` starts `scripts/shopify-dev.mjs` as the app's web process — `npm run dev`
 with `APP_URL` pointed at the CLI's tunnel — and installs the dev app on the dev store.

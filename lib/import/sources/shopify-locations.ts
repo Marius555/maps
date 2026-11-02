@@ -13,9 +13,17 @@ import { ImportSourceError, type SourceTable } from "./types";
  * `SourceTable` a file becomes — everything after is the ordinary import.
  */
 export async function readShopifyLocations(mapId: string): Promise<SourceTable> {
-  if ((await ensureScope(LOCATIONS_SCOPE)) === "declined") {
+  const permission = await ensureScope(LOCATIONS_SCOPE);
+
+  if (permission === "declined") {
     throw new ImportSourceError(
       "Pinglide needs permission to read your store's locations. Press Import from Shopify again and choose Allow.",
+    );
+  }
+
+  if (permission === "failed") {
+    throw new ImportSourceError(
+      "Shopify couldn't show the permission prompt for your locations. Reload Pinglide and try again, or upload your locations as a file.",
     );
   }
 

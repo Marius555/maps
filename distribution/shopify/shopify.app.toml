@@ -20,7 +20,6 @@ embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
 [access_scopes]
 # Shopify managed installation: required scopes are granted before the app

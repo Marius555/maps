@@ -22,17 +22,26 @@ function scopesApi(): ScopesApi | null {
 /**
  * Make sure `scope` is granted, asking once if it is not.
  *
- * `"unavailable"` when App Bridge is not on the page (it loads only inside the
- * admin) — the caller goes ahead and the server, which checks the token's real
- * grants, has the last word.
+ * - `"unavailable"` when App Bridge is not on the page (it loads only inside
+ *   the admin) — the caller goes ahead and the server, which checks the
+ *   token's real grants, has the last word.
+ * - `"failed"` when Shopify refused to show the prompt at all. Seen when the
+ *   running app config does not declare the scope as optional — a dev store
+ *   still on an older `shopify app dev` preview (measured 2026-11-02: "should be
+ *   a subset of the declared optional access scopes: []").
  */
-export async function ensureScope(scope: string): Promise<"granted" | "declined" | "unavailable"> {
+export async function ensureScope(scope: string): Promise<"granted" | "declined" | "unavailable" | "failed"> {
   const api = scopesApi();
   if (!api) return "unavailable";
 
-  const { granted } = await api.query();
-  if (granted.includes(scope)) return "granted";
+  try {
+    const { granted } = await api.query();
+    if (granted.includes(scope)) return "granted";
 
-  const { result } = await api.request([scope]);
-  return result === "granted-all" ? "granted" : "declined";
+    const { result } = await api.request([scope]);
+    return result === "granted-all" ? "granted" : "declined";
+  } catch (error) {
+    console.error(`[shopify] asking for ${scope} failed:`, error);
+    return "failed";
+  }
 }

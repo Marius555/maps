@@ -16,8 +16,9 @@ const SOURCES: readonly {
   // and only there: it is offered only when `shopifyPanel` is passed.
   {
     id: "shopify-locations",
-    label: "Shopify locations",
-    description: "Your store's own",
+    // Short: three cards share a row, and "Shopify locations" was cut off there.
+    label: "Shopify",
+    description: "Your store's locations",
     icon: Store,
   },
   {
