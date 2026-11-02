@@ -77,7 +77,7 @@ export function PublishStatus({
               {hasPendingChanges ? (
                 <span className="text-accent">changes not published</span>
               ) : (
-                formatDistanceToNow(new Date(map.publishedAt), { addSuffix: true })
+                <Ago at={map.publishedAt} />
               )}
             </>
           )}
@@ -98,7 +98,7 @@ export function PublishStatus({
   return (
     <p className="text-xs text-muted">
       <span className="text-foreground">Live</span> · published{" "}
-      {formatDistanceToNow(new Date(map.publishedAt), { addSuffix: true })}
+      <Ago at={map.publishedAt} />
       {hasPendingChanges ? (
         <>
           {" · "}
@@ -108,5 +108,18 @@ export function PublishStatus({
         </>
       ) : null}
     </p>
+  );
+}
+
+/**
+ * "3 minutes ago", in its own element so the one text that is *meant* to
+ * differ between the server's render and the browser's can say so. The server
+ * renders it at request time and the browser hydrates later — inside the
+ * Shopify admin's iframe, sometimes a minute later — and "2 minutes ago"
+ * against "3 minutes ago" failed hydration and regenerated the whole sidebar.
+ */
+function Ago({ at }: { at: string }) {
+  return (
+    <span suppressHydrationWarning>{formatDistanceToNow(new Date(at), { addSuffix: true })}</span>
   );
 }

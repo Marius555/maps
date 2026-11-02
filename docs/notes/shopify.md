@@ -275,6 +275,13 @@ the buttons were too big, four controls of similar weight said nothing about whi
 nothing read top to bottom. The stepper is the answer: roomier (~300px at its fullest at lg, the
 folds scrolling above it), but with one obvious next press.
 
+**Below `lg` the stepper is not pinned.** It leads the scroller and scrolls away with the folds:
+pinned in a 390px sheet it filled the whole open sheet (2026-11-02), and at the top Publish is on
+screen the moment the sheet opens. `DesignSidebar` draws it in both places with CSS hiding one,
+which is why its heading id is a `useId`. Its relative time ("5 minutes ago") is an `Ago` span
+with `suppressHydrationWarning`: rendered at request time and hydrated a minute later in the admin's
+iframe, the two strings differed and the whole sidebar was regenerated on the client.
+
 **Step 2 is "done" only as far as this browser remembers.** Telling whether the block is in the
 theme needs `read_themes`, and the app asks for no scope (above). So pressing **Add to theme**, or
 **Already added** (for a merchant back on a new device), writes `pinglide:theme-added:<mapId>` to

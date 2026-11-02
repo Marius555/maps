@@ -105,6 +105,29 @@ export function DesignSidebar({
 
   useTurnOnAnalytics(turnOnAnalytics, design);
 
+  // A map carrying only shapes publishes something real, so this waits until
+  // there is genuinely nothing to put on a customer's site.
+  const emptyNotice = isEmpty ? (
+    <p className="text-xs text-muted">
+      This map has no locations yet, so it would publish empty. Add some on the
+      Locations tab first.
+    </p>
+  ) : null;
+
+  // Inside the Shopify admin the path onto the store — show it, add the
+  // block, publish — is three numbered steps with Publish the third
+  // (docs/notes/shopify.md, "The Publish footer inside Shopify"). Drawn in the
+  // footer at `lg` and at the top of the scroller below it; CSS hides the other.
+  const stepper = isShopify ? (
+    <StorefrontStepper
+      map={map}
+      places={places}
+      isMeasuring={design.settings.analytics}
+      hasPendingChanges={hasPendingChanges}
+      storefront={storefront}
+    />
+  ) : null;
+
   return (
     <BottomSheet
       contentId="design-sheet-content"
@@ -179,6 +202,17 @@ export function DesignSidebar({
         {design.error ? (
           <div className="pb-3">
             <ErrorMessage error={design.error} />
+          </div>
+        ) : null}
+
+        {/* Inside Shopify below `lg`, the stepper leads the sheet and scrolls
+            with the folds. Pinned, it filled a phone's open sheet and left the
+            folds no room — the 2026-11-01 measurement again. At the top, Publish
+            is on screen the moment the sheet opens. */}
+        {isShopify ? (
+          <div className="mb-3 space-y-3 border-b border-border pb-4 lg:hidden">
+            {emptyNotice}
+            {stepper}
           </div>
         ) : null}
 
@@ -266,8 +300,13 @@ export function DesignSidebar({
       </ScrollShadow>
 
       {/* Outside the scroller on purpose: a long column of controls must not be
-          able to push Publish out of reach. */}
-      <footer className="shrink-0 space-y-3 border-t border-border px-3 py-3">
+          able to push Publish out of reach. Inside Shopify, desktop only — below
+          `lg` the stepper is at the top of the scroller instead (above). */}
+      <footer
+        className={`shrink-0 space-y-3 border-t border-border px-3 py-3 ${
+          isShopify ? "max-lg:hidden" : ""
+        }`}
+      >
         {/* `max-lg:hidden`, because the sheet's peek strip carries it there —
             the point of the strip is that the state is readable with the
             controls shut. Inside Shopify it is step 3's own line instead. */}
@@ -277,27 +316,10 @@ export function DesignSidebar({
           </div>
         )}
 
-        {/* A map carrying only shapes publishes something real, so this waits
-            until there is genuinely nothing to put on a customer's site. */}
-        {isEmpty ? (
-          <p className="text-xs text-muted">
-            This map has no locations yet, so it would publish empty. Add some on
-            the Locations tab first.
-          </p>
-        ) : null}
+        {emptyNotice}
 
-        {/* Inside the Shopify admin the footer is the path onto the store —
-            show it, add the block, publish — as three numbered steps, with
-            Publish the third (docs/notes/shopify.md, "The Publish footer
-            inside Shopify"). */}
         {isShopify ? (
-          <StorefrontStepper
-            map={map}
-            places={places}
-            isMeasuring={design.settings.analytics}
-            hasPendingChanges={hasPendingChanges}
-            storefront={storefront}
-          />
+          stepper
         ) : (
           <>
             <ShareDialog

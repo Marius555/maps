@@ -2,6 +2,7 @@
 
 import { Button } from "@heroui/react";
 import { Store } from "lucide-react";
+import { useId } from "react";
 
 import { PublishAction } from "@/components/publish/publish-action";
 import { PublishStatus } from "@/components/publish/publish-status";
@@ -55,6 +56,9 @@ export function StorefrontStepper({
     busy,
   } = storefront;
   const current = status.data;
+  // `useId`, not a fixed id: the sidebar draws this twice — in the footer at
+  // `lg`, at the top of the scroller below it — with CSS hiding one.
+  const titleId = useId();
 
   // The status sits beside the button rather than above it: one line fewer in
   // a pinned footer, and it reads as the button's own caption.
@@ -69,9 +73,9 @@ export function StorefrontStepper({
   );
 
   return (
-    <section aria-labelledby="storefront-stepper-title" className="space-y-3">
+    <section aria-labelledby={titleId} className="space-y-3">
       <h3
-        id="storefront-stepper-title"
+        id={titleId}
         className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted uppercase"
       >
         <Store aria-hidden="true" className="size-3.5" />
