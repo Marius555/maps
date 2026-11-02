@@ -1,36 +1,71 @@
 import { describe, expect, it } from "vitest";
 
-import { storefrontPrimary } from "./storefront-step";
+import { storefrontSteps } from "./storefront-step";
 
-const base = { onStorefront: true, isError: false, justShown: false, hasPendingChanges: false };
+const base = {
+  onStorefront: true,
+  isError: false,
+  themeAdded: true,
+  hasPendingChanges: false,
+  published: true,
+};
 
-describe("storefrontPrimary", () => {
-  it("leads with nothing while the status loads", () => {
-    expect(storefrontPrimary({ ...base, onStorefront: undefined })).toBeNull();
+describe("storefrontSteps", () => {
+  it("draws no steps and fills nothing while the status loads", () => {
+    expect(storefrontSteps({ ...base, onStorefront: undefined })).toEqual({ steps: null, primary: null });
   });
 
   it("falls back to Publish when the status could not be read", () => {
-    expect(storefrontPrimary({ ...base, onStorefront: undefined, isError: true })).toBe("publish");
+    expect(storefrontSteps({ ...base, onStorefront: undefined, isError: true })).toEqual({
+      steps: null,
+      primary: "publish",
+    });
   });
 
-  it("leads with Show on storefront until the map is there", () => {
-    expect(storefrontPrimary({ ...base, onStorefront: false })).toBe("show");
-    expect(storefrontPrimary({ ...base, onStorefront: false, hasPendingChanges: true })).toBe("show");
+  it("starts at step 1 until the map is on the storefront, whatever else is true", () => {
+    expect(storefrontSteps({ ...base, onStorefront: false, hasPendingChanges: true })).toEqual({
+      steps: { show: "current", theme: "upcoming", publish: "upcoming" },
+      primary: "show",
+    });
   });
 
-  it("leads with Add to theme right after step 1, even with edits to publish", () => {
-    expect(storefrontPrimary({ ...base, justShown: true, hasPendingChanges: true })).toBe("theme");
+  it("moves to step 2 until Add to theme has been pressed, even with edits to publish", () => {
+    expect(storefrontSteps({ ...base, themeAdded: false, hasPendingChanges: true })).toEqual({
+      steps: { show: "done", theme: "current", publish: "upcoming" },
+      primary: "theme",
+    });
   });
 
-  it("leads with Publish when the storefront is behind the editor", () => {
-    expect(storefrontPrimary({ ...base, hasPendingChanges: true })).toBe("publish");
+  it("moves to step 3 when the store is behind the editor", () => {
+    expect(storefrontSteps({ ...base, hasPendingChanges: true })).toEqual({
+      steps: { show: "done", theme: "done", publish: "current" },
+      primary: "publish",
+    });
   });
 
-  it("leads with Add to theme when there is nothing to publish", () => {
-    expect(storefrontPrimary(base)).toBe("theme");
+  it("treats a map never published as something to publish", () => {
+    expect(storefrontSteps({ ...base, published: false }).primary).toBe("publish");
+  });
+
+  it("marks all three done and fills nothing when the store is current", () => {
+    expect(storefrontSteps(base)).toEqual({
+      steps: { show: "done", theme: "done", publish: "done" },
+      primary: null,
+    });
   });
 
   it("keeps the status answer over a later failed refetch", () => {
-    expect(storefrontPrimary({ ...base, onStorefront: false, isError: true })).toBe("show");
+    expect(storefrontSteps({ ...base, onStorefront: false, isError: true }).primary).toBe("show");
+  });
+
+  it("never has more than one current step", () => {
+    for (const onStorefront of [true, false]) {
+      for (const themeAdded of [true, false]) {
+        for (const hasPendingChanges of [true, false]) {
+          const { steps } = storefrontSteps({ ...base, onStorefront, themeAdded, hasPendingChanges });
+          expect(Object.values(steps ?? {}).filter((s) => s === "current").length).toBeLessThanOrEqual(1);
+        }
+      }
+    }
   });
 });

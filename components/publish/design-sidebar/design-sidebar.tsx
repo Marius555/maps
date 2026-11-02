@@ -5,6 +5,7 @@ import { ChevronLeft, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { StorefrontStepper } from "@/components/shopify/storefront/storefront-stepper";
 import { useStorefront } from "@/components/shopify/storefront/use-storefront";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -26,7 +27,6 @@ import { MobileGroup } from "./mobile-group";
 import { PanelGroup } from "./panel-group";
 import { PanelSurfaceGroup } from "./panel-surface-group";
 import { RowsGroup } from "./rows-group";
-import { ShopifyPublishControls } from "./shopify-publish-controls";
 import type { EmbedDesign } from "./use-embed-design";
 
 /**
@@ -84,15 +84,19 @@ export function DesignSidebar({
   onDeviceChange: (value: DeviceId) => void;
   /** Open on the Visitor analytics fold with the switch on — see `useTurnOnAnalytics`. */
   turnOnAnalytics?: boolean;
-  /** Inside the Shopify admin — the footer carries the storefront row.
+  /** Inside the Shopify admin — the footer is the storefront stepper.
       From the server's user, so the column never draws the other layout first. */
   isShopify?: boolean;
 }) {
   const isEmpty = places.length === 0 && shapes.length === 0;
   const hasPendingChanges = hasUnpublishedChanges(map, places, shapes);
-  // Inert outside the Shopify admin. Here rather than in the storefront row
-  // because the row and Publish share one answer to "which button is filled".
-  const storefront = useStorefront(map.id, { enabled: isShopify, hasPendingChanges });
+  // Inert outside the Shopify admin. Here rather than in the stepper because
+  // it needs `hasPendingChanges`, which this column already works out.
+  const storefront = useStorefront(map.id, {
+    enabled: isShopify,
+    hasPendingChanges,
+    published: Boolean(map.publishedAt),
+  });
 
   // Shut to start with, which only means anything below `lg`: the map is what
   // this page is for, and the controls are one tap from it. Open when the
@@ -266,14 +270,12 @@ export function DesignSidebar({
       <footer className="shrink-0 space-y-3 border-t border-border px-3 py-3">
         {/* `max-lg:hidden`, because the sheet's peek strip carries it there —
             the point of the strip is that the state is readable with the
-            controls shut. */}
-        <div className="max-lg:hidden">
-          <PublishStatus
-            map={map}
-            hasPendingChanges={hasPendingChanges}
-            storefront={isShopify}
-          />
-        </div>
+            controls shut. Inside Shopify it is step 3's own line instead. */}
+        {isShopify ? null : (
+          <div className="max-lg:hidden">
+            <PublishStatus map={map} hasPendingChanges={hasPendingChanges} />
+          </div>
+        )}
 
         {/* A map carrying only shapes publishes something real, so this waits
             until there is genuinely nothing to put on a customer's site. */}
@@ -284,15 +286,16 @@ export function DesignSidebar({
           </p>
         ) : null}
 
-        {/* Inside the Shopify admin the storefront joins Publish here, as one
-            row, and the embed code for any other site shrinks to a square
-            beside the button (docs/notes/shopify.md, "The Publish footer
+        {/* Inside the Shopify admin the footer is the path onto the store —
+            show it, add the block, publish — as three numbered steps, with
+            Publish the third (docs/notes/shopify.md, "The Publish footer
             inside Shopify"). */}
         {isShopify ? (
-          <ShopifyPublishControls
+          <StorefrontStepper
             map={map}
             places={places}
             isMeasuring={design.settings.analytics}
+            hasPendingChanges={hasPendingChanges}
             storefront={storefront}
           />
         ) : (

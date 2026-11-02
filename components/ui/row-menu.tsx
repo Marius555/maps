@@ -32,13 +32,10 @@ export type RowMenuItem = {
 export function RowMenu({
   label,
   items,
-  isDisabled = false,
 }: {
   /** Names the button for screen readers — "Actions for Berlin Store". */
   label: string;
   items: RowMenuItem[];
-  /** While an action from this menu (or beside it) is still running. */
-  isDisabled?: boolean;
 }) {
   if (items.length === 0) return null;
 
@@ -57,8 +54,7 @@ export function RowMenu({
        */}
       <Dropdown.Trigger
         aria-label={label}
-        isDisabled={isDisabled}
-        className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted transition-colors hover:bg-default hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)] group-hover:text-foreground data-disabled:cursor-default data-disabled:opacity-50"
+        className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted transition-colors hover:bg-default hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)] group-hover:text-foreground"
       >
         <MoreHorizontal aria-hidden="true" className="size-4" />
       </Dropdown.Trigger>

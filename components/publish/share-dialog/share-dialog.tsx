@@ -4,7 +4,6 @@ import { Button, Separator } from "@heroui/react";
 import { CodeXml, Share2 } from "lucide-react";
 import { useState } from "react";
 
-import { IconButton } from "@/components/ui/icon-button";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { AllowedDomainsFold } from "../allowed-domains/allowed-domains-fold";
@@ -29,9 +28,9 @@ import { EmbedSnippet } from "../embed-snippet";
  * say how many locations the choice shows.
  *
  * Inside the Shopify admin the store is the obvious place for the map, so
- * `trigger="icon"` demotes the button to a square beside Publish
- * (`ShopifyPublishControls`). Same accessible name and tooltip, so the docs and
- * the "site list is full" toast still point at it.
+ * `trigger="link"` demotes the button to one quiet line, "Embed on another
+ * site", at the foot of the storefront stepper (`StorefrontStepper`) — the
+ * name the "site list is full" toasts there use.
  */
 export function ShareDialog({
   map,
@@ -39,7 +38,7 @@ export function ShareDialog({
   isMeasuring,
   trigger = "button",
 }: {
-  trigger?: "button" | "icon";
+  trigger?: "button" | "link";
   map: AppMap;
   /** For the tag chips: which tags anybody wears, and how many each shows. */
   places: Place[];
@@ -54,15 +53,15 @@ export function ShareDialog({
 
   return (
     <>
-      {trigger === "icon" ? (
-        <IconButton
-          label="Embed code and domains"
-          icon={CodeXml}
-          variant="secondary"
-          size="md"
-          className="shrink-0"
-          onPress={() => setIsOpen(true)}
-        />
+      {trigger === "link" ? (
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="flex items-center gap-1.5 rounded text-xs text-muted underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-focus"
+        >
+          <CodeXml aria-hidden="true" className="size-3.5" />
+          Embed on another site
+        </button>
       ) : (
         <Button variant="secondary" size="sm" className="w-full" onPress={() => setIsOpen(true)}>
           <Share2 aria-hidden="true" className="size-4" />

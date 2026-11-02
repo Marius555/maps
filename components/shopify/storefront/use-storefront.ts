@@ -1,7 +1,6 @@
 "use client";
 
 import { toast } from "@heroui/react";
-import { useState } from "react";
 
 import {
   useRemoveFromStorefront,
@@ -11,49 +10,60 @@ import {
 } from "@/lib/query/shopify";
 import { toastError } from "@/lib/query/toast-error";
 import { pickerName } from "@/lib/shopify/storefront-maps";
-import { storefrontPrimary } from "@/lib/shopify/storefront-step";
+import { storefrontSteps } from "@/lib/shopify/storefront-step";
+import { markThemeAdded, useThemeAdded } from "./use-theme-added";
 
 /**
- * One map's place on the shop's storefront, the two things that change it
- * (each with its toast), and which button in the Publish sidebar is the main
- * one (docs/notes/shopify.md, "Storefront").
+ * One map's place on the shop's storefront, the things that change it (each
+ * with its toast), and where the Publish footer's three steps stand
+ * (docs/notes/shopify.md, "The Publish footer inside Shopify").
  *
- * Called by the sidebar rather than by the storefront row, because the answer
- * is shared: the row and Publish sit side by side in the footer, and only one
- * of their buttons may be filled. `enabled` is false outside the Shopify admin,
- * where nothing is fetched and `primary` says nothing.
+ * Called by the sidebar, which hands it to `StorefrontStepper`. `enabled` is
+ * false outside the Shopify admin, where nothing is fetched and `primary` says
+ * nothing.
  *
- * `justShown` is whether Show on storefront succeeded on this visit — the
- * moment Add to theme should lead. Local on purpose: it is about what the
- * merchant just did, not about the theme, which the app cannot see.
+ * Step 2 has no server answer: `themeAdded` is this browser remembering that
+ * Add to theme (or "Already added") was pressed — see `use-theme-added.ts`.
  */
 export function useStorefront(
   mapId: string,
-  { enabled, hasPendingChanges }: { enabled: boolean; hasPendingChanges: boolean },
+  {
+    enabled,
+    hasPendingChanges,
+    published,
+  }: { enabled: boolean; hasPendingChanges: boolean; published: boolean },
 ) {
   const status = useStorefrontStatus(mapId, enabled);
   const show = useShowOnStorefront(mapId);
   const remove = useRemoveFromStorefront(mapId);
-  const [justShown, setJustShown] = useState(false);
+  const themeAdded = useThemeAdded(mapId);
 
-  const primary = storefrontPrimary({
+  const { steps, primary } = storefrontSteps({
     onStorefront: status.data?.onStorefront,
     isError: status.isError,
-    justShown,
+    themeAdded,
     hasPendingChanges,
+    published,
   });
+
+  // Marked before leaving: the theme editor replaces the whole admin page, and
+  // nothing in this app runs again until the merchant comes back.
+  const onAddToTheme = () => {
+    const url = status.data?.addBlockUrl;
+    if (!url) return;
+    markThemeAdded(mapId);
+    window.open(url, "_top");
+  };
 
   const onShow = (makeDefault: boolean) =>
     show.mutate(
       { makeDefault },
       {
         onSuccess: (result) => {
-          if (!makeDefault) setJustShown(true);
-
           if (result.siteRefused) {
             toast.warning(makeDefault ? "Shown by default" : "Shown on your storefront", {
               description:
-                "Your map's site list is full, so your store's address couldn't be added. Remove a site under Embed code and domains, beside Publish.",
+                "Your map's site list is full, so your store's address couldn't be added. Remove a site under Embed on another site, at the bottom of this panel.",
             });
             return;
           }
@@ -78,7 +88,7 @@ export function useStorefront(
           if (result.siteRefused || result.domainMissing) {
             toast.warning("Your store's address couldn't be added", {
               description:
-                "Your map's site list is full. Remove a site under Embed code and domains, beside Publish, then try again.",
+                "Your map's site list is full. Remove a site under Embed on another site, at the bottom of this panel, then try again.",
             });
             return;
           }
@@ -99,7 +109,10 @@ export function useStorefront(
 
   return {
     status,
+    steps,
     primary,
+    onAddToTheme,
+    onAlreadyAdded: () => markThemeAdded(mapId),
     onShow,
     onFixDomain,
     onRemove,

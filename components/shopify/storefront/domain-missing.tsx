@@ -8,9 +8,9 @@ import { TriangleAlert } from "lucide-react";
  * refuses to draw it there, so visitors see nothing (docs/notes/shopify.md,
  * "Storefront"). One press adds the address and republishes.
  *
- * One line in the Publish footer rather than a box: it sits under the
- * storefront row, pinned, so every line it takes is one the design folds lose.
- * The toast that answers the press says it published.
+ * One line under step 1 of the storefront stepper rather than a box: the
+ * stepper is pinned, so every line it takes is one the design folds lose. The
+ * toast that answers the press says it published.
  */
 export function DomainMissing({
   storeHost,

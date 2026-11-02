@@ -54,7 +54,7 @@ export default async function MapPublishPage(
         // Set by the Analytics tab's "Turn it on" — the sidebar opens on the
         // switch and flips it, through the designer's own writer.
         turnOnAnalytics={search.analytics === "on"}
-        // Inside the Shopify admin the footer carries the storefront row;
+        // Inside the Shopify admin the footer is the storefront stepper;
         // read here so the first paint already has the right layout.
         isShopify={Boolean(user.shopify)}
       />

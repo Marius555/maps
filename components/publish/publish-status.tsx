@@ -25,10 +25,10 @@ export function PublishStatus({
   map: AppMap;
   hasPendingChanges: boolean;
   compact?: boolean;
-  /** Inside the Shopify admin: one line with a dot, because the footer there
-      also holds the storefront row and every line is taken from the design
-      folds. The sentence about a snippet is not true there anyway — the way
-      onto the store is Show on storefront, whose toast says it published. */
+  /** Inside the Shopify admin: one line with a dot, under step 3 of the
+      storefront stepper, whose title already says what to do. The sentence
+      about a snippet is not true there anyway — the way onto the store is
+      Show on storefront, whose toast says it published. */
   storefront?: boolean;
 }) {
   if (compact) {

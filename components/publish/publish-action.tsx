@@ -34,24 +34,27 @@ import type { PublishResult } from "@/lib/repositories/publish.repository";
  * toast already raised for it globally (`lib/query/client.ts`), so the `catch`
  * skips that one error rather than say it twice.
  *
- * Inside the Shopify admin the storefront row may be the next thing to
- * press, so `variant` lets the sidebar unfill this button (`storefrontPrimary`,
- * via `DesignSidebar`), `onStorefront` says in the toast where the update
- * lands, and `aside` puts the embed code's square button on Publish's row.
+ * Inside the Shopify admin this is step 3 of the storefront stepper, so
+ * `variant` lets the stepper unfill it when another step is next
+ * (`storefrontSteps`), `compact` draws it the stepper's size rather than full
+ * width, and `onStorefront` says in the toast where the update lands.
  * Everywhere else none of them is passed.
  */
 export function PublishAction({
   mapId,
   variant = "primary",
   onStorefront = false,
-  aside,
+  compact = false,
+  status,
 }: {
   mapId: string;
   variant?: "primary" | "secondary";
   /** The map is on its Shopify shop's storefront list. */
   onStorefront?: boolean;
-  /** A compact control drawn on the button's own row, to its right. */
-  aside?: ReactNode;
+  /** A small button sized to its label, for the storefront stepper. */
+  compact?: boolean;
+  /** A one-line caption drawn beside the button — the stepper's "Live · …". */
+  status?: ReactNode;
 }) {
   const publish = usePublishMap(mapId);
   const unverified = useEmailUnverified();
@@ -79,9 +82,10 @@ export function PublishAction({
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
+      <div className={status ? "flex min-w-0 items-center gap-3" : undefined}>
         <Button
-          className="min-w-0 flex-1"
+          className={compact ? "shrink-0" : "w-full"}
+          size={compact ? "sm" : "md"}
           variant={variant}
           onPress={onPress}
           isPending={publish.isPending}
@@ -90,7 +94,7 @@ export function PublishAction({
         >
           Publish
         </Button>
-        {aside}
+        {status}
       </div>
 
       {/* Terms §10.4: "By publishing a map you confirm that you have checked

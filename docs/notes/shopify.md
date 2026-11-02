@@ -238,54 +238,64 @@ maps renamed since).
 ### The Publish footer inside Shopify
 
 Inside the Shopify admin the store is the obvious place for a map, so the Publish sidebar's
-pinned footer carries it, as **one row** (`StorefrontRow`, in `ShopifyPublishControls`):
+pinned footer is the path onto it: **three numbered steps, read top to bottom**, with Publish the
+third (`StorefrontStepper`, `components/shopify/storefront/`):
 
 ```
-● Live · 33 minutes ago                        ← lg only; the sheet's peek strip says it below lg
-🏪 On your storefront   [Add to theme] [⋯]     ← ⋯: Show by default (if not), Remove from storefront
-   In the block, choose "X" under Map.         ← only when this map is not the default
-   ⚠ host isn't on this map's site list… Add it ← only when domainMissing
-[ Publish                         ] [</>]      ← </> = Embed code and domains
-Publishing confirms you've checked every pin.
+YOUR STORE
+(✓) Show on your storefront                 Remove   ← done: one line (+ "Not your default map. Make default")
+ │
+(2) Add the block to your theme                       ← current: the only filled button
+ │  Opens your theme editor with the block added. Press Save there.
+ │  [Add to theme]  Already added
+ │
+(3) Publish your changes                              ← upcoming: grey
+    [Publish]  ● Live · about 1 hour ago
+    Publishing confirms you've checked every pin.
+────────────────────────────────────────
+</> Embed on another site
 ```
 
-Not on the storefront, the whole row is one **Show on storefront** button, since the label says
-where the map isn't. Embed code and domains is a square beside Publish: demoted rather than
-removed, because it also holds the allowed sites, which a full list sends the merchant to (the
-toasts say "beside Publish"). The "press Save in the theme editor" instruction is Add to theme's
-tooltip. `isShopify` comes from the page's server-side user rather than `useMe()`, so the first
-paint already has this layout.
+Only the current step is open and has a filled button; finished steps fold to a line with a
+check, later steps are grey, and a line joins the discs. Every move that is not the next step is
+words, not a button (`TextAction`): Remove, Make default, Already added, Open editor, and "Embed
+on another site" — the embed dialog demoted rather than removed, because it also holds the
+allowed sites, which a full list sends the merchant to (the toasts name it). **Publish is drawn
+in step 3 in every state**, filled only when step 3 is current, so a map taken off the
+storefront, or only embedded elsewhere, is never stuck. All buttons are `size="sm"`, sized to
+their labels. `isShopify` comes from the page's server-side user rather than `useMe()`, so the
+first paint already has this layout.
 
-**Why one row, and why pinned now.** It replaced two numbered cards ("① Show on storefront",
-"② Add to theme", a heading, two paragraphs) that sat at the top of the scrolling column. They
-could not be pinned: in the footer, measured at 390×844, they took 479px of the open sheet's 482px
-(2026-11-01). In the scroller they were ~230px above the folds, on top of a ~180px footer, and the
-owner read the column as having no room for its dropdowns (2026-11-02). The row and its footer
-measure ~155px at lg (all eight fold triggers visible with room to spare in a 577px-tall admin
-frame) and ~133px in the open sheet. Every line in the footer is a line the folds lose, so
-anything added here has to earn it.
+**How it got here (2026-11-01 → 11-02), so it is not rebuilt.** Two numbered cards at the top of
+the scrolling column could not be pinned (in the footer at 390×844 they took 479px of the open
+sheet's 482px), and in the scroller they sat on ~230px above the folds over a ~180px footer, which
+the owner read as no room for the dropdowns. A **single dense row** replaced them — "On your
+storefront [Add to theme] [⋯]" over "[Publish] [</>]" — at ~155px, and the owner rejected it:
+the buttons were too big, four controls of similar weight said nothing about which to press, and
+nothing read top to bottom. The stepper is the answer: roomier (~300px at its fullest at lg, the
+folds scrolling above it), but with one obvious next press.
 
-**Two widths to remember.** "On your storefront", Add to theme and ⋯ fill the 296px of a 20rem
-column exactly: a separate check icon beside the words truncated them, so the store icon in the
-success colour is the "done" mark. And HeroUI's `Tooltip.Content` is `break-all`, which split
-Add to theme's sentence mid-word; prose tooltips need `break-normal`.
+**Step 2 is "done" only as far as this browser remembers.** Telling whether the block is in the
+theme needs `read_themes`, and the app asks for no scope (above). So pressing **Add to theme**, or
+**Already added** (for a merchant back on a new device), writes `pinglide:theme-added:<mapId>` to
+`localStorage` (`use-theme-added.ts`, every access wrapped). Losing it only shows step 2 again;
+Publish is on screen regardless. The steps come from `storefrontSteps` (`lib/shopify/storefront-step.ts`,
+tested), and at most one is current:
 
-**Add to theme is never marked done.** Telling whether the block is in the theme needs `read_themes`,
-and the app asks for no scope (above). So one button is filled at a time, decided by
-`storefrontPrimary` (`lib/shopify/storefront-step.ts`, tested):
+| State | ① Show | ② Theme | ③ Publish | Filled |
+|---|---|---|---|---|
+| Status loading | — | — | — | none ("Checking your storefront…" + Publish) |
+| Status failed | — | — | — | Publish ("Couldn't check… Try again") |
+| Not on the storefront | current | upcoming | upcoming | Show on storefront |
+| On it, theme not marked | done | current | upcoming | Add to theme |
+| On it, theme marked, changes not live or never published | done | done | current | Publish |
+| On it, theme marked, nothing to publish | done | done | done | none — nothing to press |
 
-| State | Filled |
-|---|---|
-| Status loading | none |
-| Status failed | Publish |
-| Not on the storefront | Show on storefront |
-| On it, Show on storefront pressed on this visit | Add to theme |
-| On it, unpublished changes | Publish |
-| On it, nothing to publish | Add to theme |
-
-"Pressed on this visit" is local state. Add to theme leaves the app (`window.open(…, "_top")`),
-so nothing resets it. The "Ready to publish?" tip has a Shopify wording too (`PUBLISH_SHOPIFY`
-in `components/onboarding/callouts.ts`), because the default one promises code to paste.
+Add to theme marks the step before `window.open(…, "_top")`, because the theme editor replaces the
+admin page and nothing in the app runs again until the merchant returns. The "Ready to publish?"
+tip has a Shopify wording too (`PUBLISH_SHOPIFY` in `components/onboarding/callouts.ts`), because
+the default one promises code to paste. HeroUI's `Tooltip.Content` is `break-all`: a prose tooltip
+needs `break-normal`, or it splits words.
 
 **A deleted map comes off the storefront** (`lib/shopify/storefront-cleanup.ts`): the map
 route's DELETE, inside the admin, schedules the removal from the list and the picker in
@@ -298,7 +308,7 @@ map's picker entry follows on the next `GET`.
 embed checks a restricted site list against the visitor's host, so a store that connected
 `www.brand.com` afterwards showed a blank block. `readStorefront` now reads
 `shop { primaryDomain { host } }` on every call (no scope), the route updates the shop row
-when it moved, and `domainMissing` drives a one-line warning under the storefront row whose "Add it" adds the
+when it moved, and `domainMissing` drives a one-line warning under step 1 whose "Add it" adds the
 host and republishes. An empty site list means every site and never warns.
 
 ## Lifecycle (webhooks)
