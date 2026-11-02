@@ -3,6 +3,7 @@
 import type { PostHog } from "posthog-js";
 
 import type { AuthUser } from "@/lib/auth/types";
+import { isPostHogEnabled, posthogHost, posthogProjectToken } from "./config";
 import { redactEventUrls } from "./redact";
 
 /**
@@ -35,12 +36,10 @@ import { redactEventUrls } from "./redact";
  * never land in the customer funnel, and invite tokens are cut out of every
  * URL that is kept.
  */
-const projectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
-const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
+const projectToken = posthogProjectToken;
+const host = posthogHost;
 
-export const isPostHogEnabled = Boolean(
-  projectToken && host && process.env.NEXT_PUBLIC_DISABLE_POSTHOG !== "true",
-);
+export { isPostHogEnabled };
 
 const IGNORED_PATHS = ["/admin", "/login/admin", "/dev"];
 
@@ -119,6 +118,9 @@ export function identifyUser(user: AuthUser): void {
     posthog?.identify(user.id, {
       email: user.email,
       name: user.name,
+      // Which door they came in by, so a funnel can be split: a Shopify shop
+      // never signs up on our site (lib/shopify/funnel.ts).
+      platform: user.shopify ? "shopify" : "web",
     }),
   );
 }

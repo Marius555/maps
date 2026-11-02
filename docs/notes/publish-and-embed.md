@@ -37,6 +37,11 @@ rewritten; it is the record of why this area is shaped as it is.
   `./map.js`, a second evaluation of the loader on any page whose CMS appends `?ver=`.
   Hence `config.ts` (the loader's) and `page.ts` (the app's) each carry a `warn`. Old
   hashed chunks stay in R2, so a visitor holding a cached old `map.js` still works.
+- **The box the map waits in is never empty** (`boot.ts`, a zero-width character). Dawn and
+  every Shopify theme built on it ship `div:empty{display:none}`; an empty box is hidden, a
+  hidden box never nears the viewport, and the loader's wait never ends — a blank map with no
+  warning unless it was eager (found on the Shopify block, 2026-11-02). Content rather than an
+  inline `display`, so a host that hides the box itself (a tab) still decides when it shows.
 - **A Directions press opens instantly and is never intercepted.** It has broken twice. No
   `window.open`, no `preventDefault`, nothing awaited in the click: the link is a real
   `<a>` and the new tab is Google's (or Apple's) from the first frame. The first press may

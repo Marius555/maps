@@ -11,6 +11,10 @@
  * Liquid's contract — rename one here and every storefront block stops
  * finding its map. Only public values go in: the snapshot URL is already on
  * every page the map is shown on, and a metafield read by Liquid is public.
+ *
+ * Beside it, each map on the list is also a `$app:map` metaobject
+ * (`storefrontMapFields`), which is what the block's "Map" picker offers. This
+ * list stays the source for the default map and for `script`.
  */
 
 export type StorefrontMap = { name: string; snapshot: string };
@@ -69,6 +73,36 @@ export function withStorefrontMap(
   const keep = current?.default && current.default in maps ? current.default : null;
 
   return { default: makeDefault || !keep ? mapId : keep, script, maps };
+}
+
+/**
+ * The list with `script` pointed at where `map.js` is served now, or `null`
+ * when it already is. A dev tunnel dies with every `shopify app dev`, and the
+ * list is otherwise rewritten only by "Show on storefront" — which a map
+ * already on the storefront never offers — so without this every block on the
+ * dev store stays blank from the next restart on.
+ */
+export function withScript(current: StorefrontMaps | null, script: string): StorefrontMaps | null {
+  if (!current || current.script === script) return null;
+  return { ...current, script };
+}
+
+/**
+ * The `$app:map` metaobject's fields for one storefront map — what the theme
+ * block's "Map" picker lists (`name`) and loads (`snapshot`). Both are required
+ * by the definition (distribution/shopify/shopify.app.toml), so an unnamed map
+ * still gets a name.
+ */
+export function storefrontMapFields(map: StorefrontMap): { key: string; value: string }[] {
+  return [
+    { key: "name", value: pickerName(map.name) },
+    { key: "snapshot", value: map.snapshot },
+  ];
+}
+
+/** What the picker lists a map as — compared, too, to tell whether an entry is stale. */
+export function pickerName(name: string): string {
+  return name.trim() || "Untitled map";
 }
 
 /** Take a map off the list; the default moves to whichever map is left first. */

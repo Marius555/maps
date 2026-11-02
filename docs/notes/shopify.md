@@ -45,13 +45,33 @@ and the admin side is the Next.js site.
 - **The block's markup is the WordPress block's**, so the embed needs no change and its
   own-code budget is untouched. A theme-editor section reload re-boots by importing `map.js`
   under a fresh query string, in `request.design_mode` only.
+- **The block's canvas carries an inline `display:block`, and must.** Dawn and every theme
+  built on it ship `div:empty{display:none}`; the canvas is empty until the map mounts, a
+  hidden element never intersects, so the lazy loader never started the map — blank on the
+  storefront and in the theme editor, unless "Load the map straight away" was on (2026-11-02).
 - **Theme extension assets are `.jpg .jpeg .js .css .png .svg .json .wasm` only**, and only
   the CLI's bundler enforces it — `shopify theme check` passed a `.webp` that `shopify app dev`
-  then refused. The block's `assets/placeholder.jpg` is a JPEG (quality 82) of the WordPress
-  `placeholder.webp`; re-make it when that one is regenerated or `DEFAULT_MAP_STYLE` changes.
-- **The metafield's keys are the Liquid's contract** (`lib/shopify/storefront-maps.ts`):
-  `default`, `script`, `maps.<id>.name`, `maps.<id>.snapshot`. Rename one and every block stops
-  finding its map.
+  then refused. The block has no assets now.
+- **No picture of a map in the block's setup card.** It had one (a stretched JPEG), and the
+  owner read the card as the map drawn in low quality. A plain card cannot be mistaken for it.
+- **The Liquid's contract** is the metafield's keys (`lib/shopify/storefront-maps.ts`) —
+  `default`, `script`, `maps.<id>.name`, `maps.<id>.snapshot` — and the `$app:map`
+  metaobject's fields, `name` and `snapshot` (`shopify.app.toml`). Rename one and every block
+  stops finding its map.
+- **`shopify app dev` does not reload `shopify.app.toml`, and validates the block in the same
+  push that would create a metaobject definition.** A block naming a type the shop does not have
+  yet fails that push ("metaobject_type is invalid") and the definition is never made. Add a
+  definition in two steps: TOML first with no setting using it, restart, then the setting.
+- **The block's schema names the metaobject type in full: `app--442457194497--map`.** Shopify
+  refuses `$app:map` in a schema (measured 2026-11-02, with the definition present) — the
+  `$app:` prefix works in Liquid only. That number is the **dev** app's id, so the production
+  app (`shopify.app.production.toml`) needs its own id written there before it ships.
+- **A Shopify shop's first and last funnel steps are sent by the server**
+  (`lib/posthog/server.ts`, `lib/shopify/funnel.ts`): `user_signed_up` (`method: "shopify"`)
+  once, when `provisionShop` creates the shop, and `checkout_completed`
+  (`provider: "shopify"`) when the App Home's return from the plan page shows a paid plan
+  started or changed — never from the hourly sweep, so a renewal is not a sale. The browser
+  identifies the same workspace id with `platform: "shopify"`.
 - **A Shopify shop is never billed by Lemon Squeezy**, and its subscription row says
   `provider: "shopify"`. Absent `provider` is Lemon, which is every row written before this.
 - **Frozen is sticky.** `activeSubscription` has no status; a freeze is known only from the
@@ -117,13 +137,57 @@ installation, which takes any namespace, needs no scope and is readable only by 
 "Show on storefront" (`/api/maps/[id]/shopify-storefront`) publishes when needed, lets the
 shop's domains through a restricted allowlist (`prepareMapForSites`, shared with the WordPress
 connect), and adds the map to the list; the first map becomes the default, so a block needs
-no settings. A "Map code" setting picks another. The tag filter is not offered: the embed's
-`data-tags` takes tag ids, which a merchant typing in the theme editor does not know.
+no settings. The tag filter is not offered: the embed's `data-tags` takes tag ids, which a
+merchant typing in the theme editor does not know.
+
+**Another map is picked by name, not by code.** Each map on the list is also a `$app:map`
+metaobject (handle = map id; `name`, `snapshot`), declared in `shopify.app.toml` and written by
+the same route; the block's "Map" setting is a `metaobject` picker of them, naming the type in
+full (Invariants). App-owned
+metaobjects need no access scope (since 2026-04), so `scopes = ""` stands. An empty picker, or
+an entry since removed, shows the default. It replaced a typed "Map code" that the app only
+displayed for maps that were *not* the default, so the one map most people have never had a
+code anybody could find.
+
+**`GET` heals what the block reads**, writing only what differs: `script` (in development it
+is the tunnel, which dies with every `shopify app dev`, and nothing else rewrites the list once
+a map is on it) and a missing or misnamed picker entry (maps shown before the picker existed,
+maps renamed since).
 
 `addBlockUrl` is Shopify's deep link that opens the theme editor with the block added.
 
-Not done yet: a deleted or renamed map is not taken off the list. A deleted map's block
-shows nothing to visitors and a "no map with that code" card in the editor.
+### The Publish footer inside Shopify
+
+Inside the Shopify admin the store is the obvious place for a map. The Publish sidebar's column
+opens on two numbered steps, **① Show on storefront** and **② Add to theme**
+(`components/shopify/storefront/`). Its footer keeps Publish, then "On another website too? Embed
+code and domains" as one quiet line. That line is demoted rather than removed because it also
+holds the allowed sites, which a full list sends the merchant to. `isShopify` comes from the
+page's server-side user rather than `useMe()`, so the first paint already has this layout.
+
+**The steps sit at the top of the scrolling column, not in the pinned footer.** In the footer,
+measured at 390×844, they took 479px of the open sheet's 482px and left the design controls
+none (2026-11-01). The footer stays the height it is for everybody else.
+
+**Step 2 is never marked done.** Telling whether the block is in the theme needs `read_themes`,
+and the app asks for no scope (above). So one button is filled at a time, decided by
+`storefrontPrimary` (`lib/shopify/storefront-step.ts`, tested):
+
+| State | Filled |
+|---|---|
+| Status loading | none |
+| Status failed | Publish |
+| Not on the storefront | Show on storefront |
+| On it, step 1 pressed on this visit | Add to theme |
+| On it, unpublished changes | Publish |
+| On it, nothing to publish | Add to theme |
+
+"Pressed on this visit" is local state. Add to theme leaves the app (`window.open(…, "_top")`),
+so nothing resets it. The "Ready to publish?" tip has a Shopify wording too (`PUBLISH_SHOPIFY`
+in `components/onboarding/callouts.ts`), because the default one promises code to paste.
+
+Not done yet: a deleted map is not taken off the list or out of the picker; its block shows
+nothing to visitors. A renamed map's picker entry follows on the next `GET`.
 
 ## Lifecycle (webhooks)
 
@@ -175,5 +239,9 @@ theme-check:theme-app-extension` checks the block.
    forwards browser errors to the terminal (`logging.browserToTerminal: "warn"`), so if it
    recurs, the `[browser]` line just before the reloads in the CLI output names the error.
    In production the same error would show the global error page, not a loop.
-4. Analytics on storefronts: does review require Shopify's customer-privacy consent before
-   the beacon? If so, measurement stays off for Shopify maps in v1.
+4. ~~Analytics on storefronts~~ — settled 2026-11-02: the beacon asks Shopify's Customer
+   Privacy API. On a page with `window.Shopify`, `embed/src/track.ts` sends only when
+   `customerPrivacy.analyticsProcessingAllowed()` is `true` (region and store settings
+   included), sends nothing while the API is missing, and drops what was queued before a yes.
+   The block loads the API (`consent-tracking-api` 0.2). Measurement stays a paid feature for
+   Shopify shops; Privacy §6 says so.

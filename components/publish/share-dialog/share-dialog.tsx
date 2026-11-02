@@ -26,12 +26,19 @@ import { EmbedSnippet } from "../embed-snippet";
  * The domains have since become a fold of their own, entered one at a time
  * (`allowed-domains/`), and the tag chips offer only tags somebody wears and
  * say how many locations the choice shows.
+ *
+ * Inside the Shopify admin the store is the obvious place for the map, so
+ * `trigger="link"` demotes the button to one quiet line under Publish
+ * (`DesignSidebar`). Same name, so the docs and the "site list is full"
+ * toast still point at it.
  */
 export function ShareDialog({
   map,
   places,
   isMeasuring,
+  trigger = "button",
 }: {
+  trigger?: "button" | "link";
   map: AppMap;
   /** For the tag chips: which tags anybody wears, and how many each shows. */
   places: Place[];
@@ -46,10 +53,23 @@ export function ShareDialog({
 
   return (
     <>
-      <Button variant="secondary" size="sm" className="w-full" onPress={() => setIsOpen(true)}>
-        <Share2 aria-hidden="true" className="size-4" />
-        Embed code and domains
-      </Button>
+      {trigger === "link" ? (
+        <p className="text-pretty text-xs text-muted">
+          On another website too?{" "}
+          <button
+            type="button"
+            onClick={() => setIsOpen(true)}
+            className="rounded text-foreground underline outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          >
+            Embed code and domains
+          </button>
+        </p>
+      ) : (
+        <Button variant="secondary" size="sm" className="w-full" onPress={() => setIsOpen(true)}>
+          <Share2 aria-hidden="true" className="size-4" />
+          Embed code and domains
+        </Button>
+      )}
 
       <ResponsiveDialog
         isOpen={isOpen}

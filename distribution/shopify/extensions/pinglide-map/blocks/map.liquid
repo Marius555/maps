@@ -1,54 +1,82 @@
 {%- comment -%}
   A Pinglide map on a Shopify storefront (docs/notes/shopify.md, "Storefront").
 
-  Nothing here calls us when a visitor loads the page (CLAUDE.md §2). The map
-  list is an app-data metafield the app writes when a map is put on the
-  storefront — `app.metafields.pinglide.maps`:
+  Nothing here calls us when a visitor loads the page (CLAUDE.md §2). Which map
+  to show comes from two things the app writes when a map is put on the
+  storefront:
 
-    { "default": "<mapId>", "script": "https://cdn.pinglide.com/embed/v1/map.js",
-      "maps": { "<mapId>": { "name": "…", "snapshot": "https://cdn.pinglide.com/…" } } }
+  - the "Map" setting, a picker of `$app:map` metaobjects — one per map, with
+    `name` (what the picker lists) and `snapshot` (its live snapshot URL). The
+    schema has to name the type in full, `app--<app id>--map`: Shopify refuses
+    `$app:map` there (it works in Liquid only), so the id is this app's and a
+    second app (production) needs its own;
+  - the app-data metafield `app.metafields.pinglide.maps`, for the default map
+    shown while the picker is empty, and where `map.js` lives:
 
-  — and the page loads `map.js` and the live snapshot from the CDN, exactly as a
+      { "default": "<mapId>", "script": "https://cdn.pinglide.com/embed/v1/map.js",
+        "maps": { "<mapId>": { "name": "…", "snapshot": "https://cdn.pinglide.com/…" } } }
+
+  The page then loads `map.js` and the live snapshot from the CDN, exactly as a
   pasted snippet does. The markup is the WordPress block's (render.php):
   `script[type=text/plain][data-snapshot]` beside a canvas the embed sizes from
-  `data-height`, with a scoped `!important` rule for the phone height. No embed
-  change, so the embed's own-code budget is untouched.
+  `data-height`. No embed change, so the embed's own-code budget is untouched.
 
-  "Map code" picks one of several maps; empty shows the app's default.
+  **The canvas carries an inline `display:block`, and it must.** Dawn and every
+  theme built on it ship `div:empty{display:none}`, and the canvas is an empty
+  div until the map mounts into it. Hidden, it never intersects the viewport,
+  so the embed's lazy loader never starts the map: a blank block on the
+  storefront and in the theme editor, which only "Load the map straight away"
+  (no wait for the viewport) got past.
 {%- endcomment -%}
 
 {%- liquid
   assign data = app.metafields.pinglide.maps.value
-  assign code = block.settings.map_code | strip
-  if code == blank
-    assign code = data.default
+  assign picked = block.settings.map
+  assign snapshot = ''
+  if picked
+    assign snapshot = picked.snapshot.value
   endif
-  assign map = data.maps[code]
+  if snapshot == blank and data.default != blank
+    assign snapshot = data.maps[data.default].snapshot
+  endif
   assign script_url = data.script | default: 'https://cdn.pinglide.com/embed/v1/map.js'
   assign id = 'pinglide-' | append: block.id
-  assign height = block.settings.height
-  assign phone_height = block.settings.phone_height
+  assign height = block.settings.height | default: 520
+  assign phone_height = block.settings.phone_height | default: 420
 -%}
 
-{%- if map and map.snapshot != blank -%}
-  <div id="{{ id }}" class="pinglide-map" {{ block.shopify_attributes }}>
+{%- if snapshot != blank -%}
+  <div
+    id="{{ id }}"
+    class="pinglide-map{% if block.settings.different_phone_height %} pinglide-map--phone{% endif %}"
+    style="--pinglide-height:{{ height }}px;--pinglide-phone-height:{{ phone_height }}px"
+    {{ block.shopify_attributes }}
+  >
     <style>
-      #{{ id }}{overflow:hidden}
-      #{{ id }} .pinglide-map__canvas{height:{{ height }}px!important}
-      {%- if block.settings.different_phone_height %}
-        @media (max-width:749px){#{{ id }} .pinglide-map__canvas{height:{{ phone_height }}px!important}}
-      {%- endif %}
+      .pinglide-map{overflow:hidden}
+      .pinglide-map__canvas{display:block!important;height:var(--pinglide-height)!important}
+      @media (max-width:749px){.pinglide-map--phone .pinglide-map__canvas{height:var(--pinglide-phone-height)!important}}
     </style>
     <script
       type="text/plain"
-      data-snapshot="{{ map.snapshot | escape }}"
+      data-snapshot="{{ snapshot | escape }}"
       data-target="#{{ id }}-canvas"
       data-height="{{ height }}"
       {%- if block.settings.eager %} data-eager{% endif -%}
     ></script>
-    <div id="{{ id }}-canvas" class="pinglide-map__canvas"></div>
+    <div id="{{ id }}-canvas" class="pinglide-map__canvas" style="display:block;height:{{ height }}px"></div>
   </div>
   <script type="module" src="{{ script_url | escape }}"></script>
+  {%- comment -%}
+    Shopify's Customer Privacy API, for the embed's visitor measurement: on a
+    Shopify store it sends only when `analyticsProcessingAllowed()` says so,
+    and sends nothing while the API is missing (embed/src/track.ts). Loaded
+    here because a theme without a cookie banner may never load it. Shopify's
+    own script — nothing of ours runs per visitor (CLAUDE.md §2).
+  {%- endcomment -%}
+  <script>
+    window.Shopify && Shopify.loadFeatures && Shopify.loadFeatures([{ name: "consent-tracking-api", version: "0.2" }], function () {});
+  </script>
 
   {%- if request.design_mode -%}
     {%- comment -%}
@@ -72,22 +100,20 @@
   {%- endif -%}
 {%- elsif request.design_mode -%}
   {%- comment -%}
-    Not set up yet. Merchants see a picture of a map and where to go; visitors
-    see nothing at all — no empty box with margins on a live page.
+    No map on the storefront yet. Merchants see where to go, on a plain card
+    that cannot be mistaken for the map (a picture of one was); visitors see
+    nothing at all — no empty box with margins on a live page.
   {%- endcomment -%}
-  <div class="pinglide-map pinglide-map--setup" {{ block.shopify_attributes }} style="position:relative;height:{{ height }}px;overflow:hidden;border-radius:8px;background:#e9edf0">
-    <img src="{{ 'placeholder.jpg' | asset_url }}" alt="" loading="lazy" width="1920" height="480" style="width:100%;height:100%;object-fit:cover;display:block">
-    <div style="position:absolute;inset:auto 16px 16px 16px;max-width:420px;padding:16px;border-radius:8px;background:#fff;color:#1a1a1a;font:14px/1.45 system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.12)">
-      {%- if code != blank and data.maps -%}
-        <strong style="display:block;margin-bottom:4px">No map with the code “{{ code | escape }}”</strong>
-        Check the code in Pinglide, or clear it to show your default map.
-      {%- else -%}
-        <strong style="display:block;margin-bottom:4px">Choose a map for this block</strong>
-        Open Pinglide, pick a map and press <em>Show on storefront</em>. It appears here.
-      {%- endif -%}
-      <a href="https://{{ shop.permanent_domain }}/admin/apps/pinglide/maps" target="_top" style="display:inline-block;margin-top:8px;color:#1a5fd6">Open Pinglide</a>
+  <div
+    class="pinglide-map pinglide-map--setup"
+    {{ block.shopify_attributes }}
+    style="box-sizing:border-box;display:flex;align-items:center;justify-content:center;min-height:{{ height }}px;padding:24px;border:1px dashed #b5b8bc;border-radius:8px;background:#f6f6f7;color:#303030;font:14px/1.5 system-ui,sans-serif;text-align:center"
+  >
+    <div style="max-width:380px">
+      <strong style="display:block;margin-bottom:4px;font-size:15px">Choose a map for this block</strong>
+      Open Pinglide, pick a map and press <em>Show on storefront</em>. It appears here.
+      <a href="https://{{ shop.permanent_domain }}/admin/apps/pinglide/maps" target="_top" style="display:block;margin-top:12px;color:#005bd3">Open Pinglide</a>
     </div>
-    <small style="position:absolute;top:8px;right:8px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.85);color:#333;font:11px system-ui,sans-serif">© OpenStreetMap contributors</small>
   </div>
 {%- endif -%}
 
@@ -97,10 +123,11 @@
   "target": "content",
   "settings": [
     {
-      "type": "text",
-      "id": "map_code",
-      "label": "Map code",
-      "info": "Leave empty to show your default map. For another map, copy its code from Pinglide's Show on storefront."
+      "type": "metaobject",
+      "id": "map",
+      "label": "Map",
+      "metaobject_type": "app--442457194497--map",
+      "info": "Empty shows your default map. A map is listed here once you press Show on storefront for it in Pinglide."
     },
     {
       "type": "range",

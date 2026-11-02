@@ -10,7 +10,9 @@ check: **`billing.merchantOfRecord` was read off lemonsqueezy.com, not off a rea
 (`lib/legal/values.ts`). `lib/legal/placeholders.test.ts` fails if an edit makes any of the five a
 draft again, which would 404 it in production. **Version 1.1 (19 October 2026)** added the Refund
 Policy and Terms §6.5 / §6.9; it took effect on publish without the §21.2 notice because nobody was
-on a paid Plan yet. From now on, an adverse change needs the 30 days.
+on a paid Plan yet. From now on, an adverse change needs the 30 days. **Version 1.2 (2 November
+2026)** added the Shopify app — Privacy §2, §4, §5, §6 and §8, Terms §6.10 — on publish and without
+notice: it describes a new way in and changes nothing for an existing customer (lawyer question 14).
 
 | File | What it is | Page (`brand.json` link) | Where the app links it |
 |---|---|---|---|
@@ -200,6 +202,13 @@ them being fixed. Each needs a code change or a softer sentence before publishin
     fee and reversed amount (Refund §9.2(b), Terms §6.9) enforceable as damages without an express
     checkbox at checkout, given lawyer question 4? (c) Is keeping the remaining months of an annual
     plan "proportionate" (question 6 again, now stated in Refund §3.1(b))?
+14. **The Shopify app (version 1.2).** A Shopify merchant never sees our sign-up notice: the app
+    is installed from the Shopify App Store and opens without one. (a) Do these Terms bind a merchant
+    who accepted only Shopify's install screen, or does the app need its own acceptance step on first
+    open? (b) Is Terms §6.10 — Shopify bills, under Shopify's terms — enough, given that the Refund
+    Policy speaks only of the Merchant of Record? (c) Privacy §8 deletes a Shopify account 48 hours
+    after uninstall, as Shopify's `shop/redact` requires, with no export window: is that consistent
+    with the Data Act switching terms in Terms §13?
 
 ## Legal checks performed
 

@@ -33,8 +33,22 @@ import type { PublishResult } from "@/lib/repositories/publish.repository";
  * Press Publish in the instant before `useMe` answers and the 403 arrives with a
  * toast already raised for it globally (`lib/query/client.ts`), so the `catch`
  * skips that one error rather than say it twice.
+ *
+ * Inside the Shopify admin the storefront steps may be the next thing to
+ * press, so `variant` lets the sidebar unfill this button (`storefrontPrimary`,
+ * via `DesignSidebar`), and `onStorefront` says in the toast where the
+ * update lands. Everywhere else neither is passed.
  */
-export function PublishAction({ mapId }: { mapId: string }) {
+export function PublishAction({
+  mapId,
+  variant = "primary",
+  onStorefront = false,
+}: {
+  mapId: string;
+  variant?: "primary" | "secondary";
+  /** The map is on its Shopify shop's storefront list. */
+  onStorefront?: boolean;
+}) {
   const publish = usePublishMap(mapId);
   const unverified = useEmailUnverified();
   const noteId = useId();
@@ -48,7 +62,10 @@ export function PublishAction({ mapId }: { mapId: string }) {
         published_location_count: result.publishedCount,
         skipped_location_count: result.skippedCount,
       });
-      toast.success("Published", { description: describe(result) });
+      // Within a minute rather than now: the live snapshot is cached for 60
+      // seconds (lib/snapshot/r2-store.ts).
+      const where = onStorefront ? " Your storefront shows it within a minute." : "";
+      toast.success("Published", { description: `${describe(result)}${where}` });
     } catch (error) {
       if (!isEmailUnverified(error)) toastProblem("Couldn’t publish", error);
     }
@@ -60,6 +77,7 @@ export function PublishAction({ mapId }: { mapId: string }) {
     <div className="space-y-3">
       <Button
         className="w-full"
+        variant={variant}
         onPress={onPress}
         isPending={publish.isPending}
         isDisabled={unverified}

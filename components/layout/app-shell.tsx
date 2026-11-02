@@ -127,7 +127,7 @@ export function AppShell({
 
       {/* In the shell because "back from the card designer" can land on any
           page, and the shell is the one thing that sees every navigation. */}
-      <TutorialRouteWatcher pending={tutorials} />
+      <TutorialRouteWatcher pending={tutorials} isShopify={Boolean(user.shopify)} />
       <PostHogIdentify user={user} />
       <RestoreAuthGuard />
     </SidebarProvider>

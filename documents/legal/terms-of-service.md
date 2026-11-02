@@ -200,6 +200,13 @@ which the Service was provided to you, and reasonable costs of recovering them. 
 to a chargeback that succeeds because of a billing error we did not correct within 14 days after you
 told us about it.
 
+**6.10 Plans bought through our Shopify app.** If you use {{name}} through our app in the Shopify
+App Store, Shopify bills your Plan instead of the Merchant of Record: you choose, change and cancel
+it in your Shopify admin, its price is shown there in US dollars, and the charge appears on your
+Shopify bill under Shopify's terms. §6.1 does not apply to those Plans. The rest of this §6 does,
+except that Shopify's billing decides when a change of Plan takes effect and what happens when a
+payment to Shopify fails.
+
 ## 7. Your content
 
 **7.1 Ownership.** You keep all rights in Customer Content. We claim no ownership of it.

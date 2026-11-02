@@ -238,6 +238,67 @@ describe("createTracker", () => {
   });
 });
 
+describe("consent on a Shopify store", () => {
+  /*
+   * Shopify's Customer Privacy API decides, and only on a Shopify page. The
+   * stub is the shape the API publishes on `window.Shopify.customerPrivacy`.
+   */
+  function onShopify(customerPrivacy?: { analyticsProcessingAllowed: () => boolean }): void {
+    (window as { Shopify?: unknown }).Shopify = customerPrivacy ? { customerPrivacy } : {};
+  }
+
+  afterEach(() => {
+    delete (window as { Shopify?: unknown }).Shopify;
+  });
+
+  it("sends when the store and the visitor allow analytics", () => {
+    onShopify({ analyticsProcessingAllowed: () => true });
+    const track = createTracker(snapshot({ url: ENDPOINT }));
+
+    track("view");
+    hide();
+
+    expect(navigator.sendBeacon).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends nothing when they do not", () => {
+    onShopify({ analyticsProcessingAllowed: () => false });
+    const track = createTracker(snapshot({ url: ENDPOINT }));
+
+    track("view");
+    hide();
+
+    expect(navigator.sendBeacon).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing on a Shopify page that never loaded the API", () => {
+    onShopify();
+    const track = createTracker(snapshot({ url: ENDPOINT }));
+
+    track("view");
+    hide();
+
+    expect(navigator.sendBeacon).not.toHaveBeenCalled();
+  });
+
+  it("never sends what happened before a yes", async () => {
+    let allowed = false;
+    onShopify({ analyticsProcessingAllowed: () => allowed });
+    const track = createTracker(snapshot({ url: ENDPOINT }));
+
+    track("open", { id: "before" });
+    hide();
+    allowed = true;
+    track("open", { id: "after" });
+    hide();
+
+    expect(navigator.sendBeacon).toHaveBeenCalledTimes(1);
+    const [payload] = await bodies();
+    expect(JSON.stringify(payload.e)).toContain("after");
+    expect(JSON.stringify(payload.e)).not.toContain("before");
+  });
+});
+
 describe("trackLinks", () => {
   function rootWith(html: string): HTMLElement {
     const root = document.createElement("div");

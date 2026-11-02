@@ -43,6 +43,7 @@ export function PublishPanel({
   initialCardDesign,
   badge,
   turnOnAnalytics = false,
+  isShopify = false,
 }: {
   initialMap: AppMap;
   initialPlaces: Place[];
@@ -57,6 +58,8 @@ export function PublishPanel({
   badge?: { brand: string; url: string };
   /** Arrived from the Analytics tab's "Turn it on" — see `useTurnOnAnalytics`. */
   turnOnAnalytics?: boolean;
+  /** Inside the Shopify admin — see `DesignSidebar`. */
+  isShopify?: boolean;
 }) {
   const { data: map = initialMap } = useMap(initialMap.id, initialMap);
   const { data: places = initialPlaces } = usePlaces(initialMap.id, initialPlaces);
@@ -164,6 +167,7 @@ export function PublishPanel({
           device={device}
           onDeviceChange={setDevice}
           turnOnAnalytics={turnOnAnalytics}
+          isShopify={isShopify}
         />
       </div>
     </>

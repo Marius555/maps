@@ -28,11 +28,12 @@ people on a large scale (Article 37(1) GDPR). We will review that as the Service
 | **Run your account** | Name, email address, password (stored only as a salted Argon2 hash, never readable), your Plan and account settings. If you choose "Continue with Google": the account identifier, name and email address Google shares with us | (b) contract | For the life of your account, then as in §8 |
 | **Sign you in and keep accounts secure** | Session records: IP address, browser, operating system, device type, country, and times. The sign-in cookie (see the [Cookie Policy]({{legal.cookiesUrl}})). Records of password-reset and email-confirmation requests. When you sign up or ask for a password reset, the signals Cloudflare Turnstile checks to tell people from automated programs: IP address and characteristics of your browser and device | (f) our legitimate interest in keeping the Service and accounts secure | Session records until the session ends or expires (at most 1 year); security records up to 12 months |
 | **Send service emails** — confirming your address, resetting your password, and notices about your account, billing and changes to our terms | Email address, name, message content, delivery status | (b) contract; (c) legal obligation, for notices the law requires | Delivery logs as kept by our email provider, which deletes them automatically after a short period (currently 30 days) |
+| **Run our Shopify app** | If you install {{name}} from the Shopify App Store, there is no sign-up: Shopify shares your store's name, its myshopify.com address and primary domain, Shopify's identifier for the store, and the store's contact email, and we read your Plan and subscription status from Shopify. We are given no access to your store's customers, orders or products | (b) contract | While the app is installed, then deleted as set out in §8 |
 | **Host what you put into the Service** | Customer Content, which may include personal data such as contact names, phone numbers, email addresses and photos | We process it for our customer under our [Data Processing Agreement]({{legal.dpaUrl}}). For your own details in it: (b) contract | As set out in §8 |
-| **Bill paid Plans** | The Merchant of Record handles payment details — we never see card numbers. We receive: name, email address, company name, billing country and address, VAT number, Plan, amounts and subscription status | (b) contract; (c) accounting and tax law | Accounting records for 10 years, as Lithuanian accounting law requires; the rest for the life of your account |
+| **Bill paid Plans** | The Merchant of Record handles payment details — we never see card numbers. We receive: name, email address, company name, billing country and address, VAT number, Plan, amounts and subscription status. Plans bought through our Shopify app are billed by Shopify instead, and from Shopify we receive only the Plan, its billing period and its status | (b) contract; (c) accounting and tax law | Accounting records for 10 years, as Lithuanian accounting law requires; the rest for the life of your account |
 | **Answer support requests** | Your messages, and anything you tell us in them | (b) contract; (f) our legitimate interest in helping users | 24 months after the last message |
 | **Operate our servers** | Technical request logs: IP address, address requested, time, browser, error details | (f) our legitimate interest in running, securing and fixing the Service | As kept by our hosting provider, and no more than 12 months where we control it |
-| **Improve the Service** | How our website and the dashboard are used: pages viewed, buttons pressed, errors, and the steps you take (signing up, creating a map, adding locations, publishing, paying), with browser, device type and approximate location derived from the IP address. Once you sign in, this is linked to your account identifier, name and email address | (f) our legitimate interest in understanding and improving the Service | For as long as our analytics provider retains it on our plan, and at most 7 years |
+| **Improve the Service** | How our website and the dashboard are used: pages viewed, buttons pressed, errors, and the steps you take (signing up, creating a map, adding locations, publishing, paying), with browser, device type and approximate location derived from the IP address. Once you sign in — or open our Shopify app — this is linked to your account identifier, name and email address (for the Shopify app, your store's name and contact email), and records whether you came to us through our website or through Shopify | (f) our legitimate interest in understanding and improving the Service | For as long as our analytics provider retains it on our plan, and at most 7 years |
 | **Protect our legal position** | Any of the above that is relevant to a claim, dispute or request from an authority | (c) legal obligation; (f) our legitimate interest in establishing, exercising or defending legal claims | As long as needed, up to the end of the applicable limitation period |
 | **Tell customers about product news** | Name, email address | (f) our legitimate interest, for existing customers about similar services — or your consent. You can opt out in every email | Until you opt out |
 
@@ -53,7 +54,8 @@ for you or sell you a paid Plan.
 ## 4. Where the data comes from
 
 From you; from Google, if you sign in with Google; from the Merchant of Record, when you buy a paid
-Plan; and from your browser, when you use our website and dashboard.
+Plan; from Shopify, if you use our Shopify app; and from your browser, when you use our website and
+dashboard.
 
 ## 5. Who we share it with
 
@@ -72,6 +74,8 @@ Plan; and from your browser, when you use our website and dashboard.
 
 - **Google** — if you choose "Continue with Google".
 - **{{billing.merchantOfRecord}}** — sells paid Plans and processes payments.
+- **Shopify** — if you use our Shopify app: it runs your store and the Shopify admin the app opens
+  in, tells us who you are when you open it, and bills the app's paid Plans.
 - **OpenFreeMap** (Hyperknot Software Kft., Hungary) — serves the map tiles your browser downloads to
   draw a map, both in our dashboard and on Published Maps. Each request necessarily carries your IP
   address. Its privacy policy states that it does not log IP addresses, except temporarily when
@@ -107,6 +111,10 @@ Plan; and from your browser, when you use our website and dashboard.
 
   No identifier is stored on your device. Each page view gets a new random identifier that exists
   only inside that page.
+- **On a Shopify store, measurement also follows the store's privacy settings and your choice in
+  its cookie banner.** The map asks Shopify whether analytics is allowed for you before sending
+  anything, and sends nothing if the answer is no, or if the store gives no answer. Nothing recorded
+  before you agree is sent afterwards.
 - Individual records are kept for 30, 180 or 365 days, depending on the website owner's Plan, and
   are then deleted automatically, at most a day late. Daily statistics made from them —
   counts per location, search term, country, device, referring website and page, with positions
@@ -130,6 +138,11 @@ days; we then delete account data and Customer Content within the following 60 d
 expire no later than 30 days after that (Terms of Service §13.7). The exceptions are accounting
 records, which we keep for 10 years, and data needed for a legal claim, which we keep for as long as
 the claim requires.
+
+**If you use our Shopify app, uninstalling it is how the account ends.** Shopify tells us to delete
+your store's data 48 hours after you uninstall the app, and we then delete the account, its
+Customer Content and the store details from §2, without the 30-day export window above. Reinstalling
+within those 48 hours brings everything back. Accounting records are kept as above.
 
 An account whose email address is not confirmed within 7 days of signing up is deleted
 automatically, together with everything stored for it. Until an address is confirmed, the account

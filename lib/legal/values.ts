@@ -36,9 +36,9 @@ export const LEGAL_DETAILS = {
   },
   legal: {
     /** e.g. "1.0". Raise it on every published change. */
-    version: "1.1",
+    version: "1.2",
     /** At least 30 days after announcing a change that is not in customers' favour. */
-    effectiveDate: "19 October 2026",
+    effectiveDate: "2 November 2026",
   },
   billing: {
     /**

@@ -32,6 +32,27 @@ scopes = ""
 [auth]
 redirect_urls = ["https://pinglide.com/shopify"]
 
+# One entry per map on the storefront, written by "Show on storefront"
+# (app/api/maps/[id]/shopify-storefront). The theme block's "Map" setting is a
+# picker of these, so a merchant chooses a map by name instead of typing a code.
+# App-owned (`$app:map`), which needs no access scope. The field keys are the
+# block's contract (docs/notes/shopify.md, "Storefront").
+[metaobjects.app.map]
+name = "Pinglide map"
+display_name_field = "name"
+access.admin = "merchant_read"
+access.storefront = "public_read"
+
+[metaobjects.app.map.fields.name]
+name = "Name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.map.fields.snapshot]
+name = "Snapshot URL"
+type = "single_line_text_field"
+required = true
+
 [webhooks]
 api_version = "2026-10"
 

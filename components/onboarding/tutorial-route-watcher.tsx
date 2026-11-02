@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import type { TutorialId } from "@/lib/onboarding/tutorials";
 import { useMarkTutorialSeen } from "@/lib/query/account";
+import { PUBLISH_SHOPIFY } from "./callouts";
 import { Tutorial } from "./tutorial-overlay";
 import { dismissTutorial, isTutorialDismissed } from "./tutorial-store";
 
@@ -21,9 +22,16 @@ import { dismissTutorial, isTutorialDismissed } from "./tutorial-store";
  *   card this also keeps its overlay off the page they come back to.
  *
  * `pending` is what the layout found unseen on the last full load; this tab's
- * own closes are in the store.
+ * own closes are in the store. `isShopify` swaps "Ready to publish?"'s wording:
+ * inside the Shopify admin there is no code to paste (docs/notes/shopify.md).
  */
-export function TutorialRouteWatcher({ pending }: { pending: readonly TutorialId[] }) {
+export function TutorialRouteWatcher({
+  pending,
+  isShopify = false,
+}: {
+  pending: readonly TutorialId[];
+  isShopify?: boolean;
+}) {
   const pathname = usePathname();
   const [previous, setPrevious] = useState(pathname);
   const [returnedFromCard, setReturnedFromCard] = useState(false);
@@ -62,7 +70,9 @@ export function TutorialRouteWatcher({ pending }: { pending: readonly TutorialId
     inMap(pathname) &&
     !inSection(pathname, "publish");
 
-  return showPublish ? <Tutorial id="publish" /> : null;
+  return showPublish ? (
+    <Tutorial id="publish" callouts={isShopify ? PUBLISH_SHOPIFY : undefined} />
+  ) : null;
 }
 
 /** Whether `pathname` is one of a map's own pages, `/maps/x` or below it. */

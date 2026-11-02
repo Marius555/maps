@@ -28,8 +28,9 @@ import type { MapSnapshot } from "@/packages/shared/snapshot";
  *   session instead of one — which is half the cost argument gone for a header.
  * - **No cookie and no storage.** The session id lives in a closure and dies with
  *   the page. Nothing here follows a visitor between page loads or between sites,
- *   which is what keeps this out of consent-banner territory. Do not "improve"
- *   it by remembering the id.
+ *   which is what keeps this out of cookie-banner territory. Do not "improve"
+ *   it by remembering the id. (On a Shopify store the store's own consent still
+ *   decides whether anything is sent — `consented`.)
  */
 
 export type Track = (type: string, data?: Record<string, string | number>) => void;
@@ -57,6 +58,24 @@ const MAX_BODY = 8000;
  * would otherwise be lost to a crash or a killed process.
  */
 const IDLE_MS = 30_000;
+
+/**
+ * Whether this page may send what the visitor did — asked at each flush, so a
+ * visitor who answers the cookie banner mid-visit is counted from then on.
+ *
+ * **On a Shopify store, only with Shopify's yes.** Its Customer Privacy API
+ * blocks analytics by default where consent is required, until the visitor
+ * agrees, and `analyticsProcessingAllowed()` already weighs their region and the
+ * store's settings. A Shopify page without the API loaded sends nothing: the
+ * Pinglide block loads it, and a pasted snippet waits for the theme's banner to.
+ * Every other site is unchanged. A refused flush has already cleared its queue,
+ * so nothing from before a yes is sent after it.
+ */
+function consented(): boolean {
+  const shopify = (window as { Shopify?: { customerPrivacy?: { analyticsProcessingAllowed(): boolean } } })
+    .Shopify;
+  return !shopify || shopify.customerPrivacy?.analyticsProcessingAllowed() === true;
+}
 
 export function createTracker(snapshot: MapSnapshot): Track {
   const config = snapshot.analytics;
@@ -116,7 +135,7 @@ export function createTracker(snapshot: MapSnapshot): Track {
     clearTimeout(timer);
     timer = 0;
 
-    if (body.length <= MAX_BODY) {
+    if (body.length <= MAX_BODY && consented()) {
       navigator.sendBeacon(config.url, new Blob([body], { type: "text/plain" }));
     }
   };

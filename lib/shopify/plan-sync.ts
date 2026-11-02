@@ -4,6 +4,8 @@ import { runDeletionStep } from "@/lib/account-deletion/step";
 import { deletionStoreFor } from "@/lib/account-deletion/store";
 import { forgetUser } from "@/lib/auth/identity-cache";
 import { toShopifyState } from "@/lib/billing/shopify-pricing";
+import type { SubscriptionState } from "@/lib/billing/types";
+import { captureServerEvent } from "@/lib/posthog/server";
 import { ownerContext } from "@/lib/repositories/context";
 import {
   deleteShop,
@@ -24,6 +26,7 @@ import {
   recentSubscriptionEvents,
   type SubscriptionEvent,
 } from "./partner-api";
+import { shopifyPlanPurchase } from "./funnel";
 
 /**
  * Keeping a shop's `subscriptions` row in step with Shopify App Pricing
@@ -71,23 +74,32 @@ export async function reconcileShopPlan(
     shop.planCheckedAt !== null && Date.now() - Date.parse(shop.planCheckedAt) < STALE_MS;
   if (fresh && !justChose) return;
 
-  await refreshShopPlan(shop, justChose ? "unfreeze" : "keep");
+  const { before, after } = await refreshShopPlan(shop, justChose ? "unfreeze" : "keep");
+
+  // The funnel's last step, which a Lemon Squeezy purchase sends from its
+  // return page. Only on the return from Shopify's plan page — never from the
+  // hourly sweep, so a renewal is not a purchase.
+  const bought = justChose ? shopifyPlanPurchase(before, after) : null;
+  if (bought) await captureServerEvent(shop.workspaceId, "checkout_completed", bought);
 }
 
-async function refreshShopPlan(shop: ShopifyShop, freeze: Freeze): Promise<void> {
+async function refreshShopPlan(
+  shop: ShopifyShop,
+  freeze: Freeze,
+): Promise<{ before: SubscriptionState | null; after: SubscriptionState }> {
   const subscription = await fetchActiveSubscription(shop.shopGid);
+  const before = await getSubscription(shop.workspaceId);
 
-  let frozen = freeze === "freeze";
-  if (freeze === "keep") {
-    const stored = await getSubscription(shop.workspaceId);
-    frozen = stored?.provider === "shopify" && stored.status === "paused";
-  }
+  const frozen =
+    freeze === "freeze" ||
+    (freeze === "keep" && before?.provider === "shopify" && before.status === "paused");
 
-  await upsertSubscription(
-    toShopifyState({ workspaceId: shop.workspaceId, shop: shop.shop, subscription, frozen }),
-  );
+  const after = toShopifyState({ workspaceId: shop.workspaceId, shop: shop.shop, subscription, frozen });
+  await upsertSubscription(after);
   await updateShop(shop.id, { planCheckedAt: new Date().toISOString() });
   forgetUser(shop.workspaceId);
+
+  return { before, after };
 }
 
 export type ShopifySweepStep = {

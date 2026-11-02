@@ -136,6 +136,31 @@ const PUBLISH: readonly Callout[] = [
   },
 ];
 
+const PUBLISH_SHOPIFY_BODY =
+  "Put your map on your Shopify store in two presses, with no code to paste.";
+
+/** "Ready to publish?" inside the Shopify admin, where the way onto the store
+    is the storefront steps rather than a snippet (docs/notes/shopify.md). */
+export const PUBLISH_SHOPIFY: readonly Callout[] = [
+  {
+    id: "publish",
+    targets: [
+      {
+        selector: "publish-link",
+        side: "right",
+        title: "Ready to publish?",
+        body: PUBLISH_SHOPIFY_BODY,
+      },
+      {
+        selector: "nav-menu",
+        side: "right",
+        title: "Ready to publish?",
+        body: `Menu, then Publish. ${PUBLISH_SHOPIFY_BODY}`,
+      },
+    ],
+  },
+];
+
 export const CALLOUTS: Record<TutorialId, readonly Callout[]> = {
   maps: MAPS,
   editor: EDITOR,

@@ -52,6 +52,14 @@ and the five blockers this file raised are answered below rather than removed.
 - **No cookie and no storage.** The session id lives in a closure and dies with
   the page. Nothing follows a visitor between page loads or between sites. Do not
   "improve" this by remembering the id.
+- **On a Shopify store, Shopify's consent decides** (`consented` in `track.ts`). With
+  `window.Shopify` on the page, a flush sends only when
+  `Shopify.customerPrivacy.analyticsProcessingAllowed()` is `true`, and nothing while
+  that API is missing. It is asked per flush, after the queue is cleared, so a visitor
+  who agrees mid-visit is counted from then on and nothing from before the yes is sent.
+  Off Shopify nothing changed. The Shopify block loads the API; a pasted snippet on a
+  Shopify store waits for the theme's banner to. The `pinglide` DOM events are not
+  gated — they never leave the page. `embed/src/track.test.ts` guards all four cases.
 - **The tracker costs 0.8KB gzipped, all call sites included.** Measured, not
   estimated: 44.6KB → 45.4KB of a 46KB budget. Every call site is an existing
   single chokepoint — `setOpen`, the delegated Directions listener, the

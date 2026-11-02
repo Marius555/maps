@@ -5,7 +5,8 @@ import { ChevronLeft, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { StorefrontPanel } from "@/components/shopify/storefront-panel";
+import { StorefrontSteps } from "@/components/shopify/storefront/storefront-steps";
+import { useStorefront } from "@/components/shopify/storefront/use-storefront";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { PropertyFold } from "@/components/ui/properties/property-fold";
@@ -71,6 +72,7 @@ export function DesignSidebar({
   device,
   onDeviceChange,
   turnOnAnalytics = false,
+  isShopify = false,
 }: {
   map: AppMap;
   places: Place[];
@@ -82,8 +84,15 @@ export function DesignSidebar({
   onDeviceChange: (value: DeviceId) => void;
   /** Open on the Visitor analytics fold with the switch on — see `useTurnOnAnalytics`. */
   turnOnAnalytics?: boolean;
+  /** Inside the Shopify admin — the column leads with the storefront steps.
+      From the server's user, so the column never draws the other layout first. */
+  isShopify?: boolean;
 }) {
   const isEmpty = places.length === 0 && shapes.length === 0;
+  const hasPendingChanges = hasUnpublishedChanges(map, places, shapes);
+  // Inert outside the Shopify admin. Here rather than in the steps because the
+  // steps and Publish share one answer to "which button is filled".
+  const storefront = useStorefront(map.id, { enabled: isShopify, hasPendingChanges });
 
   // Shut to start with, which only means anything below `lg`: the map is what
   // this page is for, and the controls are one tap from it. Open when the
@@ -113,7 +122,7 @@ export function DesignSidebar({
           <PublishStatus
             compact
             map={map}
-            hasPendingChanges={hasUnpublishedChanges(map, places, shapes)}
+            hasPendingChanges={hasPendingChanges}
           />
         </>
       }
@@ -166,6 +175,16 @@ export function DesignSidebar({
         {design.error ? (
           <div className="pb-3">
             <ErrorMessage error={design.error} />
+          </div>
+        ) : null}
+
+        {/* Inside the Shopify admin the store is where the map goes, so its
+            two steps come first (docs/notes/shopify.md, "Storefront"). In the
+            column rather than the footer: pinned there they left the design
+            controls no room on a phone. */}
+        {isShopify ? (
+          <div className="pb-3">
+            <StorefrontSteps storefront={storefront} />
           </div>
         ) : null}
 
@@ -261,7 +280,8 @@ export function DesignSidebar({
         <div className="max-lg:hidden">
           <PublishStatus
             map={map}
-            hasPendingChanges={hasUnpublishedChanges(map, places, shapes)}
+            hasPendingChanges={hasPendingChanges}
+            storefront={isShopify}
           />
         </div>
 
@@ -274,14 +294,33 @@ export function DesignSidebar({
           </p>
         ) : null}
 
-        {/* Renders only inside the Shopify admin. */}
-        <StorefrontPanel mapId={map.id} />
-        <ShareDialog
-          map={map}
-          places={places}
-          isMeasuring={design.settings.analytics}
-        />
-        <PublishAction mapId={map.id} />
+        {/* Inside the Shopify admin Publish is filled only when it is the next
+            thing to do, and the embed code for any other site is one quiet line
+            — demoted, not removed, because it also holds the allowed sites. */}
+        {isShopify ? (
+          <>
+            <PublishAction
+              mapId={map.id}
+              variant={storefront.primary === "publish" ? "primary" : "secondary"}
+              onStorefront={storefront.status.data?.onStorefront === true}
+            />
+            <ShareDialog
+              trigger="link"
+              map={map}
+              places={places}
+              isMeasuring={design.settings.analytics}
+            />
+          </>
+        ) : (
+          <>
+            <ShareDialog
+              map={map}
+              places={places}
+              isMeasuring={design.settings.analytics}
+            />
+            <PublishAction mapId={map.id} />
+          </>
+        )}
       </footer>
     </BottomSheet>
   );

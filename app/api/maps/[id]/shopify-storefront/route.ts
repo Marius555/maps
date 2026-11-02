@@ -8,9 +8,21 @@ import { env } from "@/lib/env";
 import { NotFoundError, UnauthorizedError } from "@/lib/repositories/errors";
 import { getMap } from "@/lib/repositories/maps.repository";
 import { findShop, type ShopifyShop } from "@/lib/repositories/shopify-shops.repository";
+import type { AppMap } from "@/lib/repositories/types";
 import { adminSession, type AdminSession } from "@/lib/shopify/admin-api";
-import { addBlockUrl, readStorefrontMaps, writeStorefrontMaps } from "@/lib/shopify/storefront";
-import { withoutStorefrontMap, withStorefrontMap } from "@/lib/shopify/storefront-maps";
+import {
+  addBlockUrl,
+  deleteStorefrontMapEntry,
+  readStorefront,
+  upsertStorefrontMapEntry,
+  writeStorefrontMaps,
+} from "@/lib/shopify/storefront";
+import {
+  pickerName,
+  withoutStorefrontMap,
+  withScript,
+  withStorefrontMap,
+} from "@/lib/shopify/storefront-maps";
 import { storefrontMapSchema } from "@/lib/validation/shopify.schema";
 
 /**
@@ -18,15 +30,17 @@ import { storefrontMapSchema } from "@/lib/validation/shopify.schema";
  * (docs/notes/shopify.md, "Storefront").
  *
  * - `GET` — whether it is on the storefront, and whether it is the default.
+ *   It also heals what the theme block reads, writing only what differs: a
+ *   `script` left pointing at a dead dev tunnel, and a missing or misnamed
+ *   picker entry (maps shown before the picker existed, maps renamed since).
  * - `POST` — put it there: let the shop's domains through a restricted
  *   allowlist, publish when needed (`prepareMapForSites`, the WordPress
- *   connect's rules), then add it to the app-data metafield the theme block
- *   reads. Answers with the map code and the theme editor link that adds the
- *   block.
- * - `DELETE` — take it off the list. The live snapshot is untouched: anywhere
- *   else the map is shown keeps working.
+ *   connect's rules), then add it to the app-data metafield and to the block's
+ *   "Map" picker. Answers with the theme editor link that adds the block.
+ * - `DELETE` — take it off the list and out of the picker. The live snapshot is
+ *   untouched: anywhere else the map is shown keeps working.
  *
- * Only from inside the Shopify admin, because writing the metafield needs the
+ * Only from inside the Shopify admin, because writing to Shopify needs the
  * request's own ID token to exchange for an Admin API token — none is stored.
  * Nothing here runs when a storefront visitor loads a page (§2).
  */
@@ -43,17 +57,28 @@ async function shopifyContext(user: AuthUser): Promise<{ shop: ShopifyShop; sess
   return { shop, session: await adminSession(shop.shop, idToken.token) };
 }
 
+function status(map: AppMap, shop: ShopifyShop, onStorefront: boolean, isDefault: boolean) {
+  return { onStorefront, isDefault, name: map.name, addBlockUrl: addBlockUrl(shop.shop) };
+}
+
 export const GET = withMapAuth<{ id: string }>(async ({ params, user, ctx }) => {
   const map = await getMap(ctx, params.id);
   const { shop, session } = await shopifyContext(user);
-  const { data } = await readStorefrontMaps(session);
+  const { installationId, data, entry } = await readStorefront(session, map.id);
+  const listed = data?.maps[map.id];
 
-  return ok({
-    onStorefront: Boolean(data?.maps[map.id]),
-    isDefault: data?.default === map.id,
-    code: map.id,
-    addBlockUrl: addBlockUrl(shop.shop),
-  });
+  if (listed) {
+    // The configured origin, never the request's: behind the dev tunnel that
+    // is `https://localhost:…` (`appOrigin`, lib/shopify/bounce.ts).
+    const healed = withScript(data, embedScriptUrl(env.appUrl));
+    if (healed) await writeStorefrontMaps(session, installationId, healed);
+
+    if (!entry || entry.name !== pickerName(map.name)) {
+      await upsertStorefrontMapEntry(session, map.id, { name: map.name, snapshot: listed.snapshot });
+    }
+  }
+
+  return ok(status(map, shop, Boolean(listed), data?.default === map.id));
 });
 
 export const POST = withMapAuth<{ id: string }>(
@@ -72,20 +97,19 @@ export const POST = withMapAuth<{ id: string }>(
       origin,
     );
 
-    const { installationId, data } = await readStorefrontMaps(session);
-    const next = withStorefrontMap(
-      data,
-      map.id,
-      { name: map.name, snapshot: map.snapshotUrl ?? "" },
-      { makeDefault: input.makeDefault, script: embedScriptUrl(origin) },
-    );
+    const { installationId, data } = await readStorefront(session, map.id);
+    const entry = { name: map.name, snapshot: map.snapshotUrl ?? "" };
+    const next = withStorefrontMap(data, map.id, entry, {
+      makeDefault: input.makeDefault,
+      script: embedScriptUrl(origin),
+    });
     await writeStorefrontMaps(session, installationId, next);
+    // `prepareMapForSites` publishes a map that never was, so this is only
+    // empty for a map whose publish failed — which threw above.
+    if (entry.snapshot) await upsertStorefrontMapEntry(session, map.id, entry);
 
     return ok({
-      onStorefront: true,
-      isDefault: next.default === map.id,
-      code: map.id,
-      addBlockUrl: addBlockUrl(shop.shop),
+      ...status(map, shop, true, next.default === map.id),
       published,
       siteRefused,
     });
@@ -98,14 +122,10 @@ export const DELETE = withMapAuth<{ id: string }>(async ({ params, user, ctx }) 
   const map = await getMap(ctx, params.id);
   const { shop, session } = await shopifyContext(user);
 
-  const { installationId, data } = await readStorefrontMaps(session);
+  const { installationId, data, entry } = await readStorefront(session, map.id);
   const next = withoutStorefrontMap(data, map.id);
   if (next) await writeStorefrontMaps(session, installationId, next);
+  if (entry) await deleteStorefrontMapEntry(session, entry.id);
 
-  return ok({
-    onStorefront: false,
-    isDefault: false,
-    code: map.id,
-    addBlockUrl: addBlockUrl(shop.shop),
-  });
+  return ok(status(map, shop, false, false));
 });

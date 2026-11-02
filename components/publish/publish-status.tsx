@@ -20,10 +20,14 @@ export function PublishStatus({
   map,
   hasPendingChanges,
   compact = false,
+  storefront = false,
 }: {
   map: AppMap;
   hasPendingChanges: boolean;
   compact?: boolean;
+  /** Inside the Shopify admin: the way onto the store is the storefront steps,
+      not a snippet, so the never-published sentence says that instead. */
+  storefront?: boolean;
 }) {
   if (compact) {
     return (
@@ -47,6 +51,14 @@ export function PublishStatus({
             <span className="sr-only">(unpublished changes)</span>
           </>
         ) : null}
+      </p>
+    );
+  }
+
+  if (!map.publishedAt && storefront) {
+    return (
+      <p className="text-xs text-muted">
+        Not published yet. Showing it on your storefront publishes it too.
       </p>
     );
   }

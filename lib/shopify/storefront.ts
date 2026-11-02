@@ -2,37 +2,114 @@ import "server-only";
 
 import { env } from "@/lib/env";
 import { adminGraphql, ShopifyApiError, type AdminSession } from "./admin-api";
-import { parseStorefrontMaps, type StorefrontMaps } from "./storefront-maps";
+import {
+  parseStorefrontMaps,
+  storefrontMapFields,
+  type StorefrontMap,
+  type StorefrontMaps,
+} from "./storefront-maps";
 
 /**
- * Reading and writing the app-data metafield the theme block reads
- * (`./storefront-maps.ts` has its shape and rules). App-data metafields live on
- * the app installation, take any namespace, need no access scope, and are
- * readable only by this app — in GraphQL and in its own Liquid.
+ * What the theme block reads, written from here (`./storefront-maps.ts` has the
+ * shapes and rules):
+ *
+ * - the app-data metafield `pinglide.maps` — the default map and `script`. It
+ *   lives on the app installation, takes any namespace, needs no access scope
+ *   and is readable only by this app, in GraphQL and in its own Liquid;
+ * - one `$app:map` metaobject per map on the list, handle = map id — what the
+ *   block's "Map" picker lists. App-owned, so it needs no access scope either;
+ *   the definition is declared in distribution/shopify/shopify.app.toml.
  */
 
 const NAMESPACE = "pinglide";
 const KEY = "maps";
+const MAP_TYPE = "$app:map";
 
-export async function readStorefrontMaps(
+/** This map's picker entry, as Shopify holds it. */
+export type StorefrontMapEntry = { id: string; name: string | null };
+
+/**
+ * The metafield, and this map's `$app:map` entry, in one request — every
+ * handler of the storefront route needs both.
+ */
+export async function readStorefront(
   session: AdminSession,
-): Promise<{ installationId: string; data: StorefrontMaps | null }> {
+  mapId: string,
+): Promise<{ installationId: string; data: StorefrontMaps | null; entry: StorefrontMapEntry | null }> {
   const result = await adminGraphql<{
     currentAppInstallation: { id: string; metafield: { value: string } | null };
+    metaobjectByHandle: { id: string; name: { value: string | null } | null } | null;
   }>(
     session,
-    `query PinglideStorefrontMaps {
+    `query PinglideStorefrontMap($handle: MetaobjectHandleInput!) {
       currentAppInstallation {
         id
         metafield(namespace: "${NAMESPACE}", key: "${KEY}") { value }
       }
+      metaobjectByHandle(handle: $handle) {
+        id
+        name: field(key: "name") { value }
+      }
     }`,
+    { handle: { type: MAP_TYPE, handle: mapId } },
   );
+
+  const entry = result.metaobjectByHandle;
 
   return {
     installationId: result.currentAppInstallation.id,
     data: parseStorefrontMaps(result.currentAppInstallation.metafield?.value),
+    entry: entry ? { id: entry.id, name: entry.name?.value ?? null } : null,
   };
+}
+
+/** Create or update this map's entry in the block's "Map" picker. */
+export async function upsertStorefrontMapEntry(
+  session: AdminSession,
+  mapId: string,
+  map: StorefrontMap,
+): Promise<void> {
+  const result = await adminGraphql<{
+    metaobjectUpsert: { userErrors: { field: string[] | null; message: string }[] };
+  }>(
+    session,
+    `mutation PinglideUpsertStorefrontMap($handle: MetaobjectHandleInput!, $metaobject: MetaobjectUpsertInput!) {
+      metaobjectUpsert(handle: $handle, metaobject: $metaobject) {
+        metaobject { id }
+        userErrors { field message code }
+      }
+    }`,
+    {
+      handle: { type: MAP_TYPE, handle: mapId },
+      metaobject: { fields: storefrontMapFields(map) },
+    },
+  );
+
+  const error = result.metaobjectUpsert.userErrors[0];
+  if (error) {
+    throw new ShopifyApiError(`Shopify refused the storefront map entry: ${error.message}`, 502);
+  }
+}
+
+/** Take this map's entry out of the picker. A block that had picked it falls back to the default map. */
+export async function deleteStorefrontMapEntry(session: AdminSession, entryId: string): Promise<void> {
+  const result = await adminGraphql<{
+    metaobjectDelete: { userErrors: { field: string[] | null; message: string }[] };
+  }>(
+    session,
+    `mutation PinglideDeleteStorefrontMap($id: ID!) {
+      metaobjectDelete(id: $id) {
+        deletedId
+        userErrors { field message code }
+      }
+    }`,
+    { id: entryId },
+  );
+
+  const error = result.metaobjectDelete.userErrors[0];
+  if (error) {
+    throw new ShopifyApiError(`Shopify refused to remove the storefront map entry: ${error.message}`, 502);
+  }
 }
 
 export async function writeStorefrontMaps(

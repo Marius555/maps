@@ -53,6 +53,16 @@ async function mount(script: HTMLScriptElement): Promise<void> {
   const container = resolveContainer(script, config);
   if (!container) return;
 
+  /*
+   * Never empty while it waits. Dawn and every Shopify theme built on it ship
+   * `div:empty{display:none}`; a hidden box never nears the viewport, so the
+   * wait below never ended and the map stayed blank unless it was eager. A
+   * zero-width character is content, so `:empty` cannot match, and the host's
+   * own display rules are left alone — a box it hides in a tab stays hidden
+   * until shown. `render` replaces it with the map.
+   */
+  container.append("​");
+
   // Before any request, not just before the render: a page with four maps below
   // the fold should make no requests at all until they are scrolled towards.
   // The container is already sized, so nothing shifts when the map arrives.

@@ -9,7 +9,9 @@ import {
   updateShop,
   type ShopifyShop,
 } from "@/lib/repositories/shopify-shops.repository";
+import { captureServerEvent } from "@/lib/posthog/server";
 import { adminSession, readShopInfo } from "./admin-api";
+import { SHOPIFY_SIGNUP } from "./funnel";
 
 /**
  * Make sure a shop that just opened the app has a workspace — creating one the
@@ -52,8 +54,9 @@ export async function provisionShop(shop: string, idToken: string): Promise<Shop
 
   const workspaceId = await createShopAccount(info.name || shop);
 
+  let created: ShopifyShop;
   try {
-    return await createShop({ shop, workspaceId, ...details });
+    created = await createShop({ shop, workspaceId, ...details });
   } catch (error) {
     await deleteUser(workspaceId).catch(() => {});
 
@@ -64,4 +67,9 @@ export async function provisionShop(shop: string, idToken: string): Promise<Shop
 
     throw error;
   }
+
+  // The funnel's first step, which a web sign-up sends from its form. Only for
+  // a shop created here — not a reinstall, not the losing tab of a race.
+  await captureServerEvent(workspaceId, "user_signed_up", SHOPIFY_SIGNUP);
+  return created;
 }

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseStorefrontMaps,
+  storefrontMapFields,
   withoutStorefrontMap,
+  withScript,
   withStorefrontMap,
   type StorefrontMaps,
 } from "./storefront-maps";
@@ -57,6 +59,39 @@ describe("withoutStorefrontMap", () => {
     const one: StorefrontMaps = { default: "a", script: SCRIPT, maps: { a } };
 
     expect(withoutStorefrontMap(one, "a")).toEqual({ default: null, script: SCRIPT, maps: {} });
+  });
+});
+
+describe("withScript", () => {
+  const stale: StorefrontMaps = {
+    default: "a",
+    script: "https://old-tunnel.trycloudflare.com/embed/map.js",
+    maps: { a },
+  };
+
+  it("points a stale list at the current map.js and keeps everything else", () => {
+    expect(withScript(stale, SCRIPT)).toEqual({ ...stale, script: SCRIPT });
+  });
+
+  it("asks for no write when the list is already current", () => {
+    expect(withScript({ ...stale, script: SCRIPT }, SCRIPT)).toBeNull();
+  });
+
+  it("asks for no write when nothing is stored", () => {
+    expect(withScript(null, SCRIPT)).toBeNull();
+  });
+});
+
+describe("storefrontMapFields", () => {
+  it("gives the picker the map's name and the block its snapshot", () => {
+    expect(storefrontMapFields(a)).toEqual([
+      { key: "name", value: "Stockists" },
+      { key: "snapshot", value: a.snapshot },
+    ]);
+  });
+
+  it("names an unnamed map, because the definition requires a name", () => {
+    expect(storefrontMapFields({ ...a, name: "  " })[0]).toEqual({ key: "name", value: "Untitled map" });
   });
 });
 

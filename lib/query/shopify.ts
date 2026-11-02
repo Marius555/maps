@@ -9,8 +9,8 @@ import { queryKeys } from "./keys";
 export type StorefrontStatus = {
   onStorefront: boolean;
   isDefault: boolean;
-  /** The map code a Pinglide block's "Map code" setting takes. */
-  code: string;
+  /** The map's name — what a Pinglide block's "Map" picker lists it as. */
+  name: string;
   /** The theme editor, opened with the Pinglide block added. */
   addBlockUrl: string;
   /** Present after a POST: whether putting it there published the map. */
