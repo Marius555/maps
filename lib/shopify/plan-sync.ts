@@ -123,7 +123,18 @@ export async function runShopifySweepStep(input: {
   const outOfTime = () => Date.now() >= input.deadline;
 
   if (partnerApiConfigured()) {
-    for (const { shop, freeze } of await shopsToRefresh(now)) {
+    // Caught here, not left to throw: the erasure pass below answers Shopify's
+    // shop/redact webhook, a compliance duty that must not wait on the Partner
+    // API being up — or on its token being right.
+    let due: Awaited<ReturnType<typeof shopsToRefresh>> = [];
+    try {
+      due = await shopsToRefresh(now);
+    } catch (error) {
+      console.error("[shopify] finding plans to re-read failed:", error);
+      step.failed += 1;
+    }
+
+    for (const { shop, freeze } of due) {
       if (outOfTime()) return { ...step, more: true };
 
       try {

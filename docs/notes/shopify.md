@@ -39,6 +39,8 @@ and the admin side is the Next.js site.
 - **No Admin API access token is stored.** Every Admin API call happens with a merchant in the
   app, so one is exchanged from the request's ID token when needed and held in memory
   (`lib/shopify/admin-api.ts`). Storing one is a new decision, with encryption, made here first.
+- **The hourly sweep's erasure never waits on the Partner API.** `shop/redact` is a
+  compliance duty; a Partner API failure is logged and counted, then erasure runs ("Billing").
 - **Nothing Shopify-side runs per storefront visitor (§2).** The block reads an app-data
   metafield in Liquid and loads `map.js` and the live snapshot from the CDN. No app proxy, no
   Admin API call, no script tag API.
@@ -195,6 +197,9 @@ never reads as free. A plan set to cancel ends exactly when Shopify says.
 
 The sweep is `POST /api/cron/shopify`, driven by the existing hourly function
 (functions/sheet-sync) — **redeploy it with `npm run setup:sheet-sync`** after changing it.
+**A Partner API failure must not stop the sweep's second half**, the `shop/redact` erasure:
+finding the shops to re-read is caught, logged and counted as `failed`, and erasure runs anyway
+(`plan-sync.test.ts`). Before 2026-11-02 one bad events query skipped that hour's erasures.
 
 **Inside the app, Settings → Billing is Shopify's** (`components/user-settings/billing/shopify/`):
 the plan, Shopify's price for it in USD (`SHOPIFY_PRICES`, which must match the Partner
@@ -232,18 +237,40 @@ maps renamed since).
 
 ### The Publish footer inside Shopify
 
-Inside the Shopify admin the store is the obvious place for a map. The Publish sidebar's column
-opens on two numbered steps, **① Show on storefront** and **② Add to theme**
-(`components/shopify/storefront/`). Its footer keeps Publish, then "On another website too? Embed
-code and domains" as one quiet line. That line is demoted rather than removed because it also
-holds the allowed sites, which a full list sends the merchant to. `isShopify` comes from the
-page's server-side user rather than `useMe()`, so the first paint already has this layout.
+Inside the Shopify admin the store is the obvious place for a map, so the Publish sidebar's
+pinned footer carries it, as **one row** (`StorefrontRow`, in `ShopifyPublishControls`):
 
-**The steps sit at the top of the scrolling column, not in the pinned footer.** In the footer,
-measured at 390×844, they took 479px of the open sheet's 482px and left the design controls
-none (2026-11-01). The footer stays the height it is for everybody else.
+```
+● Live · 33 minutes ago                        ← lg only; the sheet's peek strip says it below lg
+🏪 On your storefront   [Add to theme] [⋯]     ← ⋯: Show by default (if not), Remove from storefront
+   In the block, choose "X" under Map.         ← only when this map is not the default
+   ⚠ host isn't on this map's site list… Add it ← only when domainMissing
+[ Publish                         ] [</>]      ← </> = Embed code and domains
+Publishing confirms you've checked every pin.
+```
 
-**Step 2 is never marked done.** Telling whether the block is in the theme needs `read_themes`,
+Not on the storefront, the whole row is one **Show on storefront** button, since the label says
+where the map isn't. Embed code and domains is a square beside Publish: demoted rather than
+removed, because it also holds the allowed sites, which a full list sends the merchant to (the
+toasts say "beside Publish"). The "press Save in the theme editor" instruction is Add to theme's
+tooltip. `isShopify` comes from the page's server-side user rather than `useMe()`, so the first
+paint already has this layout.
+
+**Why one row, and why pinned now.** It replaced two numbered cards ("① Show on storefront",
+"② Add to theme", a heading, two paragraphs) that sat at the top of the scrolling column. They
+could not be pinned: in the footer, measured at 390×844, they took 479px of the open sheet's 482px
+(2026-11-01). In the scroller they were ~230px above the folds, on top of a ~180px footer, and the
+owner read the column as having no room for its dropdowns (2026-11-02). The row and its footer
+measure ~155px at lg (all eight fold triggers visible with room to spare in a 577px-tall admin
+frame) and ~133px in the open sheet. Every line in the footer is a line the folds lose, so
+anything added here has to earn it.
+
+**Two widths to remember.** "On your storefront", Add to theme and ⋯ fill the 296px of a 20rem
+column exactly: a separate check icon beside the words truncated them, so the store icon in the
+success colour is the "done" mark. And HeroUI's `Tooltip.Content` is `break-all`, which split
+Add to theme's sentence mid-word; prose tooltips need `break-normal`.
+
+**Add to theme is never marked done.** Telling whether the block is in the theme needs `read_themes`,
 and the app asks for no scope (above). So one button is filled at a time, decided by
 `storefrontPrimary` (`lib/shopify/storefront-step.ts`, tested):
 
@@ -252,7 +279,7 @@ and the app asks for no scope (above). So one button is filled at a time, decide
 | Status loading | none |
 | Status failed | Publish |
 | Not on the storefront | Show on storefront |
-| On it, step 1 pressed on this visit | Add to theme |
+| On it, Show on storefront pressed on this visit | Add to theme |
 | On it, unpublished changes | Publish |
 | On it, nothing to publish | Add to theme |
 
@@ -271,7 +298,7 @@ map's picker entry follows on the next `GET`.
 embed checks a restricted site list against the visitor's host, so a store that connected
 `www.brand.com` afterwards showed a blank block. `readStorefront` now reads
 `shop { primaryDomain { host } }` on every call (no scope), the route updates the shop row
-when it moved, and `domainMissing` drives a warning under step 1 with a button that adds the
+when it moved, and `domainMissing` drives a one-line warning under the storefront row whose "Add it" adds the
 host and republishes. An empty site list means every site and never warns.
 
 ## Lifecycle (webhooks)
@@ -317,7 +344,12 @@ it before `shopify theme check` too.
    on its next deploy. **`SHOPIFY_PARTNER_ID` is the number in a `partners.shopify.com/<id>/…`
    URL — 5295851 — not the Dev Dashboard's organisation id (244455299, the one
    `shopify app info` prints)**; the Partner API is served at that Partners id. Set on the Site
-   2026-11-02, with the client secret made a secret; the API token is still owed.
+   2026-11-02, the client secret and the API token both made secrets. **The token answered
+   `activeSubscription` with "App not found"** (and `app(id: gid://partners/App/<id>)` with
+   `null`) on 2026-11-02: valid — a 200, where the other org id is a 401 — but not seeing the
+   app. Its Partner API client needs **Manage apps**; once it has it, expect "Only public apps
+   can access active subscription" until step 2. Re-check with the one `activeSubscription`
+   query in `partner-api.ts`; `null` with no error is the healthy answer for a shop on Free.
 2. Distribution: **Public** (Partners → the app → Distribution). It cannot be changed once
    chosen, and Shopify App Pricing and the Partner API's `activeSubscription` work for public
    apps only.

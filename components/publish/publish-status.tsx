@@ -25,8 +25,10 @@ export function PublishStatus({
   map: AppMap;
   hasPendingChanges: boolean;
   compact?: boolean;
-  /** Inside the Shopify admin: the way onto the store is the storefront steps,
-      not a snippet, so the never-published sentence says that instead. */
+  /** Inside the Shopify admin: one line with a dot, because the footer there
+      also holds the storefront row and every line is taken from the design
+      folds. The sentence about a snippet is not true there anyway — the way
+      onto the store is Show on storefront, whose toast says it published. */
   storefront?: boolean;
 }) {
   if (compact) {
@@ -55,10 +57,31 @@ export function PublishStatus({
     );
   }
 
-  if (!map.publishedAt && storefront) {
+  if (storefront) {
+    const dot = !map.publishedAt
+      ? "border border-muted"
+      : hasPendingChanges
+        ? "bg-accent"
+        : "bg-success";
+
     return (
-      <p className="text-xs text-muted">
-        Not published yet. Showing it on your storefront publishes it too.
+      <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+        <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${dot}`} />
+        <span className="truncate">
+          {!map.publishedAt ? (
+            "Not published"
+          ) : (
+            <>
+              <span className="text-foreground">Live</span>
+              {" · "}
+              {hasPendingChanges ? (
+                <span className="text-accent">changes not published</span>
+              ) : (
+                formatDistanceToNow(new Date(map.publishedAt), { addSuffix: true })
+              )}
+            </>
+          )}
+        </span>
       </p>
     );
   }

@@ -5,7 +5,6 @@ import { ChevronLeft, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { StorefrontSteps } from "@/components/shopify/storefront/storefront-steps";
 import { useStorefront } from "@/components/shopify/storefront/use-storefront";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -27,6 +26,7 @@ import { MobileGroup } from "./mobile-group";
 import { PanelGroup } from "./panel-group";
 import { PanelSurfaceGroup } from "./panel-surface-group";
 import { RowsGroup } from "./rows-group";
+import { ShopifyPublishControls } from "./shopify-publish-controls";
 import type { EmbedDesign } from "./use-embed-design";
 
 /**
@@ -84,14 +84,14 @@ export function DesignSidebar({
   onDeviceChange: (value: DeviceId) => void;
   /** Open on the Visitor analytics fold with the switch on — see `useTurnOnAnalytics`. */
   turnOnAnalytics?: boolean;
-  /** Inside the Shopify admin — the column leads with the storefront steps.
+  /** Inside the Shopify admin — the footer carries the storefront row.
       From the server's user, so the column never draws the other layout first. */
   isShopify?: boolean;
 }) {
   const isEmpty = places.length === 0 && shapes.length === 0;
   const hasPendingChanges = hasUnpublishedChanges(map, places, shapes);
-  // Inert outside the Shopify admin. Here rather than in the steps because the
-  // steps and Publish share one answer to "which button is filled".
+  // Inert outside the Shopify admin. Here rather than in the storefront row
+  // because the row and Publish share one answer to "which button is filled".
   const storefront = useStorefront(map.id, { enabled: isShopify, hasPendingChanges });
 
   // Shut to start with, which only means anything below `lg`: the map is what
@@ -175,16 +175,6 @@ export function DesignSidebar({
         {design.error ? (
           <div className="pb-3">
             <ErrorMessage error={design.error} />
-          </div>
-        ) : null}
-
-        {/* Inside the Shopify admin the store is where the map goes, so its
-            two steps come first (docs/notes/shopify.md, "Storefront"). In the
-            column rather than the footer: pinned there they left the design
-            controls no room on a phone. */}
-        {isShopify ? (
-          <div className="pb-3">
-            <StorefrontSteps storefront={storefront} />
           </div>
         ) : null}
 
@@ -294,23 +284,17 @@ export function DesignSidebar({
           </p>
         ) : null}
 
-        {/* Inside the Shopify admin Publish is filled only when it is the next
-            thing to do, and the embed code for any other site is one quiet line
-            — demoted, not removed, because it also holds the allowed sites. */}
+        {/* Inside the Shopify admin the storefront joins Publish here, as one
+            row, and the embed code for any other site shrinks to a square
+            beside the button (docs/notes/shopify.md, "The Publish footer
+            inside Shopify"). */}
         {isShopify ? (
-          <>
-            <PublishAction
-              mapId={map.id}
-              variant={storefront.primary === "publish" ? "primary" : "secondary"}
-              onStorefront={storefront.status.data?.onStorefront === true}
-            />
-            <ShareDialog
-              trigger="link"
-              map={map}
-              places={places}
-              isMeasuring={design.settings.analytics}
-            />
-          </>
+          <ShopifyPublishControls
+            map={map}
+            places={places}
+            isMeasuring={design.settings.analytics}
+            storefront={storefront}
+          />
         ) : (
           <>
             <ShareDialog

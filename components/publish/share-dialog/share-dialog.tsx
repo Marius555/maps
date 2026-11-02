@@ -1,9 +1,10 @@
 "use client";
 
 import { Button, Separator } from "@heroui/react";
-import { Share2 } from "lucide-react";
+import { CodeXml, Share2 } from "lucide-react";
 import { useState } from "react";
 
+import { IconButton } from "@/components/ui/icon-button";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { AllowedDomainsFold } from "../allowed-domains/allowed-domains-fold";
@@ -28,9 +29,9 @@ import { EmbedSnippet } from "../embed-snippet";
  * say how many locations the choice shows.
  *
  * Inside the Shopify admin the store is the obvious place for the map, so
- * `trigger="link"` demotes the button to one quiet line under Publish
- * (`DesignSidebar`). Same name, so the docs and the "site list is full"
- * toast still point at it.
+ * `trigger="icon"` demotes the button to a square beside Publish
+ * (`ShopifyPublishControls`). Same accessible name and tooltip, so the docs and
+ * the "site list is full" toast still point at it.
  */
 export function ShareDialog({
   map,
@@ -38,7 +39,7 @@ export function ShareDialog({
   isMeasuring,
   trigger = "button",
 }: {
-  trigger?: "button" | "link";
+  trigger?: "button" | "icon";
   map: AppMap;
   /** For the tag chips: which tags anybody wears, and how many each shows. */
   places: Place[];
@@ -53,17 +54,15 @@ export function ShareDialog({
 
   return (
     <>
-      {trigger === "link" ? (
-        <p className="text-pretty text-xs text-muted">
-          On another website too?{" "}
-          <button
-            type="button"
-            onClick={() => setIsOpen(true)}
-            className="rounded text-foreground underline outline-none focus-visible:ring-2 focus-visible:ring-focus"
-          >
-            Embed code and domains
-          </button>
-        </p>
+      {trigger === "icon" ? (
+        <IconButton
+          label="Embed code and domains"
+          icon={CodeXml}
+          variant="secondary"
+          size="md"
+          className="shrink-0"
+          onPress={() => setIsOpen(true)}
+        />
       ) : (
         <Button variant="secondary" size="sm" className="w-full" onPress={() => setIsOpen(true)}>
           <Share2 aria-hidden="true" className="size-4" />

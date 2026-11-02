@@ -140,7 +140,8 @@ const PUBLISH_SHOPIFY_BODY =
   "Put your map on your Shopify store in two presses, with no code to paste.";
 
 /** "Ready to publish?" inside the Shopify admin, where the way onto the store
-    is the storefront steps rather than a snippet (docs/notes/shopify.md). */
+    is Show on storefront then Add to theme rather than a snippet
+    (docs/notes/shopify.md). */
 export const PUBLISH_SHOPIFY: readonly Callout[] = [
   {
     id: "publish",

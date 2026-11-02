@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, toast } from "@heroui/react";
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 
 import {
   useEmailUnverified,
@@ -34,20 +34,24 @@ import type { PublishResult } from "@/lib/repositories/publish.repository";
  * toast already raised for it globally (`lib/query/client.ts`), so the `catch`
  * skips that one error rather than say it twice.
  *
- * Inside the Shopify admin the storefront steps may be the next thing to
+ * Inside the Shopify admin the storefront row may be the next thing to
  * press, so `variant` lets the sidebar unfill this button (`storefrontPrimary`,
- * via `DesignSidebar`), and `onStorefront` says in the toast where the
- * update lands. Everywhere else neither is passed.
+ * via `DesignSidebar`), `onStorefront` says in the toast where the update
+ * lands, and `aside` puts the embed code's square button on Publish's row.
+ * Everywhere else none of them is passed.
  */
 export function PublishAction({
   mapId,
   variant = "primary",
   onStorefront = false,
+  aside,
 }: {
   mapId: string;
   variant?: "primary" | "secondary";
   /** The map is on its Shopify shop's storefront list. */
   onStorefront?: boolean;
+  /** A compact control drawn on the button's own row, to its right. */
+  aside?: ReactNode;
 }) {
   const publish = usePublishMap(mapId);
   const unverified = useEmailUnverified();
@@ -74,23 +78,26 @@ export function PublishAction({
   if (!canPublish) return <ViewOnlyNotice />;
 
   return (
-    <div className="space-y-3">
-      <Button
-        className="w-full"
-        variant={variant}
-        onPress={onPress}
-        isPending={publish.isPending}
-        isDisabled={unverified}
-        aria-describedby={unverified ? noteId : undefined}
-      >
-        Publish
-      </Button>
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <Button
+          className="min-w-0 flex-1"
+          variant={variant}
+          onPress={onPress}
+          isPending={publish.isPending}
+          isDisabled={unverified}
+          aria-describedby={unverified ? noteId : undefined}
+        >
+          Publish
+        </Button>
+        {aside}
+      </div>
 
-      {/* Terms §10.4: publishing confirms the owner checked what the map
-          shows, so it is said beside the button that does it. */}
+      {/* Terms §10.4: "By publishing a map you confirm that you have checked
+          what it shows" — so it is said beside the button that does it, in
+          the Terms' own words rather than a longer paraphrase of them. */}
       <p className="text-xs text-muted text-pretty">
-        Check every location before you publish — you’re responsible for where
-        each pin sits.
+        Publishing confirms you&rsquo;ve checked every pin.
       </p>
 
       <VerifyEmailNotice id={noteId} />

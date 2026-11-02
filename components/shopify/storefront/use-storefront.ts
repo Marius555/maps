@@ -18,12 +18,12 @@ import { storefrontPrimary } from "@/lib/shopify/storefront-step";
  * (each with its toast), and which button in the Publish sidebar is the main
  * one (docs/notes/shopify.md, "Storefront").
  *
- * Called by the sidebar rather than by the steps, because the answer is shared:
- * the steps sit at the top of the column and Publish in its footer, and only
- * one of them may be filled. `enabled` is false outside the Shopify admin,
+ * Called by the sidebar rather than by the storefront row, because the answer
+ * is shared: the row and Publish sit side by side in the footer, and only one
+ * of their buttons may be filled. `enabled` is false outside the Shopify admin,
  * where nothing is fetched and `primary` says nothing.
  *
- * `justShown` is whether step 1 succeeded on this visit to the page — the
+ * `justShown` is whether Show on storefront succeeded on this visit — the
  * moment Add to theme should lead. Local on purpose: it is about what the
  * merchant just did, not about the theme, which the app cannot see.
  */
@@ -53,7 +53,7 @@ export function useStorefront(
           if (result.siteRefused) {
             toast.warning(makeDefault ? "Shown by default" : "Shown on your storefront", {
               description:
-                "Your map's site list is full, so your store's address couldn't be added. Remove a site under Embed code and domains.",
+                "Your map's site list is full, so your store's address couldn't be added. Remove a site under Embed code and domains, beside Publish.",
             });
             return;
           }
@@ -78,7 +78,7 @@ export function useStorefront(
           if (result.siteRefused || result.domainMissing) {
             toast.warning("Your store's address couldn't be added", {
               description:
-                "Your map's site list is full. Remove a site under Embed code and domains, then try again.",
+                "Your map's site list is full. Remove a site under Embed code and domains, beside Publish, then try again.",
             });
             return;
           }
