@@ -9,7 +9,12 @@
  * At most one step is `current`, and its button is the only filled one, so the
  * path reads as a path. Every step before it is `done`, every step after it
  * `upcoming`. With all three done there is nothing to press, and nothing is
- * filled — that is the answer, not a gap.
+ * filled — the stepper does not draw step 3 then, and step 2 offers "Go to
+ * theme", unfilled.
+ *
+ * **Redeploy is offered only when there is something to send** — edits since
+ * the last publish, or no publish at all (`needsPublish`). The owner did not
+ * want a button that republishes an identical map.
  *
  * **Step 2 is "done" only as far as this browser remembers** (`themeAdded`):
  * telling whether the block is really in the theme needs `read_themes`, which
@@ -44,10 +49,12 @@ export function storefrontSteps({
   /** The map has been published at least once. */
   published: boolean;
 }): StorefrontSteps {
-  // With no answer about the storefront, Publish is still something the
-  // merchant can do, and it is what the page offers everybody else.
+  const toPublish = needsPublish({ hasPendingChanges, published });
+
+  // With no answer about the storefront, Redeploy is still something the
+  // merchant can do — when there is anything to redeploy.
   if (onStorefront === undefined) {
-    return { steps: null, primary: isError ? "publish" : null };
+    return { steps: null, primary: isError && toPublish ? "publish" : null };
   }
 
   if (!onStorefront) {
@@ -58,9 +65,20 @@ export function storefrontSteps({
     return { steps: { show: "done", theme: "current", publish: "upcoming" }, primary: "theme" };
   }
 
-  if (hasPendingChanges || !published) {
+  if (toPublish) {
     return { steps: { show: "done", theme: "done", publish: "current" }, primary: "publish" };
   }
 
   return { steps: { show: "done", theme: "done", publish: "done" }, primary: null };
+}
+
+/** The store is behind the editor, or the map has never been published. */
+export function needsPublish({
+  hasPendingChanges,
+  published,
+}: {
+  hasPendingChanges: boolean;
+  published: boolean;
+}): boolean {
+  return hasPendingChanges || !published;
 }

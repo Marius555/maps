@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, toast } from "@heroui/react";
-import { useId, type ReactNode } from "react";
+import { useId } from "react";
 
 import {
   useEmailUnverified,
@@ -36,25 +36,28 @@ import type { PublishResult } from "@/lib/repositories/publish.repository";
  *
  * Inside the Shopify admin this is step 3 of the storefront stepper, so
  * `variant` lets the stepper unfill it when another step is next
- * (`storefrontSteps`), `compact` draws it the stepper's size rather than full
- * width, and `onStorefront` says in the toast where the update lands.
- * Everywhere else none of them is passed.
+ * (`storefrontSteps`), `compact` draws it at the stepper's small size (full
+ * width, like every stepper button), `onStorefront` says in the toast where
+ * the update lands, and
+ * `redeploy` names it Redeploy — there it is drawn only when the map has
+ * changes to send, so it always re-sends something already live. The toast
+ * follows the name. Everywhere else none of them is passed.
  */
 export function PublishAction({
   mapId,
   variant = "primary",
   onStorefront = false,
   compact = false,
-  status,
+  redeploy = false,
 }: {
   mapId: string;
   variant?: "primary" | "secondary";
   /** The map is on its Shopify shop's storefront list. */
   onStorefront?: boolean;
-  /** A small button sized to its label, for the storefront stepper. */
+  /** The small size, for the storefront stepper. Full width either way. */
   compact?: boolean;
-  /** A one-line caption drawn beside the button — the stepper's "Live · …". */
-  status?: ReactNode;
+  /** "Redeploy" / "Redeployed" in place of "Publish" / "Published". */
+  redeploy?: boolean;
 }) {
   const publish = usePublishMap(mapId);
   const unverified = useEmailUnverified();
@@ -72,9 +75,13 @@ export function PublishAction({
       // Within a minute rather than now: the live snapshot is cached for 60
       // seconds (lib/snapshot/r2-store.ts).
       const where = onStorefront ? " Your storefront shows it within a minute." : "";
-      toast.success("Published", { description: `${describe(result)}${where}` });
+      toast.success(redeploy ? "Redeployed" : "Published", {
+        description: `${describe(result)}${where}`,
+      });
     } catch (error) {
-      if (!isEmailUnverified(error)) toastProblem("Couldn’t publish", error);
+      if (!isEmailUnverified(error)) {
+        toastProblem(redeploy ? "Couldn’t redeploy" : "Couldn’t publish", error);
+      }
     }
   };
 
@@ -82,20 +89,17 @@ export function PublishAction({
 
   return (
     <div className="space-y-2">
-      <div className={status ? "flex min-w-0 items-center gap-3" : undefined}>
-        <Button
-          className={compact ? "shrink-0" : "w-full"}
-          size={compact ? "sm" : "md"}
-          variant={variant}
-          onPress={onPress}
-          isPending={publish.isPending}
-          isDisabled={unverified}
-          aria-describedby={unverified ? noteId : undefined}
-        >
-          Publish
-        </Button>
-        {status}
-      </div>
+      <Button
+        className="w-full"
+        size={compact ? "sm" : "md"}
+        variant={variant}
+        onPress={onPress}
+        isPending={publish.isPending}
+        isDisabled={unverified}
+        aria-describedby={unverified ? noteId : undefined}
+      >
+        {redeploy ? "Redeploy" : "Publish"}
+      </Button>
 
       {/* Terms §10.4: "By publishing a map you confirm that you have checked
           what it shows" — so it is said beside the button that does it, in

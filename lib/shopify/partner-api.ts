@@ -13,7 +13,12 @@ import { ShopifyApiError } from "./admin-api";
  * never in a storefront visitor's path (§2).
  */
 
-const PARTNER_API_VERSION = "2026-10";
+/*
+ * Not the Admin API's version (`SHOPIFY_API_VERSION`, 2026-10): the Partner API
+ * versions on its own schedule, and on 2026-11-03 Shopify's schema index listed
+ * nothing newer than 2026-07 for it. Both queries below validate there.
+ */
+const PARTNER_API_VERSION = "2026-07";
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export function partnerApiConfigured(): boolean {

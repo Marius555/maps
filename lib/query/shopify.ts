@@ -13,6 +13,8 @@ export type StorefrontStatus = {
   name: string;
   /** The theme editor, opened with the Pinglide block added. */
   addBlockUrl: string;
+  /** The live theme's editor, with nothing added — "Go to theme". */
+  themeEditorUrl: string;
   /** The storefront's public host, as Shopify has it now. */
   storeHost: string;
   /**

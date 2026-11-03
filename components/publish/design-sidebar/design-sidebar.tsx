@@ -309,7 +309,8 @@ export function DesignSidebar({
       >
         {/* `max-lg:hidden`, because the sheet's peek strip carries it there —
             the point of the strip is that the state is readable with the
-            controls shut. Inside Shopify it is step 3's own line instead. */}
+            controls shut. Inside Shopify it is on the stepper's heading row
+            instead. */}
         {isShopify ? null : (
           <div className="max-lg:hidden">
             <PublishStatus map={map} hasPendingChanges={hasPendingChanges} />

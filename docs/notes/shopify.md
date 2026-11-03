@@ -231,40 +231,70 @@ code anybody could find.
 **`GET` heals what the block reads**, writing only what differs: `script` (in development it
 is the tunnel, which dies with every `shopify app dev`, and nothing else rewrites the list once
 a map is on it) and a missing or misnamed picker entry (maps shown before the picker existed,
-maps renamed since).
+maps renamed since). **Every heal is best effort** (`bestEffort` in the route): a refused write
+is logged as `[shopify] couldn't heal …` and the status still answers. So is the POST's picker
+entry, written after the map is already on the list. Before 2026-11-03 a heal that threw failed
+the whole read, and the Publish footer said "Couldn't check your storefront" on every load.
 
-`addBlockUrl` is Shopify's deep link that opens the theme editor with the block added.
+**That came from the dev store having no `$app:map` definition** (2026-11-03). `app dev` said
+"Ready" with no errors, and its bundle carried the `data` module with the definition, yet
+GraphiQL (the URL `app dev` prints) answered `metaobjectDefinitionByType(type: "$app:map")` with
+`null` and `metaobjectDefinitions` with nothing. The default map works without it; the block's
+"Map" picker lists nothing until it exists. Check with that query after restarting `app dev`.
+
+`addBlockUrl` is Shopify's deep link that opens the theme editor with the block added;
+`themeEditorUrl` opens it as it is, for "Go to theme" — the deep link would add another block
+on every press.
 
 ### The Publish footer inside Shopify
 
 Inside the Shopify admin the store is the obvious place for a map, so the Publish sidebar's
-pinned footer is the path onto it: **three numbered steps, read top to bottom**, with Publish the
-third (`StorefrontStepper`, `components/shopify/storefront/`):
+pinned footer is the path onto it: **numbered steps, read top to bottom**, with Redeploy the
+third — drawn only when there is something to send (`StorefrontStepper`,
+`components/shopify/storefront/`):
 
 ```
-YOUR STORE
+YOUR STORE                          ● Live · 1 h ago     ← every state, loading and failed too
 (✓) Show on your storefront                 Remove   ← done: one line (+ "Not your default map. Make default")
  │
 (2) Add the block to your theme                       ← current: the only filled button
  │  Opens your theme editor with the block added. Press Save there.
- │  [Add to theme]  Already added
+ │  [             Add to theme             ]
+ │  Already added
  │
-(3) Publish your changes                              ← upcoming: grey
-    [Publish]  ● Live · about 1 hour ago
+(3) Redeploy your changes                             ← upcoming: grey
+    [               Redeploy               ]          ← only with edits since the last publish
     Publishing confirms you've checked every pin.
 ────────────────────────────────────────
 </> Embed on another site
 ```
 
+**Step 3 exists only when there is something to send** (`needsPublish`: edits since the last
+publish, or never published), in every state. Nothing to send: two steps, and step 2 ends the
+list with a full-width **[Go to theme]**, unfilled, which opens the live theme's editor with
+nothing added (`themeEditorUrl`). With edits, Go to theme gives way and step 3 appears with
+**[Redeploy]** — filled once it is the next step; its toast says Redeployed. One button at a
+time. The owner asked for all of it (2026-11-03): no button that republishes an identical map,
+the theme one press away once there is nothing to send, and **no finished "Store is up to date"
+step** — a first version drew one, with Go to theme under it, and the button read as a duplicate
+of step 2's. A map never published says Publish, and "Publish your map".
+
 Only the current step is open and has a filled button; finished steps fold to a line with a
-check, later steps are grey, and a line joins the discs. Every move that is not the next step is
-words, not a button (`TextAction`): Remove, Make default, Already added, Open editor, and "Embed
-on another site" — the embed dialog demoted rather than removed, because it also holds the
-allowed sites, which a full list sends the merchant to (the toasts name it). **Publish is drawn
-in step 3 in every state**, filled only when step 3 is current, so a map taken off the
-storefront, or only embedded elsewhere, is never stuck. All buttons are `size="sm"`, sized to
-their labels. `isShopify` comes from the page's server-side user rather than `useMe()`, so the
-first paint already has this layout.
+check on a grey disc (green check, `bg-default text-success` — the owner's call over a green
+disc), later steps are grey, and a line joins the discs. Every move that is not the next step is
+words, not a button (`TextAction`): Remove, Make default, Already added, and "Embed on another
+site" — the embed dialog demoted rather than removed, because it also holds the allowed sites,
+which a full list sends the merchant to (the toasts name it). **Redeploy is drawn whenever there
+is something to send** (`needsPublish`: edits, or never published), filled only when step 3 is
+current, so a map taken off the storefront, or only embedded elsewhere, is never stuck with edits.
+All buttons are `size="sm"` and full width (the owner's call, 2026-11-03). `isShopify` comes from
+the page's server-side user rather than `useMe()`, so the first paint already has this layout.
+
+**The time on the heading row is a number, and coarse** — "12 min ago", "1 h ago", "3 d ago",
+"1 week ago", then months and years (`shortAgo`, `lib/format/ago.ts`, labels written out for the
+`Intl` invariant), never below "1 min". The owner's call over date-fns's "less than a minute ago".
+It is worked out once per render with no counter running: a first version ticked in seconds,
+and the owner did not want a live counter.
 
 **How it got here (2026-11-01 → 11-02), so it is not rebuilt.** Two numbered cards at the top of
 the scrolling column could not be pinned (in the footer at 390×844 they took 479px of the open
@@ -278,7 +308,7 @@ folds scrolling above it), but with one obvious next press.
 **Below `lg` the stepper is not pinned.** It leads the scroller and scrolls away with the folds:
 pinned in a 390px sheet it filled the whole open sheet (2026-11-02), and at the top Publish is on
 screen the moment the sheet opens. `DesignSidebar` draws it in both places with CSS hiding one,
-which is why its heading id is a `useId`. Its relative time ("5 minutes ago") is an `Ago` span
+which is why its heading id is a `useId`. Its relative time ("5 min ago") is a `ShortAgo` span
 with `suppressHydrationWarning`: rendered at request time and hydrated a minute later in the admin's
 iframe, the two strings differed and the whole sidebar was regenerated on the client.
 
@@ -291,12 +321,12 @@ tested), and at most one is current:
 
 | State | ① Show | ② Theme | ③ Publish | Filled |
 |---|---|---|---|---|
-| Status loading | — | — | — | none ("Checking your storefront…" + Publish) |
-| Status failed | — | — | — | Publish ("Couldn't check… Try again") |
+| Status loading | — | — | — | none ("Checking your storefront…", + Redeploy with edits) |
+| Status failed | — | — | — | Redeploy with edits, else none ("Couldn't check… Try again") |
 | Not on the storefront | current | upcoming | upcoming | Show on storefront |
 | On it, theme not marked | done | current | upcoming | Add to theme |
-| On it, theme marked, changes not live or never published | done | done | current | Publish |
-| On it, theme marked, nothing to publish | done | done | done | none — nothing to press |
+| On it, theme marked, changes not live or never published | done | done | current | Redeploy |
+| On it, theme marked, nothing to publish | done | done | not drawn | none — Go to theme in step 2, unfilled |
 
 Add to theme marks the step before `window.open(…, "_top")`, because the theme editor replaces the
 admin page and nothing in the app runs again until the merchant returns. The "Ready to publish?"
@@ -336,6 +366,13 @@ npm run shopify:dev      # writes the block, then shopify app dev (CLI 5.0.0 via
 npm run shopify:deploy   # writes the block, then releases config + extension to every store
 ```
 
+**"Request to pinglide.myshopify.com was aborted before it completed"** from `app dev` is the
+network, not the app (2026-11-03). Measured: TLS to Cloudflare's Vilnius edge (`colo=VNO`) in
+~30 ms, then storefront and `/admin` paths sat 30 s with no byte, intermittently — for
+`allbirds.myshopify.com` too, same IP (23.227.38.74), with shopifystatus.com green and the Admin
+API endpoint answering. Probe with `curl -4 -w "%{time_starttransfer}" https://<shop>/robots.txt`
+a few times; retry later or from another network (hotspot, WARP, a VPN).
+
 Without a terminal to answer its prompt, release with
 `npx -y @shopify/cli@5.0.0 app deploy --path distribution/shopify --allow-updates` after
 `node scripts/shopify-block.mjs`.
@@ -367,6 +404,9 @@ it before `shopify theme check` too.
    app. Its Partner API client needs **Manage apps**; once it has it, expect "Only public apps
    can access active subscription" until step 2. Re-check with the one `activeSubscription`
    query in `partner-api.ts`; `null` with no error is the healthy answer for a shop on Free.
+   **The Partner API is pinned to `2026-07`, not the Admin API's `2026-10`** (2026-11-03): it
+   versions on its own schedule, and Shopify's schema index listed nothing newer for it. The
+   "App not found" above was measured on `2026-10`.
 2. Distribution: **Public** (Partners → the app → Distribution). It cannot be changed once
    chosen, and Shopify App Pricing and the Partner API's `activeSubscription` work for public
    apps only.

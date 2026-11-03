@@ -14,6 +14,7 @@ import {
   addBlockUrl,
   deleteStorefrontMapEntry,
   readStorefront,
+  themeEditorUrl,
   upsertStorefrontMapEntry,
   writeStorefrontMaps,
 } from "@/lib/shopify/storefront";
@@ -34,6 +35,10 @@ import { storefrontMapSchema } from "@/lib/validation/shopify.schema";
  *   It also heals what the theme block reads, writing only what differs: a
  *   `script` left pointing at a dead dev tunnel, and a missing or misnamed
  *   picker entry (maps shown before the picker existed, maps renamed since).
+ *   **Each heal is best effort** (`bestEffort`): a write Shopify refuses is
+ *   logged and the status answers anyway. A shop with no `$app:map`
+ *   definition once failed every read here, and the Publish footer could only
+ *   say "Couldn't check your storefront" (2026-11-03).
  *   And it reports `domainMissing`: the storefront's address, read fresh from
  *   Shopify, is not on the map's restricted site list — a custom domain
  *   connected after the map went on — which a POST fixes.
@@ -71,6 +76,7 @@ function status(
     isDefault,
     name: map.name,
     addBlockUrl: addBlockUrl(shop.shop),
+    themeEditorUrl: themeEditorUrl(shop.shop),
     storeHost,
     // On the storefront, but its site list leaves out where the storefront is:
     // the embed would refuse to draw it there (`hostsMissing`).
@@ -94,6 +100,19 @@ async function rememberStoreHost(shop: ShopifyShop, storeHost: string): Promise<
   }
 }
 
+/**
+ * A write that tidies what the block reads but is not what the request is for.
+ * Logged and swallowed, so a refusal from Shopify — a shop missing the
+ * `$app:map` definition, say — never becomes the request's answer.
+ */
+async function bestEffort(what: string, write: () => Promise<void>): Promise<void> {
+  try {
+    await write();
+  } catch (error) {
+    console.error(`[shopify] couldn't ${what}:`, error);
+  }
+}
+
 export const GET = withMapAuth<{ id: string }>(async ({ params, user, ctx }) => {
   const map = await getMap(ctx, params.id);
   const { shop, session } = await shopifyContext(user);
@@ -105,10 +124,16 @@ export const GET = withMapAuth<{ id: string }>(async ({ params, user, ctx }) => 
     // The configured origin, never the request's: behind the dev tunnel that
     // is `https://localhost:…` (`appOrigin`, lib/shopify/bounce.ts).
     const healed = withScript(data, embedScriptUrl(env.appUrl));
-    if (healed) await writeStorefrontMaps(session, installationId, healed);
+    if (healed) {
+      await bestEffort(`heal ${shop.shop}'s storefront script`, () =>
+        writeStorefrontMaps(session, installationId, healed),
+      );
+    }
 
     if (!entry || entry.name !== pickerName(map.name)) {
-      await upsertStorefrontMapEntry(session, map.id, { name: map.name, snapshot: listed.snapshot });
+      await bestEffort(`heal ${shop.shop}'s picker entry for map ${map.id}`, () =>
+        upsertStorefrontMapEntry(session, map.id, { name: map.name, snapshot: listed.snapshot }),
+      );
     }
   }
 
@@ -144,8 +169,14 @@ export const POST = withMapAuth<{ id: string }>(
     });
     await writeStorefrontMaps(session, installationId, next);
     // `prepareMapForSites` publishes a map that never was, so this is only
-    // empty for a map whose publish failed — which threw above.
-    if (entry.snapshot) await upsertStorefrontMapEntry(session, map.id, entry);
+    // empty for a map whose publish failed — which threw above. Best effort:
+    // the map is on the list by now, so a refused picker entry must not answer
+    // "couldn't put it there". The next GET writes it again.
+    if (entry.snapshot) {
+      await bestEffort(`write ${shop.shop}'s picker entry for map ${map.id}`, () =>
+        upsertStorefrontMapEntry(session, map.id, entry),
+      );
+    }
 
     return ok({
       ...status(map, shop, { onStorefront: true, isDefault: next.default === map.id, storeHost }),

@@ -161,12 +161,20 @@ export async function writeStorefrontMaps(
 }
 
 /**
+ * The live theme's editor, as it is — the Publish footer's "Go to theme", once
+ * the block is in. Not `addBlockUrl`: that adds another block on every press.
+ */
+export function themeEditorUrl(shop: string): string {
+  return `https://${shop}/admin/themes/current/editor`;
+}
+
+/**
  * The theme editor, opened with the Pinglide block added to a new apps section
  * of the home page — Shopify's documented deep link; the merchant previews it
  * and saves.
  */
 export function addBlockUrl(shop: string): string {
-  const url = new URL(`https://${shop}/admin/themes/current/editor`);
+  const url = new URL(themeEditorUrl(shop));
   url.searchParams.set("addAppBlockId", `${env.shopifyClientId}/map`);
   url.searchParams.set("target", "newAppsSection");
   return url.toString();

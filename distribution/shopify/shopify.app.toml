@@ -6,12 +6,13 @@
 # app extension. `npm run shopify:deploy` pushes both; once deployed, Shopify's
 # copy is what merchants get.
 #
-# This is the development app (the one `shopify app dev` installs on the dev
-# store). The production app gets its own `shopify.app.production.toml` when it
-# is created for the App Store submission.
+# One app (decided 2026-11-02): this is the App Store app *and* the one
+# `shopify app dev` installs on the dev store (docs/notes/shopify.md).
 
 client_id = "9f5f7dafc4c98c5b372c8087f8d4b29d"
-name = "pinglide"
+# What the admin's left-hand nav shows. The handle (`/apps/pinglide`) is not
+# this field and does not change with it.
+name = "Pinglide"
 # The site's root. proxy.ts sends `/?shop=…` to the App Home (/shopify), so
 # the landing page stays static for everybody else. `shopify app dev` swaps
 # this for its tunnel while it runs.

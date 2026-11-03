@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 /**
  * A secondary move in the storefront stepper, drawn as words rather than as a
- * button — Remove, Make default, Already added, Open editor.
+ * button — Remove, Make default, Already added, Try again.
  *
  * The stepper's rule is that one button is filled and the eye goes there. The
  * moves that are not "the next step" are still one press away, but they must

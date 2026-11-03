@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { storefrontSteps } from "./storefront-step";
+import { needsPublish, storefrontSteps } from "./storefront-step";
 
 const base = {
   onStorefront: true,
@@ -15,10 +15,16 @@ describe("storefrontSteps", () => {
     expect(storefrontSteps({ ...base, onStorefront: undefined })).toEqual({ steps: null, primary: null });
   });
 
-  it("falls back to Publish when the status could not be read", () => {
+  it("falls back to Redeploy when the status could not be read and there are edits", () => {
+    expect(
+      storefrontSteps({ ...base, onStorefront: undefined, isError: true, hasPendingChanges: true }),
+    ).toEqual({ steps: null, primary: "publish" });
+  });
+
+  it("offers nothing when the status could not be read and the store is current", () => {
     expect(storefrontSteps({ ...base, onStorefront: undefined, isError: true })).toEqual({
       steps: null,
-      primary: "publish",
+      primary: null,
     });
   });
 
@@ -56,6 +62,12 @@ describe("storefrontSteps", () => {
 
   it("keeps the status answer over a later failed refetch", () => {
     expect(storefrontSteps({ ...base, onStorefront: false, isError: true }).primary).toBe("show");
+  });
+
+  it("needs a publish for edits or a map never published, and only then", () => {
+    expect(needsPublish({ hasPendingChanges: false, published: true })).toBe(false);
+    expect(needsPublish({ hasPendingChanges: true, published: true })).toBe(true);
+    expect(needsPublish({ hasPendingChanges: false, published: false })).toBe(true);
   });
 
   it("never has more than one current step", () => {

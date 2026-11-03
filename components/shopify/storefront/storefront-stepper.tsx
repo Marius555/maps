@@ -19,16 +19,25 @@ import type { useStorefront } from "./use-storefront";
  * as three numbered steps, read top to bottom (docs/notes/shopify.md, "The
  * Publish footer inside Shopify").
  *
- *   ① Show on your storefront   ② Add the block to your theme   ③ Publish your changes
+ *   YOUR STORE                                  ● Live · 1 h ago
+ *   ① Show on your storefront   ② Add the block to your theme   ③ Redeploy / up to date
  *
  * Only the step the merchant is on is open and has a filled button; finished
- * steps fold to a line with a check, later ones are grey. Publish is drawn in
- * step 3 in every state — filled only when it is the next thing to do — so a
- * map off the storefront, or one only embedded elsewhere, is never stuck.
+ * steps fold to a line with a check, later ones are grey. Whether the map is
+ * live, and since when, is on the heading row, in every state. Every button is
+ * full width.
+ *
+ * **Step 3 exists only when there is something to send** (`needsPublish`:
+ * edits since the last publish, or never published). Then it holds Redeploy —
+ * filled only when it is next, so a map off the storefront, or one only
+ * embedded elsewhere, is never stuck with edits it cannot push — and Go to
+ * theme hides. Without, there are two steps and Go to theme, in step 2, ends
+ * the list. One button at a time; the theme button is step 2's alone, and
+ * there is no "up to date" step (2026-11-03).
  *
  * Everything that is not the next step is words, not a button: Remove, Make
- * default, Already added, Open editor, Embed on another site. It replaced one
- * dense row of four similar buttons that did not say which to press.
+ * default, Already added, Embed on another site. It replaced one dense row of
+ * four similar buttons that did not say which to press.
  */
 export function StorefrontStepper({
   map,
@@ -47,40 +56,46 @@ export function StorefrontStepper({
     status,
     steps,
     primary,
+    needsPublish,
     onShow,
     onRemove,
     onFixDomain,
     onAddToTheme,
+    onGoToTheme,
     onAlreadyAdded,
     isShowing,
     busy,
   } = storefront;
   const current = status.data;
+  const published = Boolean(map.publishedAt);
   // `useId`, not a fixed id: the sidebar draws this twice — in the footer at
   // `lg`, at the top of the scroller below it — with CSS hiding one.
   const titleId = useId();
 
-  // The status sits beside the button rather than above it: one line fewer in
-  // a pinned footer, and it reads as the button's own caption.
-  const publish = (
+  // Redeploy rather than Publish once anything is live: it re-sends a map the
+  // store already shows. The one map never published says Publish.
+  const publish = needsPublish ? (
     <PublishAction
       mapId={map.id}
       compact
+      redeploy={published}
       variant={primary === "publish" ? "primary" : "secondary"}
       onStorefront={current?.onStorefront === true}
-      status={<PublishStatus map={map} hasPendingChanges={hasPendingChanges} storefront />}
     />
-  );
+  ) : null;
 
   return (
     <section aria-labelledby={titleId} className="space-y-3">
-      <h3
-        id={titleId}
-        className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted uppercase"
-      >
-        <Store aria-hidden="true" className="size-3.5" />
-        Your store
-      </h3>
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <h3
+          id={titleId}
+          className="flex shrink-0 items-center gap-1.5 text-xs font-medium tracking-wide text-muted uppercase"
+        >
+          <Store aria-hidden="true" className="size-3.5" />
+          Your store
+        </h3>
+        <PublishStatus map={map} hasPendingChanges={hasPendingChanges} storefront />
+      </div>
 
       {steps === null || current === undefined ? (
         <div className="space-y-3">
@@ -113,7 +128,13 @@ export function StorefrontStepper({
                 <p className="text-xs text-pretty text-muted">
                   Makes this map available to the Pinglide block in your theme.
                 </p>
-                <Button size="sm" variant="primary" isPending={isShowing} onPress={() => onShow(false)}>
+                <Button
+                  className="w-full"
+                  size="sm"
+                  variant="primary"
+                  isPending={isShowing}
+                  onPress={() => onShow(false)}
+                >
                   Show on storefront
                 </Button>
               </>
@@ -142,11 +163,7 @@ export function StorefrontStepper({
             number={2}
             state={steps.theme}
             title="Add the block to your theme"
-            action={
-              steps.theme === "done" ? (
-                <TextAction onPress={onAddToTheme}>Open editor</TextAction>
-              ) : null
-            }
+            isLast={!needsPublish}
           >
             {steps.theme === "current" ? (
               <>
@@ -155,19 +172,37 @@ export function StorefrontStepper({
                     ? "Opens your theme editor with the block added. Press Save there."
                     : `Opens your theme editor with a block added. Choose “${pickerName(current.name)}” under Map, then press Save.`}
                 </p>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <Button size="sm" variant="primary" onPress={onAddToTheme}>
+                <div className="space-y-1.5">
+                  <Button className="w-full" size="sm" variant="primary" onPress={onAddToTheme}>
                     Add to theme
                   </Button>
                   <TextAction onPress={onAlreadyAdded}>Already added</TextAction>
                 </div>
               </>
             ) : null}
+
+            {/* Set up and nothing to send: the theme, as it is, last in the
+                list. With edits it gives way to Redeploy below — one button at
+                a time. */}
+            {steps.theme === "done" && !needsPublish ? (
+              <Button className="w-full" size="sm" variant="secondary" onPress={onGoToTheme}>
+                Go to theme
+              </Button>
+            ) : null}
           </StepperStep>
 
-          <StepperStep number={3} state={steps.publish} title="Publish your changes" isLast>
-            {publish}
-          </StepperStep>
+          {/* Only when there is something to send — never as a finished
+              "up to date" step (the owner's call, 2026-11-03). */}
+          {needsPublish ? (
+            <StepperStep
+              number={3}
+              state={steps.publish}
+              title={published ? "Redeploy your changes" : "Publish your map"}
+              isLast
+            >
+              {publish}
+            </StepperStep>
+          ) : null}
         </ol>
       )}
 

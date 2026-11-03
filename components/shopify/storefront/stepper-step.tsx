@@ -8,8 +8,9 @@ import type { StepState } from "@/lib/shopify/storefront-step";
  *
  * - `current` — the number on an accent disc, the title at full weight. The
  *   only step whose button is filled.
- * - `done` — a check in place of the number, and "(done)" for a screen reader,
- *   because the check is decoration.
+ * - `done` — a green check on a grey disc in place of the number (the owner's
+ *   call over a green disc), and "(done)" for a screen reader, because the
+ *   check is decoration.
  * - `upcoming` — a grey ring and a grey title, waiting for the step before it.
  *   Drawn anyway, so the merchant can see the whole path before taking it.
  *
@@ -73,7 +74,7 @@ export function StepperStep({
 function disc(state: StepState): string {
   const base = "relative flex size-5 shrink-0 items-center justify-center rounded-full text-[11px]";
 
-  if (state === "done") return `${base} bg-success text-success-foreground`;
+  if (state === "done") return `${base} bg-default text-success`;
   if (state === "current") return `${base} bg-accent font-medium text-accent-foreground`;
   return `${base} border border-border bg-background text-muted`;
 }

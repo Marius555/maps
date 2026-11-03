@@ -2,6 +2,7 @@
 
 import { formatDistanceToNow } from "date-fns";
 
+import { publishedAgo } from "@/lib/format/ago";
 import type { AppMap } from "@/lib/repositories/types";
 
 /**
@@ -25,10 +26,11 @@ export function PublishStatus({
   map: AppMap;
   hasPendingChanges: boolean;
   compact?: boolean;
-  /** Inside the Shopify admin: one line with a dot, under step 3 of the
-      storefront stepper, whose title already says what to do. The sentence
-      about a snippet is not true there anyway — the way onto the store is
-      Show on storefront, whose toast says it published. */
+  /** Inside the Shopify admin: one line with a dot, on the right of the
+      storefront stepper's "Your store" heading, the time in numbers
+      ("1 h ago", `ShortAgo`). The sentence about a snippet is not true there
+      anyway — the way onto the store is Show on storefront, whose toast says
+      it published. */
   storefront?: boolean;
 }) {
   if (compact) {
@@ -77,7 +79,7 @@ export function PublishStatus({
               {hasPendingChanges ? (
                 <span className="text-accent">changes not published</span>
               ) : (
-                <Ago at={map.publishedAt} />
+                <ShortAgo at={map.publishedAt} />
               )}
             </>
           )}
@@ -122,4 +124,13 @@ function Ago({ at }: { at: string }) {
   return (
     <span suppressHydrationWarning>{formatDistanceToNow(new Date(at), { addSuffix: true })}</span>
   );
+}
+
+/**
+ * "12 min ago", "1 h ago", "2 weeks ago" — `Ago` in numbers, for the Shopify
+ * footer's heading row. Worked out once, no counter (the owner's call), and
+ * `suppressHydrationWarning` for `Ago`'s reason.
+ */
+function ShortAgo({ at }: { at: string }) {
+  return <span suppressHydrationWarning>{publishedAgo(at)}</span>;
 }

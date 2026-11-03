@@ -10,7 +10,7 @@ import {
 } from "@/lib/query/shopify";
 import { toastError } from "@/lib/query/toast-error";
 import { pickerName } from "@/lib/shopify/storefront-maps";
-import { storefrontSteps } from "@/lib/shopify/storefront-step";
+import { needsPublish, storefrontSteps } from "@/lib/shopify/storefront-step";
 import { markThemeAdded, useThemeAdded } from "./use-theme-added";
 
 /**
@@ -53,6 +53,12 @@ export function useStorefront(
     if (!url) return;
     markThemeAdded(mapId);
     window.open(url, "_top");
+  };
+
+  // The editor as it is, once the block is in: `addBlockUrl` would add another.
+  const onGoToTheme = () => {
+    const url = status.data?.themeEditorUrl;
+    if (url) window.open(url, "_top");
   };
 
   const onShow = (makeDefault: boolean) =>
@@ -111,7 +117,10 @@ export function useStorefront(
     status,
     steps,
     primary,
+    /** Anything for Redeploy to send — it is drawn only then. */
+    needsPublish: needsPublish({ hasPendingChanges, published }),
     onAddToTheme,
+    onGoToTheme,
     onAlreadyAdded: () => markThemeAdded(mapId),
     onShow,
     onFixDomain,
