@@ -77,9 +77,11 @@ export function buttonTargetOf(
   place: CardButtonPlace,
   fields: readonly CardButtonField[],
   /**
-   * Where the visitor is, for the directions case alone. Optional and absent by
-   * default, which is the link this has always returned — the dashboard has no
-   * visitor to locate and passes nothing.
+   * Where the person pressing it is, for the directions case alone. Optional
+   * and absent by default, which is the link this has always returned. The
+   * embed passes `me`; the dashboard's card passes its own reading
+   * (lib/geolocation/directions-origin.ts), because the owner pressing
+   * Directions in the editor is routed from it too.
    */
   from?: DirectionsOrigin | null,
   /**

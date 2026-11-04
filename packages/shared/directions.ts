@@ -43,8 +43,9 @@ export type DirectionsTarget = {
  * Where the route starts, when anything knows.
  *
  * Optional, and absent is the link this function has always returned — which is
- * what keeps the dashboard's own card, the designer canvas and every published
- * snapshot's markup unchanged.
+ * what keeps the designer canvas and every published snapshot's markup
+ * unchanged. The embed and the dashboard's own card both pass one as soon as
+ * the browser has said where the person pressing it is.
  *
  * It exists because absent is *not* neutral at the other end. A Google Maps
  * directions link with no `origin` is not "ask the visitor where they are": the
@@ -56,7 +57,9 @@ export type DirectionsTarget = {
  *
  * Only ever the visitor's own position, never a place they searched for. See
  * `me` in embed/src/index.ts, which is kept apart from the list's measuring
- * origin for exactly this.
+ * origin for exactly this, and lib/geolocation/directions-origin.ts, its
+ * dashboard twin — the same bug reached the owner's own editor card, which
+ * passed nothing here on the reasoning that a dashboard has no visitor.
  */
 export type DirectionsOrigin = {
   lat: number;

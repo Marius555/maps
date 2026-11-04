@@ -42,6 +42,7 @@ import {
   directionsUrl,
   type DirectionsTarget,
 } from "@/packages/shared/directions";
+import { PROMPT_WINDOW_MS } from "@/packages/shared/position";
 import { link } from "./dom";
 import type { Track } from "./track";
 
@@ -140,28 +141,6 @@ export function refreshDirections(root: ParentNode, from: Fix): void {
     if (place) node.href = directionsUrl(place, from);
   });
 }
-
-/**
- * How long the ask keeps the browser's request open.
- *
- * Not `bestPosition`'s own three seconds, and the difference is a bug. That
- * number measures how long to keep *refining* a reading while somebody watches;
- * this one measures how long a visitor might take to answer a permission prompt
- * — and they are answering it on a different tab, because the Directions link
- * has already opened one in front of it.
- *
- * Three seconds is not merely too short, it is destructive: the settle timer
- * fires in the backgrounded tab, `bestPosition` clears its watch, and clearing
- * the only outstanding geolocation request is what **withdraws the prompt**. The
- * visitor comes back from Google Maps to nothing left to answer.
- *
- * Nothing is blocked on this and nobody is watching it, so the length costs
- * battery rather than time — and `bestPosition` stops the moment a reading is
- * sharp enough to use, which on anything with a GPS is a second or two. The only
- * session that runs this to the end is one on a device that never produces a
- * sharp fix, which is a desktop with no radio to spend.
- */
-const PROMPT_WINDOW_MS = 30_000;
 
 /**
  * Learn where the visitor is, starting from the first Directions press.

@@ -35,7 +35,9 @@ import {
 import { buttonTargetOf, WEBSITE_LABEL } from "@/packages/shared/card-button";
 import { directionsUrl } from "@/packages/shared/directions";
 import { SAMPLE_PLACE } from "@/lib/card/sample-place";
+import { askForOrigin } from "@/lib/geolocation/directions-origin";
 
+import { useDirectionsOrigin } from "./directions/use-directions-origin";
 import { useGalleryLightbox } from "./gallery-lightbox";
 
 /**
@@ -1002,6 +1004,9 @@ function Actions({
   const email = !block?.hideEmail ? place.email : "";
   const website = !block?.hideWebsite ? safeHttpUrl(place.url) : null;
   const directions = !block?.hideDirections;
+  // Where the person pressing Directions is, once anything knows — see
+  // lib/geolocation/directions-origin.ts. Above the early return: it is a hook.
+  const origin = useDirectionsOrigin(directions && !isDesigner);
   const buttons = fields.filter(
     (field) => field.showAs === "button" && place.fields[field.id],
   );
@@ -1063,7 +1068,8 @@ function Actions({
         <ContactRow
           icon={Navigation}
           label="Directions"
-          href={directionsUrl(place)}
+          href={directionsUrl(place, origin)}
+          onPress={askForOrigin}
           isDesigner={isDesigner}
         />
       ) : null}
@@ -1130,7 +1136,12 @@ function CardButton({
   pinColor: string | undefined;
   isDesigner?: boolean;
 }) {
-  const target = buttonTargetOf(block, place, fields);
+  // Absent is Directions — see `CardBlock.buttonAction`.
+  const routes = block.buttonAction !== "link";
+  // A route's start, the same one the Links row's Directions uses — see
+  // lib/geolocation/directions-origin.ts.
+  const origin = useDirectionsOrigin(routes && !isDesigner);
+  const target = buttonTargetOf(block, place, fields, origin);
 
   /*
    * Nothing to point at is nothing to draw — the rule every block follows, and
@@ -1179,6 +1190,10 @@ function CardButton({
       href={target.href}
       target="_blank"
       rel="noopener noreferrer"
+      // Asks behind the press, never in front of it: nothing is prevented or
+      // awaited, so the tab opens exactly as it would with no handler at all.
+      onPointerDown={routes ? askForOrigin : undefined}
+      onClick={routes ? askForOrigin : undefined}
       {...NO_DRAG_PROPS}
     >
       {target.label}
@@ -1252,11 +1267,17 @@ function ContactRow({
   icon: Icon,
   label,
   href,
+  onPress,
   isDesigner,
 }: {
   icon: LucideIcon;
   label: string;
   href: string;
+  /**
+   * Run on `pointerdown` and `click`, alongside the navigation rather than
+   * instead of it — the Directions row's position ask. Never prevents or awaits.
+   */
+  onPress?: () => void;
   isDesigner?: boolean;
 }) {
   const inner = (
@@ -1310,6 +1331,8 @@ function ContactRow({
           // any pointer drag the card is inside of — the same reason the gallery
           // image sets this.
           draggable={false}
+          onPointerDown={onPress}
+          onClick={onPress}
           className={className}
         >
           {inner}

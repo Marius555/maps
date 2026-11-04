@@ -34,6 +34,12 @@ building the same card from the same functions in `packages/shared/`.
   kept in step by hand; three sizes and one chip colour had already drifted.
 - Shared resolvers exist so neither renderer can guess: `chipStyleOf`, `buttonTargetOf`,
   `logoImageOf`, `logoRadiusOf`, `blockBox`, `emptyBlockHeight`, `overrideBlock`.
+- **Every Directions link that can be pressed carries `&origin=` once the browser has said
+  where the presser is — the dashboard's own card included.** The embed holds it as `me`;
+  the dashboard as `lib/geolocation/directions-origin.ts`, read by `useDirectionsOrigin`.
+  Both use `betterFix` / `bestPosition` from `packages/shared/position.ts`. Without it,
+  Google resolves "Your location" from the IP address. Only the designer canvas, where
+  Directions is a span, sends none.
 - `lib/card/designer-status.ts` is the one seam every reader goes through.
   `effectiveCardLayout` is what `buildSnapshot` reads, and a layout equal to
   `defaultCardLayout()` is **omitted from the snapshot entirely**.
@@ -1555,7 +1561,30 @@ will paint a prompt. `click` stays for the keyboard, where Enter fires it and no
 pointer event at all. Not `pointerenter` — asking because a pointer crossed a
 link is how a prompt becomes something people block at the browser level.
 
-The dashboard's own card is untouched throughout, having no visitor to locate.
+**The dashboard's own card was left out of all of this, and that was the next report.**
+It was "untouched throughout, having no visitor to locate" — but it has one: the owner,
+pressing Directions on the editor's pin card to check it. The link went out with no
+`origin`, Google's start box read "Your location", and on the reporting owner's desktop
+google.com's own location permission was **denied**, so Google resolved it from the IP
+address and the route began in another district. On their phone the published map was
+fine, which is what made it look like a desktop problem rather than a dashboard one.
+
+The fix is the embed's rule on the dashboard's side of the seam, not a new one.
+`betterFix`, `bestPosition` and `PROMPT_WINDOW_MS` moved from `embed/src/search.ts` to
+`packages/shared/position.ts` (search.ts re-exports them, so no embed import moved and
+the bundle came out a byte smaller); `lib/geolocation/directions-origin.ts` is a small
+module-level store with the same three rules — warm without asking when the permission
+is already `granted` (and on its `change`), ask on the press's `pointerdown`/`click`
+without touching the navigation, and latch only a refusal. `useDirectionsOrigin` reads it
+through `useSyncExternalStore`, which is what makes a card already open pick up the
+answer — the dashboard's `refreshDirections`. It also reads the permission's `denied`
+state up front, because inside the Shopify admin the frame's permissions policy blocks
+geolocation and asking anyway logs a violation on every press. The designer canvas passes
+`enabled = false`: its Directions is a span, and arranging a card starts no watch.
+
+What it cannot fix: the first press on a browser that has never answered still goes out
+without an origin (it raises the prompt; every press after it carries the answer), and a
+desktop with no Wi-Fi is only as precise as the browser's own guess.
 
 **A block's own fold opens with the first one.** `BlockProperties` opened only
 the first non-empty group, which for a Button is "Size & position" — so the
