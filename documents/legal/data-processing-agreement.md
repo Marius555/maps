@@ -395,9 +395,9 @@ Last updated: {{legal.effectiveDate}}
 
 - **OpenFreeMap** serves map tiles directly to the Visitor's browser. It receives no Customer Personal
   Data from Provider.
-- **Resend** (email), **Google** (sign-in) and **{{billing.merchantOfRecord}}** (payments) process only
-  the data Provider handles as a controller for its own customers — see the Privacy Policy. They never
-  receive Customer Personal Data.
+- **Resend** (email), **Google** and **GitHub** (sign-in) and **{{billing.merchantOfRecord}}**
+  (payments) process only the data Provider handles as a controller for its own customers — see the
+  Privacy Policy. They never receive Customer Personal Data.
 - **Google Sheets**, where Customer links a map to a sheet: Provider reads a sheet that Customer has
   itself shared by link or published to the web through Google, under Customer's own agreement with
   Google. Google does not process Customer Personal Data on Provider's behalf.

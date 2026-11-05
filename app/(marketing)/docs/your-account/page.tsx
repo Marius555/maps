@@ -80,7 +80,7 @@ export default function YourAccountPage() {
           ]}
         />
 
-        <p>Signed up with Google? There’s no password to change.</p>
+        <p>Signed up with Google or GitHub? There’s no password to change.</p>
       </DocsSection>
 
       <DocsSection id="devices" title="Signed-in devices">

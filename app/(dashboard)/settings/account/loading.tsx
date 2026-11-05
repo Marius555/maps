@@ -16,7 +16,7 @@ import {
  * The Account page without its reads. Every word that does not depend on the
  * account is the real word, from the same module the page reads it from, so it
  * wraps the same. The password section is drawn the way most accounts get it; a
- * Google-only account has none, so for them the page arrives shorter.
+ * Google- or GitHub-only account has none, so for them the page arrives shorter.
  */
 export default function AccountSettingsLoading() {
   return (

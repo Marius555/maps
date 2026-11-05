@@ -10,14 +10,17 @@ import { useRevokeSession } from "@/lib/query/account";
 import { toastError } from "@/lib/query/toast-error";
 
 /**
- * How a session signed in, where that can be told. Not `token`: the Google
+ * How a session signed in, where that can be told. Not `token`: the OAuth
  * exchange and every emailed link both mint sessions from a token, so the word
  * says nothing a person would recognise, and a guess would be wrong half the time.
+ * Not `oauth2` either, for the same reason, now that it can mean Google or
+ * GitHub — it used to read "Google", which was true only while Google was the
+ * one provider.
  */
 const PROVIDERS: Record<string, string> = {
   email: "Password",
   google: "Google",
-  oauth2: "Google",
+  github: "GitHub",
 };
 
 /**

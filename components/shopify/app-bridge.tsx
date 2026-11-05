@@ -13,11 +13,20 @@ import { APP_BRIDGE_SRC } from "@/lib/shopify/pages";
  * - `shopify-api-key` is the client id, which App Bridge reads from the page.
  *   React hoists the `<meta>` into the head.
  * - The nav menu is the admin's own left-hand links for this app.
+ * - **In development only, App Bridge logs Web Vitals to the console** —
+ *   `shopify-debug`, Shopify's documented switch. LCP, CLS and INP inside the
+ *   admin are what Built for Shopify grades (2.5s, 0.1, 200ms at the 75th
+ *   percentile), and these lines are the values as Shopify records them, which
+ *   our own tools measure differently. Production's numbers are in the Dev
+ *   Dashboard (docs/notes/shopify.md, "Performance").
  */
 export function ShopifyAppBridge({ clientId }: { clientId: string }) {
   return (
     <>
       <meta name="shopify-api-key" content={clientId} />
+      {process.env.NODE_ENV !== "production" ? (
+        <meta name="shopify-debug" content="web-vitals" />
+      ) : null}
       {/* eslint-disable-next-line @next/next/no-sync-scripts -- must run before app code; see above */}
       <script src={APP_BRIDGE_SRC} />
       {/* Not links on our page: App Bridge reads these anchors as the

@@ -277,7 +277,7 @@ export async function updateUserName(userId: string, name: string): Promise<Auth
 /**
  * Whether the account has a password at all.
  *
- * An account made by Google sign-in has none — Appwrite leaves `passwordUpdate`
+ * An account made by Google or GitHub sign-in has none — Appwrite leaves `passwordUpdate`
  * empty for it — and that is the same field Appwrite's own `updatePassword`
  * consults before demanding the old one. The Account page shows the Password
  * section only when this is true, and the password route refuses otherwise —

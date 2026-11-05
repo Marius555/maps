@@ -12,7 +12,7 @@ import { UnauthorizedError } from "@/lib/repositories/errors";
  *
  * **Appwrite's tokens, not ours.** `users.createToken` stores a single-use,
  * expiring secret and `account.createSession` is what redeems it — the same pair
- * the Google flow uses. Minting our own HMAC would have meant a signing secret to
+ * the Google and GitHub flow uses. Minting our own HMAC would have meant a signing secret to
  * add to the environment, an expiry to enforce by hand, and a way to make a token
  * single-use, which needs somewhere to write that it has been spent. This needs
  * none of the three, and no schema change (CLAUDE.md §6).

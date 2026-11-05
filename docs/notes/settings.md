@@ -195,7 +195,7 @@ small follow-up if it matters.
 ## Password and devices
 
 - **Only an account with a password sees the Password section**, and it always
-  asks for the current one. An account made by Google sign-in has an empty
+  asks for the current one. An account made by Google or GitHub sign-in has an empty
   `passwordUpdate` (`accountHasPassword`) and gets no section; the route
   refuses it with a 403 as well, because Appwrite would accept a first password
   with no old one — a stolen session could add a password and outlive its own
@@ -214,5 +214,5 @@ small follow-up if it matters.
 ## Not built
 
 - **Change email.** It needs the current password, a new confirmation link,
-  and a frozen account until it is clicked, and a Google-only account cannot
+  and a frozen account until it is clicked, and a Google- or GitHub-only account cannot
   use it. claude.ai does not offer it either.

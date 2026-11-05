@@ -13,6 +13,11 @@ Policy and Terms §6.5 / §6.9; it took effect on publish without the §21.2 not
 on a paid Plan yet. From now on, an adverse change needs the 30 days. **Version 1.2 (2 November
 2026)** added the Shopify app — Privacy §2, §4, §5, §6 and §8, Terms §6.10 — on publish and without
 notice: it describes a new way in and changes nothing for an existing customer (lawyer question 14).
+**Version 1.3 (5 November 2026)** added GitHub sign-in — Privacy §2, §4 and §5 (GitHub, Inc. as an
+independent controller), Cookie §4, Terms §3.1 and §10.1, DPA Annex III's "Not Sub-processors" —
+on publish and without notice, for the same reason as 1.2. It also corrected the documents' quotes
+of the sign-in buttons, which had read "Continue with Google" where the button says "Sign in with
+Google".
 
 | File | What it is | Page (`brand.json` link) | Where the app links it |
 |---|---|---|---|
@@ -156,7 +161,8 @@ them being fixed. Each needs a code change or a softer sentence before publishin
 4. **Surprising terms (Civil Code Art. 6.186(2)).** The sign-up notice says "By continuing, you agree"
    with links, and the Terms open with a key-terms summary. Is that "express agreement after proper
    disclosure" for the cap, no-refund and deletion terms — or is a checkbox needed? (The notice
-   avoids a checkbox on purpose: "Continue with Google" has no form to put one in.)
+   avoids a checkbox on purpose: "Sign in with Google" and "Sign in with GitHub" have no form to put
+   one in.)
 5. **Visitor consent.** Does the measurement beacon need Visitor consent under Art. 61 of the Law on
    Electronic Communications, in light of EDPB Guidelines 2/2023? That decides how the product talks
    about it, not just the documents.

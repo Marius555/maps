@@ -25,7 +25,7 @@ people on a large scale (Article 37(1) GDPR). We will review that as the Service
 
 | What we do | Personal data | Legal basis | How long we keep it |
 |---|---|---|---|
-| **Run your account** | Name, email address, password (stored only as a salted Argon2 hash, never readable), your Plan and account settings. If you choose "Continue with Google": the account identifier, name and email address Google shares with us | (b) contract | For the life of your account, then as in §8 |
+| **Run your account** | Name, email address, password (stored only as a salted Argon2 hash, never readable), your Plan and account settings. If you choose "Sign in with Google" or "Sign in with GitHub": the account identifier, name and email address that Google or GitHub shares with us | (b) contract | For the life of your account, then as in §8 |
 | **Sign you in and keep accounts secure** | Session records: IP address, browser, operating system, device type, country, and times. The sign-in cookie (see the [Cookie Policy]({{legal.cookiesUrl}})). Records of password-reset and email-confirmation requests. When you sign up or ask for a password reset, the signals Cloudflare Turnstile checks to tell people from automated programs: IP address and characteristics of your browser and device | (f) our legitimate interest in keeping the Service and accounts secure | Session records until the session ends or expires (at most 1 year); security records up to 12 months |
 | **Send service emails** — confirming your address, resetting your password, and notices about your account, billing and changes to our terms | Email address, name, message content, delivery status | (b) contract; (c) legal obligation, for notices the law requires | Delivery logs as kept by our email provider, which deletes them automatically after a short period (currently 30 days) |
 | **Run our Shopify app** | If you install {{name}} from the Shopify App Store, there is no sign-up: Shopify shares your store's name, its myshopify.com address and primary domain, Shopify's identifier for the store, and the store's contact email, and we read your Plan and subscription status from Shopify. We are given no access to your store's customers, orders or products | (b) contract | While the app is installed, then deleted as set out in §8 |
@@ -53,9 +53,9 @@ for you or sell you a paid Plan.
 
 ## 4. Where the data comes from
 
-From you; from Google, if you sign in with Google; from the Merchant of Record, when you buy a paid
-Plan; from Shopify, if you use our Shopify app; and from your browser, when you use our website and
-dashboard.
+From you; from Google or GitHub, if you sign in with one of them; from the Merchant of Record, when
+you buy a paid Plan; from Shopify, if you use our Shopify app; and from your browser, when you use
+our website and dashboard.
 
 ## 5. Who we share it with
 
@@ -72,7 +72,8 @@ dashboard.
 
 **Independent controllers**, whose own privacy policies apply:
 
-- **Google** — if you choose "Continue with Google".
+- **Google** — if you choose "Sign in with Google".
+- **GitHub, Inc.** — if you choose "Sign in with GitHub".
 - **{{billing.merchantOfRecord}}** — sells paid Plans and processes payments.
 - **Shopify** — if you use our Shopify app: it runs your store and the Shopify admin the app opens
   in, tells us who you are when you open it, and bills the app's paid Plans.

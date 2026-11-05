@@ -1,7 +1,8 @@
 import { safeRedirect } from "@/lib/utils/safe-redirect";
 
 /**
- * Where to go after Google sign-in, carried across the trip to Google and back.
+ * Where to go after an OAuth sign-in (Google or GitHub), carried across the trip
+ * to the provider and back.
  *
  * The success URL Appwrite redirects to is fixed (`/auth/success`), and putting a
  * `?next=` on it would mean registering every variant with the provider. So the
@@ -34,7 +35,7 @@ export function takeOAuthNext(): string {
 }
 
 /**
- * Proof that *this tab* asked Google to sign it in.
+ * Proof that *this tab* asked a provider to sign it in.
  *
  * `/auth/success?userId=…&secret=…` signs in whoever the token belongs to, and
  * anybody can mint one for their own account. Without this mark, a link to that

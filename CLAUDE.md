@@ -82,7 +82,7 @@ days)**, three more things are in place:
 
 **Auth and transactional email are done, and are the first of Week 4 to land.** A split
 `app/(auth)` group — a drawn map panel on one half, the form on the other — carrying
-email/password, **Google sign-in over Appwrite's OAuth2 *token* flow**, confirm-your-address,
+email/password, **Google and GitHub sign-in over Appwrite's OAuth2 *token* flow**, confirm-your-address,
 and forgot/reset password. Three emails go out through Resend. Two things there are load
 bearing and easy to undo by accident: the session is only ever created **on our server**, so
 the httpOnly cookie `proxy.ts` and `requireUser()` read is the only session there is; and every
@@ -139,7 +139,7 @@ sent back to wp-admin with it — no API key, nothing to paste. The plugin store
 map's public snapshot URL, so the visitor path is exactly a pasted snippet's (§2); a nonce,
 not a secret, guards the return trip. Ships as `/downloads/pinglide-wordpress.zip`
 (`npm run build:wordpress`, also on `prebuild`); a wordpress.org listing needs an account
-and is not done. Signup and Google sign-in now honour `?next=` for it. Its public page is
+and is not done. Signup and Google and GitHub sign-in now honour `?next=` for it. Its public page is
 `/for/wordpress`, reached from the navbar's **Integrations** menu, which lists
 `lib/marketing/integrations.ts`. `docs/notes/distribution.md`.
 

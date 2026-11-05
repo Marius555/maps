@@ -7,6 +7,7 @@ import { DataTable, type DataColumn } from "@/components/analytics/tables/data-t
 import { PLAN_COLOR } from "@/lib/admin/colors";
 import { formatDate } from "@/lib/admin/format";
 import type { UserRow } from "@/lib/admin/metrics/users";
+import { signInMethodLabel } from "@/lib/auth/oauth-providers";
 
 const PLAN_LABEL: Record<string, string> = { free: "Free", starter: "Starter", pro: "Pro" };
 
@@ -71,7 +72,7 @@ const COLUMNS: DataColumn<UserRow>[] = [
     label: "Sign-in",
     secondary: true,
     sortValue: (row) => row.method,
-    render: (row) => (row.method === "email" ? "Email" : "Google"),
+    render: (row) => signInMethodLabel(row.method),
   },
   {
     id: "created",

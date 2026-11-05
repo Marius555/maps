@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 
 import { AuthDivider } from "@/components/auth/auth-divider";
-import { GoogleButton } from "@/components/auth/google-button";
+import { OAuthButtons } from "@/components/auth/oauth/oauth-buttons";
 import { TurnstileSlot } from "@/components/auth/turnstile/turnstile-slot";
 import { useTurnstile } from "@/components/auth/turnstile/use-turnstile";
 import { LegalConsentNotice } from "@/components/brand/legal-consent-notice";
@@ -81,10 +81,10 @@ export function SignupForm({ redirectTo = null }: { redirectTo?: string | null }
   return (
     <div className="space-y-5">
       {/* The same words as the login page, deliberately. CLAUDE.md §8: an action
-          keeps its name through the whole flow, and with Google there is no
-          difference between signing in and signing up — the first press makes
-          the account either way. */}
-      <GoogleButton redirectTo={redirectTo ?? undefined} />
+          keeps its name through the whole flow, and with Google or GitHub there
+          is no difference between signing in and signing up — the first press
+          makes the account either way. */}
+      <OAuthButtons redirectTo={redirectTo ?? undefined} />
 
       <AuthDivider />
 

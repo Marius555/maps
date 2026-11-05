@@ -5,8 +5,8 @@ import { BrandLink } from "./brand-link";
  * "By continuing, you agree to our Terms and Privacy Policy."
  *
  * A notice rather than a checkbox, and "continuing" rather than "creating an
- * account", because it has to cover two buttons: the form's own, and Continue
- * with Google — which creates an account on first press from the login page as
+ * account", because it has to cover three buttons: the form's own, and Sign in with
+ * Google or GitHub — each of which creates an account on first press from the login page as
  * well as from signup, with no form to put a checkbox in.
  *
  * Built from whichever of the two links brand.json has, and not drawn at all

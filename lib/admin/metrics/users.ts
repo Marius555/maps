@@ -3,6 +3,11 @@ import "server-only";
 import type { Delta } from "@/lib/analytics/view";
 import { requireAdmin } from "@/lib/admin/auth/guard";
 import { GREY, PLAN_COLOR, SPLIT_COLORS } from "@/lib/admin/colors";
+import {
+  OAUTH_PROVIDER_LABEL,
+  OAUTH_PROVIDERS,
+  signInMethodLabel,
+} from "@/lib/auth/oauth-providers";
 import { PLAN_LIMITS, type PlanId } from "@/lib/limits/plans";
 import { listAllMaps } from "@/lib/repositories/admin/content";
 import { listAllSubscriptions } from "@/lib/repositories/admin/subscriptions";
@@ -89,7 +94,7 @@ export async function loadUsersMetrics(range: AdminRange): Promise<UsersMetrics>
   }));
 
   const verified = rows.filter((row) => row.verified).length;
-  const google = rows.filter((row) => row.method !== "email").length;
+  const byMethod = (method: string) => rows.filter((row) => row.method === method).length;
   const planCounts = { free: 0, starter: 0, pro: 0 } as Record<string, number>;
   for (const row of rows) planCounts[row.plan] = (planCounts[row.plan] ?? 0) + 1;
 
@@ -105,9 +110,21 @@ export async function loadUsersMetrics(range: AdminRange): Promise<UsersMetrics>
       { key: "verified", label: "Confirmed", value: verified, color: SPLIT_COLORS[0] },
       { key: "unverified", label: "Not confirmed", value: rows.length - verified, color: GREY },
     ],
+    // Email is whatever has no identity of a provider we offer, so the three
+    // always add up to every account.
     methods: [
-      { key: "email", label: "Email", value: rows.length - google, color: SPLIT_COLORS[0] },
-      { key: "google", label: "Google", value: google, color: SPLIT_COLORS[1] },
+      {
+        key: "email",
+        label: signInMethodLabel("email"),
+        value: rows.length - OAUTH_PROVIDERS.reduce((total, id) => total + byMethod(id), 0),
+        color: SPLIT_COLORS[0],
+      },
+      ...OAUTH_PROVIDERS.map((id, index) => ({
+        key: id,
+        label: OAUTH_PROVIDER_LABEL[id],
+        value: byMethod(id),
+        color: SPLIT_COLORS[index + 1],
+      })),
     ],
     plans: ["free", "starter", "pro"].map((plan) => ({
       key: plan,

@@ -70,8 +70,9 @@ export async function listAllUsers(): Promise<{
 }
 
 /**
- * Which accounts have a Google identity. An account without one signed up with
- * email and password — Appwrite records no identity for that.
+ * Which accounts have an OAuth identity (Google or GitHub), by provider. An
+ * account without one signed up with email and password — Appwrite records no
+ * identity for that. One with both keeps whichever identity is listed last.
  */
 export async function listOAuthUserIds(): Promise<Map<string, string>> {
   const providers = new Map<string, string>();

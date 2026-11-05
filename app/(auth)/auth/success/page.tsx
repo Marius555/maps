@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * Where Appwrite sends the browser after Google says yes.
+ * Where Appwrite sends the browser after Google or GitHub says yes.
  *
  * A page rather than a route handler, and that is the SameSite decision made
  * visible. The session cookie is `sameSite: "strict"`, and this navigation
@@ -30,7 +30,9 @@ export default function OAuthSuccessPage() {
    * `useSearchParams()`, and Next refuses to prerender a page that does so
    * without one. Its fallback is deliberately the same "signing you in" shape
    * the component's own pending state uses, so the hand-off between them is not
-   * a visible flash of different chrome.
+   * a visible flash of different chrome. It is also why neither names the
+   * provider: the fallback is prerendered and cannot know which one it was, so a
+   * name in the component alone would change the sentence on screen.
    */
   return (
     <Suspense fallback={<OAuthCallbackFallback />}>
@@ -46,7 +48,7 @@ function OAuthCallbackFallback() {
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           Signing you in
         </h1>
-        <p className="text-sm text-muted">One moment — finishing up with Google.</p>
+        <p className="text-sm text-muted">One moment — finishing up.</p>
       </div>
     </div>
   );

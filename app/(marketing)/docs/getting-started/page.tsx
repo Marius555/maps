@@ -35,7 +35,8 @@ export default function GettingStartedPage() {
         <DocsSteps>
           <DocsStep title="Sign up">
             <p>
-              Press <strong>Sign in with Google</strong>, or fill in{" "}
+              Press <strong>Sign in with Google</strong> or{" "}
+              <strong>Sign in with GitHub</strong>, or fill in{" "}
               <strong>Name</strong>, <strong>Email</strong> and{" "}
               <strong>Password</strong> (8+ characters) and press{" "}
               <strong>Create account</strong>.

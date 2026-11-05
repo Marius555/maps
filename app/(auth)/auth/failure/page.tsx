@@ -13,16 +13,18 @@ export const metadata: Metadata = {
  *
  * Appwrite passes no machine-readable reason to the failure URL, so there is
  * nothing here to branch on and inventing a cause would be guessing at the user.
- * What it can do is name the two things that are actually wrong the first time
- * anyone hits this — the provider is not enabled, or this origin is not a
- * registered platform — because both are console settings and neither produces
- * an error anywhere the person pressing the button can see.
+ * It does not know which provider was used either, so it names none in its
+ * headline. What it can do is name the things that are actually wrong the first
+ * time anyone hits this — the provider is not enabled, this origin is not a
+ * registered platform, or (GitHub only) the account has no verified address for
+ * Appwrite to read — because none of them produces an error anywhere the person
+ * pressing the button can see.
  */
 export default function OAuthFailurePage() {
   return (
     <AuthShell
       title="We couldn't finish signing you in"
-      description="Google didn't complete the handoff, so no account was created or changed."
+      description="The sign-in didn't complete, so no account was created or changed."
     >
       <div className="space-y-5">
         <div className="rounded-xl border border-border bg-surface p-4">
@@ -31,11 +33,15 @@ export default function OAuthFailurePage() {
           </p>
           <ul className="mt-2 space-y-1.5 text-xs text-muted">
             <li>Try again — the sign-in window may have been closed early.</li>
+            <li>
+              With GitHub, your account needs a verified email address. Add one
+              under GitHub&apos;s Settings → Emails.
+            </li>
             <li>Log in with your email and password instead.</li>
             <li>
-              If you run this site: check that Google is enabled under Auth →
-              Social providers, and that this domain is registered under Settings
-              → Platforms.
+              If you run this site: check that the provider you used is enabled
+              under Auth → Social providers, and that this domain is registered
+              under Settings → Platforms.
             </li>
           </ul>
         </div>

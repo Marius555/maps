@@ -3,7 +3,7 @@ import { emailShell, emailText, type EmailShellInput } from "./layout";
 
 /**
  * Sent *after* the address is confirmed, or straight away for someone who signed
- * in with Google — those accounts arrive already verified, so there is no
+ * in with Google or GitHub — those accounts arrive already verified, so there is no
  * confirmation step for this to follow.
  *
  * It exists to do one thing the verification mail cannot: point at the first

@@ -2,6 +2,8 @@
 
 import { Account, Client, OAuthProvider } from "appwrite";
 
+import type { OAuthProviderId } from "@/lib/auth/oauth-providers";
+
 import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID } from "./config";
 
 /**
@@ -25,8 +27,14 @@ export function createBrowserClient() {
   return { client, account: new Account(client) };
 }
 
+const PROVIDERS: Record<OAuthProviderId, OAuthProvider> = {
+  google: OAuthProvider.Google,
+  github: OAuthProvider.Github,
+};
+
 /**
- * Hands the browser to Google, asking for a **token** rather than a session.
+ * Hands the browser to Google or GitHub, asking for a **token** rather than a
+ * session.
  *
  * `createOAuth2Session` would have Appwrite set its own cookie on its own
  * domain, which our server cannot read — `proxy.ts`, the dashboard layout and
@@ -40,11 +48,11 @@ export function createBrowserClient() {
  * scheduled after it, and there is nothing to await — the `Promise` its callers
  * might expect does not exist.
  */
-export function startGoogleSignIn(origin: string): void {
+export function startOAuthSignIn(provider: OAuthProviderId, origin: string): void {
   const { account } = createBrowserClient();
 
   account.createOAuth2Token({
-    provider: OAuthProvider.Google,
+    provider: PROVIDERS[provider],
     success: `${origin}/auth/success`,
     failure: `${origin}/auth/failure`,
   });

@@ -51,7 +51,7 @@ export default async function AccountSettingsPage() {
 
   return (
     <>
-      {/* Only for an account that signs in with a password. One made by Google
+      {/* Only for an account that signs in with a password. One made by Google or GitHub
           sign-in has none to change, and the route refuses it one. */}
       {hasPassword ? (
         <SettingsSection {...PASSWORD_SECTION}>

@@ -1,8 +1,8 @@
 /**
  * What to call someone in a greeting.
  *
- * Appwrite lets `name` be empty, and an account created through Google carries
- * whatever Google holds — often a full name where our own form would have
+ * Appwrite lets `name` be empty, and an account created through Google or GitHub carries
+ * whatever the provider holds — often a full name where our own form would have
  * collected one word. "Hi ," is worse than either, so the address is the floor.
  *
  * Shared rather than repeated in each template's caller: three messages open with

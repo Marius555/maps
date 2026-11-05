@@ -422,6 +422,58 @@ with `APP_URL` pointed at the CLI's tunnel — and installs the dev app on the d
 `shopify theme check --path distribution/shopify/extensions/pinglide-map --config
 theme-check:theme-app-extension` checks the block.
 
+## Performance
+
+Built for Shopify (2.1) grades the app inside the admin on Web Vitals at the 75th percentile
+of page loads: **LCP ≤ 2.5s, CLS ≤ 0.1, INP ≤ 200ms**, each assessed after 100 loads in 28
+days. App Bridge collects them; loading the current `app-bridge.js` from the CDN is all it
+needs, and we do. Shopify's own figures are in the Dev Dashboard. In development,
+`ShopifyAppBridge` adds `<meta name="shopify-debug" content="web-vitals">`, so the console shows
+each value as Shopify records it.
+
+**Don't judge speed on the dev store while `shopify app dev` runs.** The admin then frames
+`next dev` on this PC through a `trycloudflare.com` tunnel. Measured 2026-11-04, a first visit
+to each map tab took 2.4–3.9s, of which 2.1–3.5s was Next compiling the route and 240–340ms
+was our code (Appwrite reads and the render). Stop `app dev` and the dev store loads the
+released app from `pinglide.com`; measure there, with the Chrome window in front (an occluded
+window drew 2 frames a second and every screenshot timed out).
+
+What is left in production, inside Shopify or not, is the server's ~300ms per tab and a fresh
+MapLibre on each map tab. Measured on `localhost` the same day (dev build), Map → Locations →
+Map: the first visit's map worker went quiet 1.5–2.0s after the click, and a return within
+`staleTimes`' 30s drew the canvas in ~110–160ms and went quiet at ~0.6–0.8s.
+
+**Don't add MapLibre's `prewarm()` to keep the workers between tabs; they already stay.**
+MapLibre does terminate its worker pool when the last map is removed (`WorkerPool.release`),
+but its global dispatcher, created with the first map and never released, holds the pool for
+the rest of the page's life. Counted by wrapping `window.Worker`: one worker for the whole
+session, with and without `prewarm()`, and the same timings. The Publish preview could not share
+them anyway: it is the embed's own MapLibre in `srcdoc` documents.
+
+## Built for Shopify, against the current UI
+
+BFS is the App Store's badge and ranking boost. It comes only after **50 net installs from paid
+shops, 5 reviews and a minimum rating**, and ordinary App Store review does not ask for Polaris.
+It asks that the app look and behave like the admin. Polaris web components are Shopify's
+*recommended* way to get there, not a rule. Assessed 2026-11-04 against Shopify's published
+rejection reasons:
+
+| Requirement | Today | Verdict |
+|---|---|---|
+| 4.1.4 Use the admin nav menu, not your own | `<ui-nav-menu>` (Maps, Settings), **and** our own sidebar inside the frame | Likely fail |
+| 4.1.1 Buttons match Polaris | Orange primary buttons; a non-Polaris primary colour is Shopify's own rejection example | Likely fail |
+| 4.1.1 A sub-page offers a back button to its parent | No title bar or breadcrumb | Likely fail |
+| 4.1.1 Nothing flickers or loads in and out | The map is rebuilt on each map tab | Watch |
+| 4.1.5 Contextual save bar / 4.1.6 `s-modal` | Autosave; Edit location is a HeroUI dialog with its own Save | Needs review |
+| 2.1 LCP / CLS / INP | Collected, never looked at | Measure |
+
+The cheap route, when it is time: inside the admin only, hide our sidebar and give a map's five
+sections tabs under its title (BFS allows tabs for secondary navigation), add a
+`<ui-title-bar>` with a back link, give `embedded=1` a Polaris-like primary colour, and send
+toasts through `shopify.toast`. Rewriting the editor in Polaris is not that route: the map
+canvas is custom either way. The dev store already runs the new admin design
+(`admin_theme=admin-next`); Polaris 2 follows it on its own, and HeroUI cannot.
+
 ## Open questions, to settle on the dev store
 
 1. Does every RSC flight request carry App Bridge's header (the patch must land before
@@ -448,6 +500,11 @@ theme-check:theme-app-extension` checks the block.
    forwards browser errors to the terminal (`logging.browserToTerminal: "warn"`), so if it
    recurs, the `[browser]` line just before the reloads in the CLI output names the error.
    In production the same error would show the global error page, not a loop.
+   **It recurred on 2026-11-04**: `/maps` loaded 90 times in about a minute, 31 of them
+   through `/shopify/session-token`, each after a `✓ Compiled in 1ms`. Clicking a sidebar
+   tab never landed, which read as "the map is slow". Restarting `npm run shopify:dev`
+   cleared it, and the restart rotated `.shopify/dev/app-dev-*.jsonl`, so the error was lost.
+   Next time, grep that log for `[browser]` *before* restarting.
 4. ~~Analytics on storefronts~~ — settled 2026-11-02: the beacon asks Shopify's Customer
    Privacy API. On a page with `window.Shopify`, `embed/src/track.ts` sends only when
    `customerPrivacy.analyticsProcessingAllowed()` is `true` (region and store settings

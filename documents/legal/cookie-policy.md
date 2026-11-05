@@ -57,8 +57,10 @@ we will ask first, and it will not be set until you agree.
 
 ## 4. Third parties
 
-- **Google.** If you choose "Continue with Google", you are taken to Google's sign-in page, where
+- **Google.** If you choose "Sign in with Google", you are taken to Google's sign-in page, where
   Google's own cookies and privacy policy apply.
+- **GitHub.** If you choose "Sign in with GitHub", you are taken to GitHub's sign-in page, where
+  GitHub's own cookies and privacy statement apply.
 - **{{billing.merchantOfRecord}}.** The checkout for paid Plans is provided by our Merchant of Record,
   which sets its own essential, performance and functionality cookies on its checkout pages under
   its own privacy policy. We do not control them, and none are set on our website.

@@ -1,8 +1,8 @@
 # Auth — design notes
 
 Everything between a stranger arriving at `/login` and a signed-in session
-cookie: the split-screen screens, Google OAuth2, and the three transactional
-emails.
+cookie: the split-screen screens, Google and GitHub OAuth2, and the three
+transactional emails.
 
 ## Invariants
 
@@ -36,7 +36,7 @@ emails.
   `/checkout/done`, and is the single most breakable thing in this area — it was
   broken a third time, by billing, after being written down twice.
 - **No link may sign in a browser that did not ask for it** (login CSRF).
-  `/auth/success` refuses a callback unless this tab started the Google sign-in
+  `/auth/success` refuses a callback unless this tab started the OAuth sign-in
   (`markOAuthStarted` / `oauthStartedHere` in `lib/auth/oauth-next.ts`), and the
   verify-email link confirms the address without signing anyone in. Every
   state-changing request through `withAuth`, `withoutAuth` or `withAdmin` is
@@ -390,24 +390,51 @@ The welcome email links to `/verify-email?status=ok`, not `/maps`: it is clicked
 a mail client, so it is the SameSite trap above, and it was what bounced a
 just-confirmed user to the login form.
 
-## Google, and what is not code
+## Google and GitHub, and what is not code
 
-Two console settings, and until both are done the flow lands on `/auth/failure`
-with nothing in any log to say why — which is why that page names them.
+Both providers run the same code from the button onwards: `OAuthButtons`
+(`components/auth/oauth/`) calls `startOAuthSignIn(provider, origin)`, and
+everything after Appwrite's redirect — `/auth/success`, the exchange, the cookie,
+the login-CSRF mark, `?next=` — never asks which provider it was. The list of
+providers and their names is `lib/auth/oauth-providers.ts`, a plain module so the
+admin console's server code can read it too. A third provider is an entry there,
+a mark in `provider-marks.tsx`, an enum case in `lib/appwrite/browser.ts`, and the
+legal documents (`documents/legal/README.md`, version 1.3, is the worked example).
 
-1. **Auth → Social providers → Google** — enabled, with a Google Cloud OAuth
-   client ID and secret. Those stay in the console; nothing about them belongs in
-   this repo. Google Cloud's authorized redirect URI is
-   `<endpoint>/account/sessions/oauth2/callback/google/<projectId>`.
+What is not code is in the consoles, and until it is done the flow lands on
+`/auth/failure` with nothing in any log to say why — which is why that page names
+it.
+
+1. **Auth → Social providers → Google** and **→ GitHub** — each enabled, with
+   that provider's OAuth client ID and secret. Those stay in the console; nothing
+   about them belongs in this repo. The redirect URI to register with the
+   provider (Google Cloud's authorized redirect URI, a GitHub OAuth app's
+   Authorization callback URL) is
+   `<endpoint>/account/sessions/oauth2/callback/<google|github>/<projectId>`.
 2. **Settings → Platforms** — a Web platform for `localhost` and for the
    production hostname, or Appwrite rejects the redirect back.
 
-Account linking is Appwrite's default behaviour: a Google identity whose address
-matches an existing email/password account attaches to it. Nothing here builds
-around that, and it is worth knowing before anyone reports it as a bug.
+**A GitHub account needs a verified email address.** Appwrite asks GitHub for the
+`user:email` scope and reads the primary verified address, private or not; with
+none, it fails the exchange and the browser lands on `/auth/failure`, which says
+so.
 
-Google-created accounts arrive with `emailVerification: true`, so they skip the
-confirmation email and get the welcome one straight away.
+Account linking is Appwrite's default behaviour: an identity whose address
+matches an existing account attaches to it — Google or GitHub to an
+email/password account, or to each other. Nothing here builds around that, and it
+is worth knowing before anyone reports it as a bug. The admin console's Sign-in
+column shows one provider per account; one with both shows whichever identity
+Appwrite listed last.
+
+Accounts from either provider arrive with `emailVerification: true`, so they skip
+the confirmation email. (Nothing sends them the welcome one either: that goes out
+from `/api/auth/verify-email/confirm`, which they never reach.)
+
+**A session redeemed from an OAuth token does not say which provider it came
+from.** Settings → Account labels a device "Google" or "GitHub" only when
+Appwrite records the provider by name, and says nothing for `oauth2`, for the
+reason it says nothing for `token`: with two providers a guess is wrong half the
+time.
 
 ## An unconfirmed account is read-only
 
@@ -595,10 +622,13 @@ error code, no new envelope. The one mechanical requirement is that `parseBody`
 calls `parseAsync` — a refinement that asks a resolver something cannot be
 expressed synchronously.
 
-**Neither check runs for Google sign-in**, which never reaches that route.
-Appwrite creates the account during the OAuth exchange, so refusing one would
-mean deleting a user we had just been handed — and a Google account is already an
-address somebody proved they control.
+**Neither check runs for Google or GitHub sign-in**, which never reaches that
+route. Appwrite creates the account during the OAuth exchange, so refusing one
+would mean deleting a user we had just been handed — and either provider only
+hands over an address somebody proved they control. That is weaker for GitHub,
+which will verify a throwaway address. It is an accepted gap rather than an
+oversight: a verified GitHub account costs a bot more than our form did, and none
+of the 2026-10 bot signups (below) came through Google sign-in.
 
 Two escape hatches, and they are not the same. `EMAIL_DOMAIN_ALLOWLIST` un-blocks
 a domain with no deploy, which is what you want when a real customer is locked

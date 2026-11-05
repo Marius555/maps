@@ -84,8 +84,8 @@ Coordinator, for the Digital Services Act.
 ## 3. Acceptance, and who may use the Service
 
 **3.1 Acceptance.** You accept these Terms by pressing a button that says doing so means you agree
-to them — including "Continue" and "Continue with Google" on our sign-up and log-in pages — or by
-using the Service. These Terms are available at {{legal.termsUrl}} before you do.
+to them — including "Create account", "Log in", "Sign in with Google" and "Sign in with GitHub" on
+our sign-up and log-in pages — or by using the Service. These Terms are available at {{legal.termsUrl}} before you do.
 
 **3.2 Business use only.** The Service is offered only to businesses, organisations, and people
 acting for the purposes of their trade, business, craft or profession. It is not offered to
@@ -302,8 +302,8 @@ You must not, and must not allow anyone else to:
 
 **10.1** The Service depends on third parties, including OpenStreetMap data (© OpenStreetMap
 contributors, available under the Open Database Licence), map tiles served by OpenFreeMap or another
-tile provider, geocoding and routing providers, Google (if you sign in with Google), the Merchant of
-Record, and the maps applications a Visitor opens for directions.
+tile provider, geocoding and routing providers, Google or GitHub (if you sign in with one of them),
+the Merchant of Record, and the maps applications a Visitor opens for directions.
 
 **10.2** Their own terms apply to your use of them. We do not control them, and we are not
 responsible for them, for their availability, or for changes they make. We may replace any of them.

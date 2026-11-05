@@ -14,7 +14,7 @@ import { exchangeOAuthToken } from "@/lib/query/auth";
 import { queryKeys } from "@/lib/query/keys";
 
 /**
- * The second half of Google sign-in: turn the callback's `userId` + `secret`
+ * The second half of Google or GitHub sign-in: turn the callback's `userId` + `secret`
  * into our own session cookie, then get out of the way.
  *
  * **The exchange is a POST to our origin, not a Web SDK call.** Only our server
@@ -96,7 +96,7 @@ export function OAuthCallback() {
 
   if (!missing && !failure) {
     return (
-      <AuthShell title="Signing you in" description="One moment — finishing up with Google.">
+      <AuthShell title="Signing you in" description="One moment — finishing up.">
         <div className="flex justify-center py-2" aria-live="polite">
           <Spinner aria-label="Signing you in" />
         </div>

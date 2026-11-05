@@ -48,7 +48,7 @@ export function useChangePassword() {
         body: JSON.stringify(input),
       }),
     // The other devices were just signed out, so the list under this form is
-    // stale; and a Google-only account now has a password, which changes the
+    // stale; and a Google- or GitHub-only account now has a password, which changes the
     // form's own heading.
     onSuccess: () => router.refresh(),
   });

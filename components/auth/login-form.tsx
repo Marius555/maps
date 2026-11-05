@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 
 import { AuthDivider } from "@/components/auth/auth-divider";
-import { GoogleButton } from "@/components/auth/google-button";
+import { OAuthButtons } from "@/components/auth/oauth/oauth-buttons";
 import { LegalConsentNotice } from "@/components/brand/legal-consent-notice";
 import { FormPasswordField, FormTextField } from "@/components/ui/form-field";
 import { track } from "@/lib/posthog/client";
@@ -50,7 +50,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
     <div className="space-y-5">
       {/* Above the form, because for anyone who has one it is the shorter path
           and putting it underneath makes it the thing you find after failing. */}
-      <GoogleButton redirectTo={redirectTo} />
+      <OAuthButtons redirectTo={redirectTo} />
 
       <AuthDivider />
 
@@ -103,8 +103,8 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
         </Button>
       </form>
 
-      {/* Here as well as on signup: Continue with Google creates the account on
-          first press from this page too. */}
+      {/* Here as well as on signup: signing in with Google or GitHub creates the
+          account on first press from this page too. */}
       <LegalConsentNotice />
     </div>
   );

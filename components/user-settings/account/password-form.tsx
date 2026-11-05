@@ -16,7 +16,7 @@ import {
 
 /**
  * Change the password. Only drawn for an account that has one — an account made
- * by Google sign-in is shown no password section at all.
+ * by Google or GitHub sign-in is shown no password section at all.
  *
  * **Every field keeps a line under it**, the description until there is an
  * error and the error in its place afterwards (`FormPasswordField`'s
