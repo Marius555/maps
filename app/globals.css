@@ -3338,6 +3338,15 @@ body.is-pin-dragging * {
 }
 
 /*
+ * The publish preview's "Updating preview…" pill (components/preview/
+ * embed-preview.tsx). Held back 400ms, so a rebuild that lands quickly never
+ * shows it; `both` keeps it invisible through the delay.
+ */
+.preview-updating {
+  animation: preview-frame-in 150ms ease-out 400ms both;
+}
+
+/*
  * Reduced motion, once, for everything.
  *
  * This used to name `.map-pin__pulse` and `.map-pin__dot` specifically, which

@@ -1,55 +1,74 @@
 "use client";
 
-import { Button, Separator } from "@heroui/react";
-import { CodeXml, Share2 } from "lucide-react";
+import { Separator, Tabs } from "@heroui/react";
+import { CodeXml, Globe } from "lucide-react";
 import { useState } from "react";
 
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { AllowedDomainsFold } from "../allowed-domains/allowed-domains-fold";
-import { EmbedSnippet } from "../embed-snippet";
+import { WebsiteTab } from "./website-tab";
+import { WordPressTab } from "./wordpress-tab";
+
+type Platform = "website" | "wordpress";
+
+const PANEL_CLASS = "col-start-1 row-start-1 mt-0 p-0 data-[inert=true]:invisible";
 
 /**
  * The two things an owner needs *after* designing: the line they paste, and
  * where it is allowed to run.
  *
- * Both were folded into the foot of the design column, and both were wrong there
- * for the same reason: they are read once each — when the snippet is first
- * pasted, and when a domain is locked down — against controls somebody adjusts
- * for as long as they are on the page. A 20rem column then made the snippet a
- * `<pre>` scrolled sideways one word at a time and the domain list a textarea
- * three characters wide.
+ * A dialog rather than the foot of the design column, because both are read
+ * once — when the snippet is first pasted, and when a domain is locked down —
+ * and a 20rem column made the snippet a `<pre>` scrolled sideways one word at
+ * a time.
  *
- * A dialog gives them the width they always needed and gives the column back to
- * the design.
+ * **Rewritten on 2026-11-07 because it read as prose with a snippet in it**:
+ * seven paragraphs — what pasting does, what the tags do, what the test page
+ * is, an analytics warning, the WordPress route, what allowed domains are and
+ * that they are not security — around one line of code. What is left says each
+ * thing once, in the place it applies:
  *
- * The domains have since become a fold of their own, entered one at a time
- * (`allowed-domains/`), and the tag chips offer only tags somebody wears and
- * say how many locations the choice shows.
+ * - **"Embed code"**, and one line under it: paste once, every publish updates
+ *   it.
+ * - **Website | WordPress tabs.** The code, with its copy button in the code's
+ *   own bar (`SnippetCode`); a "Show" row of tag chips with a count
+ *   (`SnippetTagRow`); Open test page. WordPress is three numbered steps and
+ *   the plugin, and an owner on WordPress never sees the code at all.
+ * - **Allowed domains**, folded, with one hint line inside.
  *
- * Inside the Shopify admin the store is the obvious place for the map, so
- * `trigger="link"` demotes the button to one quiet line, "Embed on another
- * site", at the foot of the storefront stepper (`StorefrontStepper`) — the
- * name the "site list is full" toasts there use.
+ * Two ways in, both from the Publish footer's steppers:
+ *
+ * - **Outside Shopify it is opened from outside** (`isOpen` / `onOpenChange`),
+ *   by the "Your website" stepper's Get embed code (`WebsiteStepper`), whose
+ *   step counts as done once the snippet is copied (`onSnippetCopied`).
+ * - **Inside the Shopify admin** the store is the obvious place for the map, so
+ *   `trigger="link"` draws one quiet line, "Embed on another site", at the foot
+ *   of the storefront stepper (`StorefrontStepper`) — the name the "site list
+ *   is full" toasts there use.
  */
 export function ShareDialog({
   map,
   places,
-  isMeasuring,
-  trigger = "button",
+  trigger = "none",
+  isOpen: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  onSnippetCopied,
 }: {
-  trigger?: "button" | "link";
+  /** `"none"`: no trigger of its own; the caller opens it with `isOpen`. */
+  trigger?: "none" | "link";
+  isOpen?: boolean;
+  onOpenChange?: (isOpen: boolean) => void;
+  /** Copy embed code reached the clipboard. */
+  onSnippetCopied?: () => void;
   map: AppMap;
   /** For the tag chips: which tags anybody wears, and how many each shows. */
   places: Place[];
-  /**
-   * The measurement switch as the sidebar's draft has it — for the wording of the
-   * test page's warning, and nothing else. What is actually being recorded lives
-   * in the published snapshot, which the test page reads for itself.
-   */
-  isMeasuring: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const isOpen = controlledOpen ?? ownOpen;
+  const setIsOpen = controlledOnOpenChange ?? setOwnOpen;
+  const [platform, setPlatform] = useState<Platform>("website");
 
   return (
     <>
@@ -62,21 +81,20 @@ export function ShareDialog({
           <CodeXml aria-hidden="true" className="size-3.5" />
           Embed on another site
         </button>
-      ) : (
-        <Button variant="secondary" size="sm" className="w-full" onPress={() => setIsOpen(true)}>
-          <Share2 aria-hidden="true" className="size-4" />
-          Embed code and domains
-        </Button>
-      )}
+      ) : null}
 
       <ResponsiveDialog
         isOpen={isOpen}
         onOpenChange={setIsOpen}
         dialogClassName="sm:max-w-[36rem]"
       >
-
-        <ResponsiveDialog.Header>
-          <ResponsiveDialog.Heading>Put this map on your site</ResponsiveDialog.Heading>
+        <ResponsiveDialog.Header className="gap-1">
+          <ResponsiveDialog.Heading>Embed code</ResponsiveDialog.Heading>
+          <p className="text-sm text-muted">
+            {map.snapshotUrl
+              ? "Paste it once — every publish updates it."
+              : "Publish your map first — its embed code appears here."}
+          </p>
         </ResponsiveDialog.Header>
 
         <ResponsiveDialog.Body className="space-y-5">
@@ -88,26 +106,55 @@ export function ShareDialog({
            */}
           {map.snapshotUrl ? (
             <>
-              <section className="space-y-2">
-                <h3 className="text-sm font-semibold text-foreground">
-                  Embed code
-                </h3>
-                <EmbedSnippet
-                  snapshotUrl={map.snapshotUrl}
-                  isMeasuring={isMeasuring}
-                  tagGroups={map.tagGroups}
-                  places={places}
-                />
-              </section>
+              <Tabs
+                className="w-full gap-4"
+                selectedKey={platform}
+                onSelectionChange={(key) => setPlatform(key as Platform)}
+              >
+                <Tabs.ListContainer>
+                  <Tabs.List aria-label="Where the map goes">
+                    <Tabs.Tab id="website" className="gap-2">
+                      <Globe aria-hidden="true" className="size-4 shrink-0" />
+                      Website
+                      <Tabs.Indicator />
+                    </Tabs.Tab>
+                    <Tabs.Tab id="wordpress" className="gap-2">
+                      <WordPressMark />
+                      WordPress
+                      <Tabs.Indicator />
+                    </Tabs.Tab>
+                  </Tabs.List>
+                </Tabs.ListContainer>
+
+                {/* Both panels mounted and stacked in one grid cell, the hidden
+                    one `invisible`, so the dialog is the height of the taller
+                    and does not jump on its centre line when the tab changes. */}
+                <div className="grid">
+                  <Tabs.Panel
+                    id="website"
+                    shouldForceMount
+                    className={PANEL_CLASS}
+                  >
+                    <WebsiteTab
+                      snapshotUrl={map.snapshotUrl}
+                      tagGroups={map.tagGroups}
+                      places={places}
+                      onCopied={onSnippetCopied}
+                    />
+                  </Tabs.Panel>
+                  <Tabs.Panel
+                    id="wordpress"
+                    shouldForceMount
+                    className={PANEL_CLASS}
+                  >
+                    <WordPressTab />
+                  </Tabs.Panel>
+                </div>
+              </Tabs>
 
               <Separator />
             </>
-          ) : (
-            <p className="text-pretty text-sm text-muted">
-              Publish the map once and the embed code you paste into your
-              site will appear here.
-            </p>
-          )}
+          ) : null}
 
           {/* Keyed on the map so switching maps re-seeds the list rather
               than showing the previous one's saved domains. */}
@@ -115,5 +162,17 @@ export function ShareDialog({
         </ResponsiveDialog.Body>
       </ResponsiveDialog>
     </>
+  );
+}
+
+/** A plain "W" in a ring — lucide has no WordPress mark, and a brand logo is not ours to redraw. */
+function WordPressMark() {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex size-4 shrink-0 items-center justify-center rounded-full border-[1.5px] border-current text-[9px] leading-none font-bold"
+    >
+      W
+    </span>
   );
 }

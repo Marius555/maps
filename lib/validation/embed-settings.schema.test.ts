@@ -103,8 +103,24 @@ describe("readEmbedSettings drawer and pin colour", () => {
     expect(settings.pinColor).toBe(DEFAULT_EMBED_ACCENT);
   });
 
-  it("lets the owner switch the drawer off", () => {
-    expect(readEmbedSettings({ panelDrawer: false }).panelDrawer).toBe(false);
+  /*
+   * The drawer switch and three others were retired on 2026-11-07: the designer
+   * no longer offers them, so a value stored back when it did must not keep a
+   * map in a layout its owner can no longer leave. The next publish writes the
+   * fixed answer; nothing already live changes.
+   */
+  it("reads the four retired controls as fixed, whatever is stored", () => {
+    const settings = readEmbedSettings({
+      panelDrawer: false,
+      panelFloat: false,
+      toolbarGlass: false,
+      panelScrollbar: false,
+    });
+
+    expect(settings.panelDrawer).toBe(true);
+    expect(settings.panelFloat).toBe(true);
+    expect(settings.toolbarGlass).toBe(true);
+    expect(settings.panelScrollbar).toBe(true);
   });
 
   it("lets the owner's own pin colour win over the default", () => {

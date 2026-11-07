@@ -25,6 +25,11 @@ import type { EmbedDesign } from "./use-embed-design";
  * still worth asking: it is the one piece of chrome that can land on top of a
  * customer's own content.
  *
+ * **"Frost the controls over the map" is gone too (2026-11-07).** Search and
+ * Nearest always wear the panel's glass when they float now — beside a glass
+ * sidebar, three opaque boxes were the one undesigned thing on the map. Fixed
+ * in `readEmbedSettings` (`RETIRED_CONTROLS`).
+ *
  * Three things a customer might expect are deliberately not here. **Traffic and
  * satellite** are metered third-party feeds in the visitor's path, which is the
  * one thing CLAUDE.md §2 forbids outright. And **the attribution** has no
@@ -84,24 +89,6 @@ export function MapControlsGroup({ settings, set }: EmbedDesign) {
           label="Ripple published pins"
           isSelected={settings.pinPulse}
           onChange={(value) => set("pinPulse", value)}
-        />
-
-        {/* Search and Nearest are docked *inside* the results panel on a wide
-            map with a list, and already on its surface; the arrangements where
-            they float over the basemap are a map with no list at all, and any
-            narrow one — where the list is a drawer at *either* position of that
-            switch, so the toolbar comes out of the panel either way. That is why
-            there is no condition on this one any more: every map has a width at
-            which these controls float, and the device tiles are how an owner
-            looks at it.
-
-            It carries no colours of its own — the controls read the panel’s own
-            transparency, blur and corners, so what is designed is one surface
-            rather than two that agree today. */}
-        <PropertySwitch
-          label="Frost the controls over the map"
-          isSelected={settings.toolbarGlass}
-          onChange={(value) => set("toolbarGlass", value)}
         />
       </PropertySwitches>
 

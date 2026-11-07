@@ -16,8 +16,13 @@ import { useOrigin } from "../use-origin";
  * URL, so it can prove a colour and can never prove a publish.
  *
  * This opens `/embed/live.html`, which points the real built bundle at the real
- * live snapshot. It is the same page that was always in the tree for testing the
- * embed by hand; the only thing missing was a way to reach it.
+ * live snapshot.
+ *
+ * **No note under it any more** (2026-11-07). It carried a sentence about what
+ * the page is and, with analytics on, a warning that visits there are recorded.
+ * The test page now says both itself, in its title and its Analytics status
+ * card, where they are true of the snapshot actually loaded rather than of the
+ * designer's draft.
  *
  * `LinkButton` rather than a `Button` with `window.open`, because this is a
  * navigation: middle-click, copy-link-address and open-in-new-window all have to
@@ -26,51 +31,26 @@ import { useOrigin } from "../use-origin";
 export function TestPageLink({
   snapshotUrl,
   tags,
-  isMeasuring,
 }: {
   snapshotUrl: string;
   /** The snippet's tag choice, so the test page narrows the same way. */
   tags: readonly string[];
-  /**
-   * Measurement as the owner has it set *now*, used for the warning's wording
-   * and nothing else. Whether anything is actually recorded depends on the live
-   * snapshot, which the test page reads and reports for itself — a draft switched
-   * on a second ago is not yet in a published snapshot, and claiming otherwise
-   * here is the confusion this whole page exists to end.
-   */
-  isMeasuring: boolean;
 }) {
   const origin = useOrigin();
 
   return (
-    <>
-      <LinkButton
-        variant="secondary"
-        size="sm"
-        href={origin ? embedTestPageUrl(origin, snapshotUrl, tags) : "#"}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-disabled={origin ? undefined : true}
-        className={origin ? undefined : "pointer-events-none opacity-50"}
-      >
-        <ExternalLink aria-hidden="true" className="size-4" />
-        Open test page
-        <span className="sr-only">(opens in a new tab)</span>
-      </LinkButton>
-
-      {/*
-        A fragment, and `w-full` is what puts this on its own line: the caller's
-        row is `flex flex-wrap`, so a full-width child breaks rather than sitting
-        beside the copy button. Keeping the note here rather than in the caller is
-        the point — it describes this link, and the two move together.
-      */}
-      <p className="w-full text-pretty text-xs text-muted">
-        Opens the map you last published on a page of its own, the way a visitor
-        sees it.
-        {isMeasuring
-          ? " Anything you do there is recorded against this map like a visitor's session."
-          : null}
-      </p>
-    </>
+    <LinkButton
+      variant="secondary"
+      size="sm"
+      href={origin ? embedTestPageUrl(origin, snapshotUrl, tags) : "#"}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-disabled={origin ? undefined : true}
+      className={origin ? undefined : "pointer-events-none opacity-50"}
+    >
+      <ExternalLink aria-hidden="true" className="size-4" />
+      Open test page
+      <span className="sr-only">(opens in a new tab)</span>
+    </LinkButton>
   );
 }

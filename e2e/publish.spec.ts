@@ -16,8 +16,8 @@ test("publish a map, then the embed loads it", { tag: "@smoke" }, async ({ page,
   await expect(page.getByText("Published", { exact: true }).first()).toBeVisible();
 
   // The snippet
-  await page.getByRole("button", { name: "Embed code and domains" }).click();
-  const shareDialog = page.getByRole("dialog").filter({ hasText: "Put this map on your site" });
+  await page.getByRole("button", { name: "Get embed code" }).click();
+  const shareDialog = page.getByRole("dialog").filter({ hasText: "Paste it once" });
   await expect(shareDialog.locator("pre code")).toContainText("data-snapshot=");
 
   // The real embed bundle, against the snapshot that was just written. The

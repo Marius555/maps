@@ -14,7 +14,7 @@ const EXAMPLE = embedSnippet({ scriptUrl: SCRIPT_URL, snapshotUrl: "YOUR-MAP-URL
 
 const STEPS = [
   { title: "Publish your map", body: "Press Publish on the map’s Publish tab." },
-  { title: "Copy the embed code", body: "Embed code and domains → Copy embed code." },
+  { title: "Copy the embed code", body: "Get embed code → Copy embed code." },
   { title: "Paste it into your page", body: "Use your builder’s HTML, Code or Embed block." },
 ] as const;
 
@@ -56,7 +56,7 @@ export function AnyWebsiteCode() {
         <div className="min-w-0">
           <CodeBlock code={EXAMPLE} label="HTML" />
           <p className="mt-3 text-sm text-muted">
-            Your map’s own code, ready to paste, is under Publish → Embed code and domains.
+            Your map’s own code, ready to paste, is under Publish → Get embed code.
           </p>
         </div>
       </div>

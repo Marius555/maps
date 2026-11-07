@@ -6,6 +6,7 @@ import {
   pickBestDelta,
   project,
   scrollAt,
+  viewGrowth,
 } from "./reveal-fold";
 
 /** A panel box, with the fields a case does not care about filled in. */
@@ -150,5 +151,31 @@ describe("pickBestDelta", () => {
     // Reduced motion lands here, which is why `pickFold` has a second answer.
     expect(pickBestDelta([0, 0, 0])).toBeNull();
     expect(pickBestDelta([])).toBeNull();
+  });
+});
+
+describe("viewGrowth", () => {
+  it("gives the view the room a footer folding away below it frees", () => {
+    // The Publish steps folding to their heading row while a fold opens.
+    expect(viewGrowth([box({ height: 220, finalHeight: 0 })])).toBe(220);
+  });
+
+  it("takes the room back while the footer comes back", () => {
+    expect(viewGrowth([box({ height: 0, finalHeight: 220 })])).toBe(-220);
+  });
+
+  it("is zero for a settled footer, open or shut", () => {
+    expect(viewGrowth([box({ height: 220, finalHeight: null })])).toBe(0);
+    expect(viewGrowth([box({ height: 0, finalHeight: 0 })])).toBe(0);
+    expect(viewGrowth([])).toBe(0);
+  });
+
+  it("adds up several, such as the empty-map notice and the steps", () => {
+    expect(
+      viewGrowth([
+        box({ height: 40, finalHeight: 0 }),
+        box({ height: 220, finalHeight: 0 }),
+      ]),
+    ).toBe(260);
   });
 });

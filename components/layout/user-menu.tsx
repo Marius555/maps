@@ -3,13 +3,19 @@
 import {
   Avatar,
   Button,
-  Chip,
   Dropdown,
   Header,
   Label,
   Separator,
 } from "@heroui/react";
-import { LogOut } from "lucide-react";
+import {
+  Bug,
+  CircleArrowUp,
+  CreditCard,
+  LifeBuoy,
+  LogOut,
+  Settings,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -22,37 +28,37 @@ import { initialsOf } from "@/lib/format/initials";
 import { useLogout } from "@/lib/query/auth";
 import type { SupportKind } from "@/lib/validation/support.schema";
 import type { PlanId } from "@/lib/repositories/plan-limits";
-import { UserMenuTheme } from "./user-menu-theme";
+
+/** Shared by every row's icon except Log out's, which takes the danger colour. */
+const ICON = "size-4 shrink-0 text-muted";
 
 /**
- * The account menu: identity, theme, settings, the way up a plan, support, log out.
+ * The account menu: identity, the way up a plan, settings, support, log out.
  *
  * Sits in the sidebar footer, which is where a persistent shell puts it — the
  * avatar is then in the same place on every page.
  *
- * **Text rows, and one icon.** Only Log out carries one, below a separator of
- * its own: it is the row that ends the session, and the icon plus the rule above
- * it make it the one a hand finds without reading. Every other row used to carry
- * an icon too, which gave them all the same weight and made none of them easier
- * to find.
+ * **An icon on every row** (the owner's call, 2026-11-07, reversing an earlier
+ * text-only menu). Each was chosen to name what the row does rather than
+ * decorate it: `CircleArrowUp` for moving up a plan (`CreditCard` for Shopify's
+ * Change plan, which can be a downgrade), the gear for Settings, `LifeBuoy` for
+ * help from a person, `Bug` for a bug. Log out keeps its own separator and the
+ * danger colour, so it is still the row a hand finds without reading.
  *
- * **The theme opens the rows below the divider under the email**, as one
- * Theme row whose submenu holds Light / System / Dark — `UserMenuTheme`. It is here as well as in Settings → General because it is
- * the one setting people reach for mid-task; both read `lib/theme/theme-choice.ts`,
- * so they cannot disagree. `ThemeSync`, not this menu, follows the OS while the
- * choice is "System". Inside the Shopify admin there is no theme row: the app
- * is locked light there.
+ * **No theme row.** The theme is chosen in Settings → General, one click away;
+ * a second picker here was a duplicate. (The admin console's menu still has
+ * `UserMenuTheme`.) `ThemeSync` follows the OS while the choice is "System".
  *
  * **Contact support and Report a bug open one form in two kinds**, mailed to the
  * support address with a subject that says which kind, which plan and which
  * topic (`lib/support/support-request.ts`), so the inbox can be triaged by
- * subject alone. Contact support is a paid-plan row: on Free it stays visible
- * but disabled, with a "Paid" chip on the same line (a second line of
- * reason made it the tallest row in the menu), and the route refuses it too. Report a
- * bug is on every plan. The dialog is rendered beside the menu, not in it,
- * since the menu closes as soon as a row is chosen.
+ * subject alone. Contact support is a paid-plan row and is **not drawn on
+ * Free** (the route refuses it too); "Free" is the best plan the person works
+ * under, so a member of a paid team still has it. Report a bug is on every
+ * plan. The dialog is rendered beside the menu, not in it, since the menu
+ * closes as soon as a row is chosen.
  *
- * **Upgrade plan only when there is one.** In accent, because on Free or Starter
+ * **Upgrade plan first, and only when there is one.** In accent, because on Free or Starter
  * it is the honest invitation, and it opens Settings → Billing where a plan is
  * changed. On Pro there is nothing above to sell, and an accented invitation to
  * buy what you have already bought is worse than no row at all — billing is one
@@ -180,17 +186,6 @@ export function UserMenu({
 
             <Separator />
 
-            {/* Not inside Shopify: the app is always light there, like the
-                admin around it (components/providers/theme-script.tsx). */}
-            {user.shopify ? null : <UserMenuTheme />}
-
-            {/* The only way into Settings. It is not a sidebar item: the sidebar
-                is about the map you are working on, and this is about the person,
-                which is what this menu is already for. */}
-            <Dropdown.Item id="settings" textValue="Settings">
-              <Label>Settings</Label>
-            </Dropdown.Item>
-
             {isTopPlan && !user.shopify ? null : (
               <Dropdown.Item id="upgrade" textValue={isTopPlan ? "Change plan" : "Upgrade plan"}>
                 {/* Tinted rather than given a variant: `menuItemVariants` offers
@@ -198,30 +193,34 @@ export function UserMenu({
                     this entirely. Inside Shopify it stays on Pro as Change plan:
                     a shop must be able to downgrade without asking us (App
                     Store requirement 1.2.3), and Shopify's page is where. */}
+                {isTopPlan ? (
+                  <CreditCard aria-hidden="true" className="size-4 shrink-0 text-accent" />
+                ) : (
+                  <CircleArrowUp aria-hidden="true" className="size-4 shrink-0 text-accent" />
+                )}
                 <Label className="text-accent">{isTopPlan ? "Change plan" : "Upgrade plan"}</Label>
               </Dropdown.Item>
             )}
 
+            {/* The only way into Settings. It is not a sidebar item: the sidebar
+                is about the map you are working on, and this is about the person,
+                which is what this menu is already for. */}
+            <Dropdown.Item id="settings" textValue="Settings">
+              <Settings aria-hidden="true" className={ICON} />
+              <Label>Settings</Label>
+            </Dropdown.Item>
+
             {/* Only once brand.json has an address: an item that opens an empty
                 email to nobody is a control that does nothing. */}
-            {BRAND.contact.supportEmail ? (
-              <Dropdown.Item
-                id="support"
-                textValue="Contact support"
-                isDisabled={isFree}
-              >
-                <div className="flex w-full items-center justify-between gap-2">
-                  <Label>Contact support</Label>
-                  {isFree ? (
-                    <Chip size="sm" variant="soft">
-                      <Chip.Label>Paid</Chip.Label>
-                    </Chip>
-                  ) : null}
-                </div>
+            {BRAND.contact.supportEmail && !isFree ? (
+              <Dropdown.Item id="support" textValue="Contact support">
+                <LifeBuoy aria-hidden="true" className={ICON} />
+                <Label>Contact support</Label>
               </Dropdown.Item>
             ) : null}
 
             <Dropdown.Item id="report-bug" textValue="Report a bug">
+              <Bug aria-hidden="true" className={ICON} />
               <Label>Report a bug</Label>
             </Dropdown.Item>
 
@@ -234,7 +233,7 @@ export function UserMenu({
                 <Separator />
 
                 <Dropdown.Item id="logout" textValue="Log out" variant="danger">
-                  <LogOut aria-hidden="true" className="size-4" />
+                  <LogOut aria-hidden="true" className="size-4 shrink-0" />
                   <Label>Log out</Label>
                 </Dropdown.Item>
               </>

@@ -59,7 +59,7 @@ export function OAuthButtons({
       // always ends up saying something.
       setPending(null);
       setError(
-        `We couldn't reach ${OAUTH_PROVIDER_LABEL[provider]} just now. Try again, or use your email below.`,
+        `We couldn't reach ${OAUTH_PROVIDER_LABEL[provider]} just now. Try again, or continue with email below.`,
       );
     }
   }

@@ -10,20 +10,22 @@ import {
 } from "@/lib/query/shopify";
 import { toastError } from "@/lib/query/toast-error";
 import { pickerName } from "@/lib/shopify/storefront-maps";
-import { needsPublish, storefrontSteps } from "@/lib/shopify/storefront-step";
-import { markThemeAdded, useThemeAdded } from "./use-theme-added";
+import { useSettleDesign } from "@/components/publish/design-sidebar/design-writes-context";
+import { themeAdded as themeAddedFlag } from "@/components/publish/stepper/marked-flag";
+import { storefrontSteps } from "@/lib/shopify/storefront-step";
 
 /**
  * One map's place on the shop's storefront, the things that change it (each
- * with its toast), and where the Publish footer's three steps stand
+ * with its toast), and where the Publish footer's steps stand
  * (docs/notes/shopify.md, "The Publish footer inside Shopify").
  *
  * Called by the sidebar, which hands it to `StorefrontStepper`. `enabled` is
  * false outside the Shopify admin, where nothing is fetched and `primary` says
  * nothing.
  *
- * Step 2 has no server answer: `themeAdded` is this browser remembering that
- * Add to theme (or "Already added") was pressed — see `use-theme-added.ts`.
+ * The theme step has no server answer: `themeAdded` is this browser
+ * remembering that Add to theme (or "Already added") was pressed — see
+ * `components/publish/stepper/marked-flag.ts`.
  */
 export function useStorefront(
   mapId: string,
@@ -36,9 +38,13 @@ export function useStorefront(
   const status = useStorefrontStatus(mapId, enabled);
   const show = useShowOnStorefront(mapId);
   const remove = useRemoveFromStorefront(mapId);
-  const themeAdded = useThemeAdded(mapId);
+  const themeAdded = themeAddedFlag.useMarked(mapId);
+  // Show on storefront republishes, so it waits for the designer's last save
+  // like Publish does — see `DesignWritesProvider`.
+  const settleDesign = useSettleDesign();
+  const afterSave = (run: () => void) => void settleDesign().then(run);
 
-  const { steps, primary } = storefrontSteps({
+  const { steps, primary, quietRedeploy } = storefrontSteps({
     onStorefront: status.data?.onStorefront,
     isError: status.isError,
     themeAdded,
@@ -51,7 +57,7 @@ export function useStorefront(
   const onAddToTheme = () => {
     const url = status.data?.addBlockUrl;
     if (!url) return;
-    markThemeAdded(mapId);
+    themeAddedFlag.mark(mapId);
     window.open(url, "_top");
   };
 
@@ -62,49 +68,53 @@ export function useStorefront(
   };
 
   const onShow = (makeDefault: boolean) =>
-    show.mutate(
-      { makeDefault },
-      {
-        onSuccess: (result) => {
-          if (result.siteRefused) {
-            toast.warning(makeDefault ? "Shown by default" : "Shown on your storefront", {
-              description:
-                "Your map's site list is full, so your store's address couldn't be added. Remove a site under Embed on another site, at the bottom of this panel.",
-            });
-            return;
-          }
+    afterSave(() =>
+      show.mutate(
+        { makeDefault },
+        {
+          onSuccess: (result) => {
+            if (result.siteRefused) {
+              toast.warning(makeDefault ? "Shown by default" : "Shown on your storefront", {
+                description:
+                  "Your map's site list is full, so your store's address couldn't be added. Remove a site under Embed on another site, at the bottom of this panel.",
+              });
+              return;
+            }
 
-          toast.success(makeDefault ? "Shown by default" : "Shown on your storefront", {
-            description: makeDefault
-              ? "Every Pinglide block shows this map unless it names another."
-              : describeShown(result),
-          });
+            toast.success(makeDefault ? "Shown by default" : "Shown on your storefront", {
+              description: makeDefault
+                ? "Every Pinglide block shows this map unless it names another."
+                : describeShown(result),
+            });
+          },
+          onError: (error) => toastError(error, "Couldn't put this map on your storefront"),
         },
-        onError: (error) => toastError(error, "Couldn't put this map on your storefront"),
-      },
+      ),
     );
 
   // The same POST as Show on storefront, which adds the store's address to the
   // site list and republishes; it keeps whichever map is the default.
   const onFixDomain = () =>
-    show.mutate(
-      { makeDefault: false },
-      {
-        onSuccess: (result) => {
-          if (result.siteRefused || result.domainMissing) {
-            toast.warning("Your store's address couldn't be added", {
-              description:
-                "Your map's site list is full. Remove a site under Embed on another site, at the bottom of this panel, then try again.",
-            });
-            return;
-          }
+    afterSave(() =>
+      show.mutate(
+        { makeDefault: false },
+        {
+          onSuccess: (result) => {
+            if (result.siteRefused || result.domainMissing) {
+              toast.warning("Your store's address couldn't be added", {
+                description:
+                  "Your map's site list is full. Remove a site under Embed on another site, at the bottom of this panel, then try again.",
+              });
+              return;
+            }
 
-          toast.success("Store address added", {
-            description: `Published with ${result.storeHost} on the map's site list.`,
-          });
+            toast.success("Store address added", {
+              description: `Published with ${result.storeHost} on the map's site list.`,
+            });
+          },
+          onError: (error) => toastError(error, "Couldn't add your store's address"),
         },
-        onError: (error) => toastError(error, "Couldn't add your store's address"),
-      },
+      ),
     );
 
   const onRemove = () =>
@@ -117,11 +127,10 @@ export function useStorefront(
     status,
     steps,
     primary,
-    /** Anything for Redeploy to send — it is drawn only then. */
-    needsPublish: needsPublish({ hasPendingChanges, published }),
+    quietRedeploy,
     onAddToTheme,
     onGoToTheme,
-    onAlreadyAdded: () => markThemeAdded(mapId),
+    onAlreadyAdded: () => themeAddedFlag.mark(mapId),
     onShow,
     onFixDomain,
     onRemove,

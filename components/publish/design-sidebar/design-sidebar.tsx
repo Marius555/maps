@@ -9,21 +9,20 @@ import { StorefrontStepper } from "@/components/shopify/storefront/storefront-st
 import { useStorefront } from "@/components/shopify/storefront/use-storefront";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ErrorMessage } from "@/components/ui/error-message";
+import { HeightCollapse } from "@/components/ui/height-collapse";
 import { PropertyFold } from "@/components/ui/properties/property-fold";
-import { PropertyFolds } from "@/components/ui/properties/property-folds";
 import type { AppMap, Place, Shape } from "@/lib/repositories/types";
 import { hasUnpublishedChanges } from "@/lib/snapshot/staleness";
-import { PublishAction } from "../publish-action";
 import { PublishStatus } from "../publish-status";
 import { DeviceToggle } from "../preview-device/device-toggle";
 import type { DeviceId } from "../preview-device/devices";
-import { ShareDialog } from "../share-dialog/share-dialog";
+import { WebsiteStepper } from "../website/website-stepper";
 import { ColorsGroup } from "./colors-group";
 import { LanguageGroup } from "./language-group";
 import { MapControlsGroup } from "./map-controls-group";
 import { MeasurementGroup } from "./measurement-group";
+import { DesignFolds, FoldingFooter, useOpenFoldStore } from "./open-fold";
 import { useTurnOnAnalytics } from "./use-turn-on-analytics";
-import { MobileGroup } from "./mobile-group";
 import { PanelGroup } from "./panel-group";
 import { PanelSurfaceGroup } from "./panel-surface-group";
 import { RowsGroup } from "./rows-group";
@@ -60,9 +59,21 @@ import type { EmbedDesign } from "./use-embed-design";
  * controls take the frame and the preview is still the band above them.
  *
  * The consequence to know: **Publish is one tap away** below `lg` rather than on
- * screen. It is in the footer inside, because a long column of controls must not
- * be able to push it out of reach, and a footer in the peek would be a second
- * row of chrome on the one width that has none to spare.
+ * screen — a footer in the peek would be a second row of chrome on the one
+ * width that has none to spare.
+ *
+ * **The way out is a stepper either way**: "Your store" inside the Shopify admin
+ * (`StorefrontStepper`), "Your website" everywhere else (`WebsiteStepper`).
+ * Same steps component, same placement, same one-button-at-a-time rule.
+ *
+ * **It is pinned under the folds at every width, and folds away while one is
+ * open** (the owner's request, 2026-11-07). Opening a fold slides the steps
+ * down to their heading row — "Your website · ● Live" — on the accordion's own
+ * curve and in the same frame (`HeightCollapse`), so the fold gets the room;
+ * closing it, or pressing that row, brings them back. Phones used to get the
+ * stepper at the top of the scroller instead, because pinned it filled the
+ * sheet and left the folds no room (2026-11-01) — folding away is what answers
+ * that, so there is one placement and one copy of it again.
  */
 export function DesignSidebar({
   map,
@@ -84,8 +95,9 @@ export function DesignSidebar({
   onDeviceChange: (value: DeviceId) => void;
   /** Open on the Visitor analytics fold with the switch on — see `useTurnOnAnalytics`. */
   turnOnAnalytics?: boolean;
-  /** Inside the Shopify admin — the footer is the storefront stepper.
-      From the server's user, so the column never draws the other layout first. */
+  /** Inside the Shopify admin — the stepper is "Your store" rather than "Your
+      website". From the server's user, so the column never draws the other
+      one first. */
   isShopify?: boolean;
 }) {
   const isEmpty = places.length === 0 && shapes.length === 0;
@@ -103,30 +115,46 @@ export function DesignSidebar({
   // owner came here to switch analytics on — the switch is the point then.
   const [isOpen, setIsOpen] = useState(turnOnAnalytics);
 
+  // Which design fold is open — shared by the folds and the footer, because
+  // any open fold folds the steps away and the stepper's heading closes it
+  // again. A store rather than state here; see `open-fold.tsx` for the
+  // measurement that decided it.
+  const openFold = useOpenFoldStore(turnOnAnalytics ? "measurement" : null);
+
   useTurnOnAnalytics(turnOnAnalytics, design);
 
   // A map carrying only shapes publishes something real, so this waits until
   // there is genuinely nothing to put on a customer's site.
-  const emptyNotice = isEmpty ? (
-    <p className="text-xs text-muted">
-      This map has no locations yet, so it would publish empty. Add some on the
-      Locations tab first.
-    </p>
-  ) : null;
+  const emptyNotice = (isCollapsed: boolean) =>
+    isEmpty ? (
+      <HeightCollapse isCollapsed={isCollapsed} className="pb-3">
+        <p className="text-xs text-muted">
+          This map has no locations yet, so it would publish empty. Add some on
+          the Locations tab first.
+        </p>
+      </HeightCollapse>
+    ) : null;
 
-  // Inside the Shopify admin the path onto the store — show it, add the
-  // block, publish — is three numbered steps with Publish the third
-  // (docs/notes/shopify.md, "The Publish footer inside Shopify"). Drawn in the
-  // footer at `lg` and at the top of the scroller below it; CSS hides the other.
-  const stepper = isShopify ? (
-    <StorefrontStepper
-      map={map}
-      places={places}
-      isMeasuring={design.settings.analytics}
-      hasPendingChanges={hasPendingChanges}
-      storefront={storefront}
-    />
-  ) : null;
+  // The path onto the store or the site, as numbered steps
+  // (docs/notes/shopify.md, "The Publish footer inside Shopify";
+  // docs/notes/publish-and-embed.md, "The Your website stepper").
+  const stepper = (fold: { isCollapsed: boolean; onExpand: () => void }) =>
+    isShopify ? (
+      <StorefrontStepper
+        map={map}
+        places={places}
+        hasPendingChanges={hasPendingChanges}
+        storefront={storefront}
+        {...fold}
+      />
+    ) : (
+      <WebsiteStepper
+        map={map}
+        places={places}
+        hasPendingChanges={hasPendingChanges}
+        {...fold}
+      />
+    );
 
   return (
     <BottomSheet
@@ -147,7 +175,7 @@ export function DesignSidebar({
             Design
           </h2>
           <PublishStatus
-            compact
+            form="compact"
             map={map}
             hasPendingChanges={hasPendingChanges}
           />
@@ -205,32 +233,19 @@ export function DesignSidebar({
           </div>
         ) : null}
 
-        {/* Inside Shopify below `lg`, the stepper leads the sheet and scrolls
-            with the folds. Pinned, it filled a phone's open sheet and left the
-            folds no room — the 2026-11-01 measurement again. At the top, Publish
-            is on screen the moment the sheet opens. */}
-        {isShopify ? (
-          <div className="mb-3 space-y-3 border-b border-border pb-4 lg:hidden">
-            {emptyNotice}
-            {stepper}
-          </div>
-        ) : null}
-
         {/*
           A full-height column holding seven unrelated questions — where the
-          panel goes, what it is made of, what a row says, what becomes of it
-          when there is no room for it, what is on the map, what colour it all
-          is, and whether visitors are counted — so a wall of thirty controls is
-          one nobody reads down.
+          panel goes, what it is made of, what a row says, what is on the map,
+          what colour it all is, what language it speaks, and whether visitors
+          are counted — so a wall of thirty controls is one nobody reads down.
 
-          Seven rather than five because "Results panel" had grown to eleven
-          controls with switches at positions 1, 3, 10 and 11, which is the
-          wall again inside one fold. Two of them were never panel controls and
-          are in "Map controls" now; the three describing the panel’s *surface*
-          are their own fold below, because all three are read only on a
-          floating panel and a fold can say that by not being there; and the
-          drawer switch is "On a phone", because it is the one setting in the
-          designer that no width above 768px reads.
+          Seven because "Results panel" had grown to eleven controls with
+          switches at positions 1, 3, 10 and 11, which is the wall again inside
+          one fold. Two of them were never panel controls and are in "Map
+          controls" now, and the three describing the panel's *surface* are
+          their own fold below. There was an eighth, "On a phone", holding the
+          drawer switch; that and three other layout controls were retired on
+          2026-11-07 (`RETIRED_CONTROLS` in embed-settings.schema.ts).
 
           It used to open on "Results panel" and allow several at once, the
           argument being that comparing a panel setting against a colour is a
@@ -238,21 +253,18 @@ export function DesignSidebar({
           five open folds in a 20rem column is the wall again. `PropertyFolds`
           is the one answer every panel in the app now gives.
         */}
-        <PropertyFolds
-          initialOpenId={turnOnAnalytics ? "measurement" : undefined}
-        >
+        <DesignFolds store={openFold}>
           <PropertyFold id="panel" title="Results panel">
             <PanelGroup {...design} />
           </PropertyFold>
 
-          {/* Transparency, blur and corners are read only where the map shows
-              through the panel, so with it docked or switched off this fold is
-              not merely empty — it is a trigger that opens onto nothing, which
-              is what `isEmpty` exists to remove. */}
+          {/* With the panel switched off this fold is not merely empty — it is
+              a trigger that opens onto nothing, which is what `isEmpty` exists
+              to remove. */}
           <PropertyFold
             id="surface"
             title="Panel surface"
-            isEmpty={!design.settings.list || !design.settings.panelFloat}
+            isEmpty={!design.settings.list}
           >
             <PanelSurfaceGroup {...design} />
           </PropertyFold>
@@ -263,20 +275,6 @@ export function DesignSidebar({
               <RowsGroup {...design} />
             </PropertyFold>
           ) : null}
-
-          {/* Between the panel's own folds and the map's, because that is
-              where it sits in the question: it is still the results panel, at
-              the one width where it cannot stand beside the map. `isEmpty`
-              rather than a ternary for `PropertyFold`'s own reason, and gated on
-              the same thing the Rows fold is — with no list there is nothing for
-              a drawer to hold. */}
-          <PropertyFold
-            id="mobile"
-            title="On a phone"
-            isEmpty={!design.settings.list}
-          >
-            <MobileGroup {...design} />
-          </PropertyFold>
 
           <PropertyFold id="controls" title="Map controls">
             <MapControlsGroup {...design} />
@@ -296,42 +294,25 @@ export function DesignSidebar({
           <PropertyFold id="measurement" title="Visitor analytics">
             <MeasurementGroup {...design} />
           </PropertyFold>
-        </PropertyFolds>
+        </DesignFolds>
       </ScrollShadow>
 
       {/* Outside the scroller on purpose: a long column of controls must not be
-          able to push Publish out of reach. Inside Shopify, desktop only — below
-          `lg` the stepper is at the top of the scroller instead (above). */}
-      <footer
-        className={`shrink-0 space-y-3 border-t border-border px-3 py-3 ${
-          isShopify ? "max-lg:hidden" : ""
-        }`}
+          able to push Publish out of reach. At every width — while a fold is
+          open it is just the heading row (`isCollapsed`), which is what keeps
+          it from crowding a phone's sheet. Spacing lives inside the collapses,
+          so a folded footer is the row and its padding and nothing else. */}
+      <FoldingFooter
+        store={openFold}
+        className="shrink-0 border-t border-border px-3 py-3"
       >
-        {/* `max-lg:hidden`, because the sheet's peek strip carries it there —
-            the point of the strip is that the state is readable with the
-            controls shut. Inside Shopify it is on the stepper's heading row
-            instead. */}
-        {isShopify ? null : (
-          <div className="max-lg:hidden">
-            <PublishStatus map={map} hasPendingChanges={hasPendingChanges} />
-          </div>
-        )}
-
-        {emptyNotice}
-
-        {isShopify ? (
-          stepper
-        ) : (
+        {(fold) => (
           <>
-            <ShareDialog
-              map={map}
-              places={places}
-              isMeasuring={design.settings.analytics}
-            />
-            <PublishAction mapId={map.id} />
+            {emptyNotice(fold.isCollapsed)}
+            {stepper(fold)}
           </>
         )}
-      </footer>
+      </FoldingFooter>
     </BottomSheet>
   );
 }

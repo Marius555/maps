@@ -23,32 +23,26 @@ import type { EmbedDesign } from "./use-embed-design";
  * floating over the basemap; hiding their toggles inside this fold's `list`
  * branch left an owner looking at a search box with no way in this panel to
  * switch it off, and no way to switch it *on* for a bare map either. They are in
- * "Map controls" now, with the glass switch that is about those same controls
- * floating, and that fold was already the one shaped like this: a choice, a row
- * of tiles, and one run of switches at the end.
+ * "Map controls" now, and that fold was already the one shaped like this: a
+ * choice, a row of tiles, and one run of switches at the end.
  *
- * **The drawer went last, to "On a phone".** Every control left here describes a
- * panel standing beside a map, and that switch describes the one width at which
- * none of them is read — see `mobile-group.tsx`.
+ * **The surface — transparency, blur, corners — is its own fold**, shown
+ * whenever the panel is: see `panel-surface-group.tsx`.
  *
- * **The surface — transparency, blur, corners — is its own fold.** It is read
- * only on a *floating* panel (opacity on a docked column reveals the page's own
- * background, not the map, which is not what anyone reaches for it wanting), so
- * three of the nine controls here were invisible half the time and pushed the
- * two switches at the foot off the bottom of a 20rem column the other half. A
- * fold that disappears says that better than a gap does — see
- * `panel-surface-group.tsx` and `PropertyFold`'s `isEmpty`.
+ * **Placement and the scrollbar switch are gone too (2026-11-07).** The panel
+ * always floats over the map as a sidebar now, and the list always draws its
+ * scrollbar — the docked column was the layout the sidebar replaced, and the
+ * bar is the one thing telling a visitor the list goes on. Both are fixed in
+ * `readEmbedSettings` (`RETIRED_CONTROLS`), not merely hidden, so a map that
+ * once chose otherwise is not stuck in a layout nobody can switch off.
  *
- * **What is left is one master switch, three selectors, one run of switches.**
- * No boolean sits between two fields, which is the rule
- * `components/ui/properties/property-fields.tsx` states and the rule this fold
- * was breaking in three places at once.
+ * **What is left is one master switch, two selectors, and the row-card
+ * switch.** No boolean sits between two fields, which is the rule
+ * `components/ui/properties/property-fields.tsx` states.
  *
- * **Width is a select; everything else is tiles.** Five words across a 20rem
- * column is about 60px each and none of them are readable, which is the
- * complaint that broke this panel open. The split is per control rather than a
- * blanket rule: a corner tile draws its own radius and says itself at any width,
- * so it stays a tile.
+ * **Width is a select; Side is tiles.** Five words across a 20rem column is
+ * about 60px each and none of them are readable, which is the complaint that
+ * broke this panel open; two icons are not.
  */
 export function PanelGroup({ settings, set }: EmbedDesign) {
   return (
@@ -70,13 +64,6 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
             onChange={(value) => set("panelSide", value)}
           />
 
-          <PropertyChoice
-            label="Placement"
-            value={settings.panelFloat ? "over" : "beside"}
-            options={PLACEMENTS}
-            onChange={(value) => set("panelFloat", value === "over")}
-          />
-
           <PropertyNumberSelect
             label="Width"
             value={settings.panelWidth}
@@ -84,35 +71,21 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
             onChange={(value) => set("panelWidth", value)}
           />
 
-          {/* Last, because a run of yes/no questions goes at the end of its fold
-              — a boolean interrupting a run of shape controls is the thing that
-              rule exists to stop. Both apply to the preview under the pointer
-              rather than waiting for a Save.
+          {/* Last, because a yes/no question goes at the end of its fold.
 
-              The scrollbar is on by default, and deliberately so: the bar is the
-              only thing telling a visitor the list continues below the fold. Off
-              is the answer for a short list, or for an owner who has designed the
-              panel down to its corners and does not want the browser's chrome in
-              the middle of it.
-
-              The row's card switch is off by default: a card opened from the
-              panel rarely fits the part of the map the panel leaves. It is only
-              offered while pins open cards at all ("Map controls"), because with
-              those off there is no card for a row to open. */}
-          <PropertySwitches>
-            {settings.card ? (
+              Off by default: a card opened from the panel rarely fits the part
+              of the map the panel leaves. It is only offered while pins open
+              cards at all ("Map controls"), because with those off there is no
+              card for a row to open. */}
+          {settings.card ? (
+            <PropertySwitches>
               <PropertySwitch
                 label="Open a card when a row is clicked"
                 isSelected={settings.rowCard}
                 onChange={(value) => set("rowCard", value)}
               />
-            ) : null}
-            <PropertySwitch
-              label="Show the list's scrollbar"
-              isSelected={settings.panelScrollbar}
-              onChange={(value) => set("panelScrollbar", value)}
-            />
-          </PropertySwitches>
+            </PropertySwitches>
+          ) : null}
         </>
       ) : null}
     </div>
@@ -122,39 +95,6 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
 const SIDES = [
   { value: "left", label: "Left", icon: <PanelLeft aria-hidden="true" className="size-4" /> },
   { value: "right", label: "Right", icon: <PanelRight aria-hidden="true" className="size-4" /> },
-] as const;
-
-/*
- * Two tiles that draw the difference: one box inside the frame, or two boxes
- * side by side. A word each ("Over the map" / "Beside it") is most of the
- * column's width for a choice with two answers.
- */
-const PLACEMENTS = [
-  {
-    value: "over",
-    label: "Over the map",
-    icon: (
-      <span
-        aria-hidden="true"
-        className="relative block size-3.5 rounded-[2px] border-2 border-current"
-      >
-        <span className="absolute inset-y-0.5 right-0.5 w-1 bg-current" />
-      </span>
-    ),
-  },
-  {
-    value: "beside",
-    label: "Beside it",
-    icon: (
-      <span
-        aria-hidden="true"
-        className="flex size-3.5 items-stretch gap-px rounded-[2px] border-2 border-current"
-      >
-        <span className="flex-1" />
-        <span className="w-1 bg-current" />
-      </span>
-    ),
-  },
 ] as const;
 
 /*

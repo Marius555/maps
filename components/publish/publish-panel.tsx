@@ -10,6 +10,7 @@ import { usePlaces } from "@/lib/query/places";
 import { useShapes } from "@/lib/query/shapes";
 import type { AppMap, Group, Place, Shape } from "@/lib/repositories/types";
 import { DesignSidebar } from "./design-sidebar/design-sidebar";
+import { DesignWritesProvider } from "./design-sidebar/design-writes-context";
 import { useEmbedDesign } from "./design-sidebar/use-embed-design";
 import { DEFAULT_DEVICE, deviceWidth, type DeviceId } from "./preview-device/devices";
 
@@ -81,7 +82,9 @@ export function PublishPanel({
   const width = deviceWidth(device);
 
   return (
-    <>
+    // Anything here that publishes waits for the designer's last save first —
+    // see `DesignWritesProvider`.
+    <DesignWritesProvider settle={design.settle}>
       <PageTitle>Publish</PageTitle>
 
       {/*
@@ -170,6 +173,6 @@ export function PublishPanel({
           isShopify={isShopify}
         />
       </div>
-    </>
+    </DesignWritesProvider>
   );
 }

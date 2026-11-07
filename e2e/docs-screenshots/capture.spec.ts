@@ -143,15 +143,15 @@ const SHOTS: Shot[] = [
     name: "publish-designer",
     open: async (page, map) => {
       await page.goto(`/maps/${map.id}/publish`);
-      await expect(page.getByRole("button", { name: "Embed code and domains" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Get embed code" })).toBeVisible();
       await page.waitForTimeout(4000);
     },
   },
   {
     name: "embed-code",
     open: async (page) => {
-      await page.getByRole("button", { name: "Embed code and domains" }).click();
-      await expect(page.getByRole("dialog").filter({ hasText: "Put this map on your site" })).toBeVisible();
+      await page.getByRole("button", { name: "Get embed code" }).click();
+      await expect(page.getByRole("dialog").filter({ hasText: "Paste it once" })).toBeVisible();
       await page.waitForTimeout(800);
     },
   },

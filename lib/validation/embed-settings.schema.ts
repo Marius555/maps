@@ -345,6 +345,29 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
 };
 
 /**
+ * Four controls the designer no longer offers, and the answer each one is fixed
+ * to whatever the stored row says (the owner's call, 2026-11-07).
+ *
+ * All four described layouts the floating sidebar and the bottom drawer
+ * replaced: a docked column beside the map (`panelFloat`), a side drawer behind
+ * a menu button on phones (`panelDrawer`), solid toolbar controls over a glass
+ * panel (`toolbarGlass`), and a list without its scrollbar (`panelScrollbar`).
+ *
+ * **Read as fixed, still written.** The fields stay on the schema and in every
+ * snapshot, because absent in a snapshot means the *old* layout (§7) — a
+ * publish that dropped them would put every republished map back in a docked
+ * column. And the embed keeps every branch, because snapshots already live with
+ * `false` in them are read forever. So a map whose owner once chose otherwise
+ * draws the standard layout from its next publish, and not a moment before.
+ */
+const RETIRED_CONTROLS = {
+  panelFloat: true,
+  panelDrawer: true,
+  toolbarGlass: true,
+  panelScrollbar: true,
+} as const satisfies Partial<EmbedSettings>;
+
+/**
  * A stored map's settings, fully resolved.
  *
  * `settings` is a free-form JSON column that may have been written by an older
@@ -370,14 +393,11 @@ export function readEmbedSettings(
     card: readFlag(settings.card, d.card),
 
     panelSide: readChoice(settings.panelSide, PANEL_SIDES, d.panelSide),
-    panelFloat: readFlag(settings.panelFloat, d.panelFloat),
     panelWidth: readNumber(settings.panelWidth, 20, 60, d.panelWidth),
     panelOpacity: readNumber(settings.panelOpacity, 0, 100, d.panelOpacity),
     panelBlur: readNumber(settings.panelBlur, 0, 24, d.panelBlur),
     panelRadius: readNumber(settings.panelRadius, 0, 24, d.panelRadius),
-    panelScrollbar: readFlag(settings.panelScrollbar, d.panelScrollbar),
-    panelDrawer: readFlag(settings.panelDrawer, d.panelDrawer),
-    toolbarGlass: readFlag(settings.toolbarGlass, d.toolbarGlass),
+    ...RETIRED_CONTROLS,
 
     rowPin: readFlag(settings.rowPin, d.rowPin),
     rowPinSize: readNumber(settings.rowPinSize, 16, 48, d.rowPinSize),

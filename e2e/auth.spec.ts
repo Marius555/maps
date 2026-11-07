@@ -7,6 +7,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 test("a wrong password is refused", async ({ page }) => {
   await page.goto("/login");
+  await page.getByRole("button", { name: "Continue with email" }).click();
   await page.getByLabel("Email").fill(process.env.E2E_EMAIL ?? "nobody@example.com");
   await page.getByLabel("Password", { exact: true }).fill("definitely-not-the-password");
   await page.getByRole("button", { name: "Log in", exact: true }).click();
@@ -17,6 +18,7 @@ test("a wrong password is refused", async ({ page }) => {
 
 test("signup refuses a throwaway address without creating an account", { tag: "@smoke" }, async ({ page }) => {
   await page.goto("/signup");
+  await page.getByRole("button", { name: "Continue with email" }).click();
   await page.getByLabel("Email").fill(`e2e-${Date.now()}@mailinator.com`);
   await page.getByLabel("Password", { exact: true }).fill("a-long-enough-password");
   await page.getByLabel("Confirm password").fill("a-long-enough-password");
@@ -32,6 +34,7 @@ test("log in, then log out", { tag: "@smoke" }, async ({ page }) => {
   test.skip(!process.env.E2E_EMAIL, "E2E_EMAIL is not set");
 
   await page.goto("/login");
+  await page.getByRole("button", { name: "Continue with email" }).click();
   await page.getByLabel("Email").fill(process.env.E2E_EMAIL!);
   await page.getByLabel("Password", { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole("button", { name: "Log in", exact: true }).click();

@@ -1,19 +1,25 @@
 "use client";
 
+import { useId } from "react";
+
 import { TagToggleChip } from "@/components/tags/tag-chip";
 import type { MapTagGroup, Place } from "@/lib/repositories/types";
 import { tagGroupsInUse, wornTagIds } from "@/lib/tags/tag-usage";
 
 /**
- * Narrowing one pasted copy of the map to some of its tags.
+ * Narrowing one pasted copy of the map to some of its tags, as one compact row.
  *
  * The same map on a "Stockists" page and an "Outlets" page, from one snippet
- * each — the choice lives in the snippet (`data-tags`), not the map, so it costs
- * no republish and the two pages cannot fight over one setting. Nothing chosen
- * is the whole map, which is what every snippet pasted before this still shows.
+ * each — the choice lives in the snippet (`data-tags`), not the map, so it
+ * costs no republish and the two pages cannot fight over one setting. Nothing
+ * chosen is the whole map, which is what every snippet pasted before this
+ * still shows.
  *
- * The same chip the locations filter uses, grouped under the same headings,
- * because it is the same question asked about the same vocabulary.
+ * **It explains itself with a count, not a paragraph** (2026-11-07: the
+ * dialog had too much text). "Show" and "40 locations" say what the chips do;
+ * pressing one turns the count into "12 of 40", which says the rest. The group
+ * name is drawn only when there is more than one group, because with one it
+ * repeats the row's own label.
  *
  * **Only tags somebody wears are offered.** The embed's `onlyTagged` falls back
  * to the whole map when nothing matches — right for a pasted snippet whose tag
@@ -21,7 +27,7 @@ import { tagGroupsInUse, wornTagIds } from "@/lib/tags/tag-usage";
  * that does nothing. `tagGroupsInUse` is the rule the snapshot publishes with.
  * Selected ids are kept too, so a chip already on can still be switched off.
  */
-export function SnippetTagFilter({
+export function SnippetTagRow({
   groups,
   places,
   selected,
@@ -32,6 +38,7 @@ export function SnippetTagFilter({
   selected: ReadonlySet<string>;
   onChange: (next: Set<string>) => void;
 }) {
+  const labelId = useId();
   const keep = wornTagIds(places);
   for (const id of selected) keep.add(id);
 
@@ -47,20 +54,25 @@ export function SnippetTagFilter({
     onChange(next);
   };
 
+  const showGroupNames = usable.length > 1;
+
   return (
-    <div className="space-y-2">
-      <p className="text-pretty text-xs text-muted">
-        Show only locations with these tags on this page. Leave them all off to
-        show the whole map.
-      </p>
+    <div role="group" aria-labelledby={labelId} className="space-y-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <p id={labelId} className="text-sm font-medium text-foreground">
+          Show
+        </p>
+        <p className="text-xs text-muted" aria-live="polite">
+          {shownLabel(places, selected)}
+        </p>
+      </div>
 
-      {usable.map((group) => (
-        <fieldset key={group.id} className="space-y-1.5">
-          <legend className="text-xs font-medium text-muted">
-            {group.label || "Untitled group"}
-          </legend>
-
-          <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {usable.map((group) => (
+          <div key={group.id} className="contents">
+            {showGroupNames ? (
+              <span className="text-xs text-muted">{group.label || "Untitled group"}</span>
+            ) : null}
             {group.tags.map((tag) => (
               <TagToggleChip
                 key={tag.id}
@@ -70,12 +82,8 @@ export function SnippetTagFilter({
               />
             ))}
           </div>
-        </fieldset>
-      ))}
-
-      <p className="text-xs text-muted" aria-live="polite">
-        {shownLabel(places, selected)}
-      </p>
+        ))}
+      </div>
     </div>
   );
 }
@@ -88,11 +96,11 @@ function shownLabel(places: Place[], selected: ReadonlySet<string>): string {
   const total = places.length;
   const noun = total === 1 ? "location" : "locations";
 
-  if (selected.size === 0) return `Shows all ${total} ${noun}.`;
+  if (selected.size === 0) return `All ${total} ${noun}`;
 
   const shown = places.filter((place) =>
     place.tags.some((id) => selected.has(id)),
   ).length;
 
-  return `Shows ${shown} of ${total} ${noun}.`;
+  return `${shown} of ${total} ${noun}`;
 }

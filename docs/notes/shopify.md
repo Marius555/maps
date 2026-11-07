@@ -243,52 +243,104 @@ GraphiQL (the URL `app dev` prints) answered `metaobjectDefinitionByType(type: "
 "Map" picker lists nothing until it exists. Check with that query after restarting `app dev`.
 
 `addBlockUrl` is Shopify's deep link that opens the theme editor with the block added;
-`themeEditorUrl` opens it as it is, for "Go to theme" — the deep link would add another block
+`themeEditorUrl` opens it as it is, for "Open theme editor" — the deep link would add another block
 on every press.
 
 ### The Publish footer inside Shopify
 
 Inside the Shopify admin the store is the obvious place for a map, so the Publish sidebar's
-pinned footer is the path onto it: **numbered steps, read top to bottom**, with Redeploy the
-third — drawn only when there is something to send (`StorefrontStepper`,
-`components/shopify/storefront/`):
+pinned footer is the path onto it: **three fixed steps, read top to bottom**
+(`StorefrontStepper`, `components/shopify/storefront/`). Its twin outside Shopify is "Your
+website" (docs/notes/publish-and-embed.md, "The Your website stepper"); the step row, the text
+links, the remembered flags and the step model are shared, in `components/publish/stepper/` and
+`lib/publish/steps.ts`.
 
 ```
 YOUR STORE                          ● Live · 1 h ago     ← every state, loading and failed too
 (✓) Show on your storefront                 Remove   ← done: one line (+ "Not your default map. Make default")
- │
+ ┃
 (2) Add the block to your theme                       ← current: the only filled button
- │  Opens your theme editor with the block added. Press Save there.
- │  [             Add to theme             ]
+ │  Your latest changes aren't live yet. Redeploy     ← with edits: Redeploy first, in this step…
+ │  first, so your theme shows them.
+ │  [               Redeploy               ]
  │  Already added
  │
-(3) Redeploy your changes                             ← upcoming: grey
-    [               Redeploy               ]          ← only with edits since the last publish
-    Publishing confirms you've checked every pin.
+(3) Up to date                                        ← the status step: grey until ② is done
 ────────────────────────────────────────
 </> Embed on another site
 ```
 
-**Step 3 exists only when there is something to send** (`needsPublish`: edits since the last
-publish, or never published), in every state. Nothing to send: two steps, and step 2 ends the
-list with a full-width **[Go to theme]**, unfilled, which opens the live theme's editor with
-nothing added (`themeEditorUrl`). With edits, Go to theme gives way and step 3 appears with
-**[Redeploy]** — filled once it is the next step; its toast says Redeployed. One button at a
-time. The owner asked for all of it (2026-11-03): no button that republishes an identical map,
-the theme one press away once there is nothing to send, and **no finished "Store is up to date"
-step** — a first version drew one, with Go to theme under it, and the button read as a duplicate
-of step 2's. A map never published says Publish, and "Publish your map".
+**The three steps never change** (the owner's call, 2026-11-07): ① Show on your storefront,
+② Add the block to your theme, ③ Up to date. Nothing is added, removed or renumbered.
+`storefrontSteps` returns one state per step, and they always come from one number, how far
+along the merchant is (`statesAt`), so progress cannot leave a gap.
 
-Only the current step is open and has a filled button; finished steps fold to a line with a
-check on a grey disc (green check, `bg-default text-success` — the owner's call over a green
-disc), later steps are grey, and a line joins the discs. Every move that is not the next step is
-words, not a button (`TextAction`): Remove, Make default, Already added, and "Embed on another
-site" — the embed dialog demoted rather than removed, because it also holds the allowed sites,
-which a full list sends the merchant to (the toasts name it). **Redeploy is drawn whenever there
-is something to send** (`needsPublish`: edits, or never published), filled only when step 3 is
-current, so a map taken off the storefront, or only embedded elsewhere, is never stuck with edits.
-All buttons are `size="sm"` and full width (the owner's call, 2026-11-03). `isShopify` comes from
-the page's server-side user rather than `useMe()`, so the first paint already has this layout.
+It replaced an ordered list numbered by position, where Redeploy was a step of its own that came
+and went. With edits it sat at ②, with the theme step at ③. Pressing it removed it, so the
+theme step slid up into ② and ③ disappeared. The owner read that as the flow going nowhere: "it
+sits on 2 step and deletes 3". A test now holds the property directly: for every state, removing
+the edits never moves the current step back up (`storefront-step.test.ts`, "never moves back
+after a redeploy").
+
+**Add to theme and Redeploy are never offered together, and with edits Redeploy comes first,
+inside ②** (the owner's call, 2026-11-07, asked twice). While the theme step is current and
+there are edits to send, ② shows Redeploy and "Already added". Once the store is current, ②
+turns into **[Add to theme]** and "Already added" in the same place, and ② stays current
+throughout. Redeploying first is also the better order, because the theme editor then shows the
+latest map.
+
+**③ is a status, not an action.** While ② is undone it is a grey "Up to date". Once ② is done it
+has two forms:
+- **Redeploy your changes**: shown while the store is behind. It reads "Your store still shows
+  the version you last published." and holds the filled Redeploy.
+- **Up to date**: a check, "Your store shows your latest changes."
+
+Under both forms is **Open theme editor ↗**, an accent text link (`TextAction tone="accent"`)
+that opens the live theme's editor with nothing added (`themeEditorUrl`). It stays put while the
+status above it changes. That link replaced a full-width outline "Go to theme" button, which the
+owner did not want ("dont show large button like before"). A map never published says Publish,
+and "Publish your map". A Redeploy toast says Redeployed.
+
+Only the current step is open and has a filled button. Finished steps fold to a line with a
+**white check on a solid accent disc**, and the line under a finished step fills with accent.
+The current step's disc is accent with a soft accent halo (`ring-accent-soft`), which is what
+tells it from a finished one. Later steps are a grey ring. These colours were the owner's call
+(2026-11-07) over a grey disc with a green check (`bg-default text-success`), which read as
+washed out. The green "Live" dot on the heading row stays green.
+
+Every move that is not the next step is words, not a button (`TextAction`): Remove, Make default,
+Already added, and "Embed on another site". The embed dialog is demoted rather than removed,
+because it also holds the allowed sites, and the "site list is full" toasts send the merchant
+there by that name.
+
+**A map off the storefront with edits gets Redeploy as words, in ③** (`quietRedeploy`): "Edits
+not live yet. Redeploy", drawn by `PublishAction look="text"`. A map taken off the storefront, or
+only embedded elsewhere, must not be stuck with its edits, and Show on storefront would not send
+them: `prepareMapForSites` publishes only when the site list changes. As words, it never competes
+with the filled Show. All buttons are `size="sm"` and full width (the owner's call, 2026-11-03).
+`isShopify` comes from the page's server-side user rather than `useMe()`, so the first paint
+already has this layout.
+
+**Nothing in it snaps** (the owner's report, 2026-11-07: the section "jumps around and changes
+all the time when data is fetched"). Three things were moving the layout:
+- the swap from "Checking your storefront…" to a list of a different length;
+- the theme mark, which read `false` on the server and flipped right after hydration;
+- every state change.
+
+Now:
+- **Loading draws the real list.** It shows the same three titles with pulsing discs, and "Checking
+  your storefront…" with a spinner under ①. Only the bodies arrive. `themeAdded` is `undefined`
+  until the browser has been read (`useMarked`'s server snapshot), so the first paint is the
+  loading list, never a wrong state.
+- **`StepperStep` animates every change.**
+  - A body cross-fades when its `bodyKey` changes (`stepMotion`), and its height eases over
+    200ms (`components/ui/animated-height.tsx`, measured by a `ResizeObserver` and animated
+    inside the observer callback, before paint).
+  - The disc's colour and halo are a CSS transition, and the check pops in where the number was.
+  - The line under a finished step fills downward.
+  - ③'s title cross-fades.
+- **Reduced motion** keeps the colours and drops the travel (`MotionConfig`, plus
+  `useReducedMotion` for the height).
 
 **The time on the heading row is a number, and coarse** — "12 min ago", "1 h ago", "3 d ago",
 "1 week ago", then months and years (`shortAgo`, `lib/format/ago.ts`, labels written out for the
@@ -305,28 +357,38 @@ the buttons were too big, four controls of similar weight said nothing about whi
 nothing read top to bottom. The stepper is the answer: roomier (~300px at its fullest at lg, the
 folds scrolling above it), but with one obvious next press.
 
-**Below `lg` the stepper is not pinned.** It leads the scroller and scrolls away with the folds:
-pinned in a 390px sheet it filled the whole open sheet (2026-11-02), and at the top Publish is on
-screen the moment the sheet opens. `DesignSidebar` draws it in both places with CSS hiding one,
-which is why its heading id is a `useId`. Its relative time ("5 min ago") is a `ShortAgo` span
-with `suppressHydrationWarning`: rendered at request time and hydrated a minute later in the admin's
-iframe, the two strings differed and the whole sidebar was regenerated on the client.
+**The stepper is pinned at every width now, and folds away while a design fold is open**
+(2026-11-07). It used to lead the scroller below `lg` and scroll away with the folds, because
+pinned in a 390px sheet it filled the whole open sheet (2026-11-02). The owner then asked for the
+steps to slide down to the heading row ("Your store · ● Live") whenever a fold opens, and back
+when it closes — which answers the room problem from the other side, so there is one placement
+and one copy again. The steps and "Embed on another site" fold away together (`HeightCollapse`),
+the heading row brings them back, and the motion is the accordion's own: docs/notes/
+publish-and-embed.md, "Folding the steps away". Its relative time ("5 min ago") is a `ShortAgo`
+span with `suppressHydrationWarning`: rendered at request time and hydrated a minute later in the
+admin's iframe, the two strings differed and the whole sidebar was regenerated on the client.
 
-**Step 2 is "done" only as far as this browser remembers.** Telling whether the block is in the
-theme needs `read_themes`, and the app asks for no scope (above). So pressing **Add to theme**, or
-**Already added** (for a merchant back on a new device), writes `pinglide:theme-added:<mapId>` to
-`localStorage` (`use-theme-added.ts`, every access wrapped). Losing it only shows step 2 again;
-Publish is on screen regardless. The steps come from `storefrontSteps` (`lib/shopify/storefront-step.ts`,
-tested), and at most one is current:
+**Show on storefront waits for the designer's last save**, like Publish: it republishes, and a
+snapshot is built from the stored settings (`useSettleDesign` in `use-storefront.ts`).
 
-| State | ① Show | ② Theme | ③ Publish | Filled |
+**The theme step is "done" only as far as this browser remembers.** Telling whether the block is
+in the theme needs `read_themes`, and the app asks for no scope (above). So pressing **Add to
+theme**, or **Already added** (for a merchant back on a new device), writes
+`pinglide:theme-added:<mapId>` to `localStorage` (`themeAdded` in
+`components/publish/stepper/marked-flag.ts`, every access wrapped). **Keep that key**: merchants'
+browsers hold it, and renaming it would show them the step again. Losing it only shows the theme
+step again. The states come from `storefrontSteps` (`lib/shopify/storefront-step.ts`, tested over
+every combination):
+
+| State | ① Show | ② Theme | ③ Status | Filled |
 |---|---|---|---|---|
-| Status loading | — | — | — | none ("Checking your storefront…", + Redeploy with edits) |
-| Status failed | — | — | — | Redeploy with edits, else none ("Couldn't check… Try again") |
-| Not on the storefront | current | upcoming | upcoming | Show on storefront |
-| On it, theme not marked | done | current | upcoming | Add to theme |
-| On it, theme marked, changes not live or never published | done | done | current | Redeploy |
-| On it, theme marked, nothing to publish | done | done | not drawn | none — Go to theme in step 2, unfilled |
+| Status loading, or theme mark not read yet | pulsing | pulsing | pulsing | none ("Checking your storefront…") |
+| Status failed | — | — | — | Redeploy in ③ with edits, else none ("Couldn't check… Try again" under ①) |
+| Not on the storefront | current | upcoming | upcoming (+ Redeploy as words with edits) | Show on storefront |
+| On it, theme not marked, edits or never published | ✓ | **current: Redeploy first** | upcoming | Redeploy |
+| On it, theme not marked, nothing to send | ✓ | current: Add to theme | upcoming | Add to theme |
+| On it, theme marked, edits or never published | ✓ | ✓ | current: Redeploy your changes | Redeploy |
+| On it, theme marked, nothing to send | ✓ | ✓ | ✓ Up to date + Open theme editor | none |
 
 Add to theme marks the step before `window.open(…, "_top")`, because the theme editor replaces the
 admin page and nothing in the app runs again until the merchant returns. The "Ready to publish?"

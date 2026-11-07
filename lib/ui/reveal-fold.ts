@@ -128,6 +128,24 @@ export function project(
 }
 
 /**
+ * How much taller the scroller's view is about to get, from collapses *below*
+ * it rather than inside it.
+ *
+ * The Publish footer folds its steps away while a designer fold is open
+ * (`HeightCollapse`), and it sits under the scroller, not in it — so as the
+ * fold grows, the view the fold has to fit in grows too, on the same curve. A
+ * target worked out against today's view would scroll further than the fold
+ * needs. Shrinking footers make room (positive); one coming back takes it away.
+ */
+export function viewGrowth(below: PanelBox[]): number {
+  let growth = 0;
+
+  for (const panel of below) growth -= panelDelta(panel);
+
+  return growth;
+}
+
+/**
  * `scrollIntoView({ block: "nearest" })`, as arithmetic.
  *
  * The smallest scroll that does the job: a fold already fully inside the scroller
@@ -191,8 +209,28 @@ function boxOf(panel: HTMLElement): PanelBox {
   };
 }
 
-/** Every fold panel React Aria draws, in both flavours. */
-const PANELS = ".accordion__panel, .disclosure__content";
+/**
+ * Every fold panel React Aria draws, in both flavours — and `HeightCollapse`,
+ * which animates the same way through the same variable.
+ */
+const PANELS = ".accordion__panel, .disclosure__content, [data-height-collapse]";
+
+/**
+ * Collapses that change the scroller's own height: beside it in its column and
+ * after it, like the Publish footer. See `viewGrowth`.
+ */
+function collapsesBelow(scroller: HTMLElement): PanelBox[] {
+  const column = scroller.parentElement;
+  if (!column) return [];
+
+  return [...column.querySelectorAll<HTMLElement>("[data-height-collapse]")]
+    .filter(
+      (el) =>
+        !scroller.contains(el) &&
+        Boolean(scroller.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING),
+    )
+    .map(boxOf);
+}
 
 /**
  * Which of a set of panel deltas is the one the reader pressed.
@@ -314,19 +352,16 @@ export function revealFold(
   const itemRect = item.getBoundingClientRect();
   const scrollerRect = scroller.getBoundingClientRect();
 
-  const panels = [
-    ...scroller.querySelectorAll<HTMLElement>(
-      ".accordion__panel, .disclosure__content",
-    ),
-  ].map(boxOf);
+  const panels = [...scroller.querySelectorAll<HTMLElement>(PANELS)].map(boxOf);
 
   const final = project(itemRect, ownPanel, panels);
 
   // `clientTop`/`clientHeight` rather than the rect, so a bordered scroller measures
-  // its content box — the part a fold can actually be inside of.
+  // its content box — the part a fold can actually be inside of. Plus whatever a
+  // footer folding away under it is about to give it.
   const view = {
     top: scrollerRect.top + scroller.clientTop,
-    height: scroller.clientHeight,
+    height: scroller.clientHeight + viewGrowth(collapsesBelow(scroller)),
   };
 
   const start = scroller.scrollTop;

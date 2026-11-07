@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useUpdateMap } from "@/lib/query/maps";
+import { createSerialWriter, type SerialWriter } from "@/lib/query/serial-writer";
 import type { AppMap } from "@/lib/repositories/types";
 import {
   readEmbedSettings,
@@ -32,6 +33,12 @@ export type EmbedDesign = {
   ) => void;
   /** Put everything back to what a new map gets. */
   reset: () => void;
+  /**
+   * Send whatever is still on the timer and wait until every write has landed.
+   * Publish awaits this first (`DesignWritesProvider`), or it would build the
+   * snapshot from the settings as they were before the last press.
+   */
+  settle: () => Promise<void>;
   error: unknown;
 };
 
@@ -50,6 +57,14 @@ export type EmbedDesign = {
  * PATCH is a trailing timer behind it. **The base a write is applied to is the
  * draft and never `map.settings`**, so a reply that lands late cannot become the
  * base for the next write and persist a value the owner has already moved off.
+ *
+ * **And the PATCHes go one at a time** (`createSerialWriter`). The draft rule
+ * alone was not enough: two presses a second apart were two whole-blob writes in
+ * flight at once, and when the first reply landed last it wrote the older
+ * settings into the cache — and the server could commit them in that order
+ * too. The switch then showed the opposite of the last press, which is what the
+ * owner reported (2026-11-07). The draft is only let go once nothing is waiting
+ * *and* nothing is in flight.
  */
 export function useEmbedDesign(map: AppMap): EmbedDesign {
   const updateMap = useUpdateMap(map.id);
@@ -88,32 +103,40 @@ export function useEmbedDesign(map: AppMap): EmbedDesign {
     mutate.current = updateMap.mutateAsync;
   }, [updateMap.mutateAsync]);
 
+  /*
+   * `mutateAsync` rather than `mutate`: Query runs a `mutate` call's own
+   * callbacks only while its observer still has listeners, and every way out of
+   * this page unmounts one. The writer swallows the rejection, so a flush on
+   * unmount cannot reach the window either.
+   */
+  const writer = useRef<SerialWriter<EmbedSettings> | null>(null);
+
   const flush = useCallback(() => {
     if (timer.current) {
       clearTimeout(timer.current);
       timer.current = null;
     }
 
+    // Made on first use rather than during render, where reading `mutate`
+    // would be a ref read the compiler rightly refuses.
+    const serial = (writer.current ??= createSerialWriter((value: EmbedSettings) =>
+      mutate.current({ settings: value }),
+    ));
+
     const next = pending.current;
-    if (!next) return;
+    if (!next) return serial.idle();
 
     pending.current = null;
 
-    /*
-     * `mutateAsync` rather than `mutate`, and the `catch` is what makes that
-     * safe: Query runs a `mutate` call's own callbacks only while its observer
-     * still has listeners, and every way out of this page unmounts one. An
-     * unhandled rejection from a flush on unmount would reach the window.
-     */
-    void mutate
-      .current({ settings: next })
-      .catch(() => undefined)
-      .finally(() => {
-        // Only when nothing newer is waiting: clearing on a stale reply would
-        // drop the draft back to a row the owner has already edited past.
-        if (!pending.current) setDraft(null);
-      });
+    return serial.write(next).then(() => {
+      // Only when nothing newer is waiting or in flight: clearing on an older
+      // reply would drop the draft back to a row the owner has already edited
+      // past.
+      if (!pending.current && !serial.isBusy) setDraft(null);
+    });
   }, []);
+
+  const settle = useCallback(() => flush(), [flush]);
 
   const write = useCallback(
     (next: EmbedSettings) => {
@@ -121,7 +144,7 @@ export function useEmbedDesign(map: AppMap): EmbedDesign {
       pending.current = next;
 
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(flush, WRITE_DELAY_MS);
+      timer.current = setTimeout(() => void flush(), WRITE_DELAY_MS);
     },
     [flush],
   );
@@ -139,7 +162,12 @@ export function useEmbedDesign(map: AppMap): EmbedDesign {
   }, [write]);
 
   // Leaving the page is the last chance to save whatever is still on the timer.
-  useEffect(() => flush, [flush]);
+  useEffect(
+    () => () => {
+      void flush();
+    },
+    [flush],
+  );
 
-  return { settings, set, reset, error: updateMap.error };
+  return { settings, set, reset, settle, error: updateMap.error };
 }

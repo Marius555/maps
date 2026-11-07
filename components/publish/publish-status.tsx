@@ -1,39 +1,37 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
+import { AnimatePresence, motion } from "motion/react";
 
 import { publishedAgo } from "@/lib/format/ago";
 import type { AppMap } from "@/lib/repositories/types";
 
 /**
  * Where the map stands: never published, live and current, or live but behind
- * what's in the editor.
+ * what's in the editor. Two `form`s, one per place it is drawn:
  *
- * **`compact` is the same three states in a strip rather than a sentence**, for
- * the sheet's peek row below `lg` (`DesignSidebar`). That row is 2.75rem tall on
- * a 390px screen and holds the panel's name as well, and the full form is a line
- * of prose that wrapped onto three of them and printed itself over "Design". The
- * word plus a dot is what survives the trim: whether it is live at all, and
- * whether what is live is current. The sentence explaining what publishing *does*
- * is for the footer, where somebody is about to press the button.
+ * - **`heading`** — one line with a dot, on the right of the Publish footer's
+ *   stepper heading ("Your store" / "Your website", `StepperHeading`), the
+ *   time in numbers ("1 h ago", `ShortAgo`). What publishing *does* is said by
+ *   the steps under it, so this says only whether it is live and since when.
+ * - **`compact`** — the same three states in a strip, for the sheet's peek row
+ *   below `lg` (`DesignSidebar`). That row is 2.75rem tall on a 390px screen
+ *   and holds the panel's name as well; the word plus a dot is what survives:
+ *   whether it is live at all, and whether what is live is current.
+ *
+ * The sentence form that used to sit above Publish outside Shopify ("Live ·
+ * published 3 minutes ago · you've made changes since…") went with the
+ * "Your website" stepper (2026-11-07).
  */
 export function PublishStatus({
   map,
   hasPendingChanges,
-  compact = false,
-  storefront = false,
+  form,
 }: {
   map: AppMap;
   hasPendingChanges: boolean;
-  compact?: boolean;
-  /** Inside the Shopify admin: one line with a dot, on the right of the
-      storefront stepper's "Your store" heading, the time in numbers
-      ("1 h ago", `ShortAgo`). The sentence about a snippet is not true there
-      anyway — the way onto the store is Show on storefront, whose toast says
-      it published. */
-  storefront?: boolean;
+  form: "heading" | "compact";
 }) {
-  if (compact) {
+  if (form === "compact") {
     return (
       <p className="flex shrink-0 items-center gap-1.5 text-xs whitespace-nowrap text-muted">
         {map.publishedAt ? (
@@ -59,77 +57,57 @@ export function PublishStatus({
     );
   }
 
-  if (storefront) {
-    const dot = !map.publishedAt
-      ? "border border-muted"
-      : hasPendingChanges
-        ? "bg-accent"
-        : "bg-success";
+  const state = !map.publishedAt ? "unpublished" : hasPendingChanges ? "behind" : "current";
+  // A border on every state, so only colour changes and the dot can fade.
+  const dot = {
+    unpublished: "border-muted bg-transparent",
+    behind: "border-accent bg-accent",
+    current: "border-success bg-success",
+  }[state];
 
-    return (
-      <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
-        <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${dot}`} />
-        <span className="truncate">
+  return (
+    <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+      <span
+        aria-hidden="true"
+        className={`size-2 shrink-0 rounded-full border transition-colors duration-200 ${dot}`}
+      />
+      {/* Cross-faded rather than swapped: it changes the moment a redeploy
+          lands, beside a stepper that is easing to its new state. */}
+      <AnimatePresence initial={false} mode="wait">
+        <motion.span
+          key={state}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="truncate"
+        >
           {!map.publishedAt ? (
             "Not published"
           ) : (
             <>
               <span className="text-foreground">Live</span>
               {" · "}
-              {hasPendingChanges ? (
+              {state === "behind" ? (
                 <span className="text-accent">changes not published</span>
               ) : (
                 <ShortAgo at={map.publishedAt} />
               )}
             </>
           )}
-        </span>
-      </p>
-    );
-  }
-
-  if (!map.publishedAt) {
-    return (
-      <p className="text-xs text-muted">
-        Not published yet. Publishing generates the map your visitors see and
-        gives you a snippet to paste into your site.
-      </p>
-    );
-  }
-
-  return (
-    <p className="text-xs text-muted">
-      <span className="text-foreground">Live</span> · published{" "}
-      <Ago at={map.publishedAt} />
-      {hasPendingChanges ? (
-        <>
-          {" · "}
-          <span className="text-accent">
-            you&rsquo;ve made changes since — publish again to push them
-          </span>
-        </>
-      ) : null}
+        </motion.span>
+      </AnimatePresence>
     </p>
   );
 }
 
 /**
- * "3 minutes ago", in its own element so the one text that is *meant* to
- * differ between the server's render and the browser's can say so. The server
- * renders it at request time and the browser hydrates later — inside the
- * Shopify admin's iframe, sometimes a minute later — and "2 minutes ago"
- * against "3 minutes ago" failed hydration and regenerated the whole sidebar.
- */
-function Ago({ at }: { at: string }) {
-  return (
-    <span suppressHydrationWarning>{formatDistanceToNow(new Date(at), { addSuffix: true })}</span>
-  );
-}
-
-/**
- * "12 min ago", "1 h ago", "2 weeks ago" — `Ago` in numbers, for the Shopify
- * footer's heading row. Worked out once, no counter (the owner's call), and
- * `suppressHydrationWarning` for `Ago`'s reason.
+ * "12 min ago", "1 h ago", "2 weeks ago" — worked out once, no counter (the
+ * owner's call). In its own element with `suppressHydrationWarning` because it
+ * is the one text *meant* to differ between the server's render and the
+ * browser's: rendered at request time and hydrated later — inside the Shopify
+ * admin's iframe, sometimes a minute later — two different strings failed
+ * hydration and regenerated the whole sidebar.
  */
 function ShortAgo({ at }: { at: string }) {
   return <span suppressHydrationWarning>{publishedAgo(at)}</span>;

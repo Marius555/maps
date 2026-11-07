@@ -45,6 +45,7 @@ setup("log in as the test account", async ({ page, baseURL }) => {
     await page.context().addCookies(await savedCookies(AUTH_FILE));
   } else {
     await page.goto("/login");
+    await page.getByRole("button", { name: "Continue with email" }).click();
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Log in", exact: true }).click();

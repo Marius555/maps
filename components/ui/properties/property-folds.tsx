@@ -38,6 +38,8 @@ export function PropertyFolds({
   children,
   className,
   initialOpenId,
+  openId: controlledOpenId,
+  onOpenIdChange,
 }: {
   children: ReactNode;
   className?: string;
@@ -47,8 +49,18 @@ export function PropertyFolds({
    * other arrival still starts with everything shut.
    */
   initialOpenId?: string;
+  /**
+   * Which fold is open, held by the caller — for a page where something else
+   * answers to it. The Publish designer folds its steps away while any fold is
+   * open, and its heading closes the fold again (`DesignSidebar`). Pass both or
+   * neither.
+   */
+  openId?: string | null;
+  onOpenIdChange?: (openId: string | null) => void;
 }) {
-  const [openId, setOpenId] = useState<string | null>(initialOpenId ?? null);
+  const [ownOpenId, setOwnOpenId] = useState<string | null>(initialOpenId ?? null);
+  const openId = controlledOpenId === undefined ? ownOpenId : controlledOpenId;
+  const setOpenId = onOpenIdChange ?? setOwnOpenId;
   const root = useRef<HTMLDivElement>(null);
 
   /*

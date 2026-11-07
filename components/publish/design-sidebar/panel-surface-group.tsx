@@ -10,18 +10,12 @@ import type { EmbedDesign } from "./use-embed-design";
  * What the results panel is made of: how much of the map shows through it, how
  * blurred that is, and how round its corners are.
  *
- * **A fold of its own, and the condition is what earns it.** All three are read
- * only on a *floating* panel — opacity on a docked column reveals the page's own
- * background rather than the map, which is not what anybody reaches for it
- * wanting. So inside the Results panel fold they were three controls that
- * vanished the moment somebody chose "Beside it", leaving a gap where a third of
- * the fold had been, and three more rows pushing the panel's own switches off
- * the bottom of a 20rem column when they came back.
- *
- * `isEmpty` on the fold is what says it properly: with the panel docked or off
- * there is no heading either, because a trigger that opens onto nothing is worse
- * than no trigger. See `design-sidebar.tsx`, and `PropertyFold`'s own docblock
- * for why that has to be a prop rather than something worked out from children.
+ * **A fold of its own.** These were once read only on a *floating* panel, and
+ * vanished from the Results panel fold whenever somebody chose "Beside it". The
+ * panel always floats now (Placement was retired on 2026-11-07), so the fold is
+ * there whenever the panel is; `isEmpty` hides it with the panel switched off,
+ * because a trigger that opens onto nothing is worse than no trigger. See
+ * `PropertyFold`'s own docblock for why that has to be a prop.
  *
  * These are the panel's answers and nothing else's — the toolbar's glass reads
  * the same three values rather than carrying any of its own, so what is being

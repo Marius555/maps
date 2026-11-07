@@ -2,6 +2,7 @@
 
 import { Button } from "@heroui/react";
 
+import { AUTH_CHOICE_BUTTON } from "@/components/auth/method-switch/button-size";
 import { OAUTH_PROVIDER_LABEL, type OAuthProviderId } from "@/lib/auth/oauth-providers";
 import { ProviderMark } from "./provider-marks";
 
@@ -16,9 +17,12 @@ import { ProviderMark } from "./provider-marks";
  * transparent ground, which is both the conventional treatment for this button
  * and the one that makes `currentColor` on the mark resolve to a neutral.
  *
- * Not `primary`: that is the accent fill the Log in button below already wears,
- * and two accent-filled buttons on a 384px column leaves neither of them reading
- * as the main action.
+ * Not `primary`: that is the accent fill the Log in button wears, and two
+ * accent-filled buttons on a 384px column leaves neither of them reading as the
+ * main action.
+ *
+ * Larger than the app's default button (`AUTH_CHOICE_BUTTON`): these, with
+ * Continue with email, are the whole column when an auth page opens.
  */
 export function OAuthButton({
   provider,
@@ -36,6 +40,8 @@ export function OAuthButton({
       type="button"
       variant="outline"
       fullWidth
+      size={AUTH_CHOICE_BUTTON.size}
+      className={AUTH_CHOICE_BUTTON.className}
       isPending={isPending}
       isDisabled={isDisabled}
       onPress={onPress}

@@ -4,174 +4,488 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Live embed harness</title>
+    <title>Test page · Pinglide</title>
+    <link rel="icon" href="/logo/pinglide-icon.svg" type="image/svg+xml" />
+    <!--
+      The Publish page's "Open test page" (`embedTestPageUrl`) and the e2e suite
+      both land here: the real built bundle against a real published snapshot,
+      exactly what a visitor to a customer's site gets.
+
+      It is a product page, not a scratch harness (2026-11-07): owners reach it,
+      and it used to greet them with paragraphs about beacons and status codes.
+      The developer notes are still here, folded into "How to check analytics".
+
+      **Every rule below is scoped to a `.tp-` class, and it has to stay that
+      way.** The embed renders into this very document, so a bare `button` or
+      `input` selector lands on the map's own controls — it once grew the zoom
+      stack 16px and hung find-nearest 8px low, and was reported three times as
+      an embed bug. This page's whole job is to show what a customer sees.
+      `body` sets only what any host page would (margin, colours, a font for the
+      page's own text); the embed sets its own font and resets its controls
+      (`.lm-root :is(button, a, input, ul, li)` in embed/src/styles.css).
+    -->
     <style>
-      body {
-        margin: 0 auto;
-        padding: 32px 16px 64px;
-        max-width: 900px;
-        font-family: system-ui, sans-serif;
-        line-height: 1.5;
-        color: #1b1d21;
+      :root {
+        color-scheme: light;
+        --tp-bg: oklch(97.5% 0 0);
+        --tp-surface: oklch(100% 0 0);
+        --tp-surface-2: oklch(96% 0 0);
+        --tp-fg: oklch(21% 0 0);
+        --tp-muted: oklch(50% 0 0);
+        --tp-border: oklch(92% 0 0);
+        --tp-accent: oklch(64.37% 0.2195 36.18);
+        --tp-accent-fg: oklch(99.11% 0 0);
+        --tp-accent-soft: color-mix(in oklch, var(--tp-accent) 14%, transparent);
+        --tp-on: oklch(62% 0.17 145);
+        --tp-warn: oklch(72% 0.15 75);
+        --tp-danger: oklch(60% 0.2 25);
+        --tp-shadow: 0 1px 2px oklch(0% 0 0 / 0.04), 0 8px 24px oklch(0% 0 0 / 0.06);
       }
-      code {
-        background: #f1f3f5;
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+          --tp-bg: oklch(14% 0 0);
+          --tp-surface: oklch(19% 0 0);
+          --tp-surface-2: oklch(23% 0 0);
+          --tp-fg: oklch(97% 0 0);
+          --tp-muted: oklch(68% 0 0);
+          --tp-border: oklch(28% 0 0);
+          --tp-accent: oklch(67% 0.19 36.18);
+          --tp-on: oklch(72% 0.17 145);
+          --tp-warn: oklch(80% 0.14 80);
+          --tp-danger: oklch(70% 0.18 25);
+          --tp-shadow: 0 1px 2px oklch(0% 0 0 / 0.3), 0 8px 24px oklch(0% 0 0 / 0.35);
+        }
+      }
+
+      body {
+        margin: 0;
+        background: var(--tp-bg);
+        color: var(--tp-fg);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        line-height: 1.5;
+      }
+
+      .tp-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+      .tp-brand {
+        display: inline-flex;
+        border-radius: 6px;
+      }
+      .tp-brand:focus-visible {
+        outline: 2px solid var(--tp-accent);
+        outline-offset: 3px;
+      }
+      .tp-logo {
+        display: block;
+        height: 22px;
+        width: auto;
+      }
+      .tp-pill {
+        padding: 2px 10px;
+        border-radius: 999px;
+        background: var(--tp-accent-soft);
+        color: var(--tp-accent);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .tp-main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 8px 16px 64px;
+        box-sizing: border-box;
+      }
+      .tp-h1 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.25;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        overflow-wrap: anywhere;
+      }
+      .tp-muted {
+        margin: 4px 0 0;
+        color: var(--tp-muted);
+        font-size: 14px;
+      }
+
+      .tp-card {
+        background: var(--tp-surface);
+        border: 1px solid var(--tp-border);
+        border-radius: 16px;
+        box-shadow: var(--tp-shadow);
+      }
+
+      /* Before a map is chosen. */
+      .tp-open {
+        max-width: 520px;
+        margin: 48px auto 0;
+        padding: 28px 24px;
+      }
+      .tp-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 20px;
+      }
+      .tp-input {
+        flex: 1 1 240px;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: 9px 12px;
+        border: 1px solid var(--tp-border);
+        border-radius: 10px;
+        background: var(--tp-bg);
+        color: var(--tp-fg);
+        font: inherit;
+        font-size: 14px;
+      }
+      .tp-input:focus-visible {
+        outline: 2px solid var(--tp-accent);
+        outline-offset: 1px;
+        border-color: transparent;
+      }
+      .tp-btn {
+        padding: 9px 16px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--tp-accent);
+        color: var(--tp-accent-fg);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .tp-btn:hover {
+        filter: brightness(1.05);
+      }
+      .tp-btn:focus-visible,
+      .tp-ghost:focus-visible,
+      .tp-summary:focus-visible {
+        outline: 2px solid var(--tp-accent);
+        outline-offset: 2px;
+      }
+
+      /* The map and what is known about it. */
+      .tp-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .tp-checks {
+        display: grid;
+        gap: 12px;
+        margin: 20px 0 16px;
+      }
+      @media (min-width: 640px) {
+        .tp-checks {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      .tp-check {
+        display: flex;
+        gap: 12px;
+        padding: 14px 16px;
+      }
+      .tp-dot {
+        flex: none;
+        width: 10px;
+        height: 10px;
+        margin-top: 6px;
+        border-radius: 999px;
+        background: var(--tp-border);
+        transition: background-color 200ms;
+      }
+      .tp-check[data-tone="pending"] .tp-dot {
+        animation: tp-pulse 1.2s ease-in-out infinite;
+      }
+      .tp-check[data-tone="on"] .tp-dot {
+        background: var(--tp-on);
+        box-shadow: 0 0 0 4px color-mix(in oklch, var(--tp-on) 18%, transparent);
+      }
+      .tp-check[data-tone="warn"] .tp-dot {
+        background: var(--tp-warn);
+        box-shadow: 0 0 0 4px color-mix(in oklch, var(--tp-warn) 20%, transparent);
+      }
+      .tp-check[data-tone="off"] .tp-dot {
+        background: var(--tp-muted);
+      }
+      .tp-check-title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .tp-check-text {
+        margin: 2px 0 0;
+        color: var(--tp-muted);
+        font-size: 13px;
+      }
+
+      /* `hidden` is a UA `display: none`, which any class setting `display`
+         beats — so the two that set one say so again. Never a bare `[hidden]`:
+         the embed's own elements are in this document too. */
+      .tp-checks[hidden],
+      .tp-loader[hidden] {
+        display: none;
+      }
+
+      /* Its min-height is the map's own height, set with it in `load()`, so
+         the frame is the right size before the bundle has inserted anything. */
+      .tp-frame {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--tp-border);
+        border-radius: 16px;
+        background: var(--tp-surface-2);
+        box-shadow: var(--tp-shadow);
+      }
+      /* Behind the map, not over it: the embed's container is in flow and
+         covers this as soon as it paints. */
+      .tp-loader {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 24px;
+        color: var(--tp-muted);
+        font-size: 14px;
+        text-align: center;
+        transition: opacity 300ms;
+      }
+      .tp-loader[data-gone] {
+        opacity: 0;
+      }
+      .tp-spinner {
+        width: 22px;
+        height: 22px;
+        border: 2px solid var(--tp-border);
+        border-top-color: var(--tp-accent);
+        border-radius: 999px;
+        animation: tp-spin 0.8s linear infinite;
+      }
+      .tp-loader[data-stuck] .tp-spinner {
+        display: none;
+      }
+
+      .tp-failed {
+        padding: 28px 24px;
+        text-align: center;
+      }
+      .tp-failed .tp-muted {
+        max-width: 420px;
+        margin-inline: auto;
+      }
+
+      .tp-foot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .tp-code {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--tp-muted);
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .tp-ghost {
+        flex: none;
+        padding: 4px 10px;
+        border: 1px solid var(--tp-border);
+        border-radius: 8px;
+        background: var(--tp-surface);
+        color: var(--tp-fg);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .tp-ghost:hover {
+        background: var(--tp-surface-2);
+      }
+
+      .tp-details {
+        margin-top: 24px;
+        padding: 4px 16px;
+      }
+      .tp-summary {
+        padding: 10px 0;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .tp-steps {
+        margin: 4px 0 0;
+        padding-left: 20px;
+        color: var(--tp-fg);
+        font-size: 14px;
+      }
+      .tp-steps > li {
+        margin: 6px 0;
+      }
+      .tp-details .tp-muted {
+        margin: 12px 0 14px;
+        font-size: 13px;
+      }
+      .tp-kbd {
         padding: 1px 5px;
         border-radius: 4px;
-        word-break: break-all;
+        background: var(--tp-surface-2);
+        font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
-      .note {
-        color: #656b76;
-        font-size: 14px;
+
+      @keyframes tp-spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
-      .warn {
-        border-left: 3px solid #e8590c;
-        padding-left: 12px;
-        color: #1b1d21;
-        font-size: 14px;
+      @keyframes tp-pulse {
+        50% {
+          opacity: 0.35;
+        }
       }
-      /*
-       * Scoped to the form, and it has to stay that way.
-       *
-       * These were bare `input` and `button` selectors, and the embed renders
-       * into this very document — so `button { margin-top: 8px; padding: 8px
-       * 14px }`, written for the Load map button below, landed on the map's
-       * zoom stack and on find-nearest inside the search field. The zoom group
-       * grew 16px and the crosshair hung 8px low, and it was reported three
-       * times as a bug in the embed before anyone looked at this file.
-       *
-       * **This page's whole job is to show what a customer sees.** A bare
-       * element selector here makes it show its own styling instead, which is
-       * worse than no harness. The fixture harness that sat beside this page
-       * (`dev.html`, deleted since) never had one, which is exactly why the same
-       * map measured clean there and broken here.
-       *
-       * The embed now carries a reset for this (`.lm-root :is(button, a, input,
-       * ul, li)` in embed/src/styles.css) — but that is a floor for pages we do
-       * not control, not a licence for ours to be one of them.
-       */
-      #form input {
-        width: 100%;
-        font: inherit;
-        padding: 8px;
-        border: 1px solid #ced4da;
-        border-radius: 6px;
-      }
-      #form button {
-        font: inherit;
-        padding: 8px 14px;
-        margin-top: 8px;
-        border: 0;
-        border-radius: 6px;
-        background: #1b1d21;
-        color: #fff;
+      @media (prefers-reduced-motion: reduce) {
+        .tp-spinner,
+        .tp-check[data-tone="pending"] .tp-dot {
+          animation: none;
+        }
       }
     </style>
   </head>
   <body>
-    <h1>Live embed harness</h1>
+    <header class="tp-bar">
+      <a class="tp-brand" href="/" aria-label="Pinglide home">
+        <picture>
+          <source srcset="/logo/pinglide-logo-dark.svg" media="(prefers-color-scheme: dark)" />
+          <img class="tp-logo" src="/logo/pinglide-logo.svg" alt="Pinglide" />
+        </picture>
+      </a>
+      <span class="tp-pill">Test page</span>
+    </header>
 
-    <!--
-      Outside #docs, because it is a consequence rather than an explanation. The
-      Publish page links here now, so somebody arrives with ?snapshot= already
-      set and never reads a word below the map — this line is the one they must
-      still see.
-    -->
-    <p class="warn">
-      <strong>This writes real rows.</strong> Anything done on this page is
-      recorded against that map exactly as a visitor's session would be, and
-      counts towards its monthly ceiling. Use a map you don't mind adding test
-      data to, and delete the rows afterwards.
-    </p>
+    <main class="tp-main">
+      <!-- Before a map is chosen: opened by hand, with no ?snapshot=. -->
+      <section id="open" class="tp-card tp-open" hidden>
+        <h1 class="tp-h1">Open a published map</h1>
+        <p class="tp-muted">
+          Paste the map's live link — the <code class="tp-kbd">data-snapshot</code> value from
+          its embed code. The Publish page's <strong>Open test page</strong> fills this in for
+          you.
+        </p>
+        <form id="form" class="tp-form">
+          <input
+            id="url"
+            class="tp-input"
+            name="snapshot"
+            type="url"
+            placeholder="https://cdn.pinglide.com/…/live.json"
+            aria-label="Live snapshot link"
+            required
+          />
+          <button class="tp-btn" type="submit">Load map</button>
+        </form>
+      </section>
 
-    <!--
-      Everything that explains the page, plus the form, hidden together the moment
-      a map loads. It was all visible at once, which was right while this page was
-      only ever opened by hand and wrong as soon as the Publish page linked to it:
-      an owner following that link got a wall of developer prose with their map
-      somewhere underneath it.
-    -->
-    <div id="docs">
-      <p class="note">
-        This page points the built embed at a
-        <strong>real published snapshot</strong> — exactly what a visitor to a
-        customer's site gets — so a session recorded here lands in the real
-        tables and shows up on the map's Analytics tab.
-      </p>
+      <section id="view" hidden>
+        <div class="tp-head">
+          <div>
+            <h1 id="name" class="tp-h1">Your map</h1>
+            <p id="meta" class="tp-muted">The map as a visitor to your site sees it.</p>
+          </div>
+        </div>
 
-      <p class="note">
-        Paste the map's live snapshot URL — the <code>data-snapshot</code> value
-        out of the snippet on its Publish page — or pass it as
-        <code>?snapshot=&lt;url&gt;</code>. The Publish page's
-        <strong>Open test page</strong> button builds that URL for you.
-      </p>
+        <div id="checks" class="tp-checks" aria-live="polite">
+          <div id="check-analytics" class="tp-card tp-check" data-tone="pending">
+            <span class="tp-dot" aria-hidden="true"></span>
+            <div>
+              <p class="tp-check-title">Analytics</p>
+              <p class="tp-check-text">Checking this publish…</p>
+            </div>
+          </div>
+          <div id="check-design" class="tp-card tp-check" data-tone="pending">
+            <span class="tp-dot" aria-hidden="true"></span>
+            <div>
+              <p class="tp-check-title">Design</p>
+              <p class="tp-check-text">Checking this publish…</p>
+            </div>
+          </div>
+        </div>
 
-      <form id="form">
-        <input
-          id="url"
-          name="snapshot"
-          type="url"
-          placeholder="https://cdn.pinglide.com/&lt;mapId&gt;/live.json"
-          required
-        />
-        <button type="submit">Load map</button>
-      </form>
+        <!-- The bundle inserts its container right after its script tag, and
+             the script goes in here — so the map lands inside the frame. -->
+        <div id="frame" class="tp-frame">
+          <div id="loader" class="tp-loader" role="status">
+            <span class="tp-spinner" aria-hidden="true"></span>
+            <span id="loader-text">Loading map…</span>
+          </div>
+        </div>
 
-      <p class="note">
-        What to check, with the Network tab open and filtered to
-        <code>collect</code>: search, click a pin, open a card, press Directions —
-        <strong>no request appears while you do any of it</strong>. Switch to
-        another tab and exactly one <code>POST /api/collect</code> fires,
-        answering <code>204</code>. Reload the Analytics tab for that map and the
-        session is there. Measurement has to be switched on in the Publish
-        designer <em>and the map republished</em> before any of that happens — the
-        endpoint is baked into the snapshot, so a map published before you turned
-        it on carries no endpoint and correctly sends nothing.
-      </p>
+        <div id="failed" class="tp-card tp-failed" hidden>
+          <h2 class="tp-h1">Couldn't load this map</h2>
+          <p class="tp-muted">
+            Check the link, and that the map has been published at least once.
+          </p>
+        </div>
 
-      <p class="note">
-        A <code>204</code> with no row behind it is the normal answer to every
-        dropped beacon and is deliberately indistinguishable from a stored one: an
-        unpublished map, measurement switched off, a host not on the allowlist, a
-        map over its ceiling. That is the contract in
-        <code>app/api/collect/route.ts</code> — a stranger's page learns nothing
-        from us — so debug it from the server log, never from the status code.
-      </p>
-    </div>
+        <div class="tp-foot">
+          <code id="snapshot-url" class="tp-code"></code>
+          <button id="copy" class="tp-ghost" type="button">Copy link</button>
+        </div>
 
-    <!--
-      Above #status, so the order down the page is verdict, URL, map. Putting it
-      after would file it below the map, since the bundle inserts its container
-      next to the script tag and that goes in after #status.
-    -->
-    <p class="note" id="verdict"></p>
-
-    <p class="note" id="design"></p>
-
-    <p class="note" id="status"></p>
+        <details class="tp-card tp-details">
+          <summary class="tp-summary">How to check analytics</summary>
+          <ol class="tp-steps">
+            <li>Open your browser's developer tools, go to Network, and filter by <code class="tp-kbd">collect</code>.</li>
+            <li>Search, open a card, press Directions — no request should appear while you do.</li>
+            <li>Switch to another tab. Exactly one <code class="tp-kbd">POST /api/collect</code> fires and answers <code class="tp-kbd">204</code>.</li>
+            <li>Reload the map's Analytics tab — the visit is there.</li>
+          </ol>
+          <p class="tp-muted">
+            Visitor analytics has to be on and the map redeployed first: the address visits are
+            sent to is written in at publish time. A <code class="tp-kbd">204</code> is also the
+            answer when a visit is dropped (analytics switched off since, a site that isn't
+            allowed, the monthly limit reached), so check the server log rather than the status
+            code. Visits recorded here are real rows — delete them afterwards if you need to.
+          </p>
+        </details>
+      </section>
+    </main>
 
     <script>
-      const form = document.getElementById("form");
-      const input = document.getElementById("url");
-      const status = document.getElementById("status");
-      const docs = document.getElementById("docs");
-      const verdict = document.getElementById("verdict");
-      const design = document.getElementById("design");
+      const $ = (id) => document.getElementById(id);
+      const form = $("form");
+      const input = $("url");
 
       /*
        * Everything after `snapshot=` to the end of the string, deliberately not
        * `URLSearchParams`. An Appwrite-hosted (development) snapshot URL carries
-       * its own `?project=`, so pasting one in unencoded splits it into two params
-       * and the map id arrives without the project it belongs to — which fails as
-       * a 401 from storage, three layers away from the mistake. Taking the tail
-       * raw reads an encoded and an unencoded URL the same way.
+       * its own `?project=`, so pasting one in unencoded splits it into two
+       * params and the map id arrives without its project — a 401 from storage,
+       * three layers from the mistake. Taking the tail raw reads an encoded and
+       * an unencoded URL the same way.
        *
-       * The consequence for anyone building this URL: `snapshot=` stays last.
-       * `embedTestPageUrl` in lib/embed/snippet.ts is the one place that does.
+       * So `snapshot=` stays last: `embedTestPageUrl` in lib/embed/snippet.ts is
+       * the one place that builds this URL, and lib/embed/snippet.test.ts reads
+       * it back the way this does.
        */
       const raw = location.search.match(/[?&]snapshot=(.+)$/);
       const fromQuery = raw ? safeDecode(raw[1]) : null;
-      if (fromQuery) input.value = fromQuery;
 
       /*
        * The snippet's `data-tags`, as the dialog's tag chips chose it. Read only
@@ -192,159 +506,207 @@
 
       form.addEventListener("submit", (event) => {
         event.preventDefault();
-        load(input.value);
+        const url = input.value.trim();
+        if (!url) return;
+        // A real URL for the page, so it can be reloaded and sent to someone.
+        history.replaceState(null, "", `?snapshot=${encodeURIComponent(url)}`);
+        load(url);
       });
+
+      function setCheck(id, tone, title, text) {
+        const card = $(id);
+        card.dataset.tone = tone;
+        card.querySelector(".tp-check-title").textContent = title;
+        card.querySelector(".tp-check-text").textContent = text;
+      }
+
+      /** "3 minutes ago", "yesterday" — once, at load. */
+      function ago(iso) {
+        const seconds = (Date.parse(iso) - Date.now()) / 1000;
+        if (!Number.isFinite(seconds)) return null;
+        const units = [
+          ["year", 31536000],
+          ["month", 2592000],
+          ["week", 604800],
+          ["day", 86400],
+          ["hour", 3600],
+          ["minute", 60],
+        ];
+        const format = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+        for (const [unit, size] of units) {
+          if (Math.abs(seconds) >= size) return format.format(Math.round(seconds / size), unit);
+        }
+        return "just now";
+      }
 
       /*
        * The only place in the product that reads the *published* answer about
-       * measurement rather than the owner's draft, which is the whole reason it is
-       * worth a second fetch.
+       * measurement and design rather than the owner's draft, which is the
+       * whole reason it is worth a second fetch: the designer's switches save
+       * at once, but the endpoint, the basemap appearance and the colours are
+       * baked into a snapshot at publish time. A switch turned on a minute ago
+       * and not redeployed records nothing, while the Analytics tab — reading
+       * settings as stored — says measurement is on. This says what the file in
+       * front of us carries.
        *
-       * The switch in the Publish designer saves immediately; the endpoint is
-       * baked into a snapshot at publish time and a live snapshot is immutable. So
-       * a switch turned on a minute ago and not yet published records nothing —
-       * and the Analytics tab still says measurement is on, because it reads
-       * settings as stored, not as last published. That gap is what sends somebody
-       * looking for a bug that isn't there. This says what the file in front of us
-       * actually carries.
-       *
-       * The duplicate fetch is free enough: the bundle is about to request the
-       * same URL, and R2 serves live.json with max-age=60, so one of the two is a
-       * cache hit.
+       * The duplicate fetch is cheap: the bundle requests the same URL, and R2
+       * serves live.json with max-age=60, so one of the two is a cache hit.
        */
-      async function reportMeasurement(snapshotUrl) {
+      async function readSnapshot(snapshotUrl) {
         let snapshot;
-
         try {
           const response = await fetch(snapshotUrl, { credentials: "omit" });
           if (!response.ok) throw new Error(String(response.status));
           snapshot = await response.json();
         } catch {
-          // The bundle warns about this in the console, which an owner following a
-          // link from the Publish page will never open. This fetch is the only
-          // thing on the page that knows, so it says so.
-          verdict.className = "warn";
-          verdict.textContent =
-            "Couldn't read this snapshot, so the map below will be empty too." +
-            " Check the URL, and that the map has been published at least once.";
+          // The bundle only warns in the console, which an owner following the
+          // Publish page's link will never open. This is the one thing that knows.
+          $("frame").hidden = true;
+          $("checks").hidden = true;
+          $("failed").hidden = false;
           return;
         }
+        if (!snapshot) return;
 
-        reportDesign(snapshot);
+        const name = typeof snapshot.name === "string" && snapshot.name.trim() ? snapshot.name : "Your map";
+        $("name").textContent = name;
+        document.title = `${name} · Test page`;
 
-        if (snapshot && snapshot.analytics && snapshot.analytics.url) {
-          verdict.className = "note";
-          /*
-           * "Sending", not "measuring", and the distinction is not pedantry — it
-           * is the whole accuracy of this line. What the file in front of us
-           * settles is whether a beacon leaves the page. Whether a row is kept is
-           * settled again server-side by `readCollectGate`, which reads the switch
-           * as stored, so a map published while measurement was on and switched
-           * off since sends beacons that are all dropped. Caught in exactly that
-           * state while testing this page, which is how we know.
-           */
-          verdict.textContent =
-            `Sending. This snapshot posts to ${snapshot.analytics.url} — one` +
-            " beacon when you leave or hide the page, never one per click." +
-            " Whether the row is kept needs measurement to be on now as well:" +
-            " switching it off stops collection within the minute, and a dropped" +
-            " beacon is answered exactly like a stored one.";
-          return;
+        const count = Array.isArray(snapshot.places) ? snapshot.places.length : null;
+        const published = snapshot.generatedAt ? ago(snapshot.generatedAt) : null;
+        const meta = [
+          published ? `Published ${published}` : null,
+          count === null ? null : `${count} ${count === 1 ? "location" : "locations"}`,
+          tags ? "tagged locations only" : null,
+        ].filter(Boolean);
+        if (meta.length) $("meta").textContent = meta.join(" · ");
+
+        /*
+         * "On" means a beacon leaves this page, and nothing more: whether a row
+         * is kept is decided again on the server by `readCollectGate`, which
+         * reads the switch as stored — so a map published with measurement on
+         * and switched off since sends beacons that are all dropped. The fold
+         * below says so.
+         */
+        if (snapshot.analytics && snapshot.analytics.url) {
+          setCheck(
+            "check-analytics",
+            "on",
+            "Analytics on",
+            "Visits on this page count in your Analytics, like a real visitor's.",
+          );
+        } else {
+          setCheck(
+            "check-analytics",
+            "off",
+            "Analytics off",
+            "Nothing here is recorded. Turn on Visitor analytics in the Publish designer, then redeploy.",
+          );
         }
 
-        verdict.className = "warn";
-        verdict.textContent =
-          "Not sending. This snapshot carries no endpoint, so nothing you do here" +
-          " leaves the page. Switch Visitor analytics on in the Publish designer" +
-          " and publish again — the endpoint is baked in at publish time.";
+        /*
+         * "Map styles are not passed to this map" reads as a rendering bug and
+         * usually is not one. Not redeployed since the style was chosen is by
+         * far the most common cause; an appearance that changes nothing is not
+         * written at all, correctly; and only if both arrived and the map still
+         * looks default did the style fetch fail in the browser (the embed falls
+         * back silently, embed/src/index.ts) — then this tab's console has it.
+         */
+        const colors = snapshot.settings && snapshot.settings.colors;
+        const missing = [];
+        if (!snapshot.appearance) missing.push("basemap style");
+        if (!(colors && Object.keys(colors).length)) missing.push("colours");
+
+        if (!missing.length) {
+          setCheck(
+            "check-design",
+            "on",
+            "Design published",
+            "Your basemap style and colours are live.",
+          );
+        } else {
+          setCheck(
+            "check-design",
+            "warn",
+            "Default design",
+            `This publish uses the default ${missing.join(" and ")}. Redeploy if you've changed ${missing.length > 1 ? "them" : "it"}.`,
+          );
+        }
       }
 
       /*
-       * Whether the owner's basemap and colours actually made it into the file.
-       *
-       * This exists because of a report that reads as a rendering bug and is
-       * usually not one: "map styles are not passed to this map, it has default
-       * map theme, default colors different". Three different things produce
-       * exactly that, and only one of them is a bug:
-       *
-       *  - the map has not been republished since the style or the colours were
-       *    chosen, so the live file honestly carries neither. By far the most
-       *    common, and the reason this page is the right place to say it — the
-       *    dashboard reads settings as *stored*, this reads what was *published*.
-       *  - `appearance` is absent because the owner's choices resolve to nothing
-       *    to do (`isPlainAppearance`), which is correct and draws the plain
-       *    basemap on purpose.
-       *  - `loadMapStyle` threw in the browser, and the embed fell back to the
-       *    untinted style URL without a word (embed/src/index.ts). Deliberate —
-       *    a stranger's site must not sprout our diagnostics — which is exactly
-       *    why something outside the bundle has to be able to tell you.
-       *
-       * The first two are distinguishable from the file alone, which is all this
-       * does. If it says both arrived and the map below still looks default, it
-       * is the third, and the console in *this* tab will have the fetch error.
+       * The loader sits behind the map, and goes once MapLibre's canvas is in.
+       * If it never arrives the embed refused — most often a site list that
+       * does not include this address — and it said so only in the console.
        */
-      function reportDesign(snapshot) {
-        if (!snapshot) return;
+      function watchForMap() {
+        const loader = $("loader");
+        const done = () => {
+          loader.dataset.gone = "";
+          setTimeout(() => (loader.hidden = true), 300);
+        };
+        if (document.querySelector("#frame .maplibregl-canvas")) return done();
 
-        const colors = snapshot.settings && snapshot.settings.colors;
-        const has = [];
-        const missing = [];
+        const observer = new MutationObserver(() => {
+          if (!document.querySelector("#frame .maplibregl-canvas")) return;
+          observer.disconnect();
+          clearTimeout(stuck);
+          done();
+        });
+        observer.observe($("frame"), { childList: true, subtree: true });
 
-        (snapshot.appearance ? has : missing).push("basemap appearance");
-        (colors && Object.keys(colors).length ? has : missing).push("colours");
-
-        if (!missing.length) {
-          design.className = "note";
-          design.textContent =
-            "Design published. This snapshot carries the basemap appearance" +
-            " and the colour tokens, so what you see below is what the owner" +
-            " designed. If it still looks like the default theme, the style" +
-            " fetch failed in the browser — check this tab's console.";
-          return;
-        }
-
-        design.className = "warn";
-        design.textContent =
-          `This snapshot carries no ${missing.join(" and no ")}` +
-          (has.length ? `, only ${has.join(" and ")}` : "") +
-          ". Most often that means the map has not been republished since" +
-          " those were chosen — the endpoint, the theme and the colours are" +
-          " all baked in at publish time. It can also be correct: an" +
-          " appearance that changes nothing is not written at all.";
+        const stuck = setTimeout(() => {
+          loader.dataset.stuck = "";
+          $("loader-text").textContent =
+            "The map didn't load. If it only allows certain sites, add this one, or check this tab's console.";
+        }, 12000);
       }
 
       function load(snapshotUrl) {
-        if (!snapshotUrl) return;
+        $("open").hidden = true;
+        $("view").hidden = false;
+        $("snapshot-url").textContent = snapshotUrl;
+        $("snapshot-url").title = snapshotUrl;
 
-        docs.hidden = true;
-        design.textContent = "";
-        // The URL alone, not "Loading …": it stays on screen under the map once
-        // the map is there, and a permanent "Loading" reads as a stuck page.
-        status.textContent = tags
-          ? `${snapshotUrl} — only locations with the tags chosen for this snippet`
-          : snapshotUrl;
-
-        void reportMeasurement(snapshotUrl);
+        void readSnapshot(snapshotUrl);
+        watchForMap();
 
         /*
-         * The real snippet, built at runtime rather than written into the file —
-         * the URL is one account's map and has no business being committed.
-         *
-         * `boot()` in embed/src/index.ts scans for `script[data-snapshot]` when
-         * the module evaluates, so putting both attributes on this one tag is
-         * the same thing the snippet does; it just arrives a moment later.
+         * The real snippet, built at runtime rather than written into the file
+         * — the URL is one account's map and has no business being committed.
+         * `boot()` in embed/src/boot.ts scans for `script[data-snapshot]` when
+         * the module evaluates, so this is the same thing the snippet does; it
+         * just arrives a moment later. Its container goes in right after it.
          */
         const script = document.createElement("script");
         script.type = "module";
         script.src = "/embed/map.js";
         script.dataset.snapshot = snapshotUrl;
         script.dataset.eager = "";
-        script.dataset.height = "520";
+        const height = innerWidth < 640 ? 460 : 560;
+        script.dataset.height = String(height);
         if (tags) script.dataset.tags = tags;
-        status.after(script);
+        $("frame").style.minHeight = `${height}px`;
+        $("frame").append(script);
       }
 
-      if (fromQuery) load(fromQuery);
+      $("copy").addEventListener("click", async () => {
+        const button = $("copy");
+        try {
+          await navigator.clipboard.writeText($("snapshot-url").textContent);
+          button.textContent = "Copied";
+        } catch {
+          button.textContent = "Couldn't copy";
+        }
+        setTimeout(() => (button.textContent = "Copy link"), 1600);
+      });
+
+      if (fromQuery) {
+        input.value = fromQuery;
+        load(fromQuery);
+      } else {
+        $("open").hidden = false;
+      }
     </script>
   </body>
 </html>

@@ -70,23 +70,19 @@ export default function PublishingAndEmbeddingPage() {
           rows={[
             [
               "Results panel",
-              "Show the results panel — the list beside the map — with its Side, Placement (Over the map or Beside it) and Width. Whether a row opens its card, and whether the list shows a scrollbar.",
+              "Show the results panel — the list over the map — with its Side and Width, and whether a row opens its card.",
             ],
             [
               "Panel surface",
-              "For a panel over the map: Transparency, Blur behind and Corners.",
+              "The panel’s Transparency, Blur behind and Corners.",
             ],
             [
               "Result rows",
               "What each row shows — Pin, Address, Distance, and Directions and phone links — and the Pin size.",
             ],
             [
-              "On a phone",
-              "A bottom drawer visitors pull up, or, switched off, a side drawer behind a menu button.",
-            ],
-            [
               "Map controls",
-              "The Corner the zoom buttons sit in. The Search box and Nearest to me. Zoom with the scroll wheel, Group nearby pins, Open a card when a pin is clicked, and Frost the controls over the map.",
+              "The Corner the zoom buttons sit in. The Search box and Nearest to me. Zoom with the scroll wheel, Group nearby pins, Open a card when a pin is clicked, and Ripple published pins.",
             ],
             [
               "Colours",
@@ -139,13 +135,13 @@ export default function PublishingAndEmbeddingPage() {
       <DocsSection id="embed-code" title="Putting the map on your site">
         <DocsFigure
           shot="embed-code"
-          alt="The Put this map on your site dialog, showing tag chips, the one-line embed code and Copy embed code."
+          alt="The Embed code dialog, showing the one-line embed code with Copy embed code, and tag chips under Show."
         />
 
         <DocsSteps>
           <DocsStep title="Copy the embed code">
             <p>
-              Press <strong>Embed code and domains</strong>, then{" "}
+              Press <strong>Get embed code</strong>, then{" "}
               <strong>Copy embed code</strong>. The code appears after your first
               publish.
             </p>
@@ -170,8 +166,9 @@ export default function PublishingAndEmbeddingPage() {
         </DocsCallout>
 
         <p>
-          On WordPress there is nothing to paste — see{" "}
-          <Link href="/for/wordpress">Maps for WordPress</Link>.
+          On WordPress there is nothing to paste — the WordPress tab in the same
+          window has the plugin, and{" "}
+          <Link href="/for/wordpress">Maps for WordPress</Link> has the details.
         </p>
 
         <p>
@@ -197,7 +194,7 @@ export default function PublishingAndEmbeddingPage() {
             ],
             [
               <code key="g">data-tags</code>,
-              "Shows only locations with these tags. Pick them under Show only in the embed code window — the code uses tag ids.",
+              "Shows only locations with these tags. Pick them under Show in the Embed code window — the code uses tag ids.",
             ],
           ]}
         />
@@ -286,7 +283,7 @@ export default function PublishingAndEmbeddingPage() {
             ],
             [
               "On a phone",
-              "The list becomes a drawer — pulled up from the bottom, or opened from a Locations button.",
+              "The list becomes a drawer that visitors pull up from the bottom.",
             ],
           ]}
         />

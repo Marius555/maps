@@ -145,6 +145,16 @@ transactional emails.
   is not a request* below. `AuthShell` is centred under a lock badge; its
   `description` is optional, omitted on Log in and Sign up and kept wherever it
   carries instructions.
+- **Log in and Sign up open on Google and GitHub; the email form is one press
+  away and replaces them** (`components/auth/method-switch/`). `?with=email`
+  opens straight on the form, and the email form's own cross-link carries it so
+  a visitor who chose email stays on email. The consent notice sits outside the
+  switch, on screen in both views.
+- **Whatever the email form needs at mount lives inside the email form.**
+  `AuthMethodSwitch` mounts one view at a time, and `useTurnstile` renders its
+  widget once, on mount, into a container that must already exist. Hoisted into
+  the parent it would never render, and every signup would wait ten seconds and
+  be refused; CSS-hidden instead of unmounted, it would render at zero width.
 - **Logging out is a document navigation, and a bfcache restore asks who is
   signed in.** `UserMenu` calls `window.location.replace("/login")`, not
   `router.replace`, and `RestoreAuthGuard` (mounted by `AppShell`) answers a

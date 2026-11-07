@@ -36,9 +36,10 @@ export default function GettingStartedPage() {
           <DocsStep title="Sign up">
             <p>
               Press <strong>Sign in with Google</strong> or{" "}
-              <strong>Sign in with GitHub</strong>, or fill in{" "}
-              <strong>Name</strong>, <strong>Email</strong> and{" "}
-              <strong>Password</strong> (8+ characters) and press{" "}
+              <strong>Sign in with GitHub</strong>. Or press{" "}
+              <strong>Continue with email</strong>, fill in{" "}
+              <strong>Email</strong>, <strong>Password</strong> (8+
+              characters) and <strong>Confirm password</strong>, and press{" "}
               <strong>Create account</strong>.
             </p>
           </DocsStep>
@@ -173,7 +174,7 @@ export default function GettingStartedPage() {
 
           <DocsStep title="Copy the embed code">
             <p>
-              Press <strong>Embed code and domains</strong>, then{" "}
+              Press <strong>Get embed code</strong>, then{" "}
               <strong>Copy embed code</strong>.
             </p>
           </DocsStep>

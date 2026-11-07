@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { embedScriptUrl, embedSnippet } from "@/lib/embed/snippet";
@@ -232,10 +233,17 @@ export function EmbedPreview({
    * a failed fetch and returns without touching the container.
    */
   const urls = useRef<string[]>([]);
-  /** The document we want on screen, and how many times we have offered it. */
-  const wanted = useRef<{ url: string; html: string; attempts: number } | null>(
-    null,
-  );
+  /**
+   * The document we want on screen, how many times we have offered it, and the
+   * `rebuildKey` it was built for — so a reveal can say which settings are now
+   * the ones on screen (`shownKey`).
+   */
+  const wanted = useRef<{
+    url: string;
+    html: string;
+    attempts: number;
+    key: string;
+  } | null>(null);
   /** Whether a navigation we started is still in flight. */
   const navigating = useRef(false);
   /** The snapshot the visible frame is really showing, read off its document. */
@@ -292,6 +300,19 @@ export function EmbedPreview({
     () => JSON.stringify(structural(snapshot)),
     [snapshot],
   );
+
+  /*
+   * The `rebuildKey` of the document actually on screen.
+   *
+   * **A rebuild keeps the old map up until the new one has drawn** — that is
+   * the crossfade, and it is right — but for the second or more it takes, the
+   * preview shows the setting from *before* the press. Nothing said so, and
+   * a switch whose preview still showed the old behaviour read as a switch
+   * doing the opposite of its label (the owner's report, 2026-11-07). So
+   * while the two differ, the preview says it is updating.
+   */
+  const [shownKey, setShownKey] = useState<string | null>(null);
+  const isUpdating = shownKey !== null && shownKey !== rebuildKey;
 
   /*
    * The live half, keyed on the properties themselves rather than on the
@@ -441,6 +462,7 @@ export function EmbedPreview({
       url: snapshotUrl,
       html: previewDocument(snapshotUrl),
       attempts: 0,
+      key: rebuildKey,
     };
 
     flush();
@@ -552,6 +574,7 @@ export function EmbedPreview({
 
       if (got && got === wanted.current?.url) {
         showing.current = got;
+        const arrivingKey = wanted.current.key;
 
         /*
          * The document is committed, but the map inside it has not been built
@@ -576,6 +599,7 @@ export function EmbedPreview({
           // in over that is a fade from the panel's own ground — which reads as
           // the map arriving late rather than arriving.
           setReveal((previous) => ({ index, animate: previous !== null }));
+          setShownKey(arrivingKey);
 
           /*
            * Freed once its replacement is *on screen*, which is a beat after
@@ -661,6 +685,18 @@ export function EmbedPreview({
             aria-hidden="true"
             className="absolute inset-0 z-20 bg-surface-secondary"
           />
+        ) : null}
+
+        {/* Fades in only after a beat (`.preview-updating`), so a rebuild that
+            lands at once never flashes it. */}
+        {isUpdating ? (
+          <div
+            role="status"
+            className="preview-updating pointer-events-none absolute top-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs text-muted shadow-sm"
+          >
+            <Spinner size="sm" aria-hidden="true" />
+            Updating preview…
+          </div>
         ) : null}
       </div>
     </div>

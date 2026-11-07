@@ -6,8 +6,10 @@
 The person's settings, modelled on claude.ai's: a left column of sections
 (General, Account, Billing, Usage) and the section beside it. It
 replaced `/account`, which is now a redirect to `/settings/billing`. The theme
-is chosen here *and* in a Theme submenu (Light / System / Dark) under the email
-in the account menu (`components/layout/user-menu-theme.tsx`) — two pickers, one store.
+is chosen here, in General. The dashboard's account menu lost its Theme row on
+2026-11-07 (a duplicate of this page); the submenu
+(`components/layout/user-menu-theme.tsx`) lives on only in the admin console's
+menu — two pickers, one store.
 
 **No visible heading, full width.** The "Settings" `<h1>` is `sr-only`
 (`PageTitle`), like every other dashboard page — the person pressed Settings to
@@ -42,7 +44,7 @@ columns. Forms that should stay narrow cap themselves (`sm:max-w-md`,
   choice is System, and when another tab writes it. The key's name is load
   bearing: the pre-paint script reads it before React exists.
 - **Every theme picker goes through `theme-choice.ts`.** There are two — this
-  page and the account menu's Theme row — and the menu's is a
+  page and the admin console's account menu's Theme row — and the menu's is a
   `Dropdown.SubmenuTrigger` whose submenu is a single-selection menu, not
   buttons inside the menu, because React Aria's menu owns focus and anything
   that is not an item cannot be reached by keyboard.
@@ -53,7 +55,7 @@ columns. Forms that should stay narrow cap themselves (`sm:max-w-md`,
   goes to the support address with that on `replyTo`, and its subject is the
   triage: `[Support · Pro · Billing] …`, `[Bug · Free · Import] …`. Contact
   support is refused on Free by `assertPlanFeature(…, "support")` as well as
-  greyed in the menu. One message a minute per account across both kinds,
+  left out of the menu (it was a greyed row with a "Paid" chip until 2026-11-07). One message a minute per account across both kinds,
   stamped on `prefs.supportRequestedAt` only after the send
   (`lib/support/throttle.ts`); `{ sent: false }` is a 503, because the mail is
   the whole action.

@@ -147,13 +147,32 @@ rewritten; it is the record of why this area is shaped as it is.
   at the frame. Ending the frame above the strip is the only way the embed's attribution
   and its zoom stack stay uncovered (§12). Measured at 822x732: the frame's bottom edge is
   668 and the strip's top is 669.
-- **The peek strip says the name and `PublishStatus compact`, and the footer's copy is
-  `max-lg:hidden`.** The full status is a sentence; on a 390px strip 2.75rem tall, beside
-  the panel's own name, it wrapped onto three lines and printed itself over "Design". The
-  compact form is the word plus the card designer's unsaved dot — whether it is live, and
-  whether what is live is current. **Publish itself is one tap away** below `lg`: it stays
-  in the footer, because a long column of controls must not be able to push it out of
-  reach and a second row of chrome is what the strip exists to avoid.
+- **The peek strip says the name and `PublishStatus form="compact"`.** A status sentence
+  on a 390px strip 2.75rem tall, beside the panel's own name, wrapped onto three lines and
+  printed itself over "Design". The compact form is the word plus the card designer's
+  unsaved dot — whether it is live, and whether what is live is current. **Publish itself
+  is one tap away** below `lg`, inside the sheet.
+- **The stepper is pinned in the footer at every width, and folds away while a design fold
+  is open** (2026-11-07). Opening a fold slides the steps down to their heading row ("Your
+  website · ● Live") on the accordion's own curve, in the same frame (`HeightCollapse`);
+  closing it, or pressing that row, brings them back. Phones used to get the stepper at the
+  top of the scroller instead, because pinned it filled the sheet — folding away answers
+  that. See "Folding the steps away" below.
+- **Four layout controls are retired and read as fixed** (2026-11-07): Placement
+  (`panelFloat`), the bottom-drawer switch (`panelDrawer`), "Frost the controls over the
+  map" (`toolbarGlass`) and the list-scrollbar switch (`panelScrollbar`) are all `true`
+  whatever is stored (`RETIRED_CONTROLS` in `lib/validation/embed-settings.schema.ts`).
+  They are still written into every snapshot — absent there means the *old* layout (§7) —
+  and the embed keeps every branch for the live snapshots that say `false`.
+- **Publish waits for the designer's last save, and design saves go one at a time**
+  (2026-11-07). `PublishAction` and Shopify's Show on storefront await
+  `useSettleDesign()` first, and `useEmbedDesign` sends its PATCHes through
+  `createSerialWriter`. Undo either and a switch can end up doing the opposite of its
+  label. See "Switches that did the opposite" below.
+- **The Publish footer is a stepper of three fixed steps, never renumbered.** "Your website"
+  outside Shopify, "Your store" inside it. ③ is a status ("Up to date", or Redeploy), and with
+  edits before ② is done Redeploy comes first, inside ② (2026-11-07). See "The Your website
+  stepper" below and docs/notes/shopify.md, "The Publish footer inside Shopify".
 - **This page must have no `loading.tsx`.** With one, a navigation produced two large grey
   states for one click (the nav unmounting, `main` jumping 240px, eight `animate-pulse`
   boxes, then a second commit 550ms later). With none, the router awaits the payload and the
@@ -691,8 +710,11 @@ rewritten; it is the record of why this area is shaped as it is.
   setting in the whole designer that no width above 768px reads, and it was sitting
   among controls — side, placement, width — that the same width cancels. What is left
   in the original fold is a master switch, three selectors and one run of switches,
-  which is the shape the rest of the designer already had.
-- **"On a phone" is a shorter truth than the setting's own, taken deliberately.** The embed
+  which is the shape the rest of the designer already had. *(Superseded 2026-11-07:
+  Placement, the scrollbar switch, the glass switch and the whole "On a phone" fold were
+  retired — see the Invariants. "Panel surface" now shows whenever the panel is on.)*
+- *(Historical — the fold was retired on 2026-11-07.)* **"On a phone" is a shorter truth
+  than the setting's own, taken deliberately.** The embed
   sizes off its *own* box, so a 360px map in a sidebar on a desktop gets the drawer and a
   phone held sideways may not — which is why the panel fold's copy said "narrow, not mobile".
   The fold is named the way an owner would say it and the header's device tiles are how
@@ -961,10 +983,27 @@ hit, and the page is outside the embed's 48KB budget.
 
 **An owner arriving from that button must not land on developer prose.** The page
 had its explanation, its paste form and its Network-tab checklist all visible at
-once, which was right while it was only ever opened by hand. Everything
-explanatory now sits in one `#docs` div hidden the moment a map loads; what stays
-is the map, the verdict, and the warning that this writes real rows against the
-map's monthly ceiling — a consequence, not an explanation, so it survives.
+once, which was right while it was only ever opened by hand. A first fix hid the
+explanation once a map loaded, but what stayed was still three paragraphs about
+beacons and 204s over the map, and the owner called it out as wrong for a deployed
+page (2026-11-07). It is now a product page:
+- **A header**: the logo and a "Test page" pill.
+- **A title block**: the map's name from the snapshot, then "Published 3 min ago ·
+  42 locations".
+- **Two status cards**, read off the fetched snapshot:
+  - **Analytics on / off**. On says visits here count like a real visitor's, which
+    is the real-rows warning, kept visible and short.
+  - **Design published / Default design**.
+- **The map in a rounded frame.** It shows a spinner until MapLibre's canvas is in.
+  If no canvas arrives within 12s, it says the map may be refusing this site and to
+  check the console.
+- **The snapshot link** with a Copy button.
+- **"How to check analytics"**, the Network-tab checklist and the 204 caveat,
+  folded shut.
+- **An empty state** for no `?snapshot=`, and an error card when the fetch fails.
+
+All of its CSS is scoped to `.tp-` classes (the bare-selector post-mortem above).
+The parsing of `snapshot=` and `tags=` is unchanged.
 
 **Everything the designer writes is optional on `SnapshotSettings`, and absent
 means what the embed did before that field existed.** That is §7, and the
@@ -1147,6 +1186,149 @@ whole whether a map names `FullscreenControl` or not — what a switch costs is 
 line that reads it. Attribution is the one control with no switch (§12), and
 there is no traffic or satellite toggle because both are metered feeds in the
 visitor's path (§2).
+
+## The Your website stepper (2026-11-07)
+
+The Publish footer outside the Shopify admin used to be a status sentence ("Live · published 3
+minutes ago · you've made changes since…"), an **Embed code and domains** button and
+**Publish**. The owner asked for the Shopify footer's stepper here too, renamed, because "Your
+store" means nothing on pinglide.com. It is `WebsiteStepper` (`components/publish/website/`).
+It has **three fixed steps**, and nothing is ever added, removed or renumbered:
+
+```
+🌐 YOUR WEBSITE                       ● Live · 1 h ago
+(✓) Publish your map
+ ┃
+(2) Add it to your website                            ← current: the only filled button
+ │  Paste one line of code where the map should appear. On WordPress, use the plugin instead.
+ │  [            Get embed code            ]
+ │  Already added
+ │
+(3) Up to date                                        ← the status step: grey until ② is done
+```
+
+The states come from `websiteSteps` (`lib/publish/website-step.ts`, tested over every
+combination), all derived from how far along the owner is (`statesAt`, `lib/publish/steps.ts`):
+
+| State | ① Publish | ② Embed | ③ Status | Filled |
+|---|---|---|---|---|
+| Never published | current | upcoming | upcoming | Publish |
+| Published, embed mark not read yet | pulsing | pulsing | pulsing | none |
+| Published, snippet not marked, edits | ✓ | **current: Redeploy first** | upcoming | Redeploy |
+| Published, snippet not marked, nothing to send | ✓ | current: Get embed code | upcoming | Get embed code |
+| Snippet marked, edits | ✓ | ✓ | current: Redeploy your changes | Redeploy |
+| Snippet marked, nothing to send | ✓ | ✓ | ✓ Up to date + Get embed code link | none |
+
+- **Fixed, because the reshuffling read as a flow going nowhere.** The first version numbered an
+  ordered list by position. With edits, Redeploy appeared at ② and "Add it to your website" at
+  ③. Pressing Redeploy removed it, so the embed step slid up to ② and ③ was gone. The owner:
+  "instead of moving to the 3 step it sits on 2 step and deletes 3". A test now holds that
+  removing the edits never moves the current step back up.
+- **With edits and the snippet not marked, Redeploy comes first, inside ②**, and ② then turns
+  into Get embed code in the same place (the owner's choice, 2026-11-07). It is the same rule as
+  Shopify's theme step: one filled button, and with edits Redeploy wins.
+- **③ is a status step.**
+  - **Redeploy your changes** is shown while the site is behind, with the filled Redeploy.
+  - **Up to date** is a check: "Your site shows your latest changes."
+  - Once ② is done, **Get embed code** sits under both as an accent text link, so the dialog
+    (snippet and allowed sites) is always one click away and never comes and goes. It replaced
+    an unfilled outline button, which the owner did not want.
+- **Get embed code opens `ShareDialog`**: the snippet and the allowed sites, as the old button
+  did. The dialog has no trigger of its own outside Shopify now (`isOpen` / `onOpenChange`).
+  Before the first publish it is not offered at all: there is no snippet yet.
+- **The embed step is "done" only as far as this browser remembers**: a successful **Copy embed
+  code** (`SnippetCode`'s `onCopied`) or "Already added" writes `pinglide:embed-added:<mapId>`
+  (`embedAdded`, `components/publish/stepper/marked-flag.ts`). Nothing can tell whether a snippet
+  is on somebody's site. Losing the mark shows the step again, and its button with it. The mark
+  reads `undefined` on the server and during hydration, which the stepper draws as loading. It
+  used to read `false`, so a marked step painted as undone and flipped a moment later.
+- **A team viewer is never shown Redeploy first** (`canPublish` from `useCan("edit")`). They come
+  to this page for the snippet and cannot publish, so they must not find Get embed code waiting
+  behind a button they cannot press. With the snippet marked and edits waiting, ③ is current for
+  them too ("Changes not live yet", with `ViewOnlyNotice`), because the site is not up to date.
+- **Shared with "Your store"**: `StepperStep`, `StepperHeading`, `TextAction` and `markedFlag`
+  in `components/publish/stepper/`, plus `AnimatedHeight`. `StepperStep` handles the discs (solid
+  accent, with a halo on the current step), the accent line and the motion. Nothing snaps:
+  bodies cross-fade on a new `bodyKey` while their height eases, discs transition colour, the
+  check pops in, and the line fills downward. See docs/notes/shopify.md, "The Publish footer
+  inside Shopify", for the full list and the reduced-motion form.
+- **The docs name the button**: getting-started, publishing-and-embedding and the any-website
+  integration say **Get embed code**, and so do `e2e/publish.spec.ts` and the docs-screenshot
+  capture. Rename it in all of them together.
+
+### Folding the steps away (2026-11-07)
+
+The owner: when a fold opens, "Your website section would slide down and only title: Your
+website and Live section would be visable", and back when it closes, "animation must perform
+together". So the stepper is pinned under the folds at every width, and while any design fold
+is open only its heading row shows.
+
+- **One motion, not two.** `HeightCollapse` (`components/ui/height-collapse.tsx`) uses HeroUI's
+  own panel values — `height` over 200ms on `--ease-out-quad`, opacity beside it,
+  `motion-reduce:transition-none` — and the same mechanism, `--disclosure-panel-height` written
+  in a layout effect. Measured at 1440x900: the fold 0 → 337px and the footer 253 → 41px start
+  on the same frame and settle on the same frame. Reduced motion is instant both ways.
+- **The scroll reveal knows the view is growing.** The footer sits *below* the scroller, so as
+  it folds away the scroller gets taller while the fold opens. `viewGrowth` in
+  `lib/ui/reveal-fold.ts` adds that to the view the fold has to fit in. Measured in the 390x844
+  sheet: view 170 → 386px, `scrollTop` 0 → 91 in one ease, landing on the fold's bottom with no
+  correction at the end.
+- **The open fold is a store, not sidebar state** (`open-fold.tsx`). As state in
+  `DesignSidebar` every press re-rendered the whole column, a ~300ms long task (dev build)
+  before the fold's first frame. Now only `DesignFolds` and `FoldingFooter` subscribe, and the
+  footer subscribes to the boolean, so moving from one open fold to another renders nothing
+  below. Measured: no long task.
+- **The heading row is the way back.** While folded it is a button ("Your website: show the
+  steps") under the row's text — the stretched-link pattern — and pressing it closes the open
+  fold, so both move together the other way. Focus moves into the steps it opened. There is no
+  chevron: the owner asked for the title and the status only, and in 20rem a chevron's 20px
+  truncated "Live · changes not published".
+- **Folded steps are `inert`**: nothing hidden can take focus.
+- **Known cost:** with nothing open, the steps take ~257px of the phone sheet. At 375x667 that
+  leaves the folds 55px — about one and a half rows — until one is opened. Raised with the
+  owner rather than fixed by changing the shared sheet's 65dvh.
+
+## Switches that did the opposite (2026-11-07)
+
+The owner: switches "sometimes do exact oposite what they say". Every remaining switch reads
+the right way round in the embed and reaches the snapshot unchanged, so the "sometimes" was
+timing, in three places:
+
+1. **Overlapping saves.** `useEmbedDesign` writes the whole `settings` blob 400ms after a
+   press, and two presses a second apart were two PATCHes in flight. `useUpdateMap` writes each
+   reply into the cache, so a slow first reply landing last put the *older* settings back — in
+   the switch, the preview and possibly the row. Now `createSerialWriter`
+   (`lib/query/serial-writer.ts`) sends one at a time, latest wins, and the draft is only let go
+   when nothing is waiting or in flight. Measured with the first PATCH held for 1.5s: the
+   second went out after the first reply, and the switch never left the last press.
+2. **Publish did not wait.** A snapshot is built from the stored settings, so a Redeploy within
+   400ms of a press published the value from before it. `PublishAction` (and Show on storefront)
+   now await `settle()` — flush the timer, wait for the writer — through
+   `DesignWritesProvider`. Measured: Redeploy pressed 83ms after a switch; the PATCH went out at
+   once and the publish was sent 26ms after its reply. The publish reply also keeps the cache's
+   `settings` (`withNewerEdits` in `lib/query/publish.ts`), since publishing never writes them.
+3. **The preview showed the old map while it rebuilt.** A structural setting rebuilds the
+   preview document, and the old one stays up until the new map has drawn (the crossfade) — 1–5s
+   in the dev build. For that long the preview contradicted the switch. It now says **Updating
+   preview…** while the document on screen was built for an older `rebuildKey` (`shownKey` in
+   `EmbedPreview`), held back 400ms so a quick rebuild never shows it.
+
+## The Embed code dialog, rewritten (2026-11-07)
+
+"Put this map on your site" had seven paragraphs around one line of code, and the owner said it
+did not look professional. It is now **Embed code**, with one line under it ("Paste it once —
+every publish updates it."), and:
+
+- **Website | WordPress tabs.** Website is the code on the dark surface with **Copy embed code**
+  in the code's own bar (`SnippetCode`), a **Show** row of tag chips with a count instead of a
+  paragraph (`SnippetTagRow`), and **Open test page**. WordPress is three numbered steps, the
+  plugin download and "How it works". Both panels are mounted in one grid cell, so the dialog
+  keeps one height and does not jump on its centre line between tabs.
+- **Allowed domains** keeps its fold, with one hint line instead of two paragraphs.
+- **Gone:** the test page's analytics warning, which the test page now shows itself, for the
+  snapshot actually loaded — so the `isMeasuring` prop chain went with it.
+- e2e finds the dialog by "Paste it once"; the docs screenshot `embed-code` is stale until
+  `npm run docs:screenshots` is rerun.
 
 ## From §4 — the embed boundary
 

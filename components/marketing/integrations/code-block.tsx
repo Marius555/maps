@@ -21,9 +21,9 @@ type CopyState = "idle" | "copied" | "failed";
  *
  * The button says what happened in place — "Copied", or "Select it and copy"
  * when the clipboard is refused (plain http, some in-app browsers), the same
- * fallback `components/publish/embed-snippet.tsx` gives. It sits in `.steady`,
- * so it does not shrink when pressed. It sits alone at the end of its bar, so a
- * label changing width moves nothing else.
+ * fallback `components/publish/share-dialog/snippet-code.tsx` gives. It sits in
+ * `.steady`, so it does not shrink when pressed. It sits alone at the end of its
+ * bar, so a label changing width moves nothing else.
  */
 export function CodeBlock({
   code,

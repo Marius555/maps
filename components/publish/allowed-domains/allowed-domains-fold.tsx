@@ -52,19 +52,13 @@ export function AllowedDomainsFold({ map }: { map: AppMap }) {
 
   const title =
     domains.length === 0
-      ? "Allowed domains · anywhere"
+      ? "Allowed domains · Anywhere"
       : `Allowed domains · ${domains.length} of ${MAX_ALLOWED_DOMAINS}`;
 
   return (
     <PropertyFolds>
       <PropertyFold id="allowed-domains" title={title}>
         <div className="space-y-3">
-          <p className="text-pretty text-xs text-muted">
-            Only sites on these domains can show the map. Subdomains are
-            included, so example.com also covers www.example.com. Leave the list
-            empty to allow the map anywhere.
-          </p>
-
           {updateMap.error ? <ErrorMessage error={updateMap.error} /> : null}
 
           <DomainChipList
@@ -77,9 +71,12 @@ export function AllowedDomainsFold({ map }: { map: AppMap }) {
             onAdd={(added) => save([...domains, ...added])}
           />
 
-          <p className="text-xs text-muted">
-            This discourages someone copying your snippet onto their own site. It
-            isn&rsquo;t a security control — the published map is a public file.
+          {/* One line where there were two paragraphs (2026-11-07). "Empty is
+              anywhere" is already the fold's title; what is left is the rule
+              and the honest limit — this is anti-abuse, not security (§7). */}
+          <p className="text-pretty text-xs text-muted">
+            Only these sites can show the map, subdomains included. It deters
+            copying; the map file itself stays public.
           </p>
         </div>
       </PropertyFold>
