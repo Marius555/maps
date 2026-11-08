@@ -32,5 +32,5 @@ export const POST = withPersonalAuth(
 
     return ok({ workspaceId });
   },
-  { allowUnverified: true },
+  { allowUnverified: true, webAccountOnly: true },
 );

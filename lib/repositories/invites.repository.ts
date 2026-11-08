@@ -340,11 +340,19 @@ export async function getInviteForEmail(inviteId: string, email: string): Promis
  *
  * Accepting twice is harmless: somebody already on the team keeps the role they
  * have, and the invite is used up either way.
+ *
+ * **Never a Shopify shop**, whatever its address says. A shop's email is the
+ * store's contact address — typed by the merchant, confirmed by nobody — so it
+ * proves nothing about who is accepting. The team routes refuse a shop first
+ * (`webAccountOnly`); this is the same rule where the membership is written, so
+ * it holds for a caller that forgets.
  */
 export async function acceptInvite(
-  person: { id: string; email: string },
+  person: { id: string; email: string; shopify?: unknown },
   invite: Invite,
 ): Promise<{ workspaceId: WorkspaceId; membership: Membership | null }> {
+  if (person.shopify) throw new NotFoundError("That invite doesn't exist any more.");
+
   const workspaceId = asWorkspaceId(invite.workspaceId);
 
   if (!isLive(invite)) {

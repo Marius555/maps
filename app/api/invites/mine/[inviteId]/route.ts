@@ -14,4 +14,5 @@ export const DELETE = withPersonalAuth<Params>(
 
     return noContent();
   },
+  { webAccountOnly: true },
 );

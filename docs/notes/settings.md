@@ -73,6 +73,10 @@ columns. Forms that should stay narrow cap themselves (`sm:max-w-md`,
   /api/account/deletion` checks the typed address and stamps
   `prefs.deletionStartedAt`; `…/step` refuses without one less than a day old.
   Without it the step route would delete a whole account on a bare POST.
+  **The stamp is not what keeps billing safe**: prefs are user-writable, so a forged stamp
+  would skip the cancellation. Every step therefore asks the provider whether a subscription
+  is still billing (`stillBilling`, `lib/account-deletion/billing-check.ts`) and refuses
+  with 409 while one is, or with 502 if the provider can't answer.
 - **Invoices are listed by the subscription id on the caller's own row, and
   nothing else.** There is no parameter on `GET /api/account/invoices` that
   could name somebody else's.

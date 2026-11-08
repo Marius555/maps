@@ -23,5 +23,5 @@ export const POST = withPersonalAuth(
 
     return noContent();
   },
-  { allowUnverified: true },
+  { allowUnverified: true, rateLimit: "support" },
 );

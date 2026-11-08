@@ -21,6 +21,12 @@ Three different questions, answered in three places:
   PATCH their own `subscriptions` row to `pro`, move a place to another map, or point
   `photoIds` at somebody else's file and delete it through our photo route.
   `npm run migrate:permissions` strips older rows.
+- **Prefs are user-writable, so nothing may be gated on them.** The same session secret
+  takes `PATCH /v1/account/prefs` directly, so a user can rewrite every stamp kept there:
+  `deletionStartedAt`, `supportRequestedAt`, the verification-sent stamp. A pref may be a
+  convenience or a window, but never the thing between a user and an effect. The deletion
+  steps ask the billing provider themselves (`lib/account-deletion/billing-check.ts`), and
+  the support form has the in-memory `support` policy on top of its stamp (2026-11-08 review).
 - **Every quantity check is "count, insert, recount".** `rollBackIfOverLimit` runs after
   the insert, and if the total is over the limit it deletes the rows *this call* made and
   refuses. Two racing requests may both be refused. The total can never end above the limit.

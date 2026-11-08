@@ -22,4 +22,5 @@ export const POST = withPersonalAuth<Params>(
 
     return ok({ workspaceId });
   },
+  { webAccountOnly: true },
 );

@@ -105,6 +105,14 @@ export const RATE_LIMITS = {
    * a Pro team fills its ten seats well inside it.
    */
   invite: { per: "user", limit: 20, windowMs: HOUR },
+  /**
+   * The support and bug-report form. Its one-a-minute throttle lives in the
+   * account's prefs (`lib/support/support-request.ts`), and **prefs are writable
+   * by the user** straight through Appwrite's API — so that stamp can be cleared
+   * between sends. This is the ceiling that cannot be: a handful per ten minutes
+   * per account, in memory, on top of the stamp.
+   */
+  support: { per: "user", limit: 3, windowMs: 10 * MINUTE },
 } as const satisfies Record<string, RatePolicy>;
 
 export type RatePolicyName = keyof typeof RATE_LIMITS;
@@ -128,5 +136,6 @@ export const IN_FLIGHT_LIMITS = {
 /*
  * Not here, because it is not counted in memory: the support form's one request
  * per minute per account is stored in the account's prefs so it holds across
- * instances (`lib/support/throttle.ts`).
+ * instances (`lib/support/throttle.ts`). Prefs are user-writable, which is why
+ * the `support` policy above backs it up.
  */

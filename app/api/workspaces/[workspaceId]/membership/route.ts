@@ -21,5 +21,5 @@ export const DELETE = withPersonalAuth<Params>(
 
     return noContent();
   },
-  { allowUnverified: true },
+  { allowUnverified: true, webAccountOnly: true },
 );

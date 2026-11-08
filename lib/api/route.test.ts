@@ -159,6 +159,28 @@ describe("withAuth — the confirmed-address gate", () => {
     expect(response.status).toBe(204);
   });
 
+  it("refuses a Shopify shop with a 404 on a webAccountOnly route, reads included", async () => {
+    requireUser.mockResolvedValue({
+      ...VERIFIED,
+      shopify: { shop: "eve.myshopify.com", storeHandle: "eve", pricingUrl: "" },
+    });
+
+    for (const method of ["GET", "POST"]) {
+      const response = await withAuth(handler, { webAccountOnly: true })(request(method));
+      expect(response.status).toBe(404);
+    }
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("lets a web account through a webAccountOnly route", async () => {
+    requireUser.mockResolvedValue(VERIFIED);
+
+    const response = await withAuth(handler, { webAccountOnly: true })(request("POST"));
+
+    expect(response.status).toBe(204);
+  });
+
   it("is inert with no RESEND_API_KEY, because the link could never arrive", async () => {
     withAuth = await loadWithAuth(undefined);
     requireUser.mockResolvedValue(UNVERIFIED);

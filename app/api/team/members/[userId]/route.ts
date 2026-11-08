@@ -9,15 +9,21 @@ import { changeRoleSchema } from "@/lib/validation/team.schema";
 type Params = { userId: string };
 
 /** Change a member's role. Who may change whom is `canManage` (lib/team/roles.ts). */
-export const PATCH = withAuth<Params>(async ({ request, params, ctx }) => {
-  const { role } = await parseBody(request, changeRoleSchema);
+export const PATCH = withAuth<Params>(
+  async ({ request, params, ctx }) => {
+    const { role } = await parseBody(request, changeRoleSchema);
 
-  return ok({ membership: await changeMemberRole(ctx, params.userId, role) });
-});
+    return ok({ membership: await changeMemberRole(ctx, params.userId, role) });
+  },
+  { webAccountOnly: true },
+);
 
 /** Take a member's access away. Their next request finds nothing here. */
-export const DELETE = withAuth<Params>(async ({ params, ctx }) => {
-  await removeMember(ctx, params.userId);
+export const DELETE = withAuth<Params>(
+  async ({ params, ctx }) => {
+    await removeMember(ctx, params.userId);
 
-  return noContent();
-});
+    return noContent();
+  },
+  { webAccountOnly: true },
+);

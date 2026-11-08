@@ -264,6 +264,27 @@ describe("acceptInvite", () => {
     expect(state.fake!.rows("memberships")).toHaveLength(0);
   });
 
+  it("refuses a Shopify shop, even one whose store email is the invited address", async () => {
+    // A shop's email is whatever the merchant typed into the store's settings,
+    // so a dev store named after somebody else's address proves nothing.
+    onPlan("pro");
+    invite("ada@example.com", { role: "admin" });
+    const { acceptInvite, findInviteByToken } = await load();
+
+    await expect(
+      acceptInvite(
+        {
+          id: "shop-workspace",
+          email: "ada@example.com",
+          shopify: { shop: "eve.myshopify.com", storeHandle: "eve", pricingUrl: "" },
+        },
+        (await findInviteByToken("token-for-ada@example.com"))!,
+      ),
+    ).rejects.toMatchObject({ code: "not_found" });
+    expect(state.fake!.rows("memberships")).toHaveLength(0);
+    expect(state.fake!.rows("invites")).toHaveLength(1);
+  });
+
   it("refuses an expired invite", async () => {
     onPlan("pro");
     invite("ada@example.com", { expiresIn: -1000 });

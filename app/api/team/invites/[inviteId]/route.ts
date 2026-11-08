@@ -16,12 +16,15 @@ export const POST = withAuth<Params>(
 
     return ok({ invite, inviteUrl: inviteUrl(token) });
   },
-  { rateLimit: "invite" },
+  { rateLimit: "invite", webAccountOnly: true },
 );
 
 /** Take the invite back. Its link stops working and its seat is free. */
-export const DELETE = withAuth<Params>(async ({ params, ctx }) => {
-  await revokeInvite(ctx, params.inviteId);
+export const DELETE = withAuth<Params>(
+  async ({ params, ctx }) => {
+    await revokeInvite(ctx, params.inviteId);
 
-  return noContent();
-});
+    return noContent();
+  },
+  { webAccountOnly: true },
+);

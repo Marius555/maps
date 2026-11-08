@@ -93,6 +93,8 @@ export function withAuth<Params = Record<string, never>>(
 
       const user = await requireUser();
 
+      if (options.webAccountOnly && user.shopify) throw new NotFoundError();
+
       rateLimit(options.rateLimit ?? defaultUserPolicy(request.method), user.id);
 
       if (!options.allowUnverified) assertEmailVerified(user, request.method);
@@ -127,6 +129,18 @@ type AuthOptions = {
   allowUnverified?: boolean;
   rateLimit?: PolicyPer<"user">;
   workspace?: WorkspaceScope;
+  /**
+   * Refuse a caller signed in with a Shopify ID token, with a 404 — for the team
+   * routes (`team/`, `invites/`, `workspaces/`), which a shop is never offered.
+   *
+   * **This is a security check, not tidiness.** A shop's `AuthUser` carries the
+   * store's contact email, which the merchant typed and nobody confirmed, yet
+   * reads as `emailVerified` (lib/auth/shopify-user.ts). The invite routes take a
+   * confirmed address as proof of who someone is, so without this a dev store
+   * named after somebody else's address could list and accept that person's
+   * invitations. `lib/api/route-scopes.test.ts` holds every team route to it.
+   */
+  webAccountOnly?: boolean;
 };
 
 /**

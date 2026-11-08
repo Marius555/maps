@@ -68,6 +68,12 @@ Files: `lib/team/**`, `lib/repositories/{memberships,invites}.repository.ts`,
   behind the email gate on purpose (no `allowUnverified`): holding the link is not proof,
   because the inviter was handed a copy for "Copy link", and anybody can sign up as an
   address they do not own. "Invitations for you" lists only for a confirmed address too.
+- **A Shopify shop is refused by every team route** (`webAccountOnly: true`, 404). Its
+  `AuthUser` reads `emailVerified: true`, but its address is the store's contact email, which
+  the merchant typed and nobody confirmed. Without the refusal a dev store named after
+  somebody's address could list and accept that person's invitations. `acceptInvite` and
+  `listMyInvitations` refuse a shop as well, and `lib/api/route-scopes.test.ts` fails any
+  wrapper call under `team/`, `invites/` or `workspaces/` that leaves the option off.
 - **Only the token's sha256 is stored.** The raw token exists in the email and in the one
   response that hands the inviter Copy link. Resend mints a new one and the old link dies.
 - **Inviting never looks an address up.** Only ids already on the team are read

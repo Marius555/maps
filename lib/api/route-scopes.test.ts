@@ -61,6 +61,25 @@ describe("route scopes", () => {
     },
   );
 
+  /*
+   * A Shopify shop reads as a confirmed address that nobody confirmed
+   * (lib/auth/shopify-user.ts), and the team routes treat a confirmed address as
+   * proof of who somebody is. Every wrapper call in these folders must refuse a
+   * shop, so a team route added next month cannot reopen invite takeover.
+   */
+  const TEAM = ["team/", "invites/", "workspaces/"];
+
+  it.each(ROUTES.filter((route) => TEAM.some((prefix) => route.name.startsWith(prefix))))(
+    "refuses a Shopify shop on $name",
+    ({ source }) => {
+      const calls = source.match(/\bwith(?:Map|Personal)?Auth\b\s*(?:<[^>]*>)?\s*\(/g) ?? [];
+      const guarded = source.match(/\bwebAccountOnly:\s*true\b/g) ?? [];
+
+      expect(calls.length).toBeGreaterThan(0);
+      expect(guarded.length).toBe(calls.length);
+    },
+  );
+
   it("keeps the card design under the map that names its workspace", () => {
     expect(ROUTES.some((route) => route.name === "account/card-design/route.ts")).toBe(false);
     expect(ROUTES.some((route) => route.name === "maps/[id]/card-design/route.ts")).toBe(true);

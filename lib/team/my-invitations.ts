@@ -24,8 +24,12 @@ export type MyInvitation = {
  * unconfirmed account that could list invitations sent to it could accept its
  * way into a stranger's team. When there is no email provider at all the gate
  * is off (`emailGateActive`), and so is this check, so the two always agree.
+ *
+ * **Never for a Shopify shop.** It reads as confirmed, but its address is the
+ * store's contact email, which nobody confirmed (`acceptInvite` says more).
  */
 export async function listMyInvitations(user: AuthUser): Promise<MyInvitation[]> {
+  if (user.shopify) return [];
   if (!user.emailVerified && emailGateActive()) return [];
 
   const invites = (await listInvitesForEmail(user.email)).filter(

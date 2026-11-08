@@ -15,4 +15,4 @@ export const GET = withPersonalAuth(async ({ request, user }) => {
   ]);
 
   return ok({ workspaces, activeWorkspaceId: active.workspaceId, role: active.role });
-});
+}, { webAccountOnly: true });

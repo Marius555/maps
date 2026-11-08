@@ -23,5 +23,5 @@ export const POST = withAuth(
 
     return created({ invite, inviteUrl: inviteUrl(token) });
   },
-  { rateLimit: "invite" },
+  { rateLimit: "invite", webAccountOnly: true },
 );
