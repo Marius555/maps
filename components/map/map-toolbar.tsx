@@ -31,6 +31,8 @@ import { ShapeToolsButton } from "./shapes/shape-tools-button";
  * Each threshold is the map-row width (the `@container` below) under which that
  * control would leave the field short, worked from the mobile sizes: icon
  * buttons 36px, Add and Draw 40px, 4px gaps, 10px of panel padding and border.
+ * (Add and Draw are icon-only now, 36px like the rest, so each threshold is up
+ * to 8px conservative — a control leaves a touch early, never late.)
  * Listed first-to-go; Add and Search never go. Whole literal strings, because
  * Tailwind only generates classes it can read in the source. `sm` and up are
  * untouched.
@@ -107,6 +109,7 @@ export function MapToolbar({
   onDropPin,
   onDraggingChange,
   onOpenStudio,
+  onAddEngage,
   onSaveView,
   onPreview,
   onChangeStyle,
@@ -180,6 +183,11 @@ export function MapToolbar({
   onDraggingChange?: (isDragging: boolean) => void;
   /** Opens the pin studio — a modal on a desktop, a bottom sheet on a phone. */
   onOpenStudio: () => void;
+  /**
+   * The add control was pressed or dragged from. The editor folds the search
+   * on it: the `search` slot is the editor's, so the toolbar only reports it.
+   */
+  onAddEngage?: () => void;
   onSaveView: () => void;
   onPreview: () => void;
   /** Both save immediately — see AppearanceButton. */
@@ -260,6 +268,7 @@ export function MapToolbar({
               onDropPin={onDropPin}
               onDraggingChange={onDraggingChange}
               onOpenStudio={onOpenStudio}
+              onEngage={onAddEngage}
             />
           </span>
         )}

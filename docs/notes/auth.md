@@ -213,7 +213,7 @@ a Strict cookie.
   (so the `Set-Cookie` lands) and the hop to `/maps` is `router.replace` (so the
   cookie goes with it).
 - Billing: `/checkout/done` is a marketing-group page, and `CheckoutReturn` does
-  `router.replace("/account")` from the client.
+  `router.replace("/maps?checkout=done")` from the client.
 
 **Billing walked into this a third time, and it is worth saying why it got
 past two written warnings.** The other two flows are *about* authentication, so

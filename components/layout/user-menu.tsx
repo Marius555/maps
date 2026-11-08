@@ -232,7 +232,7 @@ export function UserMenu({
               <>
                 <Separator />
 
-                <Dropdown.Item id="logout" textValue="Log out" variant="danger">
+                <Dropdown.Item id="logout" textValue="Log out" variant="default">
                   <LogOut aria-hidden="true" className="size-4 shrink-0" />
                   <Label>Log out</Label>
                 </Dropdown.Item>

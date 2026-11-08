@@ -2,7 +2,7 @@
 
 import { Button } from "@heroui/react";
 
-import { LinkButton } from "@/components/ui/link-button";
+import { CheckoutLink } from "@/components/billing/checkout-link/checkout-link";
 import { isDowngrade, type Offer } from "@/lib/billing/plan-change";
 import type { BillingStanding } from "@/lib/billing/standing";
 import { formatDate } from "@/lib/format/date";
@@ -111,8 +111,9 @@ export function planActionFor({
 }
 
 /**
- * What pressing this column's button would do, said before the press: the
- * button moves money and there is no confirmation step behind it.
+ * What pressing this column's button would do, said before the press — and
+ * said again in the confirmation the press opens (`ConfirmPlanChangeDialog`),
+ * because the button moves money.
  *
  * Drawn at the top of the column, under the price, rather than under the button
  * — a line there made one footer taller than the others and pushed the columns
@@ -222,12 +223,13 @@ export function PlanAction({
        * The same door `/pricing`'s cards use: it reads the session, opens the
        * merchant of record's checkout and brings the buyer back through
        * `/checkout/done`. Only reached by an account with no subscription to
-       * move — see `planActionFor`.
+       * move — see `planActionFor`. A `CheckoutLink`, so this page stays up
+       * until the checkout opens instead of fading to a blank one.
        */
       return (
-        <LinkButton href={`/upgrade?plan=${plan.id}&cadence=${cadence}`} fullWidth>
+        <CheckoutLink href={`/upgrade?plan=${plan.id}&cadence=${cadence}`} fullWidth>
           Upgrade to {plan.name}
-        </LinkButton>
+        </CheckoutLink>
       );
 
     case "cancel-above":
@@ -255,8 +257,12 @@ export function PlanAction({
       );
 
     case "resume-first":
+      // A disabled button, like "Current plan" and "moves-to-free": it says why
+      // nothing can be pressed here, and keeps the footers the same height.
       return (
-        <p className="text-sm text-muted">Resume your plan above to change it.</p>
+        <Button fullWidth isDisabled variant="secondary">
+          Resume your plan to change it
+        </Button>
       );
 
     default:

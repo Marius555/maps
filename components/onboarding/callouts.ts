@@ -54,6 +54,23 @@ const IMPORT: Callout = {
   ],
 };
 
+/**
+ * The third way onto an empty map: type an address, press + on the match. On
+ * the same row as the pin button, so its note stacks above that one's — see
+ * the tie rule in tutorial-layout.ts.
+ */
+const SEARCH: Callout = {
+  id: "map-search",
+  targets: [
+    {
+      selector: "map-search",
+      side: "below",
+      title: "Search for an address",
+      body: "Press Enter, then + beside a match to add it as a location.",
+    },
+  ],
+};
+
 const EDITOR: readonly Callout[] = [
   {
     id: "add-location",
@@ -66,6 +83,7 @@ const EDITOR: readonly Callout[] = [
       },
     ],
   },
+  SEARCH,
   IMPORT,
 ];
 
@@ -86,6 +104,7 @@ export const EDITOR_WITH_PLACES: readonly Callout[] = [
       },
     ],
   },
+  SEARCH,
   IMPORT,
 ];
 

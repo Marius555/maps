@@ -5,6 +5,7 @@ import { Download } from "lucide-react";
 import { useState } from "react";
 
 import { ExportPanel } from "@/components/export/export-panel";
+import { TriggerTooltip } from "@/components/ui/trigger-tooltip";
 import type { ExportOptions } from "@/lib/export/export-map";
 
 /**
@@ -16,9 +17,8 @@ import type { ExportOptions } from "@/lib/export/export-map";
  * its neighbours are, which is that the row already competes with the search
  * field on a phone.
  *
- * A plain Button rather than the repo's IconButton, and for the reason
- * `appearance-button.tsx` spells out: IconButton wraps its trigger in a Tooltip,
- * and a tooltip on a popover trigger stays up over the panel it just opened.
+ * Its hover label is a `TriggerTooltip` rather than the repo's IconButton,
+ * whose uncontrolled tooltip would stay up over the panel this opens.
  *
  * The panel keeps its choices while the popover is closed and reopened — a
  * format and a page size are a preference for the session, and re-picking A4
@@ -52,9 +52,11 @@ export function ExportButton({
         setIsOpen(open);
       }}
     >
-      <Button size="sm" variant="tertiary" isIconOnly aria-label="Export this map">
-        <Download aria-hidden="true" className="size-4" />
-      </Button>
+      <TriggerTooltip label="Export this map" isSuppressed={isOpen}>
+        <Button size="sm" variant="tertiary" isIconOnly aria-label="Export this map">
+          <Download aria-hidden="true" className="size-4" />
+        </Button>
+      </TriggerTooltip>
 
       <Popover.Content placement="bottom end">
         <Popover.Dialog aria-label="Export this map">

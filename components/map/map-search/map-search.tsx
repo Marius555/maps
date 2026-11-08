@@ -2,7 +2,8 @@
 
 import { Button, Input, Label, TextField } from "@heroui/react";
 import { Plus, Search, X } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { type Ref, useEffect, useId, useImperativeHandle, useRef, useState } from "react";
 
 import { GeocodeResultList } from "@/components/geocode/geocode-result-list";
 import { PlanLimitNote } from "@/components/map/plan-limit-note";
@@ -13,6 +14,30 @@ import { isAtLimit, type PlanHeadroom } from "@/lib/map/plan-headroom";
 import { useGeocodeSearch } from "@/lib/query/geocode";
 
 const MIN_QUERY = 3;
+
+/** The field's open width — `w-72`, which the wrapper keeps as its resting size. */
+const FIELD_WIDTH = 288;
+
+/**
+ * How long the bar takes to unroll or fold, in seconds.
+ *
+ * It was the 150ms `--duration-fast` token, and a 288px field crossing the
+ * toolbar in 150ms read as a snap rather than a fold. A third of a second on a
+ * long ease-out moves fast at first and settles gently, which is what lets the
+ * eye follow the search button riding out and back.
+ */
+const FOLD_SECONDS = 0.34;
+const FOLD_EASE = [0.22, 1, 0.36, 1] as const;
+
+/** What the editor can ask of the search from outside it. */
+export type MapSearchHandle = {
+  /**
+   * Put the bar away because the user has turned to something else — pressing
+   * Add location, say. Drops the matches, keeps the typed query (as clicking
+   * away does), and leaves focus where the user put it.
+   */
+  fold: () => void;
+};
 
 /**
  * Find an address on the map.
@@ -49,19 +74,24 @@ const MIN_QUERY = 3;
  * label was still unfolded, and the panel resolved the overflow by breaking onto
  * a second row for the length of the fold and then snapping back.
  *
- * So: nothing here mounts or unmounts on toggle, the panel cannot wrap, and every
- * width that moves is a CSS `max-width` transition on the same two tokens. Opening
- * and closing are then one layout pass per frame with no discrete steps anywhere —
- * which is the only way this reads as one control changing shape rather than
- * several arriving at once. `prefers-reduced-motion` is covered by the blanket
- * rule in globals.css, which zeroes transition durations.
+ * So: nothing here mounts or unmounts on toggle, the panel cannot wrap, and the
+ * one width that moves is the field's `max-width`. Opening and closing are then
+ * one layout pass per frame with no discrete steps anywhere — which is the only
+ * way this reads as one control changing shape rather than several arriving at
+ * once. That `max-width` is driven by Motion now rather than a CSS transition,
+ * for the curve and the length (FOLD_SECONDS); the mount-free structure above is
+ * what fixed the flicker, and it is unchanged. Motion's `reducedMotion="user"`
+ * does not cover a width, so `prefers-reduced-motion` is read here and makes
+ * the fold instant.
  */
 export function MapSearch({
+  ref,
   mapId,
   headroom,
   onPick,
   onAdd,
 }: {
+  ref?: Ref<MapSearchHandle>;
   mapId: string;
   /**
    * The location allowance. The `+` is the third way to add one — beside the
@@ -93,14 +123,29 @@ export function MapSearch({
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
+  /*
+   * Which search is current. Clearing or folding bumps it, so a reply still in
+   * flight from before lands nowhere — without this, a search folded away
+   * mid-request would hang its matches back under the bar a moment later.
+   */
+  const generation = useRef(0);
+
   const run = async () => {
     if (isTooShort) return;
 
+    const asked = ++generation.current;
     try {
-      setCandidates(await search.mutateAsync({ address: query }));
+      const found = await search.mutateAsync({ address: query });
+      if (asked === generation.current) setCandidates(found);
     } catch {
       // Rendered from the mutation's error below.
     }
+  };
+
+  const forget = () => {
+    generation.current += 1;
+    setCandidates(null);
+    search.reset();
   };
 
   // Clearing empties the bar but does not put it away: focus goes back to the
@@ -110,8 +155,7 @@ export function MapSearch({
   // without the focus the blur that follows would fold the bar on the spot.
   const clear = () => {
     setQuery("");
-    setCandidates(null);
-    search.reset();
+    forget();
     inputRef.current?.focus();
   };
 
@@ -121,6 +165,56 @@ export function MapSearch({
     setIsOpen(false);
     triggerRef.current?.focus();
   };
+
+  const reduceMotion = useReducedMotion() ?? false;
+  const foldSeconds = reduceMotion ? 0 : FOLD_SECONDS;
+
+  /*
+   * Adding from a match waits for the fold to finish.
+   *
+   * Creating a location is the heaviest thing this toolbar sets off: the list
+   * re-renders, a pin is drawn and the camera flies. Started in the same frame
+   * as the fold, it took the main thread for ~170ms in the middle of it, and a
+   * width animation cannot run off the main thread — measured, the bar froze
+   * halfway and then jumped shut. So the bar folds first, on an idle thread, and
+   * the pin lands and the camera moves the moment it has. A timer rather than
+   * Motion's completion callback, which does not fire for an interrupted
+   * animation — reopening the bar mid-fold would otherwise lose the add.
+   */
+  const pendingAdd = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (pendingAdd.current !== null) window.clearTimeout(pendingAdd.current);
+    },
+    [],
+  );
+
+  const addAndFold = (candidate: GeocodeCandidate) => {
+    setQuery("");
+    forget();
+    close();
+
+    if (foldSeconds === 0) {
+      onAdd(candidate);
+      return;
+    }
+    pendingAdd.current = window.setTimeout(() => {
+      pendingAdd.current = null;
+      onAdd(candidate);
+    }, foldSeconds * 1000);
+  };
+
+  // No focus handling, unlike `close`: by the time this is called the user has
+  // pressed something else, and that is where focus belongs.
+  useImperativeHandle(ref, () => ({
+    fold: () => {
+      forget();
+      setIsOpen(false);
+    },
+  }));
+
+  /** The front X: the same two stages as Escape — the matches, then the bar. */
+  const hasSomethingToClear = isHolding || query !== "";
 
   return (
     /*
@@ -146,6 +240,8 @@ export function MapSearch({
      */
     <div
       data-search-open={isOpen ? "" : undefined}
+      // The onboarding overlay's third arrow: searching is a way to add one.
+      data-tutorial="map-search"
       className="relative flex min-w-0 items-center"
       onBlur={(event) => {
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
@@ -175,42 +271,64 @@ export function MapSearch({
       }}
     >
       {/*
-       * Opening the search and running it are the same button, because they were
-       * always the same glyph in the same place — two elements swapping over
-       * would be a remount, and a remount is a jump.
-       *
-       * It leads rather than trails so that the control under the pointer stays
-       * put while the field unrolls to its right.
-       *
-       * Not disabled below MIN_QUERY: the press that opens the bar would then
-       * grey it out on the way in, which is a state flash on the thing just
-       * clicked. `run` already ignores a short query, exactly as Enter does.
-       */}
-      <IconButton
-        ref={triggerRef}
-        label="Find an address"
-        icon={Search}
-        placement="bottom"
-        isPending={search.isPending}
-        onPress={() => {
-          if (isOpen) void run();
-          else setIsOpen(true);
-        }}
-      />
-
-      {/*
        * The field is clipped to nothing rather than removed. `w-72` is its
-       * resting width; `max-w-0` takes its contribution to the panel's width to
-       * zero without taking it out of the DOM, so opening and closing are the
-       * same transition run in opposite directions. `inert` is what keeps a
-       * field nobody can see out of the tab order and the accessibility tree.
+       * resting width; a `max-width` of 0 takes its contribution to the panel's
+       * width to zero without taking it out of the DOM, so opening and closing
+       * are the same animation run in opposite directions. `inert` is what
+       * keeps a field nobody can see out of the tab order and the
+       * accessibility tree.
+       *
+       * The fade is shorter than the fold and runs at the end that matters:
+       * opening, the text appears once there is room for it; folding, it is
+       * gone before the field is narrow enough to crop it mid-word.
+       * `initial={false}` so a page load draws the bar shut, not folding shut.
        */}
-      <div
+      <motion.div
         inert={!isOpen}
-        className={`relative flex w-72 min-w-0 items-center overflow-hidden transition-[max-width,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ${
-          isOpen ? "max-w-72 opacity-100" : "max-w-0 opacity-0"
-        }`}
+        initial={false}
+        animate={
+          isOpen ? { maxWidth: FIELD_WIDTH, opacity: 1 } : { maxWidth: 0, opacity: 0 }
+        }
+        transition={{
+          maxWidth: { duration: foldSeconds, ease: FOLD_EASE },
+          opacity: {
+            duration: foldSeconds * 0.6,
+            delay: isOpen ? foldSeconds * 0.25 : 0,
+            ease: "easeOut",
+          },
+        }}
+        className="relative flex w-72 min-w-0 items-center overflow-hidden"
       >
+        {/*
+         * The X sits *in* the field, at its leading end — absolutely positioned
+         * over the `ps-8` the input reserves for it, so the text starts after it
+         * and an empty bar is all field.
+         *
+         * Shown for as long as the bar is open, and it does what Escape does:
+         * with text or matches it clears them and keeps the bar; on an empty bar
+         * it puts the bar away.
+         *
+         * Absolute rather than HeroUI's own `InputGroup.Prefix`, which is the
+         * built-in shape for this and brings a divider rule, its own padding and
+         * a focus ring around the whole group — three things this field has
+         * already been carefully talked out of, because it has to stand exactly
+         * `.button--sm` tall in a row of toolbar buttons. First in the DOM so the
+         * tab order reads the way the bar does; `z-10` so it still paints over
+         * the field that follows it.
+         *
+         * The wrapper's `inert` keeps it out of reach while the bar is shut.
+         */}
+        <Button
+          size="sm"
+          variant="tertiary"
+          aria-label={hasSomethingToClear ? "Clear search" : "Close search"}
+          isIconOnly
+          className="absolute start-1 top-1/2 z-10 size-6 min-w-0 -translate-y-1/2 rounded-md"
+          onPress={hasSomethingToClear ? clear : close}
+        >
+          <X aria-hidden="true" className="size-3.5" />
+        </Button>
+
         <TextField
           fullWidth
           aria-label="Find an address"
@@ -241,46 +359,40 @@ export function MapSearch({
           <Input
             ref={inputRef}
             placeholder="Find an address"
-            // `pe-8` is the room Clear sits in — see below. Padding rather than
-            // a sibling's width, so the text simply stops short of the button
-            // instead of the field stopping short of it.
-            className="h-9 border-0 bg-transparent py-0 pe-8 text-sm shadow-none focus:inset-ring-2 focus:inset-ring-focus focus:ring-0 data-focused:inset-ring-2 data-focused:inset-ring-focus data-focused:ring-0 md:h-8"
+            // `ps-8` is the room the X sits in — see above. Padding rather than
+            // a sibling's width, so the text simply starts after the button
+            // instead of the field starting after it.
+            className="h-9 border-0 bg-transparent py-0 ps-8 text-sm shadow-none focus:inset-ring-2 focus:inset-ring-focus focus:ring-0 data-focused:inset-ring-2 data-focused:inset-ring-focus data-focused:ring-0 md:h-8"
           />
         </TextField>
+      </motion.div>
 
-        {/*
-         * Clear sits *in* the field, at its trailing end, rather than beside it.
-         *
-         * It was a flex sibling of the TextField, and a sibling has a width
-         * whether or not it can be seen: an idle search bar spent about 32px of
-         * a 288px field on a button that was `opacity-0`, which read as the text
-         * mysteriously stopping short of the end. Now it is absolutely
-         * positioned over the `pe-8` the input reserves for it, so an empty bar
-         * is all field and nothing moves when the first keystroke fades it in.
-         *
-         * Absolute rather than HeroUI's own `InputGroup.Suffix`, which is the
-         * built-in shape for this and brings a divider rule, its own padding and
-         * a focus ring around the whole group — three things this field has
-         * already been carefully talked out of, because it has to stand exactly
-         * `.button--sm` tall in a row of toolbar buttons.
-         *
-         * `inert` while empty is what keeps a button nobody can see out of the
-         * tab order; it was already doing that job and still is.
-         */}
-        <Button
-          size="sm"
-          variant="tertiary"
-          aria-label="Clear search"
-          isIconOnly
-          inert={!query}
-          className={`absolute end-1 top-1/2 size-6 min-w-0 -translate-y-1/2 rounded-md transition-opacity duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ${
-            query ? "opacity-100" : "opacity-0"
-          }`}
-          onPress={clear}
-        >
-          <X aria-hidden="true" className="size-3.5" />
-        </Button>
-      </div>
+      {/*
+       * Opening the search and running it are the same button, because they were
+       * always the same glyph in the same place — two elements swapping over
+       * would be a remount, and a remount is a jump.
+       *
+       * It trails the field, so an open bar reads X, address, search. Shut, the
+       * field is `max-w-0` and this is all there is, exactly where it always
+       * was; opening unrolls the field to its left and the button rides out on
+       * the field's own max-width transition, and closing brings it back the
+       * same way. Nothing is reordered, so there is no frame where it jumps.
+       *
+       * Not disabled below MIN_QUERY: the press that opens the bar would then
+       * grey it out on the way in, which is a state flash on the thing just
+       * clicked. `run` already ignores a short query, exactly as Enter does.
+       */}
+      <IconButton
+        ref={triggerRef}
+        label="Find an address"
+        icon={Search}
+        placement="bottom"
+        isPending={search.isPending}
+        onPress={() => {
+          if (isOpen) void run();
+          else setIsOpen(true);
+        }}
+      />
 
       {/*
        * Results hang below the toolbar on their own surface rather than inside
@@ -289,8 +401,21 @@ export function MapSearch({
        * the bar but is not part of its geometry. Capped, because five matches on
        * a short map panel is most of it.
        */}
-      {search.error || candidates ? (
-        <div className="absolute top-full right-0 z-20 mt-2 max-h-64 w-72 max-w-[calc(100vw-2rem)] space-y-2 overflow-y-auto rounded-xl border border-border bg-surface p-2 shadow-sm">
+      {/* Only while open: folded from outside (`fold`) or by adding a match,
+          the bar takes its matches with it rather than leaving them hanging
+          under an icon. They lift away as the bar folds — opacity and a few
+          pixels of transform, both of which Motion hands to the compositor,
+          so the list leaves smoothly even when the thread behind it is busy. */}
+      <AnimatePresence>
+      {isOpen && (search.error || candidates) ? (
+        <motion.div
+          key="results"
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: reduceMotion ? 0 : 0.18, ease: "easeOut" }}
+          className="absolute top-full right-0 z-20 mt-2 max-h-64 w-72 max-w-[calc(100vw-2rem)] space-y-2 overflow-y-auto rounded-xl border border-border bg-surface p-2 shadow-sm"
+        >
           {search.error ? <ErrorMessage error={search.error} /> : null}
 
           <GeocodeResultList
@@ -313,10 +438,11 @@ export function MapSearch({
                 className="relative size-4 min-w-0 rounded-md p-0 after:absolute after:-inset-2 after:content-['']"
                 isDisabled={isFull}
                 aria-describedby={isFull ? noteId : undefined}
-                onPress={() => {
-                  onAdd(candidate);
-                  clear();
-                }}
+                // The search has done its job: the bar empties and folds away,
+                // focus goes back to the search icon rather than to the body,
+                // and the location is added once the fold is done — see
+                // `addAndFold`.
+                onPress={() => addAndFold(candidate)}
               />
             )}
             // Picking flies the camera and leaves the list up: the next match is
@@ -342,8 +468,9 @@ export function MapSearch({
           {isFull && headroom ? (
             <PlanLimitNote id={noteId} resource="places" headroom={headroom} />
           ) : null}
-        </div>
+        </motion.div>
       ) : null}
+      </AnimatePresence>
     </div>
   );
 }

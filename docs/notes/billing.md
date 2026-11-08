@@ -32,7 +32,18 @@ The page itself is described in `docs/notes/settings.md`.
   session cookie is `sameSite: "strict"` and the buyer returns from the
   provider's domain, so a return straight to `/settings/billing` (or the old
   `/account`) answers a completed purchase with a login form. `/checkout/done`
-  exists for this and `lib/billing/lemon.test.ts` asserts it.
+  exists for this and `lib/billing/lemon.test.ts` asserts it. From there the client
+  hops to `/maps?checkout=done`, which forwards to the last-opened map, where
+  `PurchaseCelebration` (mounted in the dashboard shell) opens — "Activating" until
+  the webhook lands, then "Welcome to Starter" — and strips the param on close.
+- **Plan buttons that open a checkout are `CheckoutLink`, a plain `<a>`, never
+  `next/link`.** A client navigation to `/upgrade` faded the page to blank while the
+  provider created the checkout. A document navigation keeps the page up and gets a
+  straight 307. So `/upgrade` must keep no `loading.tsx` or Suspense above it — a
+  flushed shell would turn the redirect back into a client one and the blank page.
+- **A subscriber's plan change is confirmed first** (`ConfirmPlanChangeDialog`), except
+  "Keep …", which only undoes a booked downgrade and charges nothing. It states the
+  price and when it starts, never a proration figure: the provider gives no preview.
 - **A 404 from the provider is a 200 from us; a 5xx is a 5xx.** Non-2xx is how
   the provider is told to redeliver, so `fetchSubscriptionState` returns null on
   a 404 — a subscription that does not exist will not exist on the retry either
@@ -599,8 +610,8 @@ naming because it looks exactly like success.
    `POST /api/collect` writes nothing. Flip the subscription row to `starter`;
    both resume.
 4. **Checkout**, in test mode: `/pricing` → Yearly → Start on Starter → `/upgrade`
-   → provider checkout → their test card → `/checkout/done` → `/settings/billing` showing
-   Starter. **A login form anywhere in that tail is the SameSite bug returning**
+   → provider checkout → their test card → `/checkout/done` → `/maps/<last map>` with the
+   "Welcome to Starter" dialog ("Activating" first if the webhook is behind). **A login form anywhere in that tail is the SameSite bug returning**
    — see `docs/notes/auth.md`.
 5. **The webhook.** Their dashboard re-sends events, or `npm run billing:replay`.
    A bad signature must 401, a good one must write `subscriptions`, and a replay

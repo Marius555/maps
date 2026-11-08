@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog/responsive-dialog";
 import type { AppMap, Place } from "@/lib/repositories/types";
 import { AllowedDomainsFold } from "../allowed-domains/allowed-domains-fold";
+import { useStickyMinHeight } from "./use-sticky-min-height";
 import { WebsiteTab } from "./website-tab";
 import { WordPressTab } from "./wordpress-tab";
 
@@ -69,6 +70,7 @@ export function ShareDialog({
   const isOpen = controlledOpen ?? ownOpen;
   const setIsOpen = controlledOnOpenChange ?? setOwnOpen;
   const [platform, setPlatform] = useState<Platform>("website");
+  const panelsRef = useStickyMinHeight<HTMLDivElement>();
 
   return (
     <>
@@ -128,8 +130,10 @@ export function ShareDialog({
 
                 {/* Both panels mounted and stacked in one grid cell, the hidden
                     one `invisible`, so the dialog is the height of the taller
-                    and does not jump on its centre line when the tab changes. */}
-                <div className="grid">
+                    and does not jump on its centre line when the tab changes.
+                    The sticky min-height covers the one commit in which React
+                    Aria drops the old panel — see `useStickyMinHeight`. */}
+                <div ref={panelsRef} className="grid">
                   <Tabs.Panel
                     id="website"
                     shouldForceMount

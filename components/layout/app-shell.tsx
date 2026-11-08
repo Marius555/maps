@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+
+import { PurchaseCelebration } from "@/components/billing/purchase-celebration/purchase-celebration";
 import { NotificationsDrawer } from "@/components/notifications/drawer/notifications-drawer";
 import { TutorialRouteWatcher } from "@/components/onboarding/tutorial-route-watcher";
 import { VerifyEmailBanner } from "@/components/verify-email/verify-email-banner";
@@ -128,6 +131,10 @@ export function AppShell({
       {/* In the shell because "back from the card designer" can land on any
           page, and the shell is the one thing that sees every navigation. */}
       <TutorialRouteWatcher pending={tutorials} isShopify={Boolean(user.shopify)} />
+      {/* Opens on `?checkout=done`, wherever a purchase lands the buyer. */}
+      <Suspense fallback={null}>
+        <PurchaseCelebration accountPlan={accountPlan} email={user.email} />
+      </Suspense>
       <PostHogIdentify user={user} />
       <RestoreAuthGuard />
     </SidebarProvider>

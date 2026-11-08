@@ -26,8 +26,13 @@ import { track } from "@/lib/posthog/client";
  * is visible, then navigate on from here — because a navigation our own
  * same-site page initiates does carry a Strict cookie.
  *
+ * **It goes on to `/maps`, not back to Settings → Billing.** The buyer came to
+ * build a map; `/maps` forwards them to the one they were last on, where
+ * `PurchaseCelebration` opens on `?checkout=done` and waits for the webhook if
+ * the plan has not landed yet.
+ *
  * `router.refresh()` after the `replace` is load bearing, not belt and braces:
- * `/settings/billing` is server-rendered, so the cookie has to reach the *server* before
+ * `/maps` is server-rendered, so the cookie has to reach the *server* before
  * the destination paints.
  *
  * **The link is not a fallback afterthought.** With JavaScript off the effect
@@ -46,7 +51,7 @@ export function CheckoutReturn() {
     moved.current = true;
 
     track("checkout_completed");
-    router.replace("/settings/billing?checkout=done");
+    router.replace("/maps?checkout=done");
     router.refresh();
   }, [router]);
 
@@ -54,14 +59,14 @@ export function CheckoutReturn() {
     <EmptyState
       icon={CircleCheck}
       title="Payment received"
-      description="Thank you — taking you to your account now."
+      description="Thank you — taking you to your map now."
       action={
         <div className="flex flex-col items-center gap-4">
           <div className="flex justify-center" aria-live="polite">
-            <Spinner aria-label="Opening your account" />
+            <Spinner aria-label="Opening your map" />
           </div>
 
-          <LinkButton href="/settings/billing">Go to your account</LinkButton>
+          <LinkButton href="/maps?checkout=done">Go to your map</LinkButton>
         </div>
       }
     />

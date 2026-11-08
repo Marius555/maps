@@ -117,6 +117,19 @@
         font-size: 14px;
       }
 
+      /* Read by a screen reader, not drawn. Scoped like everything else. */
+      .tp-sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+      }
+
       .tp-card {
         background: var(--tp-surface);
         border: 1px solid var(--tp-border);
@@ -168,40 +181,29 @@
         filter: brightness(1.05);
       }
       .tp-btn:focus-visible,
-      .tp-ghost:focus-visible,
       .tp-summary:focus-visible {
         outline: 2px solid var(--tp-accent);
         outline-offset: 2px;
       }
 
-      /* The map and what is known about it. */
-      .tp-head {
+      /* What is known about this publish: two short titles under the map. The
+         sentence behind each is its `title`, so the map keeps the screen. */
+      .tp-checks {
         display: flex;
         flex-wrap: wrap;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: 12px;
-      }
-      .tp-checks {
-        display: grid;
-        gap: 12px;
-        margin: 20px 0 16px;
-      }
-      @media (min-width: 640px) {
-        .tp-checks {
-          grid-template-columns: 1fr 1fr;
-        }
+        gap: 6px 20px;
+        margin: 10px 2px 0;
       }
       .tp-check {
-        display: flex;
-        gap: 12px;
-        padding: 14px 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: default;
       }
       .tp-dot {
         flex: none;
-        width: 10px;
-        height: 10px;
-        margin-top: 6px;
+        width: 8px;
+        height: 8px;
         border-radius: 999px;
         background: var(--tp-border);
         transition: background-color 200ms;
@@ -211,24 +213,19 @@
       }
       .tp-check[data-tone="on"] .tp-dot {
         background: var(--tp-on);
-        box-shadow: 0 0 0 4px color-mix(in oklch, var(--tp-on) 18%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in oklch, var(--tp-on) 18%, transparent);
       }
       .tp-check[data-tone="warn"] .tp-dot {
         background: var(--tp-warn);
-        box-shadow: 0 0 0 4px color-mix(in oklch, var(--tp-warn) 20%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in oklch, var(--tp-warn) 20%, transparent);
       }
       .tp-check[data-tone="off"] .tp-dot {
         background: var(--tp-muted);
       }
       .tp-check-title {
-        margin: 0;
-        font-size: 14px;
-        font-weight: 600;
-      }
-      .tp-check-text {
-        margin: 2px 0 0;
         color: var(--tp-muted);
         font-size: 13px;
+        font-weight: 500;
       }
 
       /* `hidden` is a UA `display: none`, which any class setting `display`
@@ -287,36 +284,6 @@
       .tp-failed .tp-muted {
         max-width: 420px;
         margin-inline: auto;
-      }
-
-      .tp-foot {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 12px;
-      }
-      .tp-code {
-        flex: 1;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        color: var(--tp-muted);
-        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      }
-      .tp-ghost {
-        flex: none;
-        padding: 4px 10px;
-        border: 1px solid var(--tp-border);
-        border-radius: 8px;
-        background: var(--tp-surface);
-        color: var(--tp-fg);
-        font: inherit;
-        font-size: 12px;
-        cursor: pointer;
-      }
-      .tp-ghost:hover {
-        background: var(--tp-surface-2);
       }
 
       .tp-details {
@@ -403,29 +370,7 @@
       </section>
 
       <section id="view" hidden>
-        <div class="tp-head">
-          <div>
-            <h1 id="name" class="tp-h1">Your map</h1>
-            <p id="meta" class="tp-muted">The map as a visitor to your site sees it.</p>
-          </div>
-        </div>
-
-        <div id="checks" class="tp-checks" aria-live="polite">
-          <div id="check-analytics" class="tp-card tp-check" data-tone="pending">
-            <span class="tp-dot" aria-hidden="true"></span>
-            <div>
-              <p class="tp-check-title">Analytics</p>
-              <p class="tp-check-text">Checking this publish…</p>
-            </div>
-          </div>
-          <div id="check-design" class="tp-card tp-check" data-tone="pending">
-            <span class="tp-dot" aria-hidden="true"></span>
-            <div>
-              <p class="tp-check-title">Design</p>
-              <p class="tp-check-text">Checking this publish…</p>
-            </div>
-          </div>
-        </div>
+        <h1 class="tp-sr">The map as a visitor to your site sees it</h1>
 
         <!-- The bundle inserts its container right after its script tag, and
              the script goes in here — so the map lands inside the frame. -->
@@ -443,9 +388,17 @@
           </p>
         </div>
 
-        <div class="tp-foot">
-          <code id="snapshot-url" class="tp-code"></code>
-          <button id="copy" class="tp-ghost" type="button">Copy link</button>
+        <div id="checks" class="tp-checks" aria-live="polite">
+          <span id="check-analytics" class="tp-check" data-tone="pending" title="Checking this publish…">
+            <span class="tp-dot" aria-hidden="true"></span>
+            <span class="tp-check-title">Analytics</span>
+            <span class="tp-sr tp-check-text">Checking this publish…</span>
+          </span>
+          <span id="check-design" class="tp-check" data-tone="pending" title="Checking this publish…">
+            <span class="tp-dot" aria-hidden="true"></span>
+            <span class="tp-check-title">Design</span>
+            <span class="tp-sr tp-check-text">Checking this publish…</span>
+          </span>
         </div>
 
         <details class="tp-card tp-details">
@@ -513,30 +466,14 @@
         load(url);
       });
 
+      /* A title under the map, with its explanation as the hover text and for
+         a screen reader — the map is what this page is for. */
       function setCheck(id, tone, title, text) {
-        const card = $(id);
-        card.dataset.tone = tone;
-        card.querySelector(".tp-check-title").textContent = title;
-        card.querySelector(".tp-check-text").textContent = text;
-      }
-
-      /** "3 minutes ago", "yesterday" — once, at load. */
-      function ago(iso) {
-        const seconds = (Date.parse(iso) - Date.now()) / 1000;
-        if (!Number.isFinite(seconds)) return null;
-        const units = [
-          ["year", 31536000],
-          ["month", 2592000],
-          ["week", 604800],
-          ["day", 86400],
-          ["hour", 3600],
-          ["minute", 60],
-        ];
-        const format = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-        for (const [unit, size] of units) {
-          if (Math.abs(seconds) >= size) return format.format(Math.round(seconds / size), unit);
-        }
-        return "just now";
+        const item = $(id);
+        item.dataset.tone = tone;
+        item.title = text;
+        item.querySelector(".tp-check-title").textContent = title;
+        item.querySelector(".tp-check-text").textContent = text;
       }
 
       /*
@@ -568,18 +505,9 @@
         }
         if (!snapshot) return;
 
+        // The map's name goes in the tab only; the page itself is the map.
         const name = typeof snapshot.name === "string" && snapshot.name.trim() ? snapshot.name : "Your map";
-        $("name").textContent = name;
         document.title = `${name} · Test page`;
-
-        const count = Array.isArray(snapshot.places) ? snapshot.places.length : null;
-        const published = snapshot.generatedAt ? ago(snapshot.generatedAt) : null;
-        const meta = [
-          published ? `Published ${published}` : null,
-          count === null ? null : `${count} ${count === 1 ? "location" : "locations"}`,
-          tags ? "tagged locations only" : null,
-        ].filter(Boolean);
-        if (meta.length) $("meta").textContent = meta.join(" · ");
 
         /*
          * "On" means a beacon leaves this page, and nothing more: whether a row
@@ -662,11 +590,22 @@
         }, 12000);
       }
 
+      /*
+       * The whole map on screen when the page opens: the viewport below the
+       * frame's top, less the status row under it and a small gap. A floor, so
+       * a short window still gets a usable map and scrolls rather than a strip.
+       * Measured after `#view` is shown — a hidden frame has no position.
+       */
+      const MIN_HEIGHT = 360;
+      function fitHeight() {
+        const top = $("frame").getBoundingClientRect().top + scrollY;
+        const below = $("checks").offsetHeight + 10 + 16;
+        return Math.max(MIN_HEIGHT, Math.floor(innerHeight - top - below));
+      }
+
       function load(snapshotUrl) {
         $("open").hidden = true;
         $("view").hidden = false;
-        $("snapshot-url").textContent = snapshotUrl;
-        $("snapshot-url").title = snapshotUrl;
 
         void readSnapshot(snapshotUrl);
         watchForMap();
@@ -683,23 +622,28 @@
         script.src = "/embed/map.js";
         script.dataset.snapshot = snapshotUrl;
         script.dataset.eager = "";
-        const height = innerWidth < 640 ? 460 : 560;
+        const height = fitHeight();
         script.dataset.height = String(height);
         if (tags) script.dataset.tags = tags;
         $("frame").style.minHeight = `${height}px`;
         $("frame").append(script);
-      }
 
-      $("copy").addEventListener("click", async () => {
-        const button = $("copy");
-        try {
-          await navigator.clipboard.writeText($("snapshot-url").textContent);
-          button.textContent = "Copied";
-        } catch {
-          button.textContent = "Couldn't copy";
-        }
-        setTimeout(() => (button.textContent = "Copy link"), 1600);
-      });
+        /*
+         * Keep fitting the window. The embed sizes its container once, at boot
+         * (`resolveContainer` in embed/src/boot.ts: the element right after its
+         * script); MapLibre's own resize observer redraws when that changes.
+         */
+        let frame = 0;
+        addEventListener("resize", () => {
+          cancelAnimationFrame(frame);
+          frame = requestAnimationFrame(() => {
+            const next = `${fitHeight()}px`;
+            $("frame").style.minHeight = next;
+            const container = script.nextElementSibling;
+            if (container) container.style.height = next;
+          });
+        });
+      }
 
       if (fromQuery) {
         input.value = fromQuery;

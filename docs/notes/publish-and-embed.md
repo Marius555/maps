@@ -986,18 +986,19 @@ had its explanation, its paste form and its Network-tab checklist all visible at
 once, which was right while it was only ever opened by hand. A first fix hid the
 explanation once a map loaded, but what stayed was still three paragraphs about
 beacons and 204s over the map, and the owner called it out as wrong for a deployed
-page (2026-11-07). It is now a product page:
-- **A header**: the logo and a "Test page" pill.
-- **A title block**: the map's name from the snapshot, then "Published 3 min ago ·
-  42 locations".
-- **Two status cards**, read off the fetched snapshot:
-  - **Analytics on / off**. On says visits here count like a real visitor's, which
-    is the real-rows warning, kept visible and short.
+page (2026-11-07). It is now a product page, and a second pass the same day gave the
+map the screen (the title block, the status cards and the snapshot link with its Copy
+button were taking it):
+- **A header**: the logo and a "Test page" pill. The map's name goes in the tab title.
+- **The map in a rounded frame, sized to the window**: the viewport below the frame
+  less the status row, floor 360px, refitted on resize (the embed sizes its container
+  once at boot, so the page sets that element's height itself). It shows a spinner until
+  MapLibre's canvas is in. If no canvas arrives within 12s, it says the map may be
+  refusing this site and to check the console.
+- **Two status titles under the map**, read off the fetched snapshot — a dot and a
+  few words each, the explanation as hover text and for a screen reader:
+  - **Analytics on / off**.
   - **Design published / Default design**.
-- **The map in a rounded frame.** It shows a spinner until MapLibre's canvas is in.
-  If no canvas arrives within 12s, it says the map may be refusing this site and to
-  check the console.
-- **The snapshot link** with a Copy button.
 - **"How to check analytics"**, the Network-tab checklist and the 204 caveat,
   folded shut.
 - **An empty state** for no `?snapshot=`, and an error card when the fetch fails.

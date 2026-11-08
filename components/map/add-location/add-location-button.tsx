@@ -4,6 +4,7 @@ import { Button, Popover } from "@heroui/react";
 import { MapPin } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { TriggerTooltip } from "@/components/ui/trigger-tooltip";
 import { isAtLimit, type PlanHeadroom } from "@/lib/map/plan-headroom";
 import { allPinIcons } from "@/lib/map/pin-pages";
 import { PinGrid } from "./pin-grid";
@@ -64,6 +65,7 @@ export function AddLocationButton({
   onDropPin,
   onDraggingChange,
   onOpenStudio,
+  onEngage,
 }: {
   isAdding: boolean;
   /** The icon add mode is armed with. */
@@ -81,6 +83,11 @@ export function AddLocationButton({
   /** Lets the map say what to do with the pin now in the air. */
   onDraggingChange?: (isDragging: boolean) => void;
   onOpenStudio: () => void;
+  /**
+   * The control was pressed or a pin was dragged out of it — the user has
+   * turned to adding by hand, and the toolbar's search folds away for it.
+   */
+  onEngage?: () => void;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [page, setPage] = useState(0);
@@ -96,7 +103,10 @@ export function AddLocationButton({
     onDrop: onDropPin,
     // A pin in the air needs the map underneath it, not a menu. The drag itself
     // survives the close: its listeners are on the window, not on the tile.
-    onDragStart: () => setIsMenuOpen(false),
+    onDragStart: () => {
+      setIsMenuOpen(false);
+      onEngage?.();
+    },
     pinIcons,
   });
 
@@ -110,8 +120,10 @@ export function AddLocationButton({
     <Popover.Root
       isOpen={isMenuOpen}
       onOpenChange={(open) => {
-        // The press that ended a drag is not a press on the control.
+        // The press that ended a drag is not a press on the control — and the
+        // drag already engaged it, on the way out.
         if (open && consumeDidDrag()) return;
+        if (open) onEngage?.();
         // While add mode is armed the button is a stop button, not a menu.
         if (open && isAdding) {
           onStopAdding();
@@ -148,54 +160,68 @@ export function AddLocationButton({
         data-tutorial="add-location"
         className="inline-flex"
       >
-        <Button
-          size="sm"
-          variant={isAdding ? "primary" : "tertiary"}
-          // The visible label is gone, so the name has to be stated: an icon
-          // alone gives screen readers (and the e2e tests) nothing to call it.
-          aria-label={isAdding ? "Stop adding" : "Add location"}
-          aria-pressed={isAdding}
-          isPending={isBusy}
-          // The dragging half is left to `body.is-pin-dragging`, which paints
-          // the arrow over the whole page rather than over this one button.
-          className="cursor-pointer"
+        {/* The same words as the accessible name, shown on hover. Down while
+            the grid is open or a pin is in the air: both put something of
+            their own where the label would hang. */}
+        <TriggerTooltip
+          label={isAdding ? "Stop adding" : "Add location"}
+          isSuppressed={isMenuOpen || isDragging}
         >
-          {/* Faded, not hidden: the icon is in the air, and what stays behind
-              reads as the socket it came out of rather than as a second pin. */}
-          <MapPin
-            aria-hidden="true"
-            className={`size-4 transition-opacity duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ${
-              isDragging ? "opacity-30" : "opacity-100"
-            }`}
-          />
+          <Button
+            size="sm"
+            variant={isAdding ? "primary" : "tertiary"}
+            // The visible label is gone, so the name has to be stated: an icon
+            // alone gives screen readers (and the e2e tests) nothing to call it.
+            aria-label={isAdding ? "Stop adding" : "Add location"}
+            aria-pressed={isAdding}
+            // Icon-only now that the label is gone, and that matters beyond
+            // looks: on any other button the pending spinner (globals.css) is
+            // appended *beside* the glyph, which widened this button by 20px
+            // for the length of every save and shoved the whole toolbar
+            // sideways. Icon-only, the spinner takes the pin's place instead.
+            isIconOnly
+            isPending={isBusy}
+            // The dragging half is left to `body.is-pin-dragging`, which paints
+            // the arrow over the whole page rather than over this one button.
+            className="cursor-pointer"
+          >
+            {/* Faded, not hidden: the icon is in the air, and what stays behind
+                reads as the socket it came out of rather than as a second pin. */}
+            <MapPin
+              aria-hidden="true"
+              className={`size-4 transition-opacity duration-[var(--duration-fast)] ease-[var(--ease-out-fluid)] ${
+                isDragging ? "opacity-30" : "opacity-100"
+              }`}
+            />
 
-          {/*
-           * The label folds away for two independent reasons, and both leave the
-           * control as the pin icon alone.
-           *
-           * A pin being dragged: the control becomes the icon that is now
-           * travelling, and it comes back on release. A plain press never
-           * collapses it, which is what keeps "Stop adding" readable for anyone
-           * using the sticky add mode instead of the gesture.
-           *
-           * The toolbar's search being open: the two cannot both have the width
-           * on a narrow map, and a search you asked for beats a label you have
-           * already read. That one is a CSS `group-has-`, watching the
-           * `data-search-open` the search puts on itself — a boolean threaded
-           * from a sibling, through the toolbar, and back down here would be
-           * three components knowing about one, to say what the cascade already
-           * knows.
-           *
-           * `max-width`, not `width` — it animates reliably from an auto-sized
-           * flex child, the same idiom the nav sidebar's labels use. The text
-           * stays in the DOM throughout, so the button keeps its accessible name.
-           *
-           * The negative margin cancels the Button's own `gap-2`. Without it the
-           * label reaches zero width and leaves half a centimetre of nothing
-           * behind, and the button stops short of closing up.
-           */}
-          
-        </Button>
+            {/*
+             * The label folds away for two independent reasons, and both leave the
+             * control as the pin icon alone.
+             *
+             * A pin being dragged: the control becomes the icon that is now
+             * travelling, and it comes back on release. A plain press never
+             * collapses it, which is what keeps "Stop adding" readable for anyone
+             * using the sticky add mode instead of the gesture.
+             *
+             * The toolbar's search being open: the two cannot both have the width
+             * on a narrow map, and a search you asked for beats a label you have
+             * already read. That one is a CSS `group-has-`, watching the
+             * `data-search-open` the search puts on itself — a boolean threaded
+             * from a sibling, through the toolbar, and back down here would be
+             * three components knowing about one, to say what the cascade already
+             * knows.
+             *
+             * `max-width`, not `width` — it animates reliably from an auto-sized
+             * flex child, the same idiom the nav sidebar's labels use. The text
+             * stays in the DOM throughout, so the button keeps its accessible name.
+             *
+             * The negative margin cancels the Button's own `gap-2`. Without it the
+             * label reaches zero width and leaves half a centimetre of nothing
+             * behind, and the button stops short of closing up.
+             */}
+
+          </Button>
+        </TriggerTooltip>
       </span>
 
       <Popover.Content placement="bottom start">

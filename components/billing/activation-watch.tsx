@@ -1,8 +1,8 @@
 "use client";
 
 import { Spinner } from "@heroui/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+
+import { useActivationPoll } from "./purchase-celebration/use-activation-poll";
 
 /**
  * The gap between paying and the plan appearing.
@@ -13,9 +13,8 @@ import { useEffect, useState } from "react";
  * before the row exists, be told they are on Free, and reasonably conclude their
  * money went nowhere.
  *
- * This says what is true instead, and re-asks. `router.refresh()` re-runs the
- * account page on the server, so the plan appears on its own the moment the
- * webhook lands, with no reload.
+ * This says what is true instead, and re-asks — `useActivationPoll`, shared with
+ * the post-purchase dialog (`PurchaseCelebration`).
  *
  * **The polling is free at the provider.** The Billing page only asks the
  * provider anything when there is already a `billingSubscriptionId`, which during
@@ -29,26 +28,8 @@ import { useEffect, useState } from "react";
  * one where somebody needs to be told to get in touch rather than kept waiting.
  */
 
-const EVERY_MS = 2_000;
-const GIVE_UP_AFTER = 15;
-
 export function ActivationWatch({ email }: { email: string }) {
-  const router = useRouter();
-  const [tries, setTries] = useState(0);
-
-  const waiting = tries < GIVE_UP_AFTER;
-
-  useEffect(() => {
-    if (!waiting) return;
-
-    const timer = setTimeout(() => {
-      router.refresh();
-      setTries((n) => n + 1);
-    }, EVERY_MS);
-
-    return () => clearTimeout(timer);
-    // `tries` drives the next pass: each refresh schedules the one after it.
-  }, [tries, waiting, router]);
+  const { waiting } = useActivationPoll(true);
 
   return (
     <section

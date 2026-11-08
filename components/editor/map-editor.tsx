@@ -9,7 +9,7 @@ import type { DraggedObject } from "@/components/groups/use-row-drag";
 import { MapCanvas } from "@/components/map/map-canvas";
 import type { MapHandle } from "@/components/map/map-canvas-impl";
 import { MapHintBar } from "@/components/map/map-hint-bar";
-import { MapSearch } from "@/components/map/map-search/map-search";
+import { MapSearch, type MapSearchHandle } from "@/components/map/map-search/map-search";
 import { MapToolbar } from "@/components/map/map-toolbar";
 import { useRouteRequest } from "@/components/map/routes/use-route-request";
 import { useRoutability } from "@/components/map/routes/use-routability";
@@ -447,6 +447,8 @@ export function MapEditor({
    * temporal dead zone when they are evaluated.
    */
   const mapHandle = useRef<MapHandle | null>(null);
+  /** The toolbar's address search, so pressing Add location can fold it. */
+  const searchHandle = useRef<MapSearchHandle | null>(null);
 
   /*
    * A ref cannot wake an effect, and the framing below has to run once the map
@@ -1423,6 +1425,7 @@ export function MapEditor({
           search={
             canEdit ? (
               <MapSearch
+                ref={searchHandle}
                 mapId={map.id}
                 headroom={limits.places}
                 onPick={(candidate) => mapHandle.current?.flyTo(candidate)}
@@ -1450,6 +1453,9 @@ export function MapEditor({
           onDropPin={dropPin}
           onDraggingChange={setIsDraggingPin}
           onOpenStudio={() => setIsStudioOpen(true)}
+          // Turning to the pin is turning away from the search: fold it, the
+          // way clicking away does — even with matches still showing.
+          onAddEngage={() => searchHandle.current?.fold()}
           onSaveView={() => void saveCurrentView()}
           onPreview={() => setIsPreviewOpen(true)}
           onChangeStyle={(style) => updateMap.mutate({ style })}

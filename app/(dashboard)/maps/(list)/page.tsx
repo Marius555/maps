@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
+import { SIDEBAR_MAP_COOKIE } from "@/components/layout/sidebar/sidebar-cookies";
 import { MapList } from "@/components/maps/map-list";
 import { Tutorial } from "@/components/onboarding/tutorial-overlay";
 import { RoleProvider } from "@/components/team/role-context";
@@ -7,17 +10,36 @@ import { Container } from "@/components/ui/container";
 import { requireUser } from "@/lib/auth/current-user";
 import { shouldShowTutorial, tutorialAlwaysPresent } from "@/lib/auth/tutorial";
 import { listMapSummaries } from "@/lib/repositories/map-summary.repository";
+import { sidebarMapId } from "@/lib/repositories/maps.repository";
 import { PLAN_LIMITS, getUserPlan } from "@/lib/repositories/plan-limits";
 import { loadActiveContext } from "@/lib/team/resolve";
 import { can } from "@/lib/team/roles";
 
 export const metadata: Metadata = { title: "Maps" };
 
-export default async function MapsPage() {
+export default async function MapsPage(props: PageProps<"/maps">) {
   const user = await requireUser();
   // The workspace the dashboard is switched to — the person's own unless they
   // picked a team. The list, the map limit and New map are all that one's.
   const ctx = await loadActiveContext(user.id);
+
+  /*
+   * Back from a purchase (`CheckoutReturn` hops here from `/checkout/done`): on
+   * to the map they were last working on, else the most recently edited one,
+   * where `PurchaseCelebration` opens on the same `?checkout=done`. With no map
+   * yet it opens over this list instead. The hop is a navigation our own page
+   * started, so the Strict session cookie is on it (docs/notes/billing.md).
+   */
+  const { checkout } = await props.searchParams;
+
+  if (checkout === "done") {
+    const jar = await cookies();
+    const mapId = await sidebarMapId(ctx, jar.get(SIDEBAR_MAP_COOKIE)?.value || null).catch(
+      () => null,
+    );
+
+    if (mapId) redirect(`/maps/${mapId}?checkout=done`);
+  }
 
   /*
    * What is on each map and when it last changed, so a card can say something

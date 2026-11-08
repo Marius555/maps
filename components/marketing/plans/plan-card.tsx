@@ -1,5 +1,6 @@
 import { Card } from "@heroui/react";
 
+import { CheckoutLink } from "@/components/billing/checkout-link/checkout-link";
 import { LinkButton } from "@/components/ui/link-button";
 import { PlanRowList } from "@/components/ui/plan-row-list";
 import {
@@ -132,20 +133,29 @@ export function PlanCard({
          * button here that knew whether you were signed in would make the whole
          * public page dynamic. CLAUDE.md §8: the action keeps its name through
          * the flow, so "Start on Starter" leads to a Starter checkout.
+         *
+         * A paid plan's link is a `CheckoutLink` — a document navigation, so
+         * this page stays on screen until the checkout opens, never a blank one.
          */}
-        <LinkButton
-          href={
-            plan.id === "free"
-              ? "/signup"
-              : `/upgrade?plan=${plan.id}&cadence=${cadence}${
-                  applies && discount ? `&code=${encodeURIComponent(discount.code)}` : ""
-                }`
-          }
-          fullWidth
-          variant={recommended ? undefined : "secondary"}
-        >
-          {plan.id === "free" ? "Sign up free" : `Start on ${plan.name}`}
-        </LinkButton>
+        {plan.id === "free" ? (
+          <LinkButton
+            href="/signup"
+            fullWidth
+            variant={recommended ? undefined : "secondary"}
+          >
+            Sign up free
+          </LinkButton>
+        ) : (
+          <CheckoutLink
+            href={`/upgrade?plan=${plan.id}&cadence=${cadence}${
+              applies && discount ? `&code=${encodeURIComponent(discount.code)}` : ""
+            }`}
+            fullWidth
+            variant={recommended ? undefined : "secondary"}
+          >
+            Start on {plan.name}
+          </CheckoutLink>
+        )}
       </Card.Footer>
     </Card>
   );

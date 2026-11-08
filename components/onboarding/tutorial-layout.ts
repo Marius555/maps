@@ -9,6 +9,12 @@
  * sits right above the pin button — placed independently, the two notes land on
  * top of each other in both.
  *
+ * **Targets level with each other stack rightmost first.** The pin button and
+ * the address search share the toolbar's row, and every "below" arrow leaves
+ * its note on the left and climbs. With the left-hand note on top, the
+ * right-hand note's arrow would climb straight across it; the other way round,
+ * each arrow climbs in clear space to the left of the notes above it.
+ *
  * **Every arrow is a single quarter-turn**, one cubic from the note's edge into
  * the target, leaving along one axis and arriving along the other. That is what
  * keeps it free of loops however the notes get pushed around: both control
@@ -47,6 +53,8 @@ const RING_PAD = 5;
 export const RING_RADIUS = 12;
 /** Kept clear at the viewport's edges. */
 const MARGIN = 16;
+/** Tips closer than this vertically count as one row — see the tie rule above. */
+const SAME_ROW = 4;
 /** Between one note's foot and the next note's head. */
 const STACK = 20;
 /** Where a note would like to be, relative to its arrow's tip. */
@@ -61,7 +69,9 @@ export function layoutCallouts(
 ): PlacedCallout[] {
   const withTips = inputs
     .map((input) => ({ ...input, tip: tipOf(input) }))
-    .sort((a, b) => a.tip.y - b.tip.y);
+    .sort((a, b) =>
+      Math.abs(a.tip.y - b.tip.y) < SAME_ROW ? b.tip.x - a.tip.x : a.tip.y - b.tip.y,
+    );
 
   let floor = -Infinity;
 

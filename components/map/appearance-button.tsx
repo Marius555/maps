@@ -5,6 +5,7 @@ import { Palette } from "lucide-react";
 import { useState } from "react";
 
 import { AppearancePanel } from "@/components/appearance/appearance-panel";
+import { TriggerTooltip } from "@/components/ui/trigger-tooltip";
 import type { MapStyleKey } from "@/lib/map/style";
 import type { MapAppearanceSettings } from "@/lib/validation/map-appearance.schema";
 
@@ -43,14 +44,12 @@ export function AppearanceButton({
 
   return (
     <Popover.Root isOpen={isOpen} onOpenChange={setIsOpen}>
-      {/*
-       * A plain Button with an aria-label rather than the repo's IconButton:
-       * that one wraps its trigger in a Tooltip, and a tooltip on a popover
-       * trigger stays up over the panel it just opened.
-       */}
-      <Button size="sm" variant="tertiary" isIconOnly aria-label="Map appearance">
-        <Palette aria-hidden="true" className="size-4" />
-      </Button>
+      {/* Not IconButton: its tooltip would stay up over the panel this opens. */}
+      <TriggerTooltip label="Map appearance" isSuppressed={isOpen}>
+        <Button size="sm" variant="tertiary" isIconOnly aria-label="Map appearance">
+          <Palette aria-hidden="true" className="size-4" />
+        </Button>
+      </TriggerTooltip>
 
       <Popover.Content placement="bottom end">
         <Popover.Dialog aria-label="Map appearance">

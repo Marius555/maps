@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { CadenceToggle } from "@/components/ui/cadence-toggle";
 import { SettingsSection } from "@/components/user-settings/section/settings-section";
+import { isDowngrade } from "@/lib/billing/plan-change";
 import type { BillingStanding } from "@/lib/billing/standing";
 import { MARKETING_PLANS, type PlanCadence } from "@/lib/marketing/plans";
 import { useChangePlan } from "@/lib/query/billing";
@@ -12,6 +13,10 @@ import { formatDate } from "@/lib/format/date";
 import { toastError } from "@/lib/query/toast-error";
 import { isEmailUnverified } from "@/lib/query/verify-email-toast";
 import type { PlanId } from "@/lib/repositories/plan-limits";
+import {
+  ConfirmPlanChangeDialog,
+  type PlanChangeRequest,
+} from "./confirm-plan-change/confirm-plan-change-dialog";
 import {
   nameOf,
   PlanAction,
@@ -85,18 +90,36 @@ export function PlanCompare({
     MARKETING_PLANS.find((entry) => entry.id === plan) ?? MARKETING_PLANS[0];
   const next = MARKETING_PLANS.find((entry) => entry.places > current.places);
 
-  const onChange = (target: PlanId, label: string) => {
-    if (target === "free") return;
+  /*
+   * A press asks first — a plan change moves money — except "Keep …", which
+   * only undoes a downgrade booked for the renewal and charges nothing.
+   */
+  const [request, setRequest] = useState<PlanChangeRequest | null>(null);
+
+  const onPress = (next: PlanChangeRequest) => {
+    if (next.plan.id === "free") return;
+
+    if (next.label.startsWith("Keep ")) {
+      onChange(next);
+      return;
+    }
+
+    setRequest(next);
+  };
+
+  const onChange = ({ plan: target, cadence: at, label }: PlanChangeRequest) => {
+    if (target.id === "free") return;
 
     changePlan.mutate(
-      { plan: target, cadence },
+      { plan: target.id, cadence: at },
       {
         /*
          * The toast keeps the button's own words in the past tense — "Upgrade
          * to Pro" becomes "Upgraded to Pro" — per CLAUDE.md §8's rule that an
          * action keeps its name through the whole flow.
          */
-        onSuccess: (result) =>
+        onSuccess: (result) => {
+          setRequest(null);
           toast.success(pastTense(label), {
             description: result.kept
               ? result.kept.plan === result.plan
@@ -105,7 +128,8 @@ export function PlanCompare({
               : label.startsWith("Keep ")
                 ? "Nothing changes at your renewal."
                 : "The difference is added to your next bill.",
-          }),
+          });
+        },
         onError: (error) => {
           // Already raised once, globally, by the MutationCache.
           if (isEmailUnverified(error)) return;
@@ -137,6 +161,18 @@ export function PlanCompare({
             pending,
             endsOn,
           });
+          const note = planNoteFor({
+            kind,
+            plan: entry,
+            cadence,
+            current: plan,
+            currentCadence,
+            pending,
+            renewsOn,
+          });
+          const down =
+            kind !== "keep" &&
+            isDowngrade({ plan, cadence: currentCadence }, { plan: entry.id, cadence });
 
           return (
             <PlanColumn
@@ -145,15 +181,7 @@ export function PlanCompare({
               current={entry.id === plan}
               cadence={cadence}
               against={current}
-              note={planNoteFor({
-                kind,
-                plan: entry,
-                cadence,
-                current: plan,
-                currentCadence,
-                pending,
-                renewsOn,
-              })}
+              note={note}
               action={
                 // Nothing to say is an absent footer, not an empty padded one.
                 kind !== null ? (
@@ -169,7 +197,9 @@ export function PlanCompare({
                       changePlan.isPending && changePlan.variables?.plan === entry.id
                     }
                     isBusy={changePlan.isPending}
-                    onChange={(label) => onChange(entry.id, label)}
+                    onChange={(label) =>
+                      onPress({ plan: entry, cadence, label, note, down })
+                    }
                   />
                 ) : null
               }
@@ -177,6 +207,14 @@ export function PlanCompare({
           );
         })}
       </div>
+
+      <ConfirmPlanChangeDialog
+        request={request}
+        currentName={current.name}
+        isPending={changePlan.isPending}
+        onConfirm={onChange}
+        onClose={() => setRequest(null)}
+      />
 
       {pending ? (
         <PlanChangeNotice current={plan} currentCadence={currentCadence} pending={pending} />

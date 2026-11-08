@@ -6,6 +6,7 @@ import { useId, useState } from "react";
 
 import { PlanLimitNote } from "@/components/map/plan-limit-note";
 import { ControlNote } from "@/components/ui/control-note";
+import { TriggerTooltip } from "@/components/ui/trigger-tooltip";
 import { isAtLimit, type PlanHeadroom } from "@/lib/map/plan-headroom";
 import type { ShapeKind } from "@/packages/shared/shapes";
 
@@ -123,17 +124,23 @@ export function ShapeToolsButton({
         setIsMenuOpen(open);
       }}
     >
-      <Button
-        size="sm"
-        variant={isDrawing ? "primary" : "tertiary"}
-        aria-pressed={isDrawing}
-        // Icon-only, so the name has to be given: without it a screen reader
-        // announces a bare "button" and nothing can find it by role.
-        aria-label={isDrawing ? "Stop drawing" : "Draw"}
-        isPending={isBusy}
-      >
-        <Shapes aria-hidden="true" className="size-4" />
-      </Button>
+      <TriggerTooltip label={isDrawing ? "Stop drawing" : "Draw"} isSuppressed={isMenuOpen}>
+        <Button
+          size="sm"
+          variant={isDrawing ? "primary" : "tertiary"}
+          aria-pressed={isDrawing}
+          // Icon-only, so the name has to be given: without it a screen reader
+          // announces a bare "button" and nothing can find it by role.
+          aria-label={isDrawing ? "Stop drawing" : "Draw"}
+          // Icon-only so a shape save swaps the glyph for the spinner in place
+          // rather than appending it and widening the toolbar — see the same
+          // line on AddLocationButton.
+          isIconOnly
+          isPending={isBusy}
+        >
+          <Shapes aria-hidden="true" className="size-4" />
+        </Button>
+      </TriggerTooltip>
 
       <Popover.Content placement="bottom start">
         <Popover.Dialog aria-label="Choose a drawing tool">
