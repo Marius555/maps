@@ -2,16 +2,15 @@ import { Reveal } from "@/components/marketing/reveal";
 import { Section } from "@/components/marketing/section";
 import { StepPanel } from "@/components/marketing/steps/step-panel";
 
-import { ConnectArt } from "./art/connect-art";
-import { InsertArt } from "./art/insert-art";
-import { InstallArt } from "./art/install-art";
+import { ConnectArt, InsertArt, InstallArt } from "./art/wordpress-art-loader";
 
 /**
  * The three steps, a drawing and one line each — the landing page's sequence
  * (`components/marketing/steps/steps.tsx`), told the same way: order says
  * "sequence", the drawings say what happens, and the detail is in the plugin's
  * readme for whoever wants it. The labels quoted are the ones WordPress and the
- * plugin draw.
+ * plugin draw. Each drawing plays while its panel is hovered, as the landing
+ * page's do, and rests on its finished frame.
  */
 const STEPS = [
   {
@@ -34,6 +33,7 @@ const STEPS = [
 export function WordPressSteps() {
   return (
     <Section
+      screen
       eyebrow="Setup"
       title={
         <>

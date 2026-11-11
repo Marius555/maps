@@ -1,5 +1,5 @@
 import { PlatformIcon } from "@/components/marketing/integrations/platform-icon";
-import { HtmlBlockArt } from "@/components/marketing/integrations/wordpress/art/html-block-art";
+import { HtmlBlockArt } from "@/components/marketing/integrations/wordpress/art/wordpress-art-loader";
 import { LinkButton } from "@/components/ui/link-button";
 
 /**
@@ -34,8 +34,9 @@ export function AnyWebsiteHero() {
           </div>
         </div>
 
-        <div className="mk-panel aspect-[3/2] w-full overflow-hidden rounded-2xl">
-          <HtmlBlockArt label="Embed" />
+        {/* On the page, not a grey panel: the drawing is the landing page's stage. */}
+        <div className="mk-ground relative aspect-[3/2] w-full">
+          <HtmlBlockArt label="Embed" play="view" />
         </div>
       </div>
     </section>

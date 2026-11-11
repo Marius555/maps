@@ -3609,13 +3609,16 @@ body.is-pin-dragging * {
 }
 
 /*
- * The landing page scrolls a section at a time.
+ * The landing page — and the `/for/*` platform pages — scroll a section at a time.
  *
  * **On `<html>`, because that is the scroll container.** The document scrolls,
  * not a box inside it, so `scroll-snap-type` has to be set there — and `:has()`
- * is what keeps it on the one page that wants it. `app/(marketing)/page.tsx`
- * renders `.mk-snap`; /pricing, /docs and the legal pages share the same shell
- * and are ordinary documents, which they stay.
+ * is what keeps it on the pages that want it. `SnapPage`
+ * (components/marketing/snap-page.tsx) renders `.mk-snap`, on the landing page
+ * and on /for/wordpress and /for/shopify; /pricing, /docs, /for/any-website and
+ * the legal pages share the same shell and are ordinary documents, which they
+ * stay. Every number below was measured on the landing page; the platform
+ * pages' own budgets are in docs/notes/marketing.md.
  *
  * **Mandatory, and it took making the sections fit to earn that.** This used to
  * be gated behind `min-height: 56rem` with `proximity` below it, because three
@@ -4304,8 +4307,8 @@ body.is-pin-dragging * {
 
 /*
  * The landing page has no grey panels (owner, 2026-10-23): every section lies
- * on the page, the way the showcase map does. `.mk-panel` above is kept for the
- * /for/* platform pages, which still wear it.
+ * on the page, the way the showcase map does, and so do /for/wordpress and
+ * /for/shopify. `.mk-panel` above is kept for /for/any-website's closing CTA.
  *
  * `.mk-ground` holds a drawing: nothing at all, so the dots' radial fade and the
  * haze are its only edges. `.mk-outline` holds text and controls (the cost

@@ -1,16 +1,14 @@
 "use client";
 
-import { stagger, type AnimationSequence } from "motion/react";
+import type { AnimationSequence } from "motion/react";
 
+import { arriveMap, centreOf, clearMap, EASE, holdUntil, typing } from "../stage/pass-kit";
 import { useHoverPlay } from "../stage/use-hover-play";
 import { BrowserWindow } from "./browser-window";
 import { CodePill } from "./code-pill";
-import { REVEAL_R } from "./window-map";
 
-const EASE = [0.4, 0, 0.2, 1] as const;
-const CODE_CHARS = 32;
 /** One character at a time, the way typing looks. */
-const TYPE = (t: number) => Math.round(t * CODE_CHARS) / CODE_CHARS;
+const TYPE = typing(32);
 
 /**
  * The pass: the map on their page empties; the line types itself, the cursor
@@ -22,21 +20,11 @@ const TYPE = (t: number) => Math.round(t * CODE_CHARS) / CODE_CHARS;
  * tilted window, so it lands in the right place at every width.
  */
 function buildPass(root: HTMLElement): AnimationSequence {
-  const box = root.getBoundingClientRect();
-  const centre = (selector: string) => {
-    const r = root.querySelector(selector)?.getBoundingClientRect();
-    return r
-      ? { x: r.left + r.width / 2 - box.left, y: r.top + r.height / 2 - box.top }
-      : { x: 0, y: 0 };
-  };
-  const from = centre('[data-art="pill"]');
-  const to = centre('[data-art="window-map"]');
+  const from = centreOf(root, '[data-art="pill"]');
+  const to = centreOf(root, '[data-art="window-map"]');
 
   return [
-    ['[data-art="reveal"]', { r: 0 }, { duration: 0.4, ease: "easeIn", at: 0 }],
-    ["[data-wpin]", { y: -6, opacity: 0 }, { duration: 0.25, at: 0 }],
-    ['[data-art="route"]', { opacity: 0 }, { duration: 0.2, at: 0 }],
-    ['[data-art="route"]', { pathLength: 0 }, { duration: 0.01, at: 0.25 }],
+    ...clearMap(0),
 
     ['[data-art="code"]', { clipPath: "inset(0% 100% 0% 0%)" }, { duration: 0.01, at: 0.4 }],
     ['[data-art="check"]', { pathLength: 0 }, { duration: 0.01, at: 0.4 }],
@@ -54,12 +42,9 @@ function buildPass(root: HTMLElement): AnimationSequence {
     ],
     ['[data-art="ghost"]', { opacity: 0 }, { duration: 0.15, at: 2.7 }],
 
-    ['[data-art="reveal"]', { r: REVEAL_R }, { duration: 0.9, ease: "easeOut", at: 2.75 }],
-    ["[data-wpin]", { y: 0, opacity: 1 }, { duration: 0.4, ease: "backOut", delay: stagger(0.07), at: 2.95 }],
-    ['[data-art="route"]', { opacity: 1 }, { duration: 0.01, at: 3.5 }],
-    ['[data-art="route"]', { pathLength: 1 }, { duration: 0.9, ease: EASE, at: 3.5 }],
+    ...arriveMap(2.75),
 
-    ['[data-art="hold"]', { opacity: 1 }, { duration: 0.01, at: 5.6 }],
+    ...holdUntil(5.6),
   ];
 }
 

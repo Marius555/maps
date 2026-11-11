@@ -2,7 +2,8 @@
 
 Started 2026-10-10 with WordPress. The code lives in `/distribution` (one folder per
 platform, shipped as that platform expects) plus a small connect flow on our side.
-Each platform also gets a public page at `/for/<platform>` (`/for/wordpress`), listed
+Each platform also gets a public page at `/for/<platform>` (`/for/wordpress`,
+`/for/shopify`), listed
 in the navbar's Integrations menu from `lib/marketing/integrations.ts` —
 `docs/notes/marketing.md`.
 

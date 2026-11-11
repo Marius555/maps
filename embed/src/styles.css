@@ -2898,9 +2898,18 @@ button.lm-popup__gallery:focus-visible {
    * having fixed once, silently reintroduced by the compiler. It was reachable
    * only with the results list switched off until the drawer started floating a
    * narrow map's toolbar with the list on, which is how it was found.
+   *
+   * **`:has(.lm-search)` now, not `:not(:empty)` (2026-11-10).** Spreading is
+   * for the search field, the one control that grows to fill the row. A toolbar
+   * holding only "Nearest to me" (a one-location map, `lib/embed/panel-auto.ts`)
+   * spread too, and its one button sat in the left corner on a phone while the
+   * same map drew it top-right on a desktop. It now stays shrink-wrapped on the
+   * owner's side. The weight is the same: `:has()` counts its argument, one class,
+   * exactly what `:empty` counted. An empty toolbar has no search, so it still
+   * cannot match.
    */
-  .lm-toolbar:not(:empty),
-  .lm-root[data-lm-side="right"] .lm-toolbar:not(:empty) {
+  .lm-toolbar:has(.lm-search),
+  .lm-root[data-lm-side="right"] .lm-toolbar:has(.lm-search) {
     inset-inline-start: 10px;
     inset-inline-end: 10px;
   }
@@ -2923,10 +2932,11 @@ button.lm-popup__gallery:focus-visible {
   }
 
   /* Spanning the width, the toolbar now covers the far corner too — so each
-     side gains the one the rule above left alone. */
-  .lm-root:not([data-lm-side="right"]):has(> .lm-toolbar:not(:empty))
+     side gains the one the rule above left alone. Only when it does span: a
+     search-less toolbar stays in its own corner, as above. */
+  .lm-root:not([data-lm-side="right"]):has(> .lm-toolbar .lm-search)
     .maplibregl-ctrl-top-right,
-  .lm-root[data-lm-side="right"]:has(> .lm-toolbar:not(:empty))
+  .lm-root[data-lm-side="right"]:has(> .lm-toolbar .lm-search)
     .maplibregl-ctrl-top-left {
     padding-top: 44px;
   }

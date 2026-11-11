@@ -152,7 +152,8 @@ workspace (an Appwrite user with no email or password, made on the App Home's fi
 plans are Shopify App Pricing ($19 / $39), re-read from the Partner API because Shopify sends no
 billing webhooks; the storefront map is a theme app block reading an app-data metafield, with
 the WordPress block's markup and **no embed change**. No Admin API token is stored. Config and
-the block live in `/distribution/shopify`. `docs/notes/shopify.md`.
+the block live in `/distribution/shopify`. Its public page is `/for/shopify`, whose install
+button waits on `SHOPIFY_APP_STORE_URL` (empty until the listing is live). `docs/notes/shopify.md`.
 
 **Team seats are the fourth call made against rivals, and they override §11** ("teams and
 permissions"). Every rival sells seats; a brand's map is worked on by more than one person.

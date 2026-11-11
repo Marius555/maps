@@ -2,193 +2,140 @@
 
 import type { AnimationSequence } from "motion/react";
 
-import { ART_PIN, ArtPin } from "@/components/marketing/art/art-pin";
-import { useArtLoop } from "@/components/marketing/steps/art/use-art-loop";
+import { TiltedWindow } from "../../../steps/art/tilted-window";
+import {
+  cursorTo,
+  EASE,
+  holdUntil,
+  HOME,
+  PRESS,
+  PRESSED,
+} from "../../../steps/stage/pass-kit";
+import { PinMark } from "../../../steps/stage/pin-mark";
+import { useStagePlay, type PlayMode } from "../../../steps/stage/use-stage-play";
+import { StageCheck, StageCursor } from "../../stage/stage-cursor";
 
-import { ArtCursor, cursorTo, PRESS } from "../../art/art-cursor";
-import { ArtWindow } from "../../art/art-window";
-
-const W = 360;
-const H = 240;
-
-const WINDOW = { x: 20, y: 16, width: 320, height: 208 } as const;
-const DROP = { x: 78, y: 70, width: 244, height: 60 } as const;
-const ROW = { x: 78, y: 142, width: 244, height: 56 } as const;
-const BUTTON = { x: 254, y: 160, width: 58, height: 20 } as const;
-const PROGRESS = { x: 110, y: 97, width: 180 } as const;
-
-const REST = { x: 300, y: 204 } as const;
-const DROP_MID = { x: DROP.x + DROP.width / 2, y: DROP.y + DROP.height / 2 } as const;
-const BUTTON_MID = { x: BUTTON.x + BUTTON.width / 2, y: BUTTON.y + BUTTON.height / 2 } as const;
-
-const EASE = [0.4, 0, 0.2, 1] as const;
-const toDrop = cursorTo(REST, DROP_MID);
+/** wp-admin's menu, Plugins lit. */
+const MENU = ["w-4/5", "w-3/5", "w-4/5", "plugins", "w-2/3", "w-3/5"] as const;
 
 /**
  * Step one, in three beats: the zip is carried into **Upload Plugin**, a
  * progress bar fills, and the plugin's row arrives and is activated. The file
  * travels with the cursor by the same offset, so it is held, not chased.
  */
-const SEQUENCE: AnimationSequence = [
-  ['[data-art="row"]', { opacity: 0, y: 8 }, { duration: 0.3, at: 0 }],
-  ['[data-art="active"]', { opacity: 0, scale: 0.9 }, { duration: 0.01, at: 0.3 }],
+function buildPass(root: HTMLElement): AnimationSequence {
+  const to = cursorTo(root);
+  const drop = to('[data-art="drop"]');
 
-  // Carry the zip in.
-  ['[data-art="file"]', { opacity: 1 }, { duration: 0.25, at: 0.4 }],
-  ['[data-art="cursor"]', toDrop, { duration: 0.8, ease: EASE, at: 0.7 }],
-  ['[data-art="file"]', toDrop, { duration: 0.8, ease: EASE, at: 0.7 }],
-  ['[data-art="cursor"]', PRESS, { duration: 0.3, at: 1.5 }],
-  ['[data-art="file"]', { opacity: 0, scale: 0.6 }, { duration: 0.25, at: 1.6 }],
-  ['[data-art="hint"]', { opacity: 0 }, { duration: 0.2, at: 1.6 }],
-  ['[data-art="file"]', { x: 0, y: 0, scale: 1 }, { duration: 0.01, at: 2.0 }],
+  return [
+    ['[data-art="row"]', { opacity: 0, y: 8 }, { duration: 0.3, at: 0 }],
+    ['[data-art="active"]', { opacity: 0, scale: 0.9 }, { duration: 0.01, at: 0.3 }],
+    // Held at 0 from the start of the pass, which is harmless: the bar is hidden until 1.7.
+    ['[data-art="progress-fill"]', { scaleX: 0 }, { duration: 0.01, at: 0.3 }],
 
-  // Upload.
-  ['[data-art="progress"]', { opacity: 1 }, { duration: 0.15, at: 1.7 }],
-  // Held at 0 from the loop's start, harmless: the bar is hidden until 1.7.
-  ['[data-art="progress-fill"]', { width: [0, PROGRESS.width] }, { duration: 0.8, ease: "easeInOut", at: 1.75 }],
-  ['[data-art="progress"]', { opacity: 0 }, { duration: 0.2, at: 2.6 }],
-  ['[data-art="hint"]', { opacity: 1 }, { duration: 0.2, at: 2.75 }],
+    // Carry the zip in.
+    ['[data-art="file"]', { opacity: 1 }, { duration: 0.25, at: 0.4 }],
+    ['[data-art="cursor"]', drop, { duration: 0.8, ease: EASE, at: 0.7 }],
+    ['[data-art="file"]', drop, { duration: 0.8, ease: EASE, at: 0.7 }],
+    ['[data-art="cursor"]', PRESS, { duration: 0.3, at: 1.5 }],
+    ['[data-art="file"]', { opacity: 0, scale: 0.6 }, { duration: 0.25, at: 1.6 }],
+    ['[data-art="hint"]', { opacity: 0 }, { duration: 0.2, at: 1.6 }],
+    ['[data-art="file"]', { x: 0, y: 0, scale: 1 }, { duration: 0.01, at: 2.0 }],
 
-  // The row arrives; Activate.
-  ['[data-art="row"]', { opacity: 1, y: 0 }, { duration: 0.4, ease: "backOut", at: 2.7 }],
-  ['[data-art="cursor"]', cursorTo(REST, BUTTON_MID), { duration: 0.6, ease: EASE, at: 2.9 }],
-  ['[data-art="cursor"]', PRESS, { duration: 0.3, at: 3.55 }],
-  ['[data-art="activate"]', { scale: [1, 0.94, 1] }, { duration: 0.3, at: 3.55 }],
-  ['[data-art="active"]', { opacity: 1, scale: 1 }, { duration: 0.35, ease: "backOut", at: 3.65 }],
-  ['[data-art="cursor"]', { x: 0, y: 0 }, { duration: 0.8, ease: EASE, at: 4.15 }],
-];
+    // Upload.
+    ['[data-art="progress"]', { opacity: 1 }, { duration: 0.15, at: 1.7 }],
+    ['[data-art="progress-fill"]', { scaleX: 1 }, { duration: 0.8, ease: "easeInOut", at: 1.75 }],
+    ['[data-art="progress"]', { opacity: 0 }, { duration: 0.2, at: 2.6 }],
+    ['[data-art="hint"]', { opacity: 1 }, { duration: 0.2, at: 2.75 }],
+
+    // The row arrives; Activate.
+    ['[data-art="row"]', { opacity: 1, y: 0 }, { duration: 0.4, ease: "backOut", at: 2.7 }],
+    ['[data-art="cursor"]', to('[data-art="activate"]'), { duration: 0.6, ease: EASE, at: 2.9 }],
+    ['[data-art="cursor"]', PRESS, { duration: 0.3, at: 3.55 }],
+    ['[data-art="activate"]', PRESSED, { duration: 0.3, at: 3.55 }],
+    ['[data-art="active"]', { opacity: 1, scale: 1 }, { duration: 0.35, ease: "backOut", at: 3.65 }],
+    ['[data-art="cursor"]', HOME, { duration: 0.8, ease: EASE, at: 4.15 }],
+
+    ...holdUntil(5.4),
+  ];
+}
 
 /** wp-admin's Add Plugins screen: the dark menu, the upload zone, the plugin's row. */
-export function InstallArt() {
-  const scope = useArtLoop<SVGSVGElement>(SEQUENCE, 1.4);
+export default function InstallArt({ play = "hover" }: { play?: PlayMode }) {
+  const scope = useStagePlay<HTMLDivElement>(buildPass, play);
 
   return (
-    <svg
-      ref={scope}
-      aria-hidden="true"
-      viewBox={`0 0 ${W} ${H}`}
-      className="h-full w-full"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <defs>
-        <clipPath id="wp-install-window">
-          <rect {...WINDOW} rx="12" />
-        </clipPath>
-      </defs>
+    <div ref={scope} aria-hidden="true" className="absolute inset-0 overflow-hidden">
+      <TiltedWindow address="yoursite.com/wp-admin" className="inset-x-[7%] top-[7%] bottom-[12%]">
+        <div className="flex min-h-0 flex-1">
+          <div className="flex w-[18%] shrink-0 flex-col gap-1.5 bg-foreground/80 px-1.5 pt-2.5">
+            {MENU.map((item, index) =>
+              item === "plugins" ? (
+                <span key={index} className="-mx-1 rounded-[3px] bg-accent px-1 py-1">
+                  <span className="block h-1 w-3/4 rounded-full bg-accent-foreground/90" />
+                </span>
+              ) : (
+                <span key={index} className={`h-1 ${item} rounded-full bg-surface/35`} />
+              ),
+            )}
+          </div>
 
-      <ArtWindow {...WINDOW} dots />
+          <div className="flex min-w-0 flex-1 flex-col gap-2 p-3">
+            <span className="text-[9px] leading-none font-semibold text-foreground">Add Plugins</span>
 
-      {/* The admin menu, Plugins lit. */}
-      <g clipPath="url(#wp-install-window)">
-        <rect x={WINDOW.x} y={WINDOW.y + 26} width="44" height={WINDOW.height - 26} fill="var(--foreground)" opacity="0.78" />
-      </g>
-      {[56, 70, 84, 112, 126].map((y) => (
-        <rect key={y} x={WINDOW.x + 9} y={y} width="26" height="4" rx="2" fill="var(--surface)" opacity="0.35" />
-      ))}
-      <rect x={WINDOW.x + 4} y="94" width="36" height="12" rx="3" fill={ART_PIN.accent} />
-      <rect x={WINDOW.x + 9} y="98" width="22" height="4" rx="2" fill="var(--accent-foreground)" opacity="0.9" />
+            <div
+              data-art="drop"
+              className="relative grid h-[34%] place-items-center rounded-md border border-dashed border-foreground/25 bg-foreground/[0.03]"
+            >
+              <span data-art="hint" className="flex flex-col items-center gap-1 text-[8px] leading-none text-muted">
+                <svg viewBox="0 0 16 16" className="size-3" fill="none" aria-hidden="true">
+                  <path d="M8 12V4M4.5 7.5L8 4l3.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Upload Plugin
+              </span>
+              <span data-art="progress" className="absolute inset-x-[14%] top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-foreground/10" style={{ opacity: 0 }}>
+                <span data-art="progress-fill" className="absolute inset-0 origin-left rounded-full bg-accent" />
+              </span>
+            </div>
 
-      {/* Add Plugins, and the upload zone. */}
-      <text x={DROP.x} y="60" fontSize="10" fontWeight="600" fill="var(--foreground)">
-        Add Plugins
-      </text>
-      <rect
-        x={DROP.x + 0.5}
-        y={DROP.y + 0.5}
-        width={DROP.width - 1}
-        height={DROP.height - 1}
-        rx="8"
-        fill="var(--foreground)"
-        fillOpacity="0.03"
-        stroke="var(--muted)"
-        strokeOpacity="0.55"
-        strokeDasharray="4 3"
-      />
-      <g data-art="hint">
-        <path
-          d={`M${DROP_MID.x} ${DROP_MID.y - 12}v12M${DROP_MID.x - 5} ${DROP_MID.y - 7}l5-5l5 5`}
-          fill="none"
-          stroke="var(--muted)"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <text x={DROP_MID.x} y={DROP_MID.y + 14} textAnchor="middle" fontSize="8.5" fill="var(--muted)">
-          Upload Plugin
-        </text>
-      </g>
-      <g data-art="progress" opacity="0">
-        <rect x={PROGRESS.x} y={PROGRESS.y} width={PROGRESS.width} height="6" rx="3" fill="var(--foreground)" opacity="0.08" />
-        <rect
-          data-art="progress-fill"
-          x={PROGRESS.x}
-          y={PROGRESS.y}
-          width={PROGRESS.width}
-          height="6"
-          rx="3"
-          fill={ART_PIN.accent}
-        />
-      </g>
+            <div data-art="row" className="flex items-center gap-2 rounded-md bg-foreground/[0.04] p-2">
+              <span className="mk-step-pin mk-step-pin--flat grid size-6 shrink-0 place-items-center rounded-md bg-accent/14">
+                <PinMark kind="flagship" />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col gap-1 leading-none">
+                <span className="truncate text-[9px] font-semibold text-foreground">Pinglide</span>
+                <span className="h-1 w-3/5 rounded-full bg-foreground/15" />
+              </span>
+              <span className="relative shrink-0">
+                <span
+                  data-art="activate"
+                  className="block rounded-full border border-foreground/40 bg-surface px-2 py-1 text-[8px] leading-none font-medium text-foreground"
+                >
+                  Activate
+                </span>
+                <span
+                  data-art="active"
+                  className="absolute inset-0 flex items-center justify-center gap-0.5 rounded-full bg-accent text-[8px] leading-none font-semibold text-accent-foreground"
+                >
+                  <StageCheck art="active-check" className="size-2" />
+                  Active
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </TiltedWindow>
 
-      {/* The plugin, installed. */}
-      <g data-art="row">
-        <rect {...ROW} rx="8" fill="var(--foreground)" opacity="0.04" />
-        <rect x={ROW.x + 10} y={ROW.y + 10} width="36" height="36" rx="8" fill={ART_PIN.accent} fillOpacity="0.14" />
-        <ArtPin x={ROW.x + 28} y={ROW.y + 28} color={ART_PIN.accent} r={6} />
-        <text x={ROW.x + 56} y={ROW.y + 24} fontSize="10" fontWeight="600" fill="var(--foreground)">
-          Pinglide Maps
-        </text>
-        <rect x={ROW.x + 56} y={ROW.y + 32} width="96" height="4" rx="2" fill="var(--muted)" opacity="0.45" />
-
-        <g data-art="activate">
-          <rect
-            x={BUTTON.x + 0.5}
-            y={BUTTON.y + 0.5}
-            width={BUTTON.width - 1}
-            height={BUTTON.height - 1}
-            rx={BUTTON.height / 2}
-            fill="var(--surface)"
-            stroke="var(--foreground)"
-            strokeOpacity="0.5"
-          />
-          <text x={BUTTON_MID.x} y={BUTTON.y + 13.5} textAnchor="middle" fontSize="8.5" fontWeight="500" fill="var(--foreground)">
-            Activate
-          </text>
-        </g>
-        <g data-art="active">
-          <rect {...BUTTON} rx={BUTTON.height / 2} fill={ART_PIN.accent} />
-          <path
-            d={`M${BUTTON.x + 10} ${BUTTON.y + 10.5}l2.6 2.6l4.8-5.2`}
-            fill="none"
-            stroke="var(--accent-foreground)"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <text x={BUTTON.x + 22} y={BUTTON.y + 13.5} fontSize="8.5" fontWeight="600" fill="var(--accent-foreground)">
-            Active
-          </text>
-        </g>
-      </g>
-
-      {/* The zip, under the cursor's tip. Hidden in the finished frame. */}
-      <g data-art="file" opacity="0">
-        <path
-          d={`M${REST.x - 13} ${REST.y - 18}h18l8 8v26h-26z`}
-          fill="var(--surface)"
-          stroke="var(--foreground)"
-          strokeOpacity="0.55"
-          strokeWidth="1.2"
-          strokeLinejoin="round"
-        />
-        <path d={`M${REST.x + 5} ${REST.y - 18}v8h8`} fill="none" stroke="var(--foreground)" strokeOpacity="0.55" strokeWidth="1.2" />
-        <rect x={REST.x - 10} y={REST.y + 1} width="22" height="10" rx="2" fill={ART_PIN.accent} />
-        <text x={REST.x + 1} y={REST.y + 8.5} textAnchor="middle" fontSize="6.5" fontWeight="700" fill="var(--accent-foreground)">
-          ZIP
-        </text>
-      </g>
-
-      <ArtCursor {...REST} />
-    </svg>
+      {/* The zip, held at the cursor's tip. Hidden in the finished frame. */}
+      <span
+        data-art="file"
+        className="absolute z-20 flex h-7 w-6 -translate-x-1/2 -translate-y-full flex-col items-center justify-end rounded-[3px] border border-foreground/50 bg-surface pb-1 shadow-sm"
+        style={{ left: "80%", top: "84%", opacity: 0 }}
+      >
+        <span className="rounded-[2px] bg-accent px-0.5 text-[6px] leading-tight font-bold text-accent-foreground">ZIP</span>
+      </span>
+      <StageCursor left="80%" top="84%" />
+      <span data-art="hold" className="hidden" />
+    </div>
   );
 }

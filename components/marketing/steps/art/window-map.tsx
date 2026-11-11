@@ -1,12 +1,12 @@
-import { useId } from "react";
+import { useId, useMemo } from "react";
 
 import { DotField } from "../../europe-map/dot-field";
 import { smoothPath } from "../../europe-map/smooth-path";
 import { PinMark } from "../stage/pin-mark";
 import { STAGE_DOT, STAGE_VIEW, stagePlace, stagePlaces } from "../stage/stage-data";
 
-const PLACES = stagePlaces(["Amsterdam", "Paris", "Berlin", "Zurich", "Vienna", "Milan"]);
-const ROUTE = smoothPath(["Amsterdam", "Paris", "Zurich", "Milan"].map(stagePlace));
+const PLACES = ["Amsterdam", "Paris", "Berlin", "Zurich", "Vienna", "Milan"] as const;
+const ROUTE = ["Amsterdam", "Paris", "Zurich", "Milan"] as const;
 
 /** Far enough from the middle to uncover every corner. */
 export const REVEAL_R = Math.hypot(STAGE_VIEW.width, STAGE_VIEW.height) / 2 + STAGE_DOT;
@@ -17,10 +17,24 @@ export const REVEAL_R = Math.hypot(STAGE_VIEW.width, STAGE_VIEW.height) / 2 + ST
  *
  * The ground is uncovered by one circle in a mask (`data-art="reveal"`, its
  * `r` animated) rather than by fading ~600 dots one by one; `data-wpin` and
- * `data-art="route"` are the publish pass's other hooks.
+ * `data-art="route"` are the publish pass's other hooks (`clearMap` and
+ * `arriveMap` in ../stage/pass-kit.ts play them). Each pin's `data-wpin` is its
+ * place's name, so a pass can drop one pin on its own.
+ *
+ * `places` and `route` default to the chain the landing page's publish drawing
+ * shows; the platform pages' drawings pass their own. Both are names from
+ * `EUROPE_PLACES` inside the stage's crop.
  */
-export function WindowMap() {
+export function WindowMap({
+  places = PLACES,
+  route = ROUTE,
+}: {
+  places?: readonly string[];
+  route?: readonly string[];
+} = {}) {
   const mask = `mk-step-reveal-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const pins = useMemo(() => stagePlaces(places), [places]);
+  const path = useMemo(() => smoothPath(route.map(stagePlace)), [route]);
 
   return (
     <div className="absolute inset-0 grid place-items-center">
@@ -46,7 +60,7 @@ export function WindowMap() {
           </g>
           <path
             data-art="route"
-            d={ROUTE}
+            d={path}
             fill="none"
             stroke="var(--accent)"
             strokeWidth={9}
@@ -54,13 +68,13 @@ export function WindowMap() {
           />
         </svg>
 
-        {PLACES.map((place) => (
+        {pins.map((place) => (
           <span
             key={place.name}
             className="absolute size-0"
             style={{ left: `${place.left}%`, top: `${place.top}%` }}
           >
-            <span data-wpin className="mk-step-pin mk-step-pin--flat absolute -translate-1/2">
+            <span data-wpin={place.name} className="mk-step-pin mk-step-pin--flat absolute -translate-1/2">
               <PinMark kind={place.kind} />
             </span>
           </span>

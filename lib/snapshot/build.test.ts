@@ -10,10 +10,11 @@ import { buildSnapshot } from "./build";
 const GENERATED_AT = "2026-08-08T10:00:00.000Z";
 
 // The stored design minus what publish resolves into fields of their own: the
-// language and the owner's words become `lang` and `strings`, never `settings`.
+// language and the owner's words become `lang` and `strings`, never `settings`,
+// and `listAuto` is decided into `list`/`search` and never published.
 const PUBLISHED_SETTINGS = Object.fromEntries(
   Object.entries(DEFAULT_EMBED_SETTINGS).filter(
-    ([key]) => key !== "language" && key !== "strings",
+    ([key]) => key !== "language" && key !== "strings" && key !== "listAuto",
   ),
 );
 
@@ -75,6 +76,18 @@ function makePlace(overrides: Partial<Place> = {}): Place {
     updatedAt: GENERATED_AT,
     ...overrides,
   };
+}
+
+/**
+ * A map of more than one location: what the default design describes. With one
+ * location or none the automatic results panel switches the panel and the
+ * search box off (lib/embed/panel-auto.ts), which has its own tests below.
+ */
+function twoPlaces(): Place[] {
+  return [
+    makePlace({ id: "a", lat: 54.0, lng: 25.0 }),
+    makePlace({ id: "b", lat: 55.5, lng: 26.5 }),
+  ];
 }
 
 function makeShape(overrides: Partial<Shape> = {}): Shape {
@@ -409,7 +422,12 @@ describe("buildSnapshot", () => {
   it("resolves the whole design when settings were never written", () => {
     // What every map created before the designer existed looks like:
     // `settings: "{}"` at creation and nothing after it.
-    const { snapshot } = buildSnapshot(makeMap({ settings: {} }), [], [], GENERATED_AT);
+    const { snapshot } = buildSnapshot(
+      makeMap({ settings: {} }),
+      twoPlaces(),
+      [],
+      GENERATED_AT,
+    );
 
     // Against DEFAULT_EMBED_SETTINGS rather than a second copy of it: this test
     // is here to prove the resolver runs and publishes a complete answer, not
@@ -424,7 +442,7 @@ describe("buildSnapshot", () => {
   it("carries stored embed controls through to the snapshot", () => {
     const { snapshot } = buildSnapshot(
       makeMap({ settings: { clustering: false, nearest: false } }),
-      [],
+      twoPlaces(),
       [],
       GENERATED_AT,
     );
@@ -441,7 +459,7 @@ describe("buildSnapshot", () => {
       // The column is free-form JSON, so it may have been hand-edited in the
       // Appwrite console or written by an older build.
       makeMap({ settings: { clustering: "yes", search: null } }),
-      [],
+      twoPlaces(),
       [],
       GENERATED_AT,
     );
@@ -765,7 +783,7 @@ describe("buildSnapshot", () => {
   });
 
   it("publishes the default design for a map nobody has designed", () => {
-    const { snapshot } = buildSnapshot(makeMap(), [], [], GENERATED_AT);
+    const { snapshot } = buildSnapshot(makeMap(), twoPlaces(), [], GENERATED_AT);
 
     expect(snapshot.settings).toEqual(PUBLISHED_SETTINGS);
   });
@@ -775,12 +793,76 @@ describe("buildSnapshot", () => {
       settings: { clustering: false, search: "yes", nearest: null },
     });
 
-    const { snapshot } = buildSnapshot(map, [], [], GENERATED_AT);
+    const { snapshot } = buildSnapshot(map, twoPlaces(), [], GENERATED_AT);
 
     expect(snapshot.settings.clustering).toBe(false);
     // A junk value must not switch a control off; it falls back to the default.
     expect(snapshot.settings.search).toBe(true);
     expect(snapshot.settings.nearest).toBe(true);
+  });
+
+  describe("the automatic results panel", () => {
+    it("publishes no panel and no search box for a map of one location", () => {
+      const { snapshot } = buildSnapshot(makeMap(), [makePlace()], [], GENERATED_AT);
+
+      expect(snapshot.settings.list).toBe(false);
+      expect(snapshot.settings.search).toBe(false);
+      // "Nearest to me" stays, and stands top-right.
+      expect(snapshot.settings.nearest).toBe(true);
+      expect(snapshot.settings.panelSide).toBe("right");
+      // Dashboard-only: the embed never sees the flag.
+      expect(snapshot.settings).not.toHaveProperty("listAuto");
+    });
+
+    it("counts only the locations the snapshot carries", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap(),
+        [makePlace({ id: "a" }), makePlace({ id: "b", lat: Number.NaN })],
+        [],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.settings.list).toBe(false);
+    });
+
+    it("publishes the panel once the map has two locations", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap({ settings: { list: true, panelSide: "left" } }),
+        twoPlaces(),
+        [],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.settings.list).toBe(true);
+      expect(snapshot.settings.search).toBe(true);
+      expect(snapshot.settings.panelSide).toBe("left");
+    });
+
+    it("keeps the owner's panel on a one-location map once they took the switch over", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap({
+          settings: { listAuto: false, list: true, search: true, panelSide: "left" },
+        }),
+        [makePlace()],
+        [],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.settings.list).toBe(true);
+      expect(snapshot.settings.search).toBe(true);
+      expect(snapshot.settings.panelSide).toBe("left");
+    });
+
+    it("keeps a panel the owner switched off before the flag existed", () => {
+      const { snapshot } = buildSnapshot(
+        makeMap({ settings: { list: false } }),
+        twoPlaces(),
+        [],
+        GENERATED_AT,
+      );
+
+      expect(snapshot.settings.list).toBe(false);
+    });
   });
 
   it("carries the domain allowlist through untouched", () => {

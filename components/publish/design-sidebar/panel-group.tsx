@@ -8,6 +8,7 @@ import {
   PropertySwitch,
   PropertySwitches,
 } from "@/components/ui/properties/property-switch";
+import { PanelAutoHint } from "./panel-auto-hint";
 import type { EmbedDesign } from "./use-embed-design";
 
 /**
@@ -44,7 +45,9 @@ import type { EmbedDesign } from "./use-embed-design";
  * about 60px each and none of them are readable, which is the complaint that
  * broke this panel open; two icons are not.
  */
-export function PanelGroup({ settings, set }: EmbedDesign) {
+export function PanelGroup(design: EmbedDesign) {
+  const { settings, set } = design;
+
   return (
     <div className="space-y-3">
       <PropertySwitches>
@@ -54,6 +57,10 @@ export function PanelGroup({ settings, set }: EmbedDesign) {
           onChange={(value) => set("list", value)}
         />
       </PropertySwitches>
+
+      {/* Automatic until the owner touches the switch: no panel for a map of
+          one location (lib/embed/panel-auto.ts). */}
+      <PanelAutoHint {...design} />
 
       {settings.list ? (
         <>

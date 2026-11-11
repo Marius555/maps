@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { EmbedPreview } from "@/components/preview/embed-preview";
 import { PageTitle } from "@/components/ui/page-title";
+import { publishedPlaceCount } from "@/lib/embed/panel-auto";
 import { useGroups } from "@/lib/query/groups";
 import { useMap } from "@/lib/query/maps";
 import { usePlaces } from "@/lib/query/places";
@@ -67,7 +68,7 @@ export function PublishPanel({
   const { data: shapes = initialShapes } = useShapes(initialMap.id, initialShapes);
   const { data: groups = initialGroups } = useGroups(initialMap.id, initialGroups);
 
-  const design = useEmbedDesign(map);
+  const design = useEmbedDesign(map, publishedPlaceCount(places));
   const isEmpty = places.length === 0 && shapes.length === 0;
 
   /*

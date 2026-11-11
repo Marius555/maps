@@ -1,6 +1,7 @@
 import { gazetteerCountries } from "@/lib/gazetteer/config";
 import { isDefaultView } from "@/lib/map/default-view";
 import { dotLanes, dotLinesOf } from "@/lib/map/dot-lanes";
+import { isSingleAuto, resolvePanelAuto } from "@/lib/embed/panel-auto";
 import { isValidLngLat, roundCoord } from "@/lib/map/geo";
 import { groupColorIndex } from "@/lib/map/group-colors";
 import { placeIndex, resolveGeometry } from "@/lib/map/line-endpoints";
@@ -240,7 +241,18 @@ export function buildSnapshot(
 
   // Resolved once: the snapshot writes it, and the analytics field below asks it
   // whether the owner switched measurement on.
-  const { language, strings, ...settings } = readEmbedSettings(map.settings);
+  //
+  // The automatic results panel is decided here, against the locations this
+  // snapshot actually carries, and `listAuto` itself is stripped: the embed only
+  // ever sees plain `list` and `search` (lib/embed/panel-auto.ts).
+  const { language, strings, listAuto, ...settings } = resolvePanelAuto(
+    readEmbedSettings(map.settings),
+    usable.length,
+  );
+  // A one-location map hidden automatically keeps only "Nearest to me", and it
+  // belongs top-right. With no panel, `panelSide` decides nothing but which
+  // corner the floating toolbar stands in.
+  if (isSingleAuto({ listAuto }, usable.length)) settings.panelSide = "right";
   // What the map says, resolved against its preset and cut to what differs
   // from English — see `resolveEmbedWords`.
   const words = resolveEmbedWords(language, strings, badge?.brand ?? "");

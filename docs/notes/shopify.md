@@ -16,6 +16,12 @@ USD (App Pricing is USD only); **each installed shop is its own workspace**, cre
 install, with no signup; **no second app** — Shopify's React Router template was deleted
 and the admin side is the Next.js site.
 
+**Its public page is `/for/shopify`** (docs/notes/marketing.md, "Platform pages"). Every claim
+on it is taken from this file — re-read the page when a label, a price or the uninstall
+behaviour here changes. Its install button waits on `SHOPIFY_APP_STORE_URL`
+(lib/marketing/integrations.ts): empty until the App Store listing is live, and while it is
+empty the page says "Coming soon to the Shopify App Store" and offers the embed code instead.
+
 ## Invariants
 
 - **The ID token never becomes a cookie, and never creates anything.** `lib/auth/shopify-user.ts`
@@ -174,6 +180,15 @@ From there it is the ordinary import — mapping, review, bulk create — so the
 the Locations tab and the editor's list like any file's rows (the bulk create invalidates
 `queryKeys.places.all`). Nothing is stored about the source: importing again adds the
 locations again, and there is no sync.
+
+**Verified end to end on the dev store, 2026-11-09.** Shopify's dialog appeared on the first
+press, listing "Locations" and the store owner's phone and address, which is how it describes
+`read_locations`. Allow led straight to the table, and the second press asked nothing. Of the
+store's two locations, the one with only a country ("Shop location") was left out, and the
+other came with Shopify's coordinates. The review step placed it with no lookup spent and
+labelled it "Placed by hand", like any row with coordinates, and it was imported onto the map.
+**Restart `npm run shopify:dev` first if the TOML changed**: until then the prompt fails
+(Invariants).
 
 ## Billing
 

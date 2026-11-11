@@ -96,6 +96,18 @@ export const embedSettingsSchema = z.object({
   nearest: z.boolean(),
   list: z.boolean(),
   /**
+   * Whether `list` (and, for a one-location map, `search`) follows the number of
+   * locations instead of the stored values: no panel and no search box while the
+   * map has one location or none, a panel once it has two. Cleared the moment
+   * the owner touches either switch, which is what makes their answer stick.
+   *
+   * **Dashboard only — never published.** `buildSnapshot` resolves it against
+   * the locations it is about to write (`lib/embed/panel-auto.ts`) and strips
+   * it, so a snapshot carries plain `list`/`search` and the embed knows nothing
+   * of it.
+   */
+  listAuto: z.boolean(),
+  /**
    * Whether clicking a pin opens its card.
    *
    * Spelled as the card being shown, so absent keeps meaning the card every
@@ -259,6 +271,10 @@ export const DEFAULT_EMBED_SETTINGS: EmbedSettings = {
   // nothing for a map already published — its live snapshot keeps the shape it
   // was written with, and only a republish opts it in.
   list: true,
+  // Automatic: a map with one location gets no panel and no search box, because
+  // a list of one is a sidebar saying what the pin already says. `list` above is
+  // what an owner who takes the switch over starts from.
+  listAuto: true,
   // On: a store locator whose pins say nothing is the unusual map, not the
   // common one. Off is for an owner whose locations are a picture and whose
   // words live in the panel beside it.
@@ -390,6 +406,9 @@ export function readEmbedSettings(
     search: readFlag(settings.search, d.search),
     nearest: readFlag(settings.nearest, d.nearest),
     list: readFlag(settings.list, d.list),
+    // A row from before the flag is automatic unless its owner had switched the
+    // panel off: `list: true` was only ever the default, `false` a decision.
+    listAuto: readFlag(settings.listAuto, settings.list !== false),
     card: readFlag(settings.card, d.card),
 
     panelSide: readChoice(settings.panelSide, PANEL_SIDES, d.panelSide),

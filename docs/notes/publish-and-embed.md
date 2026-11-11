@@ -110,6 +110,26 @@ rewritten; it is the record of why this area is shaped as it is.
   was written against**, and nothing may quietly rewrite it (§6 — a design somebody made is
   not ours to edit). If a changed default ever has to reach existing maps, that is a
   migration with the owner's knowledge, not an edit to `DEFAULT_EMBED_SETTINGS`.
+- **The results panel follows the location count until the owner touches it (`listAuto`,
+  2026-11-10).** While it is on, a map with one location or none publishes `list: false`,
+  `search: false` and `panelSide: "right"` (so the lone "Nearest to me" stands top-right), and
+  a map with two or more publishes `list: true`. It is resolved in `buildSnapshot` against the
+  locations the snapshot carries (`lib/embed/panel-auto.ts`) and **stripped**, so it never
+  reaches the embed, which pays 0 bytes for it, and a sheet sync that grows a map from one row
+  to two gains its panel then. Two rules keep it honest:
+  - `useEmbedDesign` hands the controls the resolved settings but **applies every write to
+    the unresolved base**. Writing the resolved ones would store `search: false` on any
+    colour change, and the map would have no search box once it grew.
+  - Touching "Show the results panel" or the search toggle takes the switch over
+    (`listAuto: false`), keeping both values as they were shown plus the change. "Use
+    automatic" hands it back.
+
+  **This is the one knowing exception to the rule above.** A row with no `listAuto` reads as
+  automatic unless it stores `list: false`, because `list: true` was only ever the baked
+  default, so every map that had not switched the panel off goes automatic on its next
+  publish. That was the owner's call. Live sites do not change until they republish. One
+  consequence: the "Made with" badge is drawn only inside the panel, so a Free-plan map with
+  one location no longer shows it.
 - **A boolean the stylesheet branches on is an attribute, not a variable.** `panelScrollbar`
   hides the results list's own bar, and hiding one takes `scrollbar-width` *and* a
   `::-webkit-scrollbar` rule — a pseudo-element cannot be switched on by a custom property.

@@ -668,7 +668,11 @@ export type MapSnapshot = {
   /** OSM and tile-provider credit. Non-negotiable on every render (§12). */
   attribution: string;
   center: SnapshotCenter;
-  /** Extent of the places, or null when the map has none. */
+  /**
+   * Extent of the places and shapes, which the embed fits on load. Null when the
+   * map has none, **and when the owner saved an opening view**, so the embed
+   * opens on `center` instead (`lib/snapshot/build.ts`).
+   */
   bounds: SnapshotBounds | null;
   /**
    * **Legacy, read-only.** Categories were merged into tags: a tag now carries

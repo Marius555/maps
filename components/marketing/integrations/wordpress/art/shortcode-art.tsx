@@ -2,140 +2,98 @@
 
 import type { AnimationSequence } from "motion/react";
 
-import { ART_PIN } from "@/components/marketing/art/art-pin";
-import { ArtStreets } from "@/components/marketing/art/art-streets";
-import { useArtLoop } from "@/components/marketing/steps/art/use-art-loop";
-
-import { ArtCursor, cursorTo, PRESS } from "../../art/art-cursor";
-import { ArtDropPin, dropPins, liftPins } from "../../art/art-drop-pin";
-import { ArtWindow } from "../../art/art-window";
-
-const W = 360;
-const H = 240;
-
-const WINDOW = { x: 20, y: 16, width: 320, height: 208 } as const;
-const LEFT = { x: 36, y: 56, width: 112, height: 148 } as const;
-const COLUMN = { x: 160, y: 56, width: 164, height: 148 } as const;
-const COLUMN_MID = { x: COLUMN.x + COLUMN.width / 2, y: COLUMN.y + COLUMN.height / 2 } as const;
-
-/** The shortcode, as Settings → Pinglide hands it out. */
-const PILL = { x: 40, y: 178, width: 112, height: 20 } as const;
-const REST = { x: PILL.x + 24, y: PILL.y + 10 } as const;
-
-const PINS = [
-  { id: "a", x: 186, y: 84 },
-  { id: "b", x: 292, y: 92 },
-  { id: "c", x: 206, y: 170 },
-  { id: "d", x: 300, y: 176 },
-] as const;
-const MAIN = { id: "main", x: 248, y: 130 } as const;
-const ALL = [...PINS.map((pin) => pin.id), MAIN.id];
-
-const EASE = [0.4, 0, 0.2, 1] as const;
-/** The pill travels with the cursor: same offset, so it is held, not chased. */
-const toColumn = cursorTo(REST, { x: COLUMN_MID.x - 30, y: COLUMN_MID.y });
+import { TiltedWindow } from "../../../steps/art/tilted-window";
+import { WindowMap } from "../../../steps/art/window-map";
+import {
+  arriveMap,
+  clearMap,
+  cursorTo,
+  EASE,
+  holdUntil,
+  HOME,
+  PRESS,
+} from "../../../steps/stage/pass-kit";
+import { useStagePlay, type PlayMode } from "../../../steps/stage/use-stage-play";
+import { StageCursor } from "../../stage/stage-cursor";
 
 /**
- * Three beats: the builder's column empties, the shortcode is dragged into it,
- * and the map renders there with its pins dropping in.
+ * Three beats: the builder's column empties, the shortcode is carried into it,
+ * and the map arrives there. The pill moves by the cursor's own offset, so it
+ * is held, not chased.
  */
-const SEQUENCE: AnimationSequence = [
-  ...liftPins(ALL, 0),
-  ['[data-art="map"]', { opacity: 0 }, { duration: 0.35, at: 0.15 }],
+function buildPass(root: HTMLElement): AnimationSequence {
+  const to = cursorTo(root);
+  const slot = to('[data-art="slot"]', { x: -24 });
 
-  // Pick up the shortcode and carry it over.
-  // `scale` is held at 0.9 from the loop's start, harmless: the pill is hidden.
-  ['[data-art="pill"]', { opacity: 1, scale: [0.9, 1] }, { duration: 0.25, at: 0.55 }],
-  ['[data-art="cursor"]', PRESS, { duration: 0.3, at: 0.75 }],
-  ['[data-art="cursor"]', toColumn, { duration: 0.9, ease: EASE, at: 1.0 }],
-  ['[data-art="pill"]', toColumn, { duration: 0.9, ease: EASE, at: 1.0 }],
-  ['[data-art="target"]', { opacity: 1 }, { duration: 0.2, at: 1.6 }],
+  return [
+    ['[data-art="map-layer"]', { opacity: 0 }, { duration: 0.35, at: 0.15 }],
+    ...clearMap(0.5),
 
-  // Drop it; the map renders.
-  ['[data-art="cursor"]', PRESS, { duration: 0.3, at: 1.95 }],
-  ['[data-art="pill"]', { opacity: 0, scale: 0.8 }, { duration: 0.25, at: 2.05 }],
-  ['[data-art="target"]', { opacity: 0 }, { duration: 0.25, at: 2.1 }],
-  ['[data-art="map"]', { opacity: 1 }, { duration: 0.35, at: 2.2 }],
-  ['[data-art="pill"]', { x: 0, y: 0, scale: 1 }, { duration: 0.01, at: 2.4 }],
-  ...dropPins(ALL, 2.4),
-  ['[data-art="cursor"]', { x: 0, y: 0 }, { duration: 0.8, ease: EASE, at: 3.0 }],
-];
+    // Pick up the shortcode and carry it over. `scale` is held at 0.9 from the
+    // start of the pass, harmless: the pill is hidden until 0.55.
+    ['[data-art="pill"]', { opacity: 1, scale: [0.9, 1] }, { duration: 0.25, at: 0.55 }],
+    ['[data-art="cursor"]', PRESS, { duration: 0.3, at: 0.75 }],
+    ['[data-art="cursor"]', slot, { duration: 0.9, ease: EASE, at: 1.0 }],
+    ['[data-art="pill"]', slot, { duration: 0.9, ease: EASE, at: 1.0 }],
+    ['[data-art="target"]', { opacity: 1 }, { duration: 0.2, at: 1.6 }],
+
+    // Drop it; the map arrives.
+    ['[data-art="cursor"]', PRESS, { duration: 0.3, at: 1.95 }],
+    ['[data-art="pill"]', { opacity: 0, scale: 0.8 }, { duration: 0.25, at: 2.05 }],
+    ['[data-art="target"]', { opacity: 0 }, { duration: 0.25, at: 2.1 }],
+    ['[data-art="map-layer"]', { opacity: 1 }, { duration: 0.2, at: 2.2 }],
+    ...arriveMap(2.25),
+    ['[data-art="pill"]', { x: 0, y: 0, scale: 1 }, { duration: 0.01, at: 2.4 }],
+    ['[data-art="cursor"]', HOME, { duration: 0.8, ease: EASE, at: 2.6 }],
+
+    ...holdUntil(5.4),
+  ];
+}
 
 /** A page builder's two columns: text in one, the map dropped into the other. */
-export function ShortcodeArt() {
-  const scope = useArtLoop<SVGSVGElement>(SEQUENCE, 1.4);
+export default function ShortcodeArt({ play = "hover" }: { play?: PlayMode }) {
+  const scope = useStagePlay<HTMLDivElement>(buildPass, play);
 
   return (
-    <svg
-      ref={scope}
-      aria-hidden="true"
-      viewBox={`0 0 ${W} ${H}`}
-      className="h-full w-full"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <defs>
-        <clipPath id="wp-shortcode-map">
-          <rect {...COLUMN} rx="8" />
-        </clipPath>
-      </defs>
+    <div ref={scope} aria-hidden="true" className="absolute inset-0 overflow-hidden">
+      <TiltedWindow address="yoursite.com/wp-admin" className="inset-x-[7%] top-[7%] bottom-[22%]">
+        <div className="flex min-h-0 flex-1 gap-2.5 p-2.5">
+          <div className="flex w-[36%] shrink-0 flex-col gap-1.5 pt-1">
+            <span className="h-2 w-4/5 rounded-full bg-foreground/50" />
+            <span className="h-1 w-full rounded-full bg-foreground/15" />
+            <span className="h-1 w-11/12 rounded-full bg-foreground/15" />
+            <span className="h-1 w-3/4 rounded-full bg-foreground/15" />
+            <span className="mt-1 min-h-0 flex-1 rounded-md bg-foreground/[0.06]" />
+          </div>
 
-      <ArtWindow {...WINDOW} dots />
+          <div
+            data-art="slot"
+            className="relative min-w-0 flex-1 rounded-md border border-dashed border-foreground/25 bg-foreground/[0.03]"
+          >
+            <span
+              data-art="target"
+              className="absolute inset-0 rounded-md bg-accent/10 ring-[1.5px] ring-accent"
+              style={{ opacity: 0 }}
+            />
+            <div data-art="map-layer" className="absolute -inset-px overflow-hidden rounded-md bg-surface">
+              <div className="absolute inset-0 bg-foreground/[0.04]">
+                <WindowMap />
+              </div>
+            </div>
+          </div>
+        </div>
+      </TiltedWindow>
 
-      {/* The left column: a heading, a paragraph, an image. */}
-      <rect x={LEFT.x} y={LEFT.y + 2} width="84" height="8" rx="4" fill="var(--foreground)" opacity="0.5" />
-      <rect x={LEFT.x} y={LEFT.y + 18} width="104" height="4.5" rx="2.25" fill="var(--muted)" opacity="0.45" />
-      <rect x={LEFT.x} y={LEFT.y + 27} width="92" height="4.5" rx="2.25" fill="var(--muted)" opacity="0.45" />
-      <rect x={LEFT.x} y={LEFT.y + 36} width="98" height="4.5" rx="2.25" fill="var(--muted)" opacity="0.45" />
-      <rect x={LEFT.x} y={LEFT.y + 50} width={LEFT.width - 4} height="58" rx="6" fill="var(--foreground)" opacity="0.06" />
-
-      {/* The right column: an empty builder slot under the map. */}
-      <rect
-        x={COLUMN.x + 0.5}
-        y={COLUMN.y + 0.5}
-        width={COLUMN.width - 1}
-        height={COLUMN.height - 1}
-        rx="8"
-        fill="var(--foreground)"
-        fillOpacity="0.03"
-        stroke="var(--muted)"
-        strokeOpacity="0.55"
-        strokeDasharray="4 3"
-      />
-      <rect
-        data-art="target"
-        x={COLUMN.x + 1}
-        y={COLUMN.y + 1}
-        width={COLUMN.width - 2}
-        height={COLUMN.height - 2}
-        rx="7.5"
-        fill={ART_PIN.accent}
-        fillOpacity="0.08"
-        stroke={ART_PIN.accent}
-        strokeWidth="1.5"
-        opacity="0"
-      />
-
-      <g data-art="map">
-        <rect {...COLUMN} rx="8" fill="var(--surface)" />
-        <rect {...COLUMN} rx="8" fill="var(--foreground)" opacity="0.04" />
-        <g clipPath="url(#wp-shortcode-map)">
-          <ArtStreets {...COLUMN} />
-        </g>
-      </g>
-      {PINS.map((pin) => (
-        <ArtDropPin key={pin.id} {...pin} />
-      ))}
-      <ArtDropPin {...MAIN} color={ART_PIN.accent} r={7} halo />
-
-      {/* The shortcode. Hidden in the finished frame. */}
-      <g data-art="pill" opacity="0">
-        <rect {...PILL} rx={PILL.height / 2} fill="var(--foreground)" />
-        <text x={PILL.x + PILL.width / 2} y={PILL.y + 13.5} textAnchor="middle" className="font-mono" fontSize="8" fill="var(--background)">
-          [pinglide slot=&quot;…&quot;]
-        </text>
-      </g>
-
-      <ArtCursor {...REST} />
-    </svg>
+      {/* The shortcode, as Settings → Pinglide hands it out. Hidden in the finished frame. */}
+      <span
+        data-art="pill"
+        className="absolute bottom-[7%] left-[9%] z-20 rounded-full bg-foreground px-2.5 py-1.5 font-mono text-[9px] leading-none whitespace-nowrap text-background shadow-lg"
+        style={{ opacity: 0 }}
+      >
+        [pinglide slot=&quot;…&quot;]
+      </span>
+      <StageCursor left="18%" top="88%" />
+      <span data-art="hold" className="hidden" />
+    </div>
   );
 }

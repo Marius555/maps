@@ -4,15 +4,8 @@ import { Section } from "@/components/marketing/section";
 import type { Point } from "@/components/marketing/split/point-list";
 import { SplitBody } from "@/components/marketing/split/split-body";
 
-import { SyncArt } from "./art/sync-art";
-
-function PointSymbol({ icon: Icon }: { icon: typeof KeyRound }) {
-  return (
-    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-default text-foreground">
-      <Icon aria-hidden="true" className="size-5" />
-    </span>
-  );
-}
+import { PointSymbol } from "../point-symbol";
+import { SyncScene } from "../stage/sync-scene-loader";
 
 /**
  * What the plugin does not ask of a site owner, beside a drawing of the one
@@ -33,6 +26,7 @@ const POINTS: readonly Point[] = [
 export function WordPressWhy() {
   return (
     <Section
+      screen
       eyebrow="Why a block"
       title={
         <>
@@ -40,7 +34,7 @@ export function WordPressWhy() {
         </>
       }
     >
-      <SplitBody art={<SyncArt />} points={POINTS} />
+      <SplitBody art={<SyncScene site="wordpress" action="Publish" />} points={POINTS} />
     </Section>
   );
 }

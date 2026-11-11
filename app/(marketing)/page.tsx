@@ -6,7 +6,7 @@ import { Hero } from "@/components/marketing/hero/hero";
 import { MapShowcase } from "@/components/marketing/hero/map-showcase";
 import { Legend } from "@/components/marketing/legend/legend";
 import { NoGoogle } from "@/components/marketing/no-google/no-google";
-import { SnapScroll } from "@/components/marketing/snap-scroll";
+import { SnapPage } from "@/components/marketing/snap-page";
 import { Steps } from "@/components/marketing/steps/steps";
 import { UnlimitedViews } from "@/components/marketing/unlimited-views/unlimited-views";
 import { PRODUCT_NAME } from "@/lib/config";
@@ -43,10 +43,11 @@ export const metadata: Metadata = {
  * same rule governs the survey at the bottom: it compares against *categories*
  * at published prices, and names nobody.
  *
- * **`mk-snap` is what makes the page scroll a section at a time.** The class
- * does nothing on its own — `html:has(.mk-snap)` in globals.css is what turns
- * snapping on, and only here, because /pricing, /docs and the legal pages share
- * this shell and are ordinary documents. Each section holds a viewport
+ * **`SnapPage` is what makes the page scroll a section at a time.** Its
+ * `mk-snap` class does nothing on its own — `html:has(.mk-snap)` in globals.css
+ * is what turns snapping on, and only here and on the `/for/*` platform pages,
+ * because /pricing, /docs and the legal pages share this shell and are ordinary
+ * documents. Each section holds a viewport
  * (`screen` on `Section`) and each one is a snap point.
  *
  * **Eight children: the map has a screen of its own.** It used to sit
@@ -70,7 +71,7 @@ export const metadata: Metadata = {
  */
 export default function LandingPage() {
   return (
-    <div className="mk-snap">
+    <SnapPage>
       <Hero />
       <MapShowcase />
       <Legend />
@@ -79,10 +80,6 @@ export default function LandingPage() {
       <UnlimitedViews />
       <FlatCost />
       <Compare />
-
-      {/* Renders nothing; see the note above. Last, so the `:first-child` rule
-          that exempts the hero from being a snap stop cannot be affected. */}
-      <SnapScroll />
-    </div>
+    </SnapPage>
   );
 }

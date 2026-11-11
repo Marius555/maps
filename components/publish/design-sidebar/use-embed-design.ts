@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { resolvePanelAuto } from "@/lib/embed/panel-auto";
 import { useUpdateMap } from "@/lib/query/maps";
 import { createSerialWriter, type SerialWriter } from "@/lib/query/serial-writer";
 import type { AppMap } from "@/lib/repositories/types";
@@ -40,6 +41,8 @@ export type EmbedDesign = {
    */
   settle: () => Promise<void>;
   error: unknown;
+  /** The locations the next publish would carry — what the automatic panel counts. */
+  placeCount: number;
 };
 
 /**
@@ -65,8 +68,21 @@ export type EmbedDesign = {
  * too. The switch then showed the opposite of the last press, which is what the
  * owner reported (2026-11-07). The draft is only let go once nothing is waiting
  * *and* nothing is in flight.
+ *
+ * **The automatic panel.** While `listAuto` is on, `list` and `search` follow
+ * the number of locations (`lib/embed/panel-auto.ts`). The controls get that
+ * resolved answer, but every write is applied to the *unresolved* base. Writing
+ * the resolved one would store `search: false` on an unrelated colour change,
+ * and the map would have no search box once it grew past one location.
  */
-export function useEmbedDesign(map: AppMap): EmbedDesign {
+export function useEmbedDesign(
+  map: AppMap,
+  /**
+   * How many locations the next publish would carry (`publishedPlaceCount`), for
+   * the automatic results panel. See "The automatic panel" above.
+   */
+  placeCount: number,
+): EmbedDesign {
   const updateMap = useUpdateMap(map.id);
   const stored = useMemo(
     () => readEmbedSettings(map.settings),
@@ -81,7 +97,12 @@ export function useEmbedDesign(map: AppMap): EmbedDesign {
    * server's row is simply what the controls draw.
    */
   const [draft, setDraft] = useState<EmbedSettings | null>(null);
-  const settings = draft ?? stored;
+  const base = draft ?? stored;
+  // What the controls and the preview draw. Never what a write is applied to.
+  const settings = useMemo(
+    () => resolvePanelAuto(base, placeCount),
+    [base, placeCount],
+  );
 
   /*
    * Refs, because the timer's callback is created once and must not close over
@@ -152,9 +173,26 @@ export function useEmbedDesign(map: AppMap): EmbedDesign {
   const set = useCallback<EmbedDesign["set"]>(
     (key, value) => {
       // Applied to the draft, not to the stored row — see the header.
-      write({ ...(pending.current ?? settings), [key]: value });
+      const from = pending.current ?? base;
+
+      // Touching either switch the automatic panel decides takes it over: what
+      // the owner was looking at is kept, plus the change they just made.
+      if (from.listAuto && (key === "list" || key === "search")) {
+        const shown = resolvePanelAuto(from, placeCount);
+
+        write({
+          ...from,
+          list: shown.list,
+          search: shown.search,
+          listAuto: false,
+          [key]: value,
+        });
+        return;
+      }
+
+      write({ ...from, [key]: value });
     },
-    [settings, write],
+    [base, placeCount, write],
   );
 
   const reset = useCallback(() => {
@@ -169,5 +207,5 @@ export function useEmbedDesign(map: AppMap): EmbedDesign {
     [flush],
   );
 
-  return { settings, set, reset, settle, error: updateMap.error };
+  return { settings, set, reset, settle, error: updateMap.error, placeCount };
 }

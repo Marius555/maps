@@ -4,8 +4,7 @@ import { Reveal } from "@/components/marketing/reveal";
 import { Section } from "@/components/marketing/section";
 import { StepPanel } from "@/components/marketing/steps/step-panel";
 
-import { HtmlBlockArt } from "./art/html-block-art";
-import { ShortcodeArt } from "./art/shortcode-art";
+import { HtmlBlockArt, ShortcodeArt } from "./art/wordpress-art-loader";
 
 /**
  * The two cases the block does not cover: an editor without blocks, and a site
@@ -15,6 +14,7 @@ import { ShortcodeArt } from "./art/shortcode-art";
 export function WordPressOtherWays() {
   return (
     <Section
+      screen
       eyebrow="Other editors"
       title={
         <>

@@ -1,19 +1,13 @@
-"use client";
-
-import { Accordion } from "@heroui/react";
-import { ChevronDown } from "lucide-react";
-
 import { Section } from "@/components/marketing/section";
 
-export type FaqItem = { question: string; answer: React.ReactNode };
+import { FaqAccordion, type FaqItem } from "./faq-accordion";
+
+export type { FaqItem };
 
 /**
- * A platform page's questions, folded. One open at a time and none to begin
- * with — react-aria's `DisclosureGroup` default, and the rule every fold in the
- * app already follows (CLAUDE.md §8).
- *
- * The answers are in the served HTML either way: a closed panel is hidden, not
- * absent, so a search engine and a reader without JavaScript still get them.
+ * A platform page's questions as a section of their own, for a page that
+ * scrolls as a document (/for/any-website). A page that moves a screen at a
+ * time closes on `IntegrationClosing` instead, which puts them beside the way in.
  */
 export function IntegrationFaq({ items }: { items: readonly FaqItem[] }) {
   return (
@@ -25,25 +19,7 @@ export function IntegrationFaq({ items }: { items: readonly FaqItem[] }) {
         </>
       }
     >
-      <Accordion className="border-y border-border">
-        {items.map((item, index) => (
-          <Accordion.Item key={item.question} id={`faq-${index}`}>
-            <Accordion.Heading>
-              <Accordion.Trigger className="py-4 text-left text-base font-medium text-foreground">
-                {item.question}
-                <Accordion.Indicator>
-                  <ChevronDown aria-hidden="true" className="size-4" />
-                </Accordion.Indicator>
-              </Accordion.Trigger>
-            </Accordion.Heading>
-            <Accordion.Panel>
-              <Accordion.Body className="pb-5 text-sm/6 text-pretty text-muted [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-2">
-                {item.answer}
-              </Accordion.Body>
-            </Accordion.Panel>
-          </Accordion.Item>
-        ))}
-      </Accordion>
+      <FaqAccordion items={items} />
     </Section>
   );
 }

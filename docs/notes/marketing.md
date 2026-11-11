@@ -99,8 +99,9 @@
   `.mk-ground` (nothing at all) and `.mk-step-scene` fades the ground out at its
   edges with a mask — on the scene, never the 3D plane. Text and controls (cost
   cards, survey) sit on `.mk-outline`, a hairline drawn as an inset shadow because
-  a border's 2px put the survey 1px past its screen. `.mk-panel` is kept for the
-  `/for/*` pages, which still wear it.
+  a border's 2px put the survey 1px past its screen. Neither do `/for/wordpress` and
+  `/for/shopify` (2026-11-11); `.mk-panel` is kept for `/for/any-website`'s
+  `IntegrationCta` alone.
 - **The Sources drawing plays by itself while on screen, never on hover** (owner,
   2026-10-23). It stands on the steps' stage (a crop of the dotted Europe) beside a
   network panel; `useViewPlay` (Motion's `useInView`) drives the same pass engine as
@@ -122,8 +123,12 @@
   finish and settle; the rest frame is also the reduced-motion form. A tap plays one
   pass on touch. Loaded `ssr: false` (`art/steps-art-loader.tsx`). Same 3D rule as
   the showcase: nothing on `.mk-step-plane` itself may set opacity, a filter or a mask.
-  `steps/art/use-art-loop.ts` is no longer used by the steps or Sources, but the
-  integrations and unlimited-views drawings still loop with it.
+  `steps/art/use-art-loop.ts` is no longer used by the steps, Sources or the
+  platform pages; only the unlimited-views drawings still loop with it. **The
+  platform pages' drawings play by the same two rules** through
+  `steps/stage/use-stage-play.ts` (`play="hover"` in a step panel, which reports
+  `setPlaying` so the "Hover to play" chip hides; `play="view"` for heroes and the
+  split) — before it, the chip sat over a drawing that was already looping.
 - **"Drop a pin" is a button, and it never looks anything up.** It arms one
   press on the ground (crosshair, a hint, Escape cancels); unarmed, the ground
   closes cards as before — dropping on every click littered the map (owner,
@@ -148,10 +153,34 @@
   links rather than menu actions. **Every claim on a platform page must be true of
   what ships** — for WordPress, `distribution/wordpress/pinglide/readme.txt` and
   the labels the plugin draws; change the plugin's wording and re-read the page.
-  Its drawings live in `components/marketing/integrations/**/art`, built from the
-  shared pieces in `integrations/art/` (cursor, window, map picker, placeholder
-  block, dropping pin). **Pins drop, they do not ripple** (`liftPins`/`dropPins`,
-  single targets only), and every drawing's server frame is its finished state.
+  Its drawings live in `components/marketing/integrations/**/art`, built on the
+  landing page's stage kit: `StepStage`/`StagePin`, `steps/art/tilted-window.tsx`,
+  `WindowMap`, the pass helpers in `steps/stage/pass-kit.ts` (`cursorTo`,
+  `centreOf`, `clearMap`/`arriveMap`, `holdUntil`, which needs a hidden
+  `data-art="hold"` span), and the integration pieces in `integrations/stage/`
+  (cursor, check, placeholder block, map picker, store header, and `SyncScene`,
+  the split drawing both pages share). Each loads `ssr: false` through a
+  per-platform `*-art-loader.tsx`. **Pins drop, they do not ripple**, and every
+  drawing's server frame is its finished state.
+- **`/for/wordpress` and `/for/shopify` scroll a screen at a time, like the
+  landing page** (owner, 2026-11-11): `SnapPage` around `PlatformHero` (the
+  landing hero's sizing, `--mk-header` subtracted) and `Section screen`s, ending on
+  `IntegrationClosing` — the questions beside the way in, one screen. Measured on
+  both pages at 1440×732, 1280×720 and 1024×704: every screen is exactly one
+  viewport. The hero's type steps down between `lg` and `xl` because at 1024×704
+  the full sizes ran 55px long. `/for/any-website` is short and stays a document.
+- **The closing FAQ reserves its tallest answer** (`faq-accordion.tsx`, `dense`).
+  It measures the question rows plus the tallest answer from invisible sizers and
+  sets `--mk-faq-reserve` as the list's `lg` floor, re-measured on resize — so
+  opening any question moves nothing (title shift 0px for all nine on both pages;
+  486px at 1440 on WordPress). A hand-written `min-h` would go stale the first
+  time an answer is edited.
+- **The Shopify install button waits on `SHOPIFY_APP_STORE_URL`**
+  (`lib/marketing/integrations.ts`). Empty — the state until the listing is live —
+  the page shows a non-link "Coming soon to the Shopify App Store" chip beside
+  **Create a free map**, and the hero's small print sends Shopify owners to the
+  embed code (`/for/any-website`). Set it and every way in becomes **Add to
+  Shopify**. Prices come from `SHOPIFY_PRICES`, never written into the copy.
   Every section title on these pages carries one accent word (owner, 2026-10-10).
   `/for/any-website` is the snippet's page (short on purpose: drawing, code, way
   in). Code on the public site goes through `integrations/code-block.tsx` — copy
