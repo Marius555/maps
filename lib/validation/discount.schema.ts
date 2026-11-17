@@ -78,13 +78,8 @@ export const adminDiscountFormSchema = z
       ctx.addIssue({ code: "custom", path: ["maxUses"], message: "Enter a whole number, or leave it empty for no limit." });
     }
 
-    const starts = input.startsAt ? Date.parse(input.startsAt) : Date.now();
-    if (input.expiresAt && Date.parse(input.expiresAt) <= starts) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["expiresAt"],
-        message: input.startsAt ? "Set the expiry after the start." : "Set the expiry in the future.",
-      });
+    if (input.expiresAt && Date.parse(input.expiresAt) <= Date.now()) {
+      ctx.addIssue({ code: "custom", path: ["expiresAt"], message: "Set the expiry in the future." });
     }
   });
 
@@ -109,7 +104,8 @@ export function toDiscountInput(form: AdminDiscountForm): DiscountInput {
     duration: form.duration,
     months: form.duration === "repeating" ? Number(form.months) : null,
     maxUses: form.maxUses === "" ? null : Number(form.maxUses),
-    startsAt: toIsoOrNull(form.startsAt),
+    // Stripe has no scheduled start: a code works from the moment it is made.
+    startsAt: null,
     expiresAt: toIsoOrNull(form.expiresAt),
     plans: form.plans.map(offerFromKey),
   };

@@ -21,7 +21,7 @@ export function BillingBreakdown({ metrics }: { metrics: BillingMetrics }) {
       action={
         <SourceBadge
           source={api(
-            "Plans, cadences and statuses as Lemon Squeezy last reported them to the webhook. Plans are across every account; cadence across paying ones.",
+            "Plans, cadences and statuses as Stripe last reported them to the webhook. Plans are across every account; cadence across paying ones.",
           )}
         />
       }

@@ -140,29 +140,27 @@ export const env = {
     .map((domain) => domain.trim().toLowerCase())
     .filter(Boolean),
   /**
-   * Billing, through the merchant of record. All optional here and checked where
-   * they are used, the way the R2 keys are: a missing billing key should fail a
-   * checkout with its own name in the message, not take the whole dashboard down
-   * at import time for everyone who is not buying anything.
+   * Billing, through Stripe Managed Payments (Stripe as merchant of record).
+   * Both optional here and checked where they are used, the way the R2 keys
+   * are: a missing billing key should fail a checkout with its own name in the
+   * message, not take the whole dashboard down at import time for everyone who
+   * is not buying anything.
    *
-   * **`LEMON_TEST_API_KEY` is read as a fallback deliberately.** The provider
-   * decides test mode from the key itself, not from a flag, so the test key and
-   * the live key are the same setting with different values — and naming the
-   * variable after the mode would mean renaming it on the day of the first real
-   * payment, which is the worst possible day to be editing environment variables.
-   * Set `LEMON_API_KEY` in production; the fallback keeps a development `.env`
-   * that already has the test key working untouched.
+   * **Test mode is the key, not a flag.** `sk_test_…` produces test checkouts
+   * and test webhooks, `sk_live_…` real ones; nothing else switches between
+   * them. Plans are found by price lookup key (`lib/billing/stripe-prices.ts`),
+   * so there are no price ids to configure. `STRIPE_PUBLISHABLE_KEY` is not read
+   * anywhere: hosted Checkout is a redirect and needs no browser key.
    */
-  lemonApiKey: process.env.LEMON_API_KEY || process.env.LEMON_TEST_API_KEY || "",
-  lemonStoreId: process.env.LEMON_STORE_ID ?? "",
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   /**
-   * What the webhook's HMAC is checked against.
+   * What the webhook's signature is checked against (`whsec_…`).
    *
    * **Unset means the webhook refuses everybody**, exactly as `CRON_SECRET` unset
    * makes the cron route refuse everybody. An open endpoint that writes
    * subscription rows is somebody else's free Pro plan.
    */
-  lemonWebhookSecret: process.env.LEMON_WEBHOOK_SECRET ?? "",
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
   /**
    * What the anonymous monthly visitor key is salted with
    * (lib/analytics/collect/visitor-key.ts). Optional: unset, the key is salted
@@ -178,30 +176,13 @@ export const env = {
    *
    * **Unset — any one of the three — means the console does not exist**: both
    * pages 404 and the login route refuses everybody, the posture
-   * `LEMON_WEBHOOK_SECRET` takes. The password is only ever stored as a scrypt
+   * `STRIPE_WEBHOOK_SECRET` takes. The password is only ever stored as a scrypt
    * hash (`npm run admin:hash`), in a format with no `$` in it because Next's
    * dotenv-expand would read `$N` as a variable and silently corrupt the value.
    */
   adminEmail: (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase(),
   adminPasswordHash: process.env.ADMIN_PASSWORD_HASH ?? "",
   adminSessionSecret: process.env.ADMIN_SESSION_SECRET ?? "",
-  /**
-   * One variant id per plan and cadence, as the provider's dashboard shows them.
-   *
-   * Configuration rather than code because they are different numbers in test and
-   * in production, and because a variant is re-created whenever a price changes —
-   * which would otherwise be a deploy to sell the same product at a new price.
-   */
-  lemonVariants: {
-    starter: {
-      monthly: process.env.LEMON_VARIANT_STARTER_MONTHLY ?? "",
-      yearly: process.env.LEMON_VARIANT_STARTER_YEARLY ?? "",
-    },
-    pro: {
-      monthly: process.env.LEMON_VARIANT_PRO_MONTHLY ?? "",
-      yearly: process.env.LEMON_VARIANT_PRO_YEARLY ?? "",
-    },
-  },
   /**
    * The Shopify app (docs/notes/shopify.md). **Both or no Shopify**: unset, no
    * ID token verifies, the App Home and the webhook refuse everybody, and the

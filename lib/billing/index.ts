@@ -1,27 +1,25 @@
 import "server-only";
 
-import { createLemonProvider } from "./lemon";
+import { createStripeProvider } from "./stripe";
 import type { BillingProvider } from "./types";
 
 /**
  * The merchant of record, memoised per process.
  *
  * The same shape as `lib/geocoding/index.ts` and `lib/routing/index.ts`: one
- * getter, one instance, and a provider named in exactly one place. There is no
- * environment switch here yet because there is one provider — when there is a
- * second, this is the line that changes and nothing else does, which is the whole
- * reason the interface exists (CLAUDE.md §3 records the choice as "Paddle **or**
- * Lemon Squeezy", not as settled forever).
+ * getter, one instance, and a provider named in exactly one place. It has
+ * changed once already — Lemon Squeezy to Stripe Managed Payments, November
+ * 2026 — and this line plus the adapter files were all that had to.
  */
 let provider: BillingProvider | null = null;
 
 export function getBilling(): BillingProvider {
-  provider ??= createLemonProvider();
+  provider ??= createStripeProvider();
 
   return provider;
 }
 
-export { BillingError } from "./lemon";
+export { BillingError } from "./stripe-client";
 export type {
   BillingCadence,
   BillingProvider,
@@ -42,6 +40,7 @@ export type {
   PaymentMethod,
   PlanChangeRequest,
   PlanOffer,
+  ScheduledChange,
   SubscriptionDetails,
   SubscriptionState,
   SubscriptionStatus,

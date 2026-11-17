@@ -5,7 +5,7 @@ wrapper, for App Store discovery, and the App Store's rules decide its shape:
 
 | Requirement | What it forced |
 |---|---|
-| 1.2.1 — bill through Shopify | Shopify App Pricing, not Lemon Squeezy, for every shop |
+| 1.2.1 — bill through Shopify | Shopify App Pricing, not Stripe, for every shop |
 | 2.2 / 2.2.2 — embedded in the admin, off-platform features inside it | The existing editor runs **inside the Shopify admin's iframe** |
 | 1.1.1 — session tokens, no third-party cookies | A second credential: the Shopify ID token |
 | 2.3.x — install from Shopify, OAuth at once, no typed shop domain | Install happens on the first load of the App Home |
@@ -91,13 +91,13 @@ empty the page says "Coming soon to the Shopify App Store" and offers the embed 
 - **Inside the admin the app is light, always.** `theme-script.tsx` locks `<html>` light on an
   `embedded=1` document (`data-theme-lock`) and `applyTheme` honours the lock; there is no theme
   row in the account menu and no General section in Settings for a shop.
-- **A shop never meets Lemon Squeezy.** Settings → Billing draws `ShopifyPlan` for a shop and
-  reads nothing from Lemon; every Lemon billing route asks `refuseShopifyBilled`
+- **A shop never meets Stripe.** Settings → Billing draws `ShopifyPlan` for a shop and
+  reads nothing from Stripe; every Stripe billing route asks `refuseShopifyBilled`
   (`lib/billing/shopify-billed.ts`) before touching the provider; `/upgrade` sends a shop back
   to Settings → Billing. Off-platform billing is an App Store rejection (1.2.1). **Change plan
   is offered on every plan, Pro included** — in Billing and in the account menu — because a
   shop must be able to downgrade without contacting us (1.2.3). Any new upgrade link points at
-  `/settings/billing`, never `/pricing` (euros, Lemon checkout).
+  `/settings/billing`, never `/pricing` (euros, Stripe checkout).
 - **A shop's Settings are Billing and Usage** (`settingsItemsFor`), and `/settings` opens at
   Billing (`settingsHomeFor`) — the admin's own "Settings" link included. General redirects a
   shop to Billing: its profile is "the address you sign in with" (a shop has none, and its name
@@ -116,8 +116,8 @@ empty the page says "Coming soon to the Shopify App Store" and offers the embed 
   (`provider: "shopify"`) when the App Home's return from the plan page shows a paid plan
   started or changed — never from the hourly sweep, so a renewal is not a sale. The browser
   identifies the same workspace id with `platform: "shopify"`.
-- **A Shopify shop is never billed by Lemon Squeezy**, and its subscription row says
-  `provider: "shopify"`. Absent `provider` is Lemon, which is every row written before this.
+- **A Shopify shop is never billed by Stripe**, and its subscription row says
+  `provider: "shopify"`. Absent `provider` is Stripe, whose adapter never writes the column.
 - **Frozen is sticky.** `activeSubscription` has no status; a freeze is known only from the
   `SUBSCRIPTION_FROZEN` event, so a re-read with no event keeps a stored freeze.
 - **Webhooks: raw body, HMAC, then parse, and answer inside five seconds.** `shop/redact` only
@@ -486,12 +486,41 @@ it before `shopify theme check` too.
    "App not found" above was measured on `2026-10`.
 2. Distribution: **Public** (Partners → the app → Distribution). It cannot be changed once
    chosen, and Shopify App Pricing and the Partner API's `activeSubscription` work for public
-   apps only.
+   apps only. **Chosen 2026-11-11.** The listing, and with it the Pricing content editor, sits
+   behind the **$19 one-time App Store registration**: until it is paid, "Manage submission"
+   opens the registration form, so the plans in step 3 cannot be drafted before paying.
+   Registration paid 2026-11-12.
 3. App Pricing in the Partner Dashboard: plans whose handles start `free`, `starter`, `pro`,
    monthly and yearly, at the prices in `SHOPIFY_PRICES`; no trial (Free is the trial).
-4. `npm run shopify:deploy` after any change under `distribution/shopify`, and
+   **Done 2026-11-12, and App Pricing is enabled** (no longer manual/legacy pricing): handles
+   exactly `free`, `starter` ($19 / $190), `pro` ($39 / $390), redirect URL `/`, "free for
+   partners" off. Handles and invoice names cannot be changed. Draft plans do not count on the
+   listing until App Pricing is enabled. The listing's plan display names and features are
+   written from `lib/limits/plans.ts` and leave seats out, because a shop has no Team.
+   Measured on the dev store the same day: a $0 Starter test charge returned
+   `…/maps?charge_id=…&plan_handle=starter`, and the Partner API (GraphiQL, client
+   `SHOPIFY_PARTNER_API_TOKEN`, version 2026-07) answered `activeSubscription` with
+   `items: [{ handle: "starter" }]`. The "App not found" above is gone. **While
+   `npm run shopify:dev` runs, the dev store frames the local tunnel**, so that return lands
+   on `next dev`, whose `.env` has no Partner token: the plan is not reconciled locally and
+   `planCheckedAt` stays null. Production has all three variables. Re-test against
+   pinglide.com with `app dev` stopped.
+4. **The App Store listing** (Partners → Distribution → Manage submission; English, primary
+   category Sales channels › Selling in person › Store locator; Embedded + Online store
+   capabilities; "doesn't need protected customer data"). Filled 2026-11-12. The automated
+   check passed. **Left for the owner:** a screencast URL (YouTube, 3–8 minutes, onboarding
+   plus the storefront), "I've reviewed all the App Store Requirements", and Submit for
+   review. Payouts need business info and a payout method under Organization settings →
+   Partner payouts. **Two rules the listing editor enforces:**
+   - The FAQ URL may not contain "shopify", so `/for/shopify` is refused.
+   - Any wording about pricing ("free", "plan", "cost") outside the pricing section draws a
+     review tip.
+
+   After approval, set `SHOPIFY_APP_STORE_URL` (`lib/marketing/integrations.ts`) to the
+   listing URL.
+5. `npm run shopify:deploy` after any change under `distribution/shopify`, and
    `npm run setup:sheet-sync` after any change to the hourly function.
-5. Check: `curl -I "https://pinglide.com/shopify/session-token?shop=<shop>.myshopify.com"` is a 200.
+6. Check: `curl -I "https://pinglide.com/shopify/session-token?shop=<shop>.myshopify.com"` is a 200.
 
 `shopify app dev` starts `scripts/shopify-dev.mjs` as the app's web process — `npm run dev`
 with `APP_URL` pointed at the CLI's tunnel — and installs the dev app on the dev store.

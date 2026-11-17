@@ -2,7 +2,7 @@ import "server-only";
 
 import { getPromotion, type Promotion } from "@/lib/repositories/promotions.repository";
 import { discountStatus } from "./discounts";
-import { countRedemptions, listDiscountsBare } from "./lemon-discounts";
+import { countRedemptions, listDiscountsBare } from "./stripe-discounts";
 import type { Discount, PricingOffer, PublicDiscount } from "./types";
 
 /**
@@ -63,6 +63,8 @@ function promotion(now: number) {
 function uses(discount: Discount, now: number): Promise<number | null> {
   // Only a capped code can be used up, so only a capped code is counted.
   if (discount.maxUses === null) return Promise.resolve(null);
+  // Stripe counts redemptions on the code itself, so the list usually has it.
+  if (discount.uses !== null) return Promise.resolve(discount.uses);
 
   return cached(
     countEntries.get(discount.id),

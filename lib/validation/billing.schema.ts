@@ -9,10 +9,10 @@ import { DISCOUNT_CODE_PATTERN } from "./discount.schema";
  * arrives from a link anybody can edit — so the same rule applies as to a request
  * body, and this schema is the one place that rule is written down.
  *
- * **A plan and a cadence, never a price and never a variant id.** The temptation
- * is to put the variant in the link, since the page already knows it — and that
- * would let anyone swap in the id of the cheapest variant in the store while
- * claiming the Pro plan. What a plan costs is decided by `lib/billing/lemon.ts`
+ * **A plan and a cadence, never an amount and never a price id.** The temptation
+ * is to put the price in the link, since the page already knows it — and that
+ * would let anyone swap in the id of the cheapest price in the account while
+ * claiming the Pro plan. What a plan costs is decided by `lib/billing/stripe-prices.ts`
  * from configuration, which is the only place that is trustworthy.
  *
  * `free` is deliberately not in the enum. It is not something you buy, and
@@ -38,7 +38,7 @@ export type CheckoutInput = z.output<typeof checkoutSchema>;
  * What the account page may ask a running subscription to become.
  *
  * The same plan-and-cadence pair as a checkout, for the same reason — never a
- * variant id from the client — with one difference: **no default cadence.** A
+ * price id from the client — with one difference: **no default cadence.** A
  * checkout that defaults to monthly opens a page where the buyer still sees the
  * price; a switch that defaults to monthly moves a yearly customer's billing
  * with nobody looking. So the caller has to say which one it means.

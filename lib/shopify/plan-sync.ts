@@ -76,7 +76,7 @@ export async function reconcileShopPlan(
 
   const { before, after } = await refreshShopPlan(shop, justChose ? "unfreeze" : "keep");
 
-  // The funnel's last step, which a Lemon Squeezy purchase sends from its
+  // The funnel's last step, which a Stripe purchase sends from its
   // return page. Only on the return from Shopify's plan page — never from the
   // hourly sweep, so a renewal is not a purchase.
   const bought = justChose ? shopifyPlanPurchase(before, after) : null;

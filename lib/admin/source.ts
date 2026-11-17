@@ -3,7 +3,7 @@
  * a service handed us from one we tallied or modelled ourselves.
  *
  * - `api` — a service's own answer, used as it came: Appwrite's totals and
- *   user records, Lemon Squeezy's subscription state, Resend's reply to a send.
+ *   user records, Stripe's subscription state, Resend's reply to a send.
  * - `counted` — our own exact tally of real events: rows bucketed by day, the
  *   upstream request counter, the lookup meter.
  * - `estimate` — modelled or partial: revenue from list prices, breakdowns

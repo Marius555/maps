@@ -180,7 +180,7 @@ transactional emails.
 
 The session cookie is `sameSite: "strict"`. Three navigations in this app arrive
 from somewhere that is not us — a mail client, Appwrite's own domain after
-Google, and Lemon Squeezy's after a payment — and browsers classify all three as
+Google, and Stripe's after a payment (or the billing portal) — and browsers classify all of them as
 cross-site *and carry that classification through a server redirect chain*.
 
 So the obvious implementation of both flows is wrong in the same way:
@@ -213,14 +213,15 @@ a Strict cookie.
   (so the `Set-Cookie` lands) and the hop to `/maps` is `router.replace` (so the
   cookie goes with it).
 - Billing: `/checkout/done` is a marketing-group page, and `CheckoutReturn` does
-  `router.replace("/maps?checkout=done")` from the client.
+  `router.replace("/maps?checkout=done")` from the client. The billing portal's
+  back link lands on `/billing/return` and `PortalReturn` hops to `/settings/billing`.
 
 **Billing walked into this a third time, and it is worth saying why it got
 past two written warnings.** The other two flows are *about* authentication, so
 the cookie is on the author's mind; the billing redirect is one string in a
-provider request body (`lib/billing/lemon.ts`), written while thinking about
-variants and prices. Nothing about `redirect_url: ".../account"` looks like a
-session decision. It is one, and `lib/billing/lemon.test.ts` now asserts the
+provider request body (`lib/billing/stripe.ts` now; Lemon Squeezy's adapter
+then), written while thinking about variants and prices. Nothing about `redirect_url: ".../account"` looks like a
+session decision. It is one, and `lib/billing/stripe.test.ts` now asserts the
 value is outside the matcher so the next person does not have to notice.
 
 The symptom is also the worst of the three. A confirmation link that bounces

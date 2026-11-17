@@ -104,11 +104,23 @@ async function rememberStoreHost(shop: ShopifyShop, storeHost: string): Promise<
  * A write that tidies what the block reads but is not what the request is for.
  * Logged and swallowed, so a refusal from Shopify — a shop missing the
  * `$app:map` definition, say — never becomes the request's answer.
+ *
+ * That one gets a line of its own instead of a stack trace: it is what a store
+ * running an `app dev` preview looks like (the preview does not create the
+ * definition the released version carries — docs/notes/shopify.md), and the
+ * theme editor's "Map" setting errors until it exists.
  */
 async function bestEffort(what: string, write: () => Promise<void>): Promise<void> {
   try {
     await write();
   } catch (error) {
+    if (error instanceof Error && error.message.includes("No metaobject definition exists")) {
+      console.warn(
+        `[shopify] couldn't ${what}: the shop has no $app:map definition, so the block's "Map" picker is empty. ` +
+          "On the dev store this is the app dev preview: stop it and clear the preview (Dev Console) to use the released version.",
+      );
+      return;
+    }
     console.error(`[shopify] couldn't ${what}:`, error);
   }
 }

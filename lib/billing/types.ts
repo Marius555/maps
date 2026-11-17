@@ -6,10 +6,11 @@ import type { PlanId } from "@/lib/repositories/plan-limits";
  * The same shape `lib/geocoding/types.ts` and `lib/routing/types.ts` take, for
  * the same reason and one extra. The shared reason is CLAUDE.md §7: a provider's
  * vocabulary stops at its own folder, so nothing outside `lib/billing/` knows
- * what a "variant" is or that statuses arrive spelled `on_trial`. The extra one
- * is §3, which names the choice as "Paddle **or** Lemon Squeezy" — a decision
- * taken once, on tax handling, with no claim that it is permanent — and §6, which
- * says the stored columns must not be named after whoever won.
+ * what a price lookup key is or that statuses arrive spelled `incomplete_expired`.
+ * The extra one is that the choice has already changed once — Lemon Squeezy
+ * stopped taking new stores, and Stripe Managed Payments replaced it in
+ * November 2026 — and §6 says the stored columns must not be named after
+ * whoever won.
  *
  * Three things are deliberately *not* in here:
  *
@@ -31,13 +32,13 @@ import type { PlanId } from "@/lib/repositories/plan-limits";
 export type BillingCadence = "monthly" | "yearly";
 
 /**
- * Who bills a subscription: Lemon Squeezy for the web app, Shopify for a shop
- * that installed the Shopify app (which must bill through Shopify — App Store
- * requirement 1.2.1). Absent on a row means Lemon Squeezy, which is every row
- * written before Shopify existed. Hand-kept in step with `BILLING_PROVIDERS`
- * in `scripts/appwrite-schema.mjs`.
+ * Who bills a subscription: Stripe for the web app, Shopify for a shop that
+ * installed the Shopify app (which must bill through Shopify — App Store
+ * requirement 1.2.1). Absent on a row means Stripe: the web adapter never
+ * writes the column. Hand-kept in step with `BILLING_PROVIDERS` in
+ * `scripts/appwrite-schema.mjs`.
  */
-export const BILLING_PROVIDERS = ["lemon", "shopify"] as const;
+export const BILLING_PROVIDERS = ["stripe", "shopify"] as const;
 
 export type BillingProviderId = (typeof BILLING_PROVIDERS)[number];
 
@@ -65,6 +66,12 @@ export type CheckoutRequest = {
    * valid and what it is worth.
    */
   discountCode?: string;
+  /**
+   * The provider-side customer of a former subscriber, from our own row, so a
+   * second purchase lands on the same customer and its invoices sit together.
+   * Absent for somebody who has never bought anything.
+   */
+  billingCustomerId?: string;
 };
 
 /** Where to send the buyer. Nothing else about the checkout crosses out. */
@@ -97,8 +104,8 @@ export type SubscriptionState = {
    */
   cadence: BillingCadence | null;
   /**
-   * Who bills it. Optional, and absent means Lemon Squeezy: the Lemon adapter
-   * never sets it, so nothing on the web path changed when Shopify arrived.
+   * Who bills it. Optional, and absent means Stripe: the Stripe adapter never
+   * sets it, so the web path reads exactly as it did before Shopify arrived.
    */
   provider?: BillingProviderId;
 };
@@ -109,24 +116,32 @@ export type PlanChangeRequest = {
   plan: PaidPlanId;
   cadence: BillingCadence;
   /**
-   * Whether the difference is settled against the period already paid for.
+   * When the new plan starts.
    *
-   * True for an upgrade: the new plan starts now and the difference is added to
-   * the next bill. False for a downgrade, and for undoing one: the next bill is
-   * simply the new price and no money moves today, because the period already
-   * paid for is kept rather than credited back — see `planChange`.
+   * `now` for an upgrade: the new plan starts at once and the difference is
+   * prorated (onto the next bill, or — when the interval changes — onto an
+   * invoice today, because Stripe restarts the billing period). `renewal` for a
+   * downgrade: the provider books it for the end of the period already paid for
+   * and nothing is charged or credited today — see `planChange`.
    */
-  prorate: boolean;
+  when: "now" | "renewal";
+};
+
+/** A downgrade the provider has booked for the renewal. */
+export type ScheduledChange = PlanOffer & {
+  /** ISO. When it takes effect: the end of the period already paid for. */
+  at: string;
 };
 
 /**
  * A plan already paid for, kept until the renewal after a downgrade.
  *
- * The provider moves a subscription the moment it is asked and has no way to
- * book a change for the end of the period — so a downgrade is sent at once,
- * without proration, and this is what keeps the customer on what they paid for
- * in the meantime. `getUserPlan` grants it until `until`, and the account page
- * says so.
+ * **The columns behind it are retired** (2026-11, Stripe). Lemon Squeezy could
+ * not book a change for the end of a period, so a downgrade was sent at once and
+ * three columns on the subscription row kept the paid-for plan until the
+ * renewal. Stripe books it itself (`ScheduledChange`), so nothing writes those
+ * columns any more; `getUserPlan` still reads them, harmlessly, and the type
+ * survives as the shape a plan-change reply describes a booked downgrade in.
  */
 export type KeptPlan = {
   plan: PaidPlanId;
@@ -173,7 +188,7 @@ export type PaymentMethod = {
  * cannot tell "renews on" from "ends on". This can, because it is asked live.
  */
 export type SubscriptionDetails = {
-  /** Null when the variant is none of ours. */
+  /** Null when the price is none of ours. */
   state: Omit<SubscriptionState, "userId"> | null;
   cancelled: boolean;
   /** The next charge, while it is running. */
@@ -181,15 +196,18 @@ export type SubscriptionDetails = {
   /** The last day, once it is cancelled or has expired. */
   endsAt: string | null;
   payment: PaymentMethod;
+  /** A downgrade booked for the renewal, or null. */
+  scheduled: ScheduledChange | null;
   /**
-   * Signed, and good for 24 hours from this request. Fetched per visit and
-   * never stored, so a stored one cannot become a button that quietly fails.
+   * Our own route, which opens a fresh customer-portal session on each press:
+   * Stripe's portal links are short-lived, so one made when the page rendered
+   * could be dead by the time it is clicked.
    */
   portalUrl: string | null;
   updatePaymentUrl: string | null;
 };
 
-/** The provider's invoice statuses, which are also ours: they need no judgement. */
+/** Our invoice statuses. The adapter maps the provider's onto these. */
 export type InvoiceStatus = "pending" | "paid" | "void" | "refunded" | "partial_refund";
 
 export type Invoice = {
@@ -201,8 +219,8 @@ export type Invoice = {
   total: string;
   status: InvoiceStatus;
   /**
-   * The provider's PDF. Signed but not expiring, so it can be rendered into a
-   * page. Null while the invoice is still pending, when there is no PDF yet.
+   * The provider's PDF, or its hosted invoice page when there is no PDF. Read
+   * per visit, never stored. Null while the invoice is still pending.
    */
   url: string | null;
 };
@@ -219,7 +237,7 @@ export type InvoicePage = {
  * The provider is the only record of these (docs/notes/billing.md,
  * "Discounts"): created and deleted from the operator console, read live,
  * never mirrored into Appwrite. Plans are named as ours — a plan and a
- * cadence — never as the provider's variant ids.
+ * cadence — never as the provider's price or product ids.
  * ------------------------------------------------------------------ */
 
 /** One thing that can be bought: a paid plan at one cadence. */
@@ -347,15 +365,25 @@ export type BillingProvider = {
    *
    * **Not a second checkout.** A checkout for somebody who already pays opens a
    * second subscription beside the first, and they are then charged twice for
-   * one account. This changes the one they have, **immediately** — the provider
-   * has no scheduled change — prorating the difference onto the next renewal
-   * or, with `prorate: false`, simply billing the new price from then on.
+   * one account. This changes the one they have — at once and prorated
+   * (`when: "now"`), or booked for the renewal with nothing charged today
+   * (`when: "renewal"`). Either way it replaces a downgrade already booked.
    *
-   * Resolves to the subscription as the provider now reports it, or null when
-   * the answer names no plan of ours. Throws when the provider refuses: a change
-   * that did not happen has to be said out loud.
+   * Resolves to the subscription as the provider now reports it. Throws when the
+   * provider refuses: a change that did not happen has to be said out loud.
    */
-  changePlan(request: PlanChangeRequest): Promise<Omit<SubscriptionState, "userId"> | null>;
+  changePlan(request: PlanChangeRequest): Promise<SubscriptionDetails | null>;
+  /** Drop a downgrade booked for the renewal, so the plan paid for simply renews. */
+  keepPlan(billingSubscriptionId: string): Promise<SubscriptionDetails | null>;
+  /**
+   * A fresh, short-lived link into the provider's own billing portal for this
+   * customer — straight to the card form with `flow: "payment"`. `returnUrl` is
+   * where the portal's back link goes.
+   */
+  portalSession(
+    billingCustomerId: string,
+    options: { flow: "payment" | null; returnUrl: string },
+  ): Promise<string>;
   /**
    * The discount codes, newest first, each with its redemption count. The
    * operator console's only reader; never in a customer's path.

@@ -11,7 +11,7 @@ never committed. Check `.env.example` for the variable names.
 2. [Testing](#2-testing)
 3. [The embed (the map on customers' websites)](#3-the-embed-the-map-on-customers-websites)
 4. [WordPress plugin](#4-wordpress-plugin)
-5. [Billing (Lemon Squeezy)](#5-billing-lemon-squeezy)
+5. [Billing (Stripe)](#5-billing-stripe)
 6. [Google Sheets auto-sync](#6-google-sheets-auto-sync)
 7. [Other integrations, switched on in `.env`](#7-other-integrations-switched-on-in-env)
 8. [Setting up a new environment](#8-setting-up-a-new-environment)
@@ -111,27 +111,29 @@ file broke and why. If the log is empty, stop Playground (Ctrl+C) and start it a
 `define( 'PINGLIDE_APP_URL', 'http://localhost:3000' );` to `wp-config.php`. The release
 checklist is in `distribution/wordpress/README.md`.
 
-## 5. Billing (Lemon Squeezy)
+## 5. Billing (Stripe)
+
+Stripe sells the plans through **Managed Payments**, so Stripe (as "Link") is the seller and
+handles VAT. Switch Managed Payments on in the Stripe Dashboard first.
 
 | Command | What it does | Needs |
 |---|---|---|
-| `npm run setup:lemon` | Finds your plan variants in the Lemon store, writes their ids into `.env` and sets up the webhook. Run it once in test mode and once in live mode. | `.env` (`LEMON_API_KEY`) |
-| `npm run setup:lemon -- --dry-run` | Shows what `setup:lemon` would change, without writing anything. | `.env` |
-| `npm run setup:lemon -- --verify` | Checks that the ids in `.env` match the store. Fails if they don't. | `.env` |
-| `npm run billing:replay -- subscription_created --email you@example.com --plan pro` | Sends a fake, correctly signed webhook to your running app, as if that person had just paid. | `npm run dev` running, `.env` |
+| `npm run setup:stripe` | Creates the four plans (Starter and Pro, monthly and yearly) as products and prices, sets up the customer portal and, when `APP_URL` is public, the webhook. When it creates the webhook it prints its secret once (put that on the Appwrite Site); it only writes it into `.env` if `.env` has none. For the live site run `APP_URL=https://pinglide.com npm run setup:stripe`. Run it once with the test key and once with the live key. | `.env` (`STRIPE_SECRET_KEY`) |
+| `npm run setup:stripe -- --dry-run` | Shows what `setup:stripe` would change, without changing anything. | `.env` |
+| `npm run setup:stripe -- --verify` | Checks the prices, the webhook and `.env` against what the app expects. Fails if they disagree. | `.env` |
 
-`billing:replay` events: `subscription_created`, `_updated`, `_cancelled`, `_expired`,
-`_resumed`, `_paused`, `_unpaused`, `subscription_payment_success`, `_failed`, `_recovered`
-and `_refunded`. The `payment_*` events also need `--subscription <id>`. Other flags:
-`--cadence monthly|yearly`, `--url <origin>` and `--dry-run`.
+**Test payments on your own computer** with the [Stripe CLI](https://docs.stripe.com/stripe-cli)
+(Windows: `winget install Stripe.StripeCLI` or `scoop install stripe`):
+1. `stripe login`, then (one line — the CLI refuses `listen` without `--events`):
+   `stripe listen --events customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.subscription.paused,customer.subscription.resumed,invoice.paid,invoice.payment_failed --forward-to localhost:3000/api/webhooks/billing`.
+   Instead of `stripe login` you can add `--api-key sk_test_…`.
+2. Put the `whsec_…` it prints into `.env` as `STRIPE_WEBHOOK_SECRET` and restart `npm run dev`.
+3. Buy a plan at `/pricing` with the test card `4242 4242 4242 4242`, any future date, any CVC.
+   The webhook arrives in the `stripe listen` window.
+4. `stripe events resend <evt_…>` sends one again; `stripe trigger <event>` makes a fake one.
 
-**Test a real payment before deploying:**
-1. Run `ngrok http 3000` and copy the https URL it prints.
-2. Set `APP_URL` in `.env` to that URL, restart `npm run dev`, then run `npm run setup:lemon`.
-3. Open the ngrok URL, sign in with email and password (not Google), and buy a plan with a
-   test card.
-4. Watch the webhook arrive at http://127.0.0.1:4040.
-5. Afterwards, set `APP_URL=https://pinglide.com` again and re-run `npm run setup:lemon`.
+The deployed site uses its own webhook secret, the one `setup:stripe` wrote when it created the
+endpoint — put that value on the Appwrite Site, not the `stripe listen` one.
 
 ## 6. Google Sheets auto-sync
 
@@ -218,7 +220,7 @@ data. Add `-- --dry-run` first where it is supported.
 
 | Command | What it does |
 |---|---|
-| `npm run migrate:permissions` | Removes user write permissions from every row and file. `-- --verify-subscriptions` compares every subscription with Lemon Squeezy, and adding `--fix` corrects them. |
+| `npm run migrate:permissions` | Removes user write permissions from every row and file. |
 | `npm run migrate:tags` | Turns old categories into tags. |
 | `npm run migrate:snapshots-to-r2` | Copies published maps from Appwrite storage to R2. |
 | `npm run migrate:style-host` | Points published maps at the current tile host. |

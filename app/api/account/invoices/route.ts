@@ -23,7 +23,7 @@ export const GET = withPersonalAuth(async ({ request, user }) => {
   const page = pageSchema.parse(request.nextUrl.searchParams.get("page") ?? 1);
   const subscription = await getSubscription(ownWorkspace(user.id));
 
-  // Shopify keeps a shop's invoices in its own admin; ours would be Lemon's.
+  // Shopify keeps a shop's invoices in its own admin; ours would be Stripe's.
   if (!subscription?.billingSubscriptionId || isShopifyBilled(subscription)) {
     return ok({ invoices: [], page: 1, lastPage: 1 });
   }

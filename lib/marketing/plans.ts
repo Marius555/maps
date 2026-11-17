@@ -19,9 +19,9 @@
  * keeps `/pricing` statically rendered.
  *
  * **What is here is what a page may say, and the provider is what actually
- * charges.** A price in this file that disagrees with the variant configured in
- * `LEMON_VARIANT_*` is an advertisement we do not honour, and no test can catch
- * it — the two live in different systems. Change one, change the other, in the
+ * charges.** A price in this file that disagrees with the Stripe price behind
+ * its `pinglide_*` lookup key (`npm run setup:stripe`) is an advertisement we do
+ * not honour, and no test can catch it — the two live in different systems. Change one, change the other, in the
  * same sitting.
  */
 

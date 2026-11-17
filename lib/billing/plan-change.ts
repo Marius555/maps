@@ -1,26 +1,19 @@
 import type { PlanId } from "@/lib/repositories/plan-limits";
-import type { BillingCadence, KeptPlan, PaidPlanId } from "./types";
+import type { BillingCadence, PaidPlanId } from "./types";
 
 /**
  * How a plan change is carried out, decided once and without the provider.
  *
  * **The rule the customer sees: an upgrade starts now, a downgrade starts at the
- * renewal.** Somebody who paid for a month of Pro keeps Pro for that month. The
- * provider cannot book a change for later — its own guide: "the plan change takes
- * effect immediately, regardless of the proration option chosen" — so the two
- * halves are split between it and us:
+ * renewal.** Somebody who paid for a month of Pro keeps Pro for that month.
  *
- * - **The provider is moved at once, without proration.** Its variant becomes
- *   the lower plan today, nothing is credited or charged, and the next renewal
- *   is billed at the new price. Billing is right by construction, with no job
- *   that has to fire on the right night.
- * - **We keep the plan that was paid for** (`KeptPlan`, three columns on the
- *   subscription row) until that renewal, and `getUserPlan` grants it. If those
- *   columns were ever lost, the customer would drop to what they are now billed
- *   for a few weeks early — visible, and the cheap direction to fail in.
- *
- * An upgrade takes the provider's default instead: the new plan now, and the
- * difference on the next bill.
+ * Stripe can book a change for the end of a period itself (a subscription
+ * schedule), so the provider keeps billing — and our row keeps reporting — the
+ * plan paid for until the renewal, and the booked change is read live from it.
+ * That replaced the `kept*` columns, which existed only because Lemon Squeezy
+ * applied every change at once. It is also forced: Stripe restarts the billing
+ * period and invoices on the spot when the interval changes, so a yearly →
+ * monthly switch made "now, unprorated" would have charged the customer today.
  *
  * Pure, and outside the repositories, so the route and the account page read one
  * decision and it can be tested without a database or a network.
@@ -32,29 +25,17 @@ const PLAN_ORDER: readonly PlanId[] = ["free", "starter", "pro"];
 /** A plan at a cadence. Cadence is null only when it was never known. */
 export type Offer = { plan: PlanId; cadence: BillingCadence | null };
 
-/** The parts of a subscription row this reads. */
-type Row = Offer & { kept: KeptPlan | null };
-
-export type PlanChangeStep = {
-  plan: PaidPlanId;
-  cadence: BillingCadence;
-  prorate: boolean;
-};
+type Target = { plan: PaidPlanId; cadence: BillingCadence };
 
 export type PlanChange =
-  /** The provider already bills this plan and cadence. */
-  | { kind: "unchanged" }
-  | {
-      kind: "change";
-      /** Sent to the provider in order. More than one only to undo a pending downgrade first. */
-      steps: PlanChangeStep[];
-      /**
-       * What the row keeps once the steps are done. `until: null` means the
-       * renewal date the provider answers the change with — the one date that is
-       * certainly current, which the stored row may not be.
-       */
-      keep: (Omit<KeptPlan, "until"> & { until: string | null }) | null;
-    };
+  /** Nothing to do: already billed, or already booked for the renewal. */
+  | { kind: "unchanged"; booked: boolean }
+  /** Drop the downgrade booked for the renewal; the plan paid for renews. */
+  | { kind: "keep" }
+  /** An upgrade: starts now, prorated. */
+  | { kind: "now"; target: Target }
+  /** A downgrade: booked for the renewal, nothing charged today. */
+  | { kind: "renewal"; target: Target };
 
 function rank(plan: PlanId): number {
   return PLAN_ORDER.indexOf(plan);
@@ -72,6 +53,10 @@ function isFuture(iso: string, now: number): boolean {
   return Number.isFinite(at) && at > now;
 }
 
+function same(a: Offer, b: Offer): boolean {
+  return a.plan === b.plan && a.cadence === b.cadence;
+}
+
 /** Whether moving `from` → `to` is a step down. Plan decides first; cadence only within one plan. */
 export function isDowngrade(from: Offer, to: Offer): boolean {
   const delta = rank(to.plan) - rank(from.plan);
@@ -82,36 +67,15 @@ export function isDowngrade(from: Offer, to: Offer): boolean {
 }
 
 /**
- * The downgrade waiting for the renewal, or null when none is.
- *
- * A kept plan whose date has passed is not an error and is not swept: the
- * renewal happened, the provider bills the new plan, and the stale columns mean
- * nothing — the same way a dangling tag id means nothing.
- */
-export function pendingKept(row: Row | null, now: number = Date.now()): KeptPlan | null {
-  if (!row?.kept) return null;
-
-  const { kept } = row;
-
-  if (!isFuture(kept.until, now)) return null;
-  if (kept.plan === row.plan && kept.cadence === row.cadence) return null;
-
-  return kept;
-}
-
-/** What this period was paid for: the kept plan while a downgrade waits, else what is billed. */
-export function paidOffer(row: Row, now: number = Date.now()): Offer {
-  const kept = pendingKept(row, now);
-
-  return kept ? { plan: kept.plan, cadence: kept.cadence } : { plan: row.plan, cadence: row.cadence };
-}
-
-/**
  * The plan to grant, with a kept one honoured until its date.
  *
+ * **Retired with the `kept*` columns** (see `KeptPlan`): nothing writes them
+ * since Stripe, so `kept` is null on every row written since, and this returns
+ * `granted` unchanged. Kept because `getUserPlan` still reads the columns and a
+ * row written before the move must not be re-interpreted.
+ *
  * Only ever *raises* what the subscription already grants, and never from
- * `free`: a subscription that has ended, lapsed or been refused grants nothing,
- * and a downgrade booked on it must not bring a plan back.
+ * `free`: a subscription that has ended, lapsed or been refused grants nothing.
  */
 export function withKeptPlan(
   granted: PlanId,
@@ -123,43 +87,26 @@ export function withKeptPlan(
   return rank(kept.plan) > rank(granted) ? kept.plan : granted;
 }
 
+/**
+ * What one press asks for.
+ *
+ * `billed` is what the provider bills this period — our row, which now always
+ * means the plan paid for. `scheduled` is a downgrade already booked for the
+ * renewal, read live, or null.
+ */
 export function planChange(
-  row: Row,
-  target: { plan: PaidPlanId; cadence: BillingCadence },
-  now: number = Date.now(),
+  billed: Offer,
+  target: Target,
+  scheduled: Offer | null,
 ): PlanChange {
-  if (row.plan === target.plan && row.cadence === target.cadence) {
-    return { kind: "unchanged" };
-  }
+  if (scheduled && same(scheduled, target)) return { kind: "unchanged", booked: true };
 
-  const kept = pendingKept(row, now);
-  const paid = paidOffer(row, now);
-
-  // Back to what this period was paid for: nothing is owed either way, and
-  // nothing is pending any more.
-  if (kept && kept.plan === target.plan && kept.cadence === target.cadence) {
-    return { kind: "change", steps: [{ ...target, prorate: false }], keep: null };
-  }
-
-  if (isDowngrade(paid, target)) {
-    return {
-      kind: "change",
-      steps: [{ ...target, prorate: false }],
-      // A second downgrade while one waits keeps the same paid plan and date.
-      keep:
-        kept ??
-        (paid.plan === "free" ? null : { plan: paid.plan, cadence: paid.cadence, until: null }),
-    };
-  }
+  if (same(billed, target)) return scheduled ? { kind: "keep" } : { kind: "unchanged", booked: false };
 
   /*
-   * An upgrade. With a downgrade pending, the provider is billing the *lower*
-   * plan, and prorating up from there would charge again for the part of this
-   * period already paid at the higher one — so it is put back first, without
-   * proration, and the upgrade is prorated from what was actually paid.
+   * A second downgrade while one waits replaces it; an upgrade while one waits
+   * starts from what is paid for, which is still what is billed — the adapter
+   * lets the booked change go first either way.
    */
-  const restore: PlanChangeStep[] =
-    kept?.cadence ? [{ plan: kept.plan, cadence: kept.cadence, prorate: false }] : [];
-
-  return { kind: "change", steps: [...restore, { ...target, prorate: true }], keep: null };
+  return isDowngrade(billed, target) ? { kind: "renewal", target } : { kind: "now", target };
 }

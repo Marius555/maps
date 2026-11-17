@@ -25,9 +25,9 @@ export type PlanChangeRequest = {
  * in between. This repeats what the column already says — the new price and
  * when it starts — and asks once. The safe choice is the one Escape takes.
  *
- * **No exact amount.** The provider offers no preview of a proration, so the
- * dialog says *when* the difference is billed, never a figure we would be
- * guessing at.
+ * **No exact amount.** The dialog says *when* the difference is billed, never
+ * a figure we would be guessing at. Lemon Squeezy offered no preview; Stripe
+ * does (`invoices.createPreview`), so a real figure is a possible follow-up.
  *
  * **`steady` on the backdrop**, because it portals out of the settings page —
  * the same rule as `CancelPlanButton`.

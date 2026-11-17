@@ -172,10 +172,10 @@ function asPlan(value: string | null | undefined): PlanId | null {
  *
  * **Two conditions, not one, and the second is the safety net.** `status` is what
  * the webhook says; `currentPeriodEnd` is when what it said stops being true. They
- * are separate because a cancellation does *not* end access — Lemon Squeezy keeps
+ * are separate because a cancellation does *not* end access — Stripe keeps
  * a cancelled subscription running to the end of its paid period, so the webhook
  * writes `active` with `currentPeriodEnd` set and expects a later
- * `subscription_expired` to close it. If that event is missed, dropped or retried
+ * `customer.subscription.deleted` to close it. If that event is missed, dropped or retried
  * into a failure, the row sits at `active` forever and the account keeps a plan it
  * stopped paying for. Reading the date here means the worst a lost webhook can do
  * is expire somebody a little early, which they can see and fix, rather than

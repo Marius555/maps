@@ -49,12 +49,12 @@ export function DiscountForm({
     try {
       const discount = await create.mutateAsync({
         ...values,
-        startsAt: wallClockToIso(values.startsAt),
+        startsAt: "",
         expiresAt: wallClockToIso(values.expiresAt),
       });
 
       toast.success("Discount created", {
-        description: `${discount.code} works at the checkout${values.startsAt ? " from the start time you set" : " now"}.`,
+        description: `${discount.code} works at the checkout now.`,
       });
       router.refresh();
       onDone();
@@ -84,20 +84,12 @@ export function DiscountForm({
         description="How many times it can be used in total, by anyone. Leave empty for no limit."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormDateTimeField
-          control={control}
-          name="startsAt"
-          label="Starts"
-          description="Your local time. Leave empty to start now."
-        />
-        <FormDateTimeField
-          control={control}
-          name="expiresAt"
-          label="Expires"
-          description="Your local time. Leave empty to never expire."
-        />
-      </div>
+      <FormDateTimeField
+        control={control}
+        name="expiresAt"
+        label="Expires"
+        description="Your local time. Leave empty to never expire. A code works from the moment it's created."
+      />
 
       <DiscountPlanFields control={control} />
 

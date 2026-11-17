@@ -12,7 +12,7 @@ const listDiscountsBare = vi.fn<() => Promise<Discount[]>>();
 const countRedemptions = vi.fn<(id: string) => Promise<number | null>>();
 const getPromotion = vi.fn();
 
-vi.mock("./lemon-discounts", () => ({ listDiscountsBare, countRedemptions }));
+vi.mock("./stripe-discounts", () => ({ listDiscountsBare, countRedemptions }));
 vi.mock("@/lib/repositories/promotions.repository", () => ({ getPromotion }));
 
 const NOW = Date.parse("2026-10-03T12:00:00Z");

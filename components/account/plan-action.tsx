@@ -144,8 +144,22 @@ export function planNoteFor({
 
   const from = { plan: current, cadence: currentCadence };
 
-  return isDowngrade(from, { plan: plan.id, cadence })
-    ? whenDowngradeStarts(from, plan, pending?.until ?? renewsOn)
+  if (isDowngrade(from, { plan: plan.id, cadence })) {
+    return whenDowngradeStarts(from, plan, pending?.until ?? renewsOn);
+  }
+
+  return upgradeNote(currentCadence, cadence);
+}
+
+/**
+ * What an upgrade costs and when. A change of interval restarts the billing
+ * period at the provider, so monthly → yearly is invoiced today, less what was
+ * left of the month; a same-interval upgrade adds the difference to the next
+ * bill. Shared with the toast so the promise and the confirmation agree.
+ */
+export function upgradeNote(from: PlanCadence | null, to: PlanCadence): string {
+  return from === "monthly" && to === "yearly"
+    ? "Starts now. Charged today, less what's left of this month."
     : "Starts now. The difference is added to your next bill.";
 }
 

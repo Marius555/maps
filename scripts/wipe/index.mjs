@@ -32,7 +32,7 @@ import { r2Bucket } from "../r2.mjs";
 import { connect, deleteRowsById } from "./appwrite.mjs";
 import { countdown, fail, requireAdminPassword, requireConfirmation, requireTerminal } from "./guards.mjs";
 import { resolveKeepSet } from "./keep-set.mjs";
-import { cancelSubscription, deleteDiscount } from "./lemon.mjs";
+import { cancelSubscription, deleteDiscount } from "./stripe.mjs";
 import { checkSchemaCoverage, planWipe } from "./plan.mjs";
 
 /*
@@ -65,7 +65,7 @@ if (!execute) {
 }
 
 if (plan.subscriptions.blocked) {
-  fail("Refusing: there are subscriptions to cancel and no LEMON_API_KEY to cancel them with.");
+  fail("Refusing: there are subscriptions to cancel and no STRIPE_SECRET_KEY to cancel them with.");
 }
 
 await requireConfirmation(appwrite.projectId);
@@ -85,7 +85,7 @@ if (failed > 0) {
   fail("Stopped before deleting anything else: a subscription could not be cancelled. Re-run once it is.");
 }
 
-await step("Deleting discount codes", plan.discounts, (discount) => deleteDiscount(discount.id));
+await step("Deleting discount codes", plan.discounts, (discount) => deleteDiscount(discount));
 
 for (const [bucketId, { remove }] of Object.entries(plan.files)) {
   await step(`Deleting files in ${bucketId}`, remove, (fileId) =>

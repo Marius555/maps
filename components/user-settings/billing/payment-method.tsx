@@ -25,9 +25,11 @@ const BRANDS: Record<string, string> = {
  * afterwards and a Back button does not have to find its way home across
  * somebody else's site.
  *
- * Plain anchors rather than `LinkButton`: these leave the app for a signed URL
- * on another domain, and prefetching one would spend a signature nobody pressed.
- * The URLs are good for 24 hours from the page load that fetched them.
+ * Plain anchors rather than `LinkButton`: each points at our own
+ * `/api/account/billing-portal`, which mints a short-lived portal session on the
+ * press and redirects to it — prefetching one would open a session nobody
+ * pressed for, and rendering the portal URL itself would leave a dead link in a
+ * tab left open.
  */
 export function PaymentMethod({
   payment,

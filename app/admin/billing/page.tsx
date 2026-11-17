@@ -23,7 +23,7 @@ export default async function AdminBillingPage() {
   await requireAdminPage();
 
   const metrics = await loadBillingMetrics();
-  const webhook = "Subscription state from Lemon Squeezy, as its webhook last reported it.";
+  const webhook = "Subscription state from Stripe, as its webhook last reported it.";
 
   return (
     <>

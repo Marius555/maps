@@ -92,6 +92,9 @@ export default async function UpgradePage(props: PageProps<"/upgrade">) {
       email: user.email,
       userId: user.id,
       discountCode: parsed.data.code,
+      // A former subscriber buys onto the customer they already have.
+      billingCustomerId:
+        subscription && subscription.provider !== "shopify" ? subscription.billingCustomerId : undefined,
     });
 
     url = checkout.url;

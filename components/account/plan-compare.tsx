@@ -22,6 +22,7 @@ import {
   PlanAction,
   planActionFor,
   planNoteFor,
+  upgradeNote,
   type PendingChange,
 } from "./plan-action";
 import { PlanChangeNotice } from "./plan-change-notice";
@@ -50,8 +51,7 @@ import { PlanColumn } from "./plan-column";
  *
  * **A downgrade waits for the renewal**, and while it does the paid plan keeps
  * "Your plan", its column offers "Keep …", and `PlanChangeNotice` under the
- * columns says what changes and when — see `planChange` for why the wait is
- * ours rather than the provider's.
+ * columns says what changes and when — the provider books it, see `planChange`.
  *
  * The cadence is state rather than a query parameter, the same choice `/pricing`
  * makes, because a settings page with two URLs is a Back button that lands
@@ -127,7 +127,7 @@ export function PlanCompare({
                 : `You keep ${nameOf(result.kept.plan)} until ${formatDate(result.kept.until)}.`
               : label.startsWith("Keep ")
                 ? "Nothing changes at your renewal."
-                : "The difference is added to your next bill.",
+                : upgradeNote(currentCadence, at).replace(/^Starts now\. /, ""),
           });
         },
         onError: (error) => {

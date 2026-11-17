@@ -107,7 +107,7 @@ Cloudflare dashboard → the zone → Security → WAF → Rate limiting rules �
 - **Then:** Block, for 10 seconds
 
 The free plan allows one rule with these periods. The webhook and cron paths are excluded
-because Lemon Squeezy and the Appwrite Function each come from a few addresses and are
+because Stripe and the Appwrite Function each come from a few addresses and are
 already authenticated by signature and secret.
 
 Check it: `for i in $(seq 1 150); do curl -s -o /dev/null -w "%{http_code}\n" https://<site>/api/auth/me; done | sort | uniq -c`
@@ -118,8 +118,6 @@ should show Cloudflare's 429s after the first hundred.
 ```
 npm run migrate:permissions -- --dry-run     # counts what would change
 npm run migrate:permissions                  # rows → [], files → read("any") only
-npm run migrate:permissions -- --verify-subscriptions        # compare every row to Lemon Squeezy
-npm run migrate:permissions -- --verify-subscriptions --fix  # overwrite mismatches with the provider's answer
 ```
 
 Run it once per environment, after deploying the code that stops granting the permissions.

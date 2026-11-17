@@ -13,7 +13,7 @@ import { track } from "@/lib/posthog/client";
  * The hop from the provider's domain back into the dashboard.
  *
  * **This component exists because of one cookie attribute.** The session cookie
- * is `sameSite: "strict"`, and a browser returning from `lemonsqueezy.com` is
+ * is `sameSite: "strict"`, and a browser returning from `checkout.stripe.com` is
  * making a cross-site top-level navigation — so it withholds the cookie, and
  * carries that classification through any server redirect chain. Sending the
  * buyer straight to the dashboard therefore handed `proxy.ts` a request with no

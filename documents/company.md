@@ -74,7 +74,7 @@ All four are filled in `lib/legal/values.ts`.
 
 | Placeholder | What it is | Value |
 |---|---|---|
-| `{{billing.merchantOfRecord}}` | Legal name of the merchant of record once chosen — CLAUDE.md §3 says Paddle or Lemon Squeezy, e.g. "Paddle.com Market Limited" | |
+| `{{billing.merchantOfRecord}}` | Legal name of the merchant of record once chosen — Stripe Managed Payments since November 2026 ("Sold through Link"); read it off a real receipt | |
 | `{{billing.merchantOfRecordTermsUrl}}` | Its terms for buyers | |
 | `{{hosting.provider}}` | Legal name of whoever runs the dashboard and the visitor-measurement endpoint. Appwrite Sites or Vercel — see `docs/notes/analytics.md` | |
 | `{{hosting.region}}` | Where it runs, e.g. "Frankfurt, Germany" | |

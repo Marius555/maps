@@ -5,9 +5,8 @@ import {
   getBilling,
   type KeptPlan,
   type SubscriptionDetails,
-  type SubscriptionState,
 } from "@/lib/billing";
-import { pendingKept, planChange } from "@/lib/billing/plan-change";
+import { planChange } from "@/lib/billing/plan-change";
 import { refuseShopifyBilled } from "@/lib/billing/shopify-billed";
 import { billingStanding } from "@/lib/billing/standing";
 import { ownWorkspace } from "@/lib/repositories/context";
@@ -26,9 +25,8 @@ import { changePlanSchema } from "@/lib/validation/billing.schema";
  * account page sends a free account to `/upgrade` and a paying one here, where
  * the subscription they have is changed in place.
  *
- * **An upgrade starts now; a downgrade starts at the renewal.** How, and why the
- * provider is moved at once either way, is `planChange`'s docblock — this route
- * carries out what it decides and writes the answer down.
+ * **An upgrade starts now; a downgrade starts at the renewal**, booked at the
+ * provider — see `planChange`. "Keep …" lets a booked downgrade go.
  *
  * Only a `switchable` subscription may be moved — `billingStanding`, which the
  * account page asks too, so the button and the route cannot disagree. A
@@ -37,10 +35,11 @@ import { changePlanSchema } from "@/lib/validation/billing.schema";
  *
  * **The row is written here as well as by the webhook**, from the provider's own
  * reply, so the page shows the change on its next render instead of waiting for
- * an event that has no promised arrival time. Both go through `toState` and
- * `upsertSubscription` is idempotent, so the webhook landing afterwards rewrites
- * the same values rather than racing them — and it never touches the kept plan,
- * which only this route writes.
+ * an event that has no promised arrival time. `upsertSubscription` is
+ * idempotent, so the webhook landing afterwards rewrites the same values.
+ *
+ * The reply's `kept` describes a booked downgrade the way the page's toast
+ * reads it: the plan paid for, kept until the date the change takes effect.
  */
 export const PATCH = withPersonalAuth(async ({ request, user }) => {
   const input = await parseBody(request, changePlanSchema);
@@ -68,15 +67,20 @@ export const PATCH = withPersonalAuth(async ({ request, user }) => {
   }
 
   /*
-   * A cancelled subscription is still `active` in our row — correctly, it runs
-   * to the end of what was paid for — so the standing above cannot see it. The
-   * provider can: ask once, and refuse, because moving a subscription that is
-   * about to end would bill a plan change nobody will use. A read that fails
-   * lets the change through; the provider still has the last word on it.
+   * Read live, for two things our row cannot hold: whether the subscription is
+   * set to end (still `active` in the row, correctly) and which downgrade, if
+   * any, is booked for the renewal. Unlike before, a failed read refuses the
+   * change: without knowing what is booked, the decision below could be wrong.
    */
-  const live = await getBilling()
-    .subscriptionDetails(subscription.billingSubscriptionId)
-    .catch(() => null);
+  let live: SubscriptionDetails | null;
+
+  try {
+    live = await getBilling().subscriptionDetails(subscription.billingSubscriptionId);
+  } catch (error) {
+    if (!(error instanceof BillingError)) throw error;
+
+    return fail("internal_error", error.message, 502);
+  }
 
   if (live?.cancelled) {
     return fail(
@@ -86,39 +90,31 @@ export const PATCH = withPersonalAuth(async ({ request, user }) => {
     );
   }
 
-  const change = planChange(subscription, input);
+  const change = planChange(
+    { plan: subscription.plan, cadence: subscription.cadence },
+    input,
+    live?.scheduled ?? null,
+  );
 
   if (change.kind === "unchanged") {
     return fail(
       "conflict",
-      pendingKept(subscription)
-        ? "That change is already booked for your renewal."
-        : "You're already on that plan.",
+      change.booked ? "That change is already booked for your renewal." : "You're already on that plan.",
       409,
     );
   }
 
-  let state: Omit<SubscriptionState, "userId"> | null = null;
+  let details: SubscriptionDetails | null;
 
   try {
-    /*
-     * One step, or two when an upgrade first has to undo a pending downgrade.
-     * If the second fails after the first succeeded, the subscription is back on
-     * the plan that was paid for and nothing is pending — so that state is
-     * written before the error is returned, rather than left for the webhook.
-     */
-    for (const [index, step] of change.steps.entries()) {
-      try {
-        state = await getBilling().changePlan({
-          billingSubscriptionId: subscription.billingSubscriptionId,
-          ...step,
-        });
-      } catch (error) {
-        if (index > 0 && state) await upsertSubscription({ ...state, userId: user.id }, null);
-
-        throw error;
-      }
-    }
+    details =
+      change.kind === "keep"
+        ? await getBilling().keepPlan(subscription.billingSubscriptionId)
+        : await getBilling().changePlan({
+            billingSubscriptionId: subscription.billingSubscriptionId,
+            ...change.target,
+            when: change.kind,
+          });
   } catch (error) {
     if (!(error instanceof BillingError)) throw error;
 
@@ -127,16 +123,15 @@ export const PATCH = withPersonalAuth(async ({ request, user }) => {
     return fail("internal_error", error.message, 502);
   }
 
+  const state = details?.state ?? null;
+
   if (!state) {
     /*
-     * The provider accepted the change and answered with a variant that is none
-     * of ours — the environment and the store disagree. The change *has*
-     * happened on their side, so this is logged loudly, and the webhook will
-     * decline the same event for the same reason.
+     * The provider accepted the change and answered with a price that is none
+     * of ours — the store and our lookup keys disagree. The change *has*
+     * happened on their side, so this is logged loudly.
      */
-    console.error(
-      `Plan change for ${user.id} returned a variant no LEMON_VARIANT_* matches.`,
-    );
+    console.error(`Plan change for ${user.id} returned a price no pinglide_* lookup key matches.`);
 
     return fail(
       "internal_error",
@@ -145,22 +140,19 @@ export const PATCH = withPersonalAuth(async ({ request, user }) => {
     );
   }
 
-  /*
-   * A downgrade keeps what was paid for until the renewal the provider has just
-   * answered with. With no date at all there is nothing to keep it until, so the
-   * change simply stands — logged, because it means the customer lost the rest
-   * of a period they paid for.
-   */
-  const until = change.keep ? (change.keep.until ?? state.currentPeriodEnd) : null;
-  const kept: KeptPlan | null = change.keep && until ? { ...change.keep, until } : null;
+  await upsertSubscription({ ...state, userId: user.id });
 
-  if (change.keep && !until) {
-    console.error(`Downgrade for ${user.id} has no renewal date, so nothing was kept.`);
-  }
+  const booked = details?.scheduled ?? null;
+  const kept: KeptPlan | null =
+    change.kind === "renewal" && booked
+      ? { plan: state.plan === "free" ? "starter" : state.plan, cadence: state.cadence, until: booked.at }
+      : null;
 
-  await upsertSubscription({ ...state, userId: user.id }, kept);
-
-  return ok({ plan: state.plan, cadence: state.cadence, kept });
+  return ok({
+    plan: booked && change.kind === "renewal" ? booked.plan : state.plan,
+    cadence: booked && change.kind === "renewal" ? booked.cadence : state.cadence,
+    kept,
+  });
 }, { rateLimit: "billing" });
 
 /**
@@ -178,8 +170,8 @@ export const PATCH = withPersonalAuth(async ({ request, user }) => {
  * with nothing running is refused.
  *
  * The reply is written through `toState` like every other write to the row, and
- * reads as `active` until `ends_at`: the `cancelled → active` mapping in
- * `lib/billing/lemon.ts` is what keeps the plan they paid for until then.
+ * reads as `active` until `cancel_at`: the set-to-cancel → `active` mapping in
+ * `lib/billing/stripe.ts` is what keeps the plan they paid for until then.
  */
 export const DELETE = withPersonalAuth(async ({ user }) => {
   const subscription = await getSubscription(ownWorkspace(user.id));

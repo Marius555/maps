@@ -36,36 +36,36 @@ export const LEGAL_DETAILS = {
   },
   legal: {
     /** e.g. "1.0". Raise it on every published change. */
-    version: "1.3",
+    version: "1.4",
     /** At least 30 days after announcing a change that is not in customers' favour. */
-    effectiveDate: "5 November 2026",
+    effectiveDate: "17 November 2026",
   },
   billing: {
     /**
      * The legal entity that sells the plans, as it appears on a customer's own
      * invoice — **not** the brand name on the dashboard you log into.
      *
-     * Lemon Squeezy is the provider, and the entity behind it has changed: it was
-     * acquired by Stripe in 2024, and invoices issued from 6 April 2026 name a
-     * different company from the ones before it. Which one applies depends on
-     * which arrangement this store is on, and the terms, the privacy policy, the
+     * Stripe Managed Payments is the provider (since November 2026; Lemon
+     * Squeezy before it, which stopped taking new stores). Buyers see the
+     * purchase as "Sold through Link", and the terms, the privacy policy, the
      * DPA and the cookie policy all quote this string verbatim to customers.
      *
-     * **So read it off a real invoice in the Lemon Squeezy dashboard before
-     * filling it in**, and do not copy it from documentation, a blog post or a
-     * search result. Naming the wrong seller in a contract is not a typo.
+     * **So read it off a real receipt before relying on it**, and do not copy
+     * it from documentation, a blog post or a search result. Naming the wrong
+     * seller in a contract is not a typo.
      *
      * Empty means unset, and `lib/brand.ts`'s rule applies: nothing it feeds is
      * drawn. The legal documents are therefore incomplete until it is filled —
      * which is correct, because so is the arrangement they describe.
      *
-     * TODO: confirm against a real invoice. Filled on 2026-10-17 from the
-     * footer of lemonsqueezy.com/buyer-terms ("Sold through Link, LLC f/k/a
-     * Lemon Squeezy LLC"), not from an invoice, so the documents could be
-     * published for Google sign-in.
+     * TODO: confirm against a real test-mode receipt. Filled on 2026-11-17 from
+     * link.com/terms, whose "Sold Through Link Terms" name the seller as Link,
+     * LLC ("Link SMP"); Stripe's own docs name no entity. Which Stripe entity
+     * contracts with a buyer depends on where they are
+     * (link.com/terms/contracting-entity, not yet read).
      */
-    merchantOfRecord: "Link, LLC (formerly Lemon Squeezy LLC), trading as Lemon Squeezy",
-    merchantOfRecordTermsUrl: "https://www.lemonsqueezy.com/buyer-terms",
+    merchantOfRecord: "Link, LLC (Stripe Managed Payments), trading as Link",
+    merchantOfRecordTermsUrl: "https://link.com/terms#sold-through-link-terms",
   },
   hosting: {
     /** Legal name of whoever runs the dashboard and the measurement endpoint. */

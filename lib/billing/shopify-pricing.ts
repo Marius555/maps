@@ -3,7 +3,7 @@ import type { BillingCadence, PaidPlanId, SubscriptionState } from "./types";
 /**
  * Shopify App Pricing's answer about a shop, mapped onto ours.
  *
- * The Shopify twin of `toState` in `lemon.ts`, and pure for the same reason:
+ * The Shopify twin of `toState` in `stripe.ts`, and pure for the same reason:
  * every judgement about what a provider's state *means* lives in one tested
  * function (docs/notes/billing.md). Shopify reports a plan only through the
  * Partner API's `activeSubscription` — it stopped sending subscription webhooks
@@ -40,7 +40,7 @@ export type ShopifyActiveSubscription = {
  * granting itself.
  *
  * `getUserPlan` ends a plan at `currentPeriodEnd`, which is the safety net for a
- * lost webhook on the Lemon side. Shopify sends us nothing at a renewal, so the
+ * lost webhook on the Stripe side. Shopify sends us nothing at a renewal, so the
  * end date only moves when the hourly sweep re-reads the subscription — and
  * between Shopify renewing it and the sweep's next run, a paying shop would read
  * as free. Two days covers that and a store whose charge Shopify retries. A

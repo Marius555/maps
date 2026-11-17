@@ -10,7 +10,6 @@ import { SettingsSection } from "@/components/user-settings/section/settings-sec
 import { requireUser } from "@/lib/auth/current-user";
 import { getBilling } from "@/lib/billing";
 import { withKnownCadence } from "@/lib/billing/known-cadence";
-import { paidOffer, pendingKept } from "@/lib/billing/plan-change";
 import { isShopifyBilled } from "@/lib/billing/shopify-billed";
 import { billingStanding } from "@/lib/billing/standing";
 import { LEGAL_DETAILS } from "@/lib/legal/values";
@@ -52,7 +51,7 @@ export default async function BillingSettingsPage(props: PageProps<"/settings/bi
   const [plan, stored] = await Promise.all([getUserPlan(ownWorkspace(user.id)), getSubscription(ownWorkspace(user.id))]);
 
   // Inside the Shopify admin, Shopify bills the shop: its own page, and no
-  // Lemon read at all (`ShopifyPlan`; docs/notes/shopify.md, "Billing").
+  // Stripe read at all (`ShopifyPlan`; docs/notes/shopify.md, "Billing").
   if (user.shopify) {
     const isPaused = isShopifyBilled(stored) && stored?.status === "paused";
 
@@ -86,14 +85,15 @@ export default async function BillingSettingsPage(props: PageProps<"/settings/bi
 
   /*
    * The plan the page marks. For a subscription that can be moved it is the one
-   * *paid for this period* — the kept plan while a downgrade waits for the
-   * renewal. For one the provider is holding (past due, paused) it is the plan
-   * on the subscription, which `getUserPlan` reads as free while it is held. Not
+   * on the row — which, since the provider books a downgrade for the renewal
+   * rather than making it at once, is always the one *paid for this period*.
+   * For one the provider is holding (past due, paused) it is the plan on the
+   * subscription, which `getUserPlan` reads as free while it is held. Not
    * `getUserPlan` for either: under `DISABLE_ALL_PLAN` that answers "pro" for
    * everybody.
    */
-  const paid = switchable ? paidOffer(switchable) : null;
-  const kept = switchable ? pendingKept(switchable) : null;
+  const paid = switchable ? { plan: switchable.plan, cadence: switchable.cadence } : null;
+  const booked = switchable ? (details?.scheduled ?? null) : null;
   const shown =
     paid?.plan ?? (standing === "held" && subscription ? subscription.plan : plan);
 
@@ -126,9 +126,7 @@ export default async function BillingSettingsPage(props: PageProps<"/settings/bi
         currentCadence={paid?.cadence ?? null}
         standing={standing}
         pending={
-          switchable && kept
-            ? { next: { plan: switchable.plan, cadence: switchable.cadence }, until: kept.until }
-            : null
+          booked ? { next: { plan: booked.plan, cadence: booked.cadence }, until: booked.at } : null
         }
         renewsOn={switchable?.currentPeriodEnd ?? null}
         endsOn={endsOn}

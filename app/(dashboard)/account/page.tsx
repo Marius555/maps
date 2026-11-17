@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
  *
  * Still inside `proxy.ts`'s matcher, and still never the provider's
  * `redirect_url` — that is `/checkout/done`, for the SameSite reason
- * `lib/billing/lemon.ts` gives.
+ * `lib/billing/stripe.ts` gives.
  */
 export default async function AccountPage(props: PageProps<"/account">) {
   const { checkout } = await props.searchParams;

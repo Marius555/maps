@@ -8,7 +8,7 @@ import { TABLES } from "../appwrite-schema.mjs";
 import { r2Bucket } from "../r2.mjs";
 import { allFiles, allRows } from "./appwrite.mjs";
 import { fail } from "./guards.mjs";
-import { lemonKey, listDiscounts, subscriptionStatus } from "./lemon.mjs";
+import { listDiscounts, stripeKey, subscriptionStatus } from "./stripe.mjs";
 
 /**
  * How each table decides whether a row belongs to a kept account. Every table
@@ -46,7 +46,7 @@ const MAP_ID = /^[0-9a-f]{20}$/;
 const PROTECTED_R2_PREFIXES = new Set(["embed", "gazetteer"]);
 
 /** Provider statuses that can still charge a card. */
-const BILLABLE = new Set(["on_trial", "active", "paused", "past_due", "unpaid"]);
+const BILLABLE = new Set(["trialing", "active", "paused", "past_due", "unpaid", "incomplete"]);
 
 export function checkSchemaCoverage() {
   const schema = TABLES.map((table) => table.id);
@@ -121,9 +121,9 @@ async function planSubscriptions(rows, keep, warnings) {
 
   if (rows.length === 0) return { toCancel, blocked: false };
 
-  if (!lemonKey()) {
+  if (!stripeKey()) {
     warnings.push(
-      `${rows.length} deleted account(s) have a payment-provider subscription, and no LEMON_API_KEY ` +
+      `${rows.length} deleted account(s) have a payment-provider subscription, and no STRIPE_SECRET_KEY ` +
         "is set to cancel them. --execute will refuse until it is.",
     );
     return { toCancel, blocked: true };
@@ -144,14 +144,12 @@ async function planSubscriptions(rows, keep, warnings) {
 }
 
 async function planDiscounts(warnings) {
-  const storeId = process.env.LEMON_STORE_ID ?? "";
-
-  if (!lemonKey() || !storeId) {
-    warnings.push("LEMON_API_KEY or LEMON_STORE_ID is not set, so discount codes are left alone.");
+  if (!stripeKey()) {
+    warnings.push("STRIPE_SECRET_KEY is not set, so discount codes are left alone.");
     return [];
   }
 
-  return listDiscounts(storeId);
+  return listDiscounts();
 }
 
 async function planFiles(appwrite, keep) {

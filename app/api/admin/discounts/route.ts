@@ -17,7 +17,6 @@ const FIELD_FOR: Record<string, string> = {
   amount: "amount",
   duration_in_months: "months",
   max_redemptions: "maxUses",
-  starts_at: "startsAt",
   expires_at: "expiresAt",
 };
 

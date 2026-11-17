@@ -15,7 +15,7 @@ Discounts, which writes to the payment provider rather than to Appwrite
   `lib/auth`. A customer signed in on the same browser is unaffected.
 - **Three env values or no console.** `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`,
   `ADMIN_SESSION_SECRET` (≥ 32 chars). Missing any one of them: `/login/admin` and `/admin`
-  404, and `POST /api/admin/login` 404s. Same posture as `LEMON_WEBHOOK_SECRET`.
+  404, and `POST /api/admin/login` 404s. Same posture as `STRIPE_WEBHOOK_SECRET`.
 - **A development admin can sit beside it, and only in development.** `DEV_ADMIN_EMAIL` /
   `DEV_ADMIN_PASSWORD` (plain text) are a second console login for local use and the e2e
   suite, so the real admin's password is never written down for the tests.

@@ -81,23 +81,21 @@ deploy. Names in use:
   **not** inert in production: it bypasses nothing, and the overlay it forces can always be
   closed.
 
-- Optional in code, **required to sell anything**, server-only: `LEMON_API_KEY`,
-  `LEMON_STORE_ID`, `LEMON_WEBHOOK_SECRET` and four variant ids —
-  `LEMON_VARIANT_STARTER_MONTHLY`, `LEMON_VARIANT_STARTER_YEARLY`,
-  `LEMON_VARIANT_PRO_MONTHLY`, `LEMON_VARIANT_PRO_YEARLY`. All are read as optional in
-  `lib/env.ts` and checked where they are used, the way the R2 credentials are: a missing one
-  should fail a checkout with its own name in the message, not take down every page in the
-  dashboard belonging to people who are not buying anything. Three things worth knowing.
-  **`LEMON_API_KEY` falls back to `LEMON_TEST_API_KEY`** because the provider decides test
-  mode from the key itself rather than from a flag — the test key and the live key are one
-  setting with two values, and naming the variable after the mode would mean renaming it on
-  the day of the first real payment, which is the worst possible day to be editing
-  environment variables. **`LEMON_WEBHOOK_SECRET` unset means the webhook refuses
-  everybody**, exactly as `CRON_SECRET` unset makes the cron route refuse everybody: an
-  unguarded endpoint that writes `subscriptions` is a free Pro plan for anyone who finds the
-  URL. And the **variant ids are configuration rather than code** because they differ between
-  test and production and are re-created whenever a price changes — otherwise selling the
-  same product at a new price would be a deploy. `docs/notes/billing.md`.
+- Optional in code, **required to sell anything**, server-only: `STRIPE_SECRET_KEY` and
+  `STRIPE_WEBHOOK_SECRET` (Stripe Managed Payments, since November 2026; Lemon Squeezy's nine
+  `LEMON_*` variables are gone). Both are read as optional in `lib/env.ts` and checked where
+  they are used, the way the R2 credentials are: a missing one should fail a checkout with its
+  own name in the message, not take down every page in the dashboard belonging to people who
+  are not buying anything. Three things worth knowing. **The key decides test or live mode**
+  (`sk_test_…` / `sk_live_…`) — there is no flag, so nothing can be left switched the wrong
+  way. **`STRIPE_WEBHOOK_SECRET` unset means the webhook refuses everybody**, exactly as
+  `CRON_SECRET` unset makes the cron route refuse everybody: an unguarded endpoint that
+  writes `subscriptions` is a free Pro plan for anyone who finds the URL. In development it
+  is the `whsec_…` that `stripe listen` prints, not the deployed endpoint's. And **there are
+  no price ids to configure**: the app finds each plan by its price's lookup key
+  (`pinglide_starter_monthly`…), which `npm run setup:stripe` writes once and moves to a new
+  price when one changes — Lemon's four hand-pasted variant ids were mis-pasted twice.
+  `STRIPE_PUBLISHABLE_KEY` is not read: hosted Checkout is a redirect. `docs/notes/billing.md`.
 
 - Optional, server-only: `SNAPSHOT_STORAGE_ID`, defaulting to `STORAGE_ID`. **Appwrite Cloud's free plan allows one bucket per project**, so published snapshots share the assets bucket, which is why `json` is in its allowed extensions. On a paid plan, point this at a dedicated bucket and add a second entry to `BUCKETS` in `scripts/appwrite-schema.mjs`; nothing else changes. Only read when `SNAPSHOT_PUBLIC_URL` is unset — see the next entry for why that is development-only.
 

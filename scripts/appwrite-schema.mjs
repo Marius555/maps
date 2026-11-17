@@ -65,7 +65,7 @@ export const SUBSCRIPTION_STATUSES = [
 // Hand-copied from lib/billing/types.ts's BillingCadence, on the same terms.
 export const BILLING_CADENCES = ["monthly", "yearly"];
 // Hand-copied from lib/billing/types.ts's BILLING_PROVIDERS, on the same terms.
-export const BILLING_PROVIDERS = ["lemon", "shopify"];
+export const BILLING_PROVIDERS = ["stripe", "shopify"];
 // Hand-copied from lib/notifications/types.ts, on the same terms.
 export const NOTIFICATION_KINDS = ["info", "success", "warning"];
 export const NOTIFICATION_AUDIENCES = ["all", "plan", "user"];
@@ -481,14 +481,13 @@ export const TABLES = [
       enumeration("keptCadence", BILLING_CADENCES),
       datetime("keptUntil"),
       // Who bills this subscription. Optional with no default: absent is
-      // Lemon Squeezy, which is every row written before Shopify billing
-      // existed. Shopify rows are written by lib/billing/shopify-pricing.ts.
+      // Stripe, whose adapter never writes it. Shopify rows are written by lib/billing/shopify-pricing.ts.
       enumeration("provider", BILLING_PROVIDERS),
     ],
     indexes: [
       { key: "idx_subs_userId", type: "unique", columns: ["userId"], orders: ["asc"] },
       // The webhook's fallback lookup. A renewal event that arrives without the
-      // checkout's custom_data has only the provider's customer id to go on, and
+      // subscription's user_id metadata has only the provider's customer id to go on, and
       // Appwrite refuses a query on a column with no index — so without this, a
       // renewal we could not attach to an account would fail rather than resolve.
       {

@@ -132,11 +132,12 @@ describe("adminDiscountFormSchema", () => {
     ).toBe(false);
   });
 
-  it("refuses an expiry before the start", () => {
+  it("refuses an expiry in the past", () => {
+    // There is no start any more — Stripe has no scheduled start — so the only
+    // ordering left is expiry against now.
     const result = adminDiscountFormSchema.safeParse({
       ...FORM,
-      startsAt: "2030-02-01T00:00:00.000Z",
-      expiresAt: "2030-01-01T00:00:00.000Z",
+      expiresAt: "2020-01-01T00:00:00.000Z",
     });
 
     expect(result.success).toBe(false);

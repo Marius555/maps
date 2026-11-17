@@ -19,7 +19,8 @@ import { PLAN_LIMITS, type PlanId } from "./plan-limits";
  * is what makes that safe: there is no state in which an account has two.
  *
  * **The columns are named after the job, not the vendor** — `billingCustomerId`,
- * not `lemonCustomerId` (CLAUDE.md §6). That is not tidiness. A stored column
+ * not `stripeCustomerId` (CLAUDE.md §6) — and it paid off: the move from Lemon
+ * Squeezy to Stripe in November 2026 touched no column. That is not tidiness. A stored column
  * outlives the decision that filled it, and renaming one across live rows to
  * change provider is the kind of migration that gets skipped, leaving the schema
  * lying about itself for years.
@@ -92,8 +93,8 @@ export async function getSubscription(
         row.cadence === "monthly" || row.cadence === "yearly" ? row.cadence : null,
       updatedAt: row.$updatedAt,
       kept: keptOf(row),
-      // Absent is Lemon Squeezy — every row written before Shopify billing.
-      provider: row.provider === "shopify" ? "shopify" : "lemon",
+      // Absent is Stripe: the web adapter never writes the column.
+      provider: row.provider === "shopify" ? "shopify" : "stripe",
     };
   } catch (error) {
     throw toRepositoryError(error);
@@ -146,7 +147,7 @@ export async function upsertSubscription(
     billingSubscriptionId: state.billingSubscriptionId,
     currentPeriodEnd: state.currentPeriodEnd,
     cadence: state.cadence,
-    // Written only when the caller names one, so the Lemon webhook — which
+    // Written only when the caller names one, so the Stripe webhook — which
     // never does — leaves absent meaning what it always meant.
     ...(state.provider ? { provider: state.provider } : {}),
     ...(kept === undefined
@@ -217,9 +218,9 @@ export async function listShopifySubscriptionsEndingBefore(
 /**
  * Which account a provider-side customer belongs to.
  *
- * The fallback path for renewal events. `meta.custom_data` is set at the checkout
- * and comes back on the events that descend from it, but it is the provider's
- * promise rather than ours — and an event that arrives without it and without
+ * The fallback path. `metadata.user_id` is set on the subscription by our
+ * checkout, but a subscription made any other way (in the provider's
+ * dashboard, say) has none — and an event that arrives without it and without
  * this lookup would be a renewal we could not attach to anybody, which is a
  * customer whose plan silently lapses while their card is being charged.
  */

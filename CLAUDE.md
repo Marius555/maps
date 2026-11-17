@@ -91,12 +91,15 @@ link that arrives from outside (a mail client, Appwrite's own domain) lands on a
 survives a redirect chain and would bounce a user who had just signed in. Both, and the reason
 Appwrite's tokens are used instead of our own HMAC, are in `docs/notes/auth.md`.
 
-**Billing is wired, and with it the thing that made billing unsafe.** Lemon Squeezy behind
-the pricing page: a static `/pricing` whose cards link to `/upgrade`, which reads the
+**Billing is wired, and with it the thing that made billing unsafe.** **Stripe Managed
+Payments** behind the pricing page (since 2026-11-17 — Lemon Squeezy stopped taking new stores;
+Stripe, selling as "Link", is still the merchant of record, so §3's MoR rule holds): a static `/pricing` whose cards link to `/upgrade`, which reads the
 session and opens a checkout; a signature-verified webhook that writes `subscriptions`;
 and Settings → Billing, where a paying customer changes plan or cadence **in place**
 (`PATCH /api/account/subscription`) — never through a second checkout, which would be a
-second subscription — and cancels, resumes, updates the card and downloads invoices. **The buyer returns to `/checkout/done`, never to `/settings/billing`** — that is the
+second subscription — and cancels, resumes, updates the card (in Stripe's portal, through
+`/api/account/billing-portal`) and downloads invoices. Plans are found by **price lookup key**, and
+**a downgrade is a Stripe subscription schedule**, not something we hold. **The buyer returns to `/checkout/done`, never to `/settings/billing`** — that is the
 `sameSite: "strict"` rule in the auth notes, which billing broke a third time after it
 had been written down twice, answering a completed purchase with a login form. Plans keep their prices and gain **annual at two months free**, a published
 **monthly lookup allowance**, Free at 25 locations instead of 10, and **analytics behind the
@@ -183,7 +186,8 @@ OpenFreeMap and have nothing to do with the geocoder budget above.
 Installed since the original scaffold: `zod`, `@tanstack/react-query`, `zustand`,
 `papaparse`, `date-fns`, `vitest`, `vite`, `fflate` (promoted from a pmtiles transitive —
 it unzips .xlsx), `resend`, `recharts` (asked for and granted; the landing page and the Analytics tab, and
-it brings Redux Toolkit transitively, so it is loaded with `next/dynamic`), `aws4fetch` (asked
+it brings Redux Toolkit transitively, so it is loaded with `next/dynamic`), `stripe` (the
+billing provider's SDK, server-only), `aws4fetch` (asked
 for and granted; signs R2's S3 requests, server-only), and `jsdom` as a
 devDependency only, plus `posthog-js` from §3 (dashboard and
 marketing only, never the embed), and `@playwright/test` from §3 (e2e, `e2e/README.md`). Still
@@ -211,10 +215,10 @@ npm run setup:appwrite  # create missing tables/columns/indexes from scripts/app
 npm run setup:r2        # snapshot bucket: custom domain, CORS, zone cache + header rules
 npm run deploy:cdn      # embed + gazetteer -> cdn.pinglide.com (skips unchanged files)
 npm run deploy:site     # build + upload to Appwrite Sites; the Deploy workflow runs it (musl only; --no-upload locally)
-npm run setup:lemon     # find the plan variants, write their ids to .env, configure the webhook
-npm run setup:lemon -- --verify  # check .env's ids against the store; non-zero if they disagree
+npm run setup:stripe    # products + prices by lookup key, customer portal, webhook (writes STRIPE_WEBHOOK_SECRET on create)
+npm run setup:stripe -- --verify  # check prices, webhook and .env against the app; non-zero if they disagree
+stripe listen --events <BILLING_EVENTS, comma-separated> --forward-to localhost:3000/api/webhooks/billing  # dev webhooks (Stripe CLI) — full command in docs/notes/billing.md
 npm run setup:sheet-sync  # configure + deploy the googleSheetsUpdate function (hourly)
-npm run billing:replay -- <event> --email you@example.com  # signed webhook at a running server
 
 npm run build:disposable-domains # re-vendor the throwaway-email domain list (98k, ~1.5MB)
 npm run admin:hash      # admin console password → ADMIN_PASSWORD_HASH + ADMIN_SESSION_SECRET (stdin)
@@ -344,14 +348,12 @@ one exists: `docs/notes/environment.md`.
   `npm run deploy:cdn` puts the files there; `UPLOAD_EMBED_ON_BUILD=true` on the site makes
   `postbuild` upload the embed on every deploy. The gazetteer is gitignored, so it is only
   ever uploaded by hand.
-- Server-only, **required to sell anything**: `LEMON_API_KEY` (falling back to
-  `LEMON_TEST_API_KEY`, because the provider decides test mode from the key itself and
-  renaming a variable on the day of the first real payment is the worst possible timing),
-  `LEMON_STORE_ID`, `LEMON_WEBHOOK_SECRET` — **unset, the webhook refuses everybody**, the
-  same posture `CRON_SECRET` takes — and one variant id per plan and cadence:
-  `LEMON_VARIANT_STARTER_MONTHLY`, `_STARTER_YEARLY`, `_PRO_MONTHLY`, `_PRO_YEARLY`. All
-  optional in `lib/env.ts` and checked where used, so a missing one fails a checkout with
-  its own name rather than taking the dashboard down.
+- Server-only, **required to sell anything**: `STRIPE_SECRET_KEY` (the key decides test or
+  live mode — `sk_test_` / `sk_live_`, no flag) and `STRIPE_WEBHOOK_SECRET` — **unset, the
+  webhook refuses everybody**, the same posture `CRON_SECRET` takes; in development it is the
+  one `stripe listen` prints. No price ids: plans are found by lookup key. Both optional in
+  `lib/env.ts` and checked where used, so a missing one fails a checkout with its own name
+  rather than taking the dashboard down. `STRIPE_PUBLISHABLE_KEY` is not read.
 - **Development only: `DISABLE_ALL_PLAN`.** Every account reads as `pro`, bypassing every
   quantity limit, the feature gates and the lookup allowance. One early return in
   `getUserPlan` and one in `usage.repository.ts`, so §6's rule that the checks live in the
@@ -558,7 +560,7 @@ If a change would put a database query, an API call, or a serverless function in
 | CSV parsing | `papaparse` | Handles messy real-world CSVs, streams large files |
 | Appwrite (client) | `appwrite` | Browser SDK |
 | Appwrite (server) | `node-appwrite` | Server actions and Functions |
-| Billing | Paddle **or** Lemon Squeezy | Merchant of Record — handles EU VAT for us. **Not raw Stripe.** |
+| Billing | **Stripe Managed Payments** (was Lemon Squeezy until 2026-11) | Merchant of Record — handles EU VAT for us. **Not raw Stripe**: every checkout sets `managed_payments`. |
 | Email | `resend` + `@react-email/components` | Transactional only |
 | Errors | `@sentry/nextjs` | |
 | Analytics | `posthog-js` | Funnel: signup → first place → publish → paid |
@@ -714,15 +716,15 @@ absent for every location a sync must never touch. `docs/notes/sheet-sync.md`.
 ### `subscriptions`
 `userId` · `billingCustomerId` · `billingSubscriptionId` · `plan` · `status` · `currentPeriodEnd` · `cadence?` · `keptPlan?` · `keptCadence?` · `keptUntil?`
 
-Provider-neutral field names — do not name them after Paddle or Stripe. Written only
-with the provider's own answer read through `toState` — by the webhook, the change-plan
-route and the account page's one-time cadence backfill. Entitlement is read only by
+Provider-neutral field names — do not name them after Paddle or Stripe (it paid off: the
+move from Lemon Squeezy needed no migration). Written only with the provider's own answer
+read through `toState` — by the webhook, the change-plan, cancel and resume routes and the
+account page's one-time cadence backfill. `provider` absent means Stripe; `"shopify"` for a shop. Entitlement is read only by
 `getUserPlan`, which honours the status **and** the date — see `docs/notes/billing.md`
 for why a cancellation is `active`. `cadence` absent means unknown, never monthly.
-The three `kept*` columns are the exception to "the provider's answer": a downgrade
-waits for the renewal, the provider cannot schedule one, so the plan already paid for
-is kept here until `keptUntil` — written only by the change-plan route, never by the
-webhook.
+The three `kept*` columns are **retired**: Lemon could not schedule a downgrade, so the
+plan already paid for was kept here; Stripe books it as a subscription schedule, and
+nothing writes them now. `withKeptPlan` still reads them — do not drop them.
 
 ### `usage`
 `userId` · `period` · `lookups`

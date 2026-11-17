@@ -3,10 +3,15 @@
 `lib/billing/**`, `lib/repositories/{subscriptions,usage,plan-limits}.repository.ts`,
 `app/api/webhooks/billing/**`, `app/api/account/subscription/**`, `app/(marketing)/upgrade/**`,
 `app/(dashboard)/settings/billing/**` (and `/account`, now a redirect to it),
-`app/api/account/{invoices,subscription/resume}/**`, `components/marketing/plans/**`,
-`components/account/**`, `components/user-settings/billing/**`, and the discount codes:
-`app/admin/discounts/**`, `app/api/admin/discounts/**`, `components/admin/sections/discounts/**`.
+`app/api/account/{invoices,subscription/resume,billing-portal}/**`, `app/(marketing)/billing/return/**`,
+`components/marketing/plans/**`, `components/account/**`, `components/user-settings/billing/**`,
+`components/billing/**`, and the discount codes: `app/admin/discounts/**`,
+`app/api/admin/discounts/**`, `components/admin/sections/discounts/**`.
 The page itself is described in `docs/notes/settings.md`.
+
+**The provider is Stripe Managed Payments (since 2026-11-17).** Lemon Squeezy stopped taking
+new stores, so its adapter was replaced; every Lemon subscription row was test data and was
+dropped. `getBilling()` in `lib/billing/index.ts` is the one place that names the provider.
 
 ## Invariants
 
@@ -15,27 +20,43 @@ The page itself is described in `docs/notes/settings.md`.
   full entitlement so it never refuses a customer using what they paid for; that is
   only safe while the worst case still costs less than the plan earns. Move one
   and redo the arithmetic below, in the same commit.
-- **`cancelled` is not cancelled.** The provider keeps a cancelled subscription
-  running to the end of the paid period, so `toStatus` maps it to `active` and
-  `currentPeriodEnd` is what closes it. Map it to `canceled` and you revoke a paid
-  plan the instant somebody clicks cancel.
+- **Set-to-cancel is not cancelled.** Stripe keeps a subscription with
+  `cancel_at_period_end` running to the end of the paid period, so `toStatus` leaves it
+  `active` and `currentPeriodEnd` (= `cancel_at`) is what closes it. Map it to
+  `canceled` and you revoke a paid plan the instant somebody clicks cancel.
 - **`getUserPlan` checks the status *and* the date.** The date is the safety net
-  for a `subscription_expired` that is never delivered. Absent means no expiry, and
-  must keep meaning that.
-- **The webhook reads the raw body.** `JSON.parse` then `JSON.stringify` does not
-  reproduce the bytes the signature was made over. Never move it to `parseBody`.
-- **Eleven subscription events, two payload shapes.** Seven send a subscription
-  object; the four `subscription_payment_*` send a subscription-**invoice**, which
-  has no `variant_id` and whose `status` is an invoice status. Never read one as
-  the other.
-- **The checkout's `redirect_url` must point outside `proxy.ts`'s matcher.** The
-  session cookie is `sameSite: "strict"` and the buyer returns from the
-  provider's domain, so a return straight to `/settings/billing` (or the old
-  `/account`) answers a completed purchase with a login form. `/checkout/done`
-  exists for this and `lib/billing/lemon.test.ts` asserts it. From there the client
-  hops to `/maps?checkout=done`, which forwards to the last-opened map, where
-  `PurchaseCelebration` (mounted in the dashboard shell) opens — "Activating" until
-  the webhook lands, then "Welcome to Starter" — and strips the param on close.
+  for a `customer.subscription.deleted` that is never delivered. Absent means no
+  expiry, and must keep meaning that.
+- **The webhook reads the raw body.** `constructEvent` checks the `stripe-signature`
+  header over the exact bytes; `JSON.parse` then `JSON.stringify` does not reproduce
+  them. Never move it to `parseBody`.
+- **The webhook never trusts the event's copy.** Every handled event — the five
+  `customer.subscription.*` and `invoice.paid` / `invoice.payment_failed` — is reduced
+  to a subscription id (`subscriptionIdOfEvent`; an invoice's is at
+  `parent.subscription_details.subscription`) and the subscription is **re-fetched**.
+  Stripe does not guarantee delivery order, so an event's snapshot can be older than
+  the row; the live read cannot. `BILLING_EVENTS` (in `lib/billing/stripe.ts`, because a
+  route file may only export route fields) and `WEBHOOK_EVENTS` in
+  `scripts/setup-stripe.mjs` are one list kept by hand.
+- **Plans are found by price `lookup_key`, never by an id in the environment.**
+  `pinglide_{starter,pro}_{monthly,yearly}`, one product per plan×cadence because a
+  coupon can be limited to products but not prices. `lib/billing/stripe-prices.ts`
+  caches the catalogue on `globalThis` for five minutes and never caches a failure.
+  A price with none of our keys is nobody's plan (`toState` → null → 200
+  `handled: false`).
+- **The checkout's `success_url` must point outside `proxy.ts`'s matcher**, and so must
+  the portal's `return_url`. The session cookie is `sameSite: "strict"` and the buyer
+  returns from `checkout.stripe.com` / `billing.stripe.com`, so a return straight to
+  `/settings/billing` answers a completed purchase with a login form. `/checkout/done`
+  and `/billing/return` exist for this and `lib/billing/stripe.test.ts` asserts the
+  first. From `/checkout/done` the client hops to `/maps?checkout=done`, which
+  forwards to the last-opened map, where `PurchaseCelebration` (mounted in the
+  dashboard shell) opens — "Activating" until the webhook lands, then "Welcome to
+  Starter" — and strips the param on close.
+- **The account is on the subscription's metadata, nowhere else.** Checkout sets
+  `subscription_data.metadata.user_id` (and `client_reference_id`, for the Dashboard's
+  eyes only). The webhook reads `subscription.metadata.user_id`, falling back to
+  `findUserByBillingCustomer` — which is why `billingCustomerId` has an index.
 - **Plan buttons that open a checkout are `CheckoutLink`, a plain `<a>`, never
   `next/link`.** A client navigation to `/upgrade` faded the page to blank while the
   provider created the checkout. A document navigation keeps the page up and gets a
@@ -43,11 +64,12 @@ The page itself is described in `docs/notes/settings.md`.
   flushed shell would turn the redirect back into a client one and the blank page.
 - **A subscriber's plan change is confirmed first** (`ConfirmPlanChangeDialog`), except
   "Keep …", which only undoes a booked downgrade and charges nothing. It states the
-  price and when it starts, never a proration figure: the provider gives no preview.
-- **A 404 from the provider is a 200 from us; a 5xx is a 5xx.** Non-2xx is how
-  the provider is told to redeliver, so `fetchSubscriptionState` returns null on
-  a 404 — a subscription that does not exist will not exist on the retry either
-  — and throws on everything else.
+  price and when it starts, never a proration figure (Stripe could preview one with
+  `invoices.createPreview`; nothing does yet).
+- **A subscription Stripe no longer has is a 200 from us; a 5xx is a 5xx.** Non-2xx is
+  how Stripe is told to redeliver, so `fetchSubscription` returns null on a 404 — a
+  subscription that does not exist will not exist on the retry either — and throws on
+  everything else.
 - **Assert before the upstream call, record after it.** A request the provider
   refused is not one to bill the customer for.
 - **`assertLookupHeadroom` fails open.** An unreadable meter lets the lookup
@@ -56,8 +78,9 @@ The page itself is described in `docs/notes/settings.md`.
 - **`recordLookups` never throws.** It runs after the customer's work succeeded;
   anything raised there turns a successful geocode into a failed request.
 - **Prices live in two systems.** `lib/marketing/plans.ts` is what a page says and
-  `LEMON_VARIANT_*` is what a card is charged. No test can hold them together.
-  Change both in one sitting.
+  the Stripe price behind each lookup key is what a card is charged. No test can hold
+  them together; `npm run setup:stripe -- --verify` compares the amounts. Change
+  both in one sitting.
 - **`/pricing` is statically rendered and must stay so.** Nothing on it may read a
   session. That is the entire reason `/upgrade` exists.
 - **`DISABLE_ALL_PLAN` is inert in production**, by a `NODE_ENV` check rather than
@@ -68,89 +91,98 @@ The page itself is described in `docs/notes/settings.md`.
   `PATCH /api/account/subscription`, `held` (past due, paused) is pointed at the
   card under Payment, and only `none` gets `/upgrade` — which itself redirects a
   `switchable` account to `/settings/billing`, because `/pricing` is static and
-  sends everybody there.
+  sends everybody there. A *former* subscriber's checkout reuses their Stripe
+  customer (`billingCustomerId`), retrying with the email alone if Stripe refuses it.
 - **Absent cadence means unknown, never monthly.** `subscriptions.cadence` is
-  optional with no default; rows written before it existed have none. The account
-  page backfills it from the provider once (`withKnownCadence`) and offers no
-  monthly↔yearly switch while it is still unknown.
+  optional with no default. Every Stripe row has one (the lookup key carries it); the
+  Billing page's `withKnownCadence` backfill is left for rows written before.
 - **Every write to `subscriptions` is the provider's own answer, read through
-  `toState`.** There are five writers now — the webhook, the change-plan route
-  (from the PATCH reply), the Billing page's cadence backfill (from its GET),
-  and the cancel and resume routes (from their replies) — and
-  `upsertSubscription` is idempotent, so they can arrive in any order. None of
-  them may write a value it inferred.
-- **Cancelling is in the app now; the merchant of record still does it.**
-  `DELETE /api/account/subscription` is one call to the provider's own cancel,
-  and `POST …/subscription/resume` undoes it. This reverses "cancelling stays in
-  the portal", deliberately: a customer should not have to find a button on
-  somebody else's site to stop paying us. The card and billing address are
-  still the provider's pages.
+  `toState`.** The writers are the webhook, the change-plan route, the Billing page's
+  cadence backfill, and the cancel and resume routes — each from a subscription it
+  just read or just updated — and `upsertSubscription` is idempotent, so they can
+  arrive in any order. None of them may write a value it inferred.
+- **Cancelling is in the app; the merchant of record still does it.**
+  `DELETE /api/account/subscription` sets `cancel_at_period_end` (releasing a booked
+  downgrade first, because a schedule owns the subscription while attached), and
+  `POST …/subscription/resume` clears it. The customer portal has cancelling and plan
+  switching **off** (`setup:stripe` configures it), so there is one place for each.
 - **`cancelled` is never stored, and is read live.** Our row keeps a cancelled
   subscription `active` (see above), so only the provider can tell "renews" from
   "ends". `subscriptionDetails` asks on every Billing visit. While cancelled, no
-  plan change is offered, and the PATCH route refuses one.
-- **Invoices are displayed, never kept.** Listed by the subscription id on the
-  caller's own row, each linking the provider's signed PDF. `lib/billing/types.ts`
-  says what that does and does not change about the merchant of record.
-  The link opens the provider's *Generate invoice* page, which asks for the buyer's
-  street address before it gives up the PDF. That is kept on purpose (2026-10-18).
-  `POST /subscription-invoices/{id}/generate-invoice` is free and returns the PDF
-  directly, but it requires name, street, city, ZIP and country on every call, and
-  the provider only holds city and country for us.
-- **The store's custom domain must never be the app's own domain.** The provider
-  builds every signed link from it (card update, billing portal), so with
-  `pinglide.com` set there, Update and Edit opened our own 404. Use
-  `pinglide.lemonsqueezy.com` or a CNAME'd subdomain. `npm run setup:lemon`
-  warns on it, and `--verify` fails.
+  plan change is offered, and the PATCH route refuses one with a 409.
+- **The card is changed in Stripe's portal, through our route, per press.** Under
+  Managed Payments the API cannot set `default_payment_method`, so Update and Edit
+  link `GET /api/account/billing-portal` (`?flow=payment` for Update), which makes a
+  portal session on the spot and 303s to it. Never render a portal URL into the page:
+  it is short-lived, and a page left open would hold a dead link.
+- **Invoices are displayed, never kept.** `invoices.list` by the subscription id on
+  the caller's own row (100 at most, paged by ten locally), each linking Stripe's
+  `invoice_pdf` (or the hosted page while there is none). Drafts are not shown, and
+  an open invoice is "pending" with no link. `lib/billing/types.ts` says what this
+  does and does not change about the merchant of record.
 - **`billingStanding` reads the row, not `getUserPlan`.** Under `DISABLE_ALL_PLAN`
   the latter answers "pro" for everybody; billing controls taken from it would
   offer a developer a switch away from a plan they never bought.
-- **An upgrade starts now; a downgrade starts at the renewal — and the wait is
-  ours, not the provider's.** The provider applies every plan change the moment
-  it is asked. A downgrade is therefore sent at once with `disable_prorations`
-  (nothing credited, nothing charged, the renewal bills the new price), and
-  `keptPlan`/`keptCadence`/`keptUntil` keep the plan already paid for until that
-  renewal. `planChange` (`lib/billing/plan-change.ts`) decides every case.
-- **Only the change-plan route writes the `kept*` columns.** `upsertSubscription`
-  leaves them alone unless passed them, because the provider answers a downgrade
-  with `subscription_updated`, and a write that cleared them there would take the
-  paid-for month back seconds after promising it. A `keptUntil` in the past means
-  nothing and is never swept.
-- **A local dev server never hears a webhook.** The store's webhook points at
-  `pinglide.com`, so a test purchase made from `localhost` is recorded nowhere
-  locally — and the account page then sees no subscription and offers a
-  *checkout*. That is how the first test "switch" bought a second subscription.
-  Link a test purchase with `npm run billing:replay -- subscription_created
-  --subscription <its id> --plan … --email …` before testing a change.
+- **An upgrade starts now; a downgrade starts at the renewal — and Stripe holds the
+  wait.** `planChange` (`lib/billing/plan-change.ts`) decides every case. An upgrade
+  swaps the item with `create_prorations` (the difference on the next bill); a monthly →
+  yearly one with `always_invoice`, so it is **charged today**, less the unused month, and
+  `upgradeNote` says so (`upgradeProration`). Measured: `create_prorations` across
+  intervals stretches the period to a year and bills nothing until then — Pro monthly →
+  yearly became one €741 charge a year later. A downgrade (a lower plan, or yearly → monthly) is a
+  **subscription schedule**: the paid price to the period's end, then the new one,
+  nothing prorated, `end_behavior: "release"` (`bookedPhases`). Sending a downgrade
+  "now, unprorated" instead would *charge at once* whenever the interval changes.
+- **The booked downgrade is read from Stripe, never stored.** `scheduledOf` reads the
+  schedule's next phase into `SubscriptionDetails.scheduled`, which is what the
+  Billing page shows as pending. "Keep …" releases the schedule; an upgrade while one
+  waits releases it first and moves up from the plan actually paid for.
+- **The `kept*` columns are retired.** Nothing writes `keptPlan` / `keptCadence` /
+  `keptUntil` any more; `withKeptPlan` still reads them in `getUserPlan` and is
+  harmless with them empty. Do not drop them (CLAUDE.md, "Retired, not deleted").
+- **Develop with `stripe listen`.** A deployed endpoint never hears a purchase made
+  from `localhost`, and the account page then sees no subscription and offers a
+  *checkout* — that is how the first Lemon-era test "switch" bought a second
+  subscription. `stripe listen --events … --forward-to localhost:3000/api/webhooks/billing`
+  forwards the account's events (the CLI refuses `listen` without `--events`, which is a
+  third hand-kept copy of `BILLING_EVENTS`); put the `whsec_…` it prints in `.env`.
 - **Discounts live at the provider and nowhere else.** `/admin/discounts` creates,
-  lists and deletes them through `lib/billing/lemon-discounts.ts` and reads them
+  lists and retires them through `lib/billing/stripe-discounts.ts` and reads them
   live on every visit; there is no Appwrite table. A copy would be a second answer
   that could disagree with the one that charges cards — the same reason
   `subscriptions` holds only the provider's own answer.
-- **A discount cannot be edited.** The provider's API has create, read and delete
-  and no update. The console offers Duplicate instead; do not build an "edit" that
+- **One discount is one promotion code with a coupon of its own.** The code carries
+  the cap and the expiry; the coupon carries the amount, the duration and the plans.
+  Deleting deactivates the code and deletes its coupon; a coupon whose code was
+  refused at create is deleted on the spot. Never share a coupon between codes, or
+  deleting one would void the other.
+- **A discount cannot be edited.** Stripe can change neither a coupon's amount nor a
+  code's text. The console offers Duplicate instead; do not build an "edit" that
   deletes and recreates behind the operator's back, because the redemption history
   belongs to the old id and would vanish from the console.
-- **A share link carries a code, never an amount or a variant.** It opens
-  `/pricing?code=…`; the cards' buttons then go to `/upgrade?plan=…&cadence=…&code=…`
-  → `checkout_data.discount_code`, and the provider decides again what the code is
-  worth. A malformed code is dropped by `checkoutSchema`, not refused — the buyer
-  still reaches the checkout, whose own code box is there.
+- **There is no "Starts" any more.** Stripe has no scheduled start for a code, so the
+  field left the form and the schema; `startsAt` stays in `Discount` and is always
+  null, so `discountStatus` is unchanged.
+- **A share link carries a code, never an amount or a price.** It opens
+  `/pricing?code=…`; the cards' buttons then go to `/upgrade?plan=…&cadence=…&code=…`,
+  which looks the code up and sends `discounts: [{ promotion_code }]` — without one,
+  `allow_promotion_codes: true`, because Stripe refuses both together. A malformed or
+  unknown code is dropped, not refused — the buyer still reaches the checkout, whose
+  own code box is there.
 - **/pricing learns about discounts after it arrives, from `GET /api/pricing/offer`.**
   The page stays static (see above); the endpoint is public, rate-limited per address
   (`pricingOffer`), and **caches everything for a minute** (`lib/billing/public-offer.ts`)
-  — the discount list, the promotion, each capped code's count — so a busy page is
-  not a provider request per visitor. Never cache a failure there. It answers only
-  `PublicDiscount`: never a discount's name, cap or use count.
+  so a busy page is not a provider request per visitor. Never cache a failure there.
+  It answers only `PublicDiscount`: never a discount's name, cap or use count.
 - **One promotion at most, in `promotions`**, set from the console's row menu (Show
   on pricing page). The row names a discount id and nothing else is trusted from it:
   the lookup re-checks the discount at the provider, so an expired or deleted promo
   just stops showing. Deleting a discount clears its promotion. The repository is
   `lib/repositories/promotions.repository.ts`, not under `admin/`, because the public
   lookup reads it.
-- **A code is for a checkout only.** A subscriber's plan changes are made in place
-  (`PATCH /subscriptions`), which takes no code, and `/upgrade` sends a subscriber
-  to Settings → Billing. So existing customers cannot redeem one; the form says so.
+- **A code is for a checkout only.** A subscriber's plan changes are made in place,
+  which takes no code, and `/upgrade` sends a subscriber to Settings → Billing. So
+  existing customers cannot redeem one; the form says so.
 
 ---
 
@@ -297,78 +329,72 @@ what the loop actually got through before failing.
 
 ## The provider
 
-Lemon Squeezy, chosen in §3 for the merchant-of-record tax handling. Fees, from
-their own documentation: **5% + $0.50**, plus **1.5%** on non-US cards, **1.5%** on
-PayPal, **0.5%** on subscription renewals, and **1%** on international payouts. On
-€19 that is roughly €1.79 a month, about 9.4%.
+**Stripe Managed Payments**: Stripe sells the plan as merchant of record — the buyer
+sees "Sold through Link" — and collects and remits VAT, which is what §3 asked of
+Paddle or Lemon Squeezy. It replaced Lemon Squeezy on 2026-11-17 because Lemon stopped
+taking new stores. Enabled per checkout with `managed_payments: { enabled: true }`,
+on an API version of 2025-03-31.basil or later (the SDK pins its own; `stripe@23`).
 
-**The entity on the invoice is not the brand on the dashboard.** They were acquired
-by Stripe in 2024 and invoices issued from 6 April 2026 name a different company
-from the ones before. `lib/legal/values.ts`'s `billing.merchantOfRecord` is quoted
-verbatim by the terms, the privacy policy, the DPA and the cookie policy — so it
-must be read off a real invoice in the dashboard, not from documentation or a
-search result. Naming the wrong seller in a contract is not a typo.
+**Fees**, read from stripe.com/pricing and stripe.com/managed-payments on 2026-11-17:
+**3.5% per successful transaction**, "in addition to Payments fees" — 1.5% + €0.25 on a
+standard EEA card, 2.5% + €0.25 UK, 3.15% + €0.25 international, + 2% where currency
+conversion is needed. On €19 from an EEA card that is about €1.20, roughly 6.3%. The
+pages say "optional products like Billing … are separate", and whether a Managed
+Payments subscription also pays Stripe Billing's own fee is **not confirmed** — read it
+off the first real payout before redoing the margin arithmetic above.
+
+What Managed Payments rules out, from its docs: `automatic_tax`, `tax_id_collection`,
+`payment_method_types`, `invoice_creation`, `subscription_data.invoice_settings`,
+`customer_update[name|address]` on the session; setting a subscription's
+`default_payment_method` through the API (hence the portal route); custom checkout
+domains; and any product without an eligible tax code (`txcd_10103001`, SaaS for
+business use, set by `setup:stripe`). A trial longer than seven days sends Stripe's own
+trial-ending emails, which is one reason downgrades are schedules, not trials.
+
+**The entity on the receipt is quoted by the legal documents.** `lib/legal/values.ts`'s
+`billing.merchantOfRecord` was filled from link.com/terms ("Link, LLC") and carries a
+TODO to confirm it against a real test receipt; which Stripe entity contracts with a
+buyer depends on their location (link.com/terms/contracting-entity). Naming the wrong
+seller in a contract is not a typo.
 
 ### Test mode is the key, not a flag
 
-A test key produces test checkouts and test webhooks; a live key produces real
-ones. There is nothing in `lemon.ts` that switches between them and nothing that
-could be left switched the wrong way on the day real money starts arriving.
-`lib/env.ts` reads `LEMON_API_KEY` and falls back to `LEMON_TEST_API_KEY`, so a
-development `.env` that already holds a test key needs no rename — and the day of
-the first real payment is the worst possible day to be editing variable names.
+`sk_test_…` produces test checkouts and test webhooks; `sk_live_…` real ones, with
+separate products, prices, webhooks and portal configuration. Nothing in the adapter
+switches between them. `STRIPE_PUBLISHABLE_KEY` is not read: hosted Checkout is a
+redirect made on the server.
 
-### Two payload shapes, and the one that bit
+### The adapter
 
-Lemon Squeezy sends eleven `subscription_*` events in **two different shapes**, and
-the documentation does not put them on the same page:
+- `lib/billing/stripe-client.ts` — the SDK singleton (on `globalThis`, 10s timeout,
+  one retry), `BillingError`, `call()` mapping a Stripe error onto it (a 400 naming a
+  `param` becomes a 422 with that field, so a refused code lands under Code), and
+  `assertStripeId`, which refuses an id without its prefix — a row left from Lemon
+  (numeric ids) is a 404, not a request built from it.
+- `lib/billing/stripe-prices.ts` — the lookup keys and the cached catalogue.
+- `lib/billing/stripe.ts` — checkout, the reads (`toStatus`, `toState`, `toDetails`,
+  `scheduledOf`), the writes (cancel, resume, `changePlan`, `keepPlan`,
+  `portalSession`), invoices, and the webhook (`verifyWebhook`,
+  `subscriptionIdOfEvent`, `BILLING_EVENTS`).
+- `lib/billing/stripe-discounts.ts` — promotion codes and coupons.
 
-| Events | `data` is |
-|---|---|
-| `created`, `updated`, `cancelled`, `expired`, `resumed`, `paused`, `unpaused` | a **subscription** |
-| `payment_success`, `payment_failed`, `payment_recovered`, `payment_refunded` | a **subscription-invoice** |
-
-An invoice carries `subscription_id`, `customer_id`, `store_id` and a `status` of
-`pending` / `paid` / `void` / `refunded` / `partial_refund`. It carries **no
-`variant_id`**, and its status says nothing about whether the subscription runs.
-
-The first version of this handler treated all of them alike. That does not corrupt
-anything — `offerForVariant` finds nothing and the event is declined — but it logs
-*"no plan matches that variant, check `LEMON_VARIANT_*`"* **on every successful
-renewal payment**, which is a false configuration alarm on the most routine event
-in the system.
-
-Simply dropping the payment events would have been worse, and this is the part
-worth keeping in mind. They are the events that fire when a renewal is actually
-charged. Ignoring them rests the entire renewal path on `subscription_updated`
-always firing alongside — and if it ever did not, `currentPeriodEnd` would go
-stale and `getUserPlan` would quietly downgrade somebody whose card had just been
-charged. That is precisely the failure direction the date check exists to avoid,
-reintroduced by the thing meant to be a safety net.
-
-So a payment event takes `subscription_id` out of the invoice and asks the API
-what the subscription now says (`fetchSubscriptionState`). One extra call on a
-renewal, and the answer is authoritative rather than inferred from which events
-happen to fire together. `toState` is shared by both paths so an event and a
-fetch can never be interpreted two different ways.
+**Status.** active, trialing, past_due and paused map to themselves; unpaid,
+canceled, incomplete, incomplete_expired and anything unknown to `canceled` — an
+incomplete subscription was never paid. `currentPeriodEnd` is
+`cancel_at ?? ended_at ?? items[0].current_period_end` (period dates live on the items
+since basil).
 
 ### Why the webhook is a bare handler
 
 Not `withAuth` (there is no session — the caller is a machine) and not
 `withoutAuth` either, because that wrapper consumes the body through `parseBody`
-and the signature is over the raw bytes. `request.text()` first, parse after. The
-same shape `app/api/collect` uses, for a different reason.
+and the signature is over the raw bytes. `request.text()` first, verify, parse. The
+same shape `app/api/collect` uses, for a different reason. The body cap is 256KB.
 
-**2xx or the provider retries.** An event we understand but cannot act on — an
-unknown variant, a payload with no account in it — answers 200 with a note, because
-retrying it tomorrow produces the same nothing. Only a genuine failure of ours is
-allowed to be a 5xx, and that is exactly when a retry is what we want.
-
-**Two ways to find the account**, and both are needed. `meta.custom_data.user_id`
-is round-tripped through the checkout and is the only link a brand-new subscription
-has. A renewal a year later descends from a charge rather than from a checkout and
-may carry none, so `findUserByBillingCustomer` is the fallback — which is why
-`billingCustomerId` has an index it would otherwise not need.
+**2xx or Stripe retries.** An event we understand but cannot act on — a price that is
+none of ours, a subscription with no account — answers 200 `handled: false`, because
+retrying it tomorrow produces the same nothing. Only a genuine failure of ours is a
+5xx, which is exactly when a retry is wanted. Events we do not subscribe to are 200 too.
 
 ### Why `/upgrade` exists
 
@@ -393,95 +419,73 @@ dashboard banner asks for the confirmation after `/checkout/done`.
 
 ### Changing a plan that already exists
 
-The account page used to be information only. Its one button was *Upgrade to …*,
-shown for plans with more locations than the current one, and it went to
-`/upgrade` — so a paying customer could not move at all, and had they pressed it,
-would have been sold a second subscription beside the first. Nothing recorded
-whether a subscription was monthly or yearly either: `planForVariant` walked both
-cadences to find the plan and threw the cadence away, so the toggle was
-hard-coded to monthly and a yearly customer was shown prices they do not pay.
+`PATCH /api/account/subscription` reads the subscription live first (a 502 if Stripe
+cannot be read — a change decided on a stale row is how a second charge happens),
+refuses a cancelled one with 409, then asks `planChange(billed, target, booked)`:
 
-Now:
+| Outcome | When | What is sent |
+|---|---|---|
+| `unchanged` | the target is what is billed and nothing is booked, or is what is already booked | nothing |
+| `keep` | the target is what is billed and a downgrade is booked | release the schedule |
+| `now` | an upgrade | release any schedule, swap the item; `create_prorations`, or `always_invoice` across intervals |
+| `renewal` | a downgrade | schedule `from_subscription`, then `bookedPhases` |
 
-- **The cadence is stored.** `offerForVariant` returns both halves, `toState`
-  carries it, and `subscriptions.cadence` holds it. The toggle opens on it.
-- **A running subscription is moved in place** by `PATCH /v1/subscriptions/{id}`
-  with a new `variant_id` — the provider's own change-plan call, which moves the
-  interval as well as the plan. `invoice_immediately` is never sent: nothing
-  charges a card on the spot from one press.
-- **Upgrades are prorated; downgrades wait.** The provider's guide: *"The plan
-  change takes effect immediately, regardless of the proration option chosen."*
-  There is no scheduled change. So an upgrade takes the default (new plan now,
-  the difference on the next bill), and a downgrade — a lower plan, or yearly →
-  monthly on one plan — is sent with `disable_prorations` while the row keeps the
-  plan paid for until the renewal (`KeptPlan`). `getUserPlan` grants it via
-  `withKeptPlan`, which only ever raises what a live subscription grants.
-- **Undoing a downgrade is free.** *Keep Pro* sends the paid plan back, also
-  unprorated, and clears the kept columns. An upgrade while a downgrade waits is
-  two calls — back to the paid plan unprorated, then up prorated — because
-  prorating up from the pending lower plan would charge again for the part of the
-  period already paid at the higher one.
-- **The account page says so before and after.** Each column's note (under the
-  price, `planNoteFor`) says when its button takes effect; the paid plan keeps
-  "Your plan" and offers *Keep …*; the booked plan's button is a disabled
-  *Starts {date}*; and `PlanChangeNotice` under the columns states the change,
-  the date and the new price.
-- **No confirmation dialog**, by the owner's choice. The price and the note are on
-  the column the button sits in, before the press.
-- **The route writes the row from the PATCH reply** so the next render shows the
-  change without waiting on `subscription_updated`, which arrives later and
-  writes the same values — and leaves the kept columns alone.
-- **Cancelling stayed in the portal** at the time. It is in the app now (Cancel
-  plan, on Settings → Billing), and Free's column points at that instead.
+The reply is the row as written from Stripe's answer, plus `kept` describing a booked
+downgrade (`{plan, cadence, until}`) so the page's existing props still draw it. Lemon
+could not book a change, which is why the `kept*` columns once held the paid plan
+ourselves; Stripe keeps billing — and `getUserPlan` keeps granting — the paid plan
+until the schedule's phase ends, with no help.
 
-Verified against a real test-mode subscription (September 2026): Pro monthly →
-*Downgrade to Starter* moved the provider to Starter with `renews_at` unchanged and
-**no new invoice**; the row kept Pro until the provider's own renewal timestamp;
-*Keep Pro* moved it back, again with no invoice. The request shapes are
-unit-tested (`lemon.test.ts`, `changePlan`), and every branch of the decision in
-`plan-change.test.ts`. Not yet seen: what the provider does to the renewal date on
-a monthly → yearly *upgrade*.
+Each column's note (`planNoteFor`, `upgradeNote`) says when its button takes effect;
+the paid plan keeps "Your plan" and offers *Keep …*; the booked plan's button is a
+disabled *Starts {date}*; and `PlanChangeNotice` states the change, the date and the
+new price.
 
-**The first attempt at this test bought a second subscription**, and it is worth
-knowing how. The Pro purchase had been made against `localhost`, whose database
-never heard of it (the webhook goes to `pinglide.com`, which did not yet serve the
-route), so the page read "no subscription" — showing Pro only because of
-`DISABLE_ALL_PLAN` — and Starter's button was a checkout. Nothing was wrong with
-the switch; the local row was missing. See the invariant above.
+**Seen against the real test-mode API (2026-11-17)**, on a plain subscription built from the
+four prices: booking a downgrade schedules Starter from the renewal with no new invoice and
+Pro still billed; releasing it leaves Pro and no schedule; Starter → Pro monthly puts €20 on
+the next bill (€59 total); Pro monthly → yearly with `always_invoice` charges €351 at once
+and €390 a year later; set-to-cancel stays `active` with `cancel_at`; the portal accepts the
+`payment_method_update` flow; `invoice_pdf` and `parent.subscription_details.subscription`
+are present.
+
+**Then end to end on a real Managed Payments subscription (2026-11-17, local dev with
+`stripe listen`)**, through the UI: Checkout (€19 VAT-inclusive, Link's terms, Sandbox) →
+`/checkout/done` → "Welcome to Starter", signed in; Starter → Pro monthly, nothing charged
+now; Downgrade to Starter booked a schedule (Managed Payments accepts schedules), Keep Pro
+released it; Pro monthly → yearly charged **€371** at once (€390 − the unused €39 + the €20
+Starter → Pro difference); cancel → "Ends …" with `cancel_at`, resume → "Renews …"; Update
+card → the portal's payment-method page → back via `/billing/return` → Billing, signed in.
+Every webhook answered 200. One bug found: the invoice table kept its cached first page after
+the yearly switch, so `useChangePlan` now invalidates `["invoices"]` too.
 
 ---
 
 ## Discounts
 
 Made at `/admin/discounts`: a name, a code, a percentage or a euro amount, which
-payments it covers (the first, the first N months, or every one), a cap on uses, a
-start and an expiry, and optionally the plans it is limited to. Each field maps to
-one of the provider's discount attributes, as of its API docs read 2026-10-03:
+payments it covers (the first, the first N months, or every one), a cap on uses, an
+expiry, and optionally the plans it is limited to.
 
-| Form | Provider |
+| Form | Stripe |
 |---|---|
-| Percentage / euros off | `amount_type`, `amount` (**cents** when fixed) |
-| First payment / first N months / every payment | `duration` `once` / `repeating` + `duration_in_months` / `forever` |
-| Uses | `is_limited_redemptions` + `max_redemptions` — **total, across every buyer**; the provider has no per-customer cap |
-| Starts / Expires | `starts_at` / `expires_at` |
-| Plans | `is_limited_to_products` + a `variants` relationship, through `LEMON_VARIANT_*` |
+| Percentage / euros off | coupon `percent_off`, or `amount_off` in **cents** with `currency: "eur"` |
+| First payment / first N months / every payment | coupon `duration` `once` / `repeating` + `duration_in_months` / `forever` |
+| Plans | coupon `applies_to.products`, the products behind the four lookup keys |
+| Code | promotion code `code` |
+| Uses | promotion code `max_redemptions` — **total, across every buyer** |
+| Expires | promotion code `expires_at` |
 
 Anything not chosen is left out of the request rather than sent as its default.
 
-**Reading them costs one request per discount.** A discount object carries no use
-count, so the list asks `discount-redemptions?filter[discount_id]=…&page[size]=1`
-for each and reads `meta.page.total`, eight at a time to stay well inside the
-provider's 300 requests a minute. A count that fails is a "—" in its row, not a
-page that fails. "Who used it" asks for the redemptions with `include=order` for
-the buyer's address, and fetches any order the reply did not include, at most a
-page (25) of them.
+**Reading them is one request.** `promotionCodes.list({ active: true, limit: 100 })`
+with the coupon and its `applies_to` expanded; `uses` is the code's `times_redeemed`.
+A product id that is none of our four sets `otherProducts`. `testMode` is `!livemode`.
 
-**Seen against the real API (2026-10-03):** `include=variants` on the list does
-fill in `relationships.variants.data` — a code limited to Pro monthly came back
-naming it. **Not yet seen:** whether `include=order` is honoured on redemptions
-(the per-order fallback covers it either way), and whether a discount made with a
-test-mode key comes back `test_mode: true` on its own (nothing sends the flag).
-The console draws a Test chip from whatever the provider answers.
+**"Who used it" scans checkouts.** Stripe has no redemption list, so it pages through
+completed Checkout Sessions (500 at most) for the ones whose `discounts` name the code,
+reading the buyer's email from `customer_details` and the saving from
+`total_details.amount_discount`.
 
 **On the pricing page** a discount lowers a card only when it covers that plan at
 that cadence (`discountAppliesTo`); the price is crossed out beside the new one,
@@ -509,95 +513,56 @@ The cards stay `visibility: hidden` until the answer is in (at most 1.5s), so th
 ring and the prices paint once instead of jumping from the static HTML's Starter
 to the discounted plan.
 
-## Setting up a store
+**Seen (2026-11-17):** a Managed Payments checkout session accepts both
+`discounts: [{ promotion_code }]` and `allow_promotion_codes`. Not yet seen: a code redeemed
+through to a paid subscription.
 
-`npm run setup:lemon` — idempotent. It finds the store, matches variants to plans,
-writes the four ids and `LEMON_STORE_ID` into `.env`, and creates or updates the
-webhook. It generates `LEMON_WEBHOOK_SECRET` only when there is none, because
-silently rotating it would leave our value and theirs disagreeing and every webhook
-401ing, which reads as a broken endpoint.
+## Setting up the account
 
-Two read-only modes beside it. `--dry-run` resolves and reports what it would set.
-**`--verify` compares what `.env` already holds against the store and exits
-non-zero on any disagreement**, so it can gate a deploy — it reads no file, writes
-no file, generates no secret and never touches the webhook, which is guaranteed by
-where it sits in the script rather than by a flag checked in five places.
+1. Switch Managed Payments on in the Dashboard (Settings → Managed Payments).
+2. `npm run setup:stripe` — idempotent. It creates the four products (tax code
+   `txcd_10103001`) and their prices by lookup key, tax-**inclusive** so the page's
+   €19 is what a buyer pays; configures the customer portal (card, billing email and
+   tax id, invoice history; cancel and plan switching off; returns to
+   `/billing/return`); and, when `APP_URL` is public, creates or updates the webhook
+   at `${APP_URL}/api/webhooks/billing`.
+3. **The webhook secret is returned once**, when the endpoint is created, so that is
+   the only time the script has it. It **prints** it, and writes it into `.env` only when
+   `.env` has no `STRIPE_WEBHOOK_SECRET` — in development `.env` holds the `stripe listen`
+   one, which a production endpoint's must not overwrite. For production:
+   `APP_URL=https://pinglide.com npm run setup:stripe` (a shell variable beats
+   `--env-file`), then put the printed value on the Appwrite Site. An existing
+   endpoint with no secret in `.env` is reported, never silently recreated — rotating
+   would leave ours and theirs disagreeing and every webhook 401ing. Reveal it in the
+   Dashboard, or delete the endpoint and re-run.
 
-`--verify` exists because re-running the script is already its own fix, but nothing
-forces the re-run, and a hand-edited `.env` is invisible until a customer meets it.
-Both ways of getting it wrong have happened here. A **product** id pasted where a
-variant id belongs: every checkout 404s and every webhook matches no plan, so
-nobody can pay and nobody who did would get a plan. And one cadence's id pasted
-into both slots: the yearly button quietly opens the monthly price, which is the
-silent mis-charge this script's own docblock was written to warn about. Neither is
-visible in the dashboard, and the second is not visible anywhere until a customer
-is billed.
+A wrong price is never edited: the script makes a new price on the same product with
+`transfer_lookup_key` and archives the old one, so the app moves with no deploy (within
+the five-minute catalogue cache). `--dry-run` says what it would do. **`--verify` is
+read only** and exits non-zero when an amount, interval, currency, tax behaviour, tax
+code, the webhook's events or `STRIPE_WEBHOOK_SECRET` disagree, so it can gate a deploy.
 
-**It cannot create products or variants — the API is read-only for both.** That is
-the one manual step, and the script names exactly what is missing and refuses to
-write anything until it is done.
+Run it **twice over the account's life**: with the test key and again with the live key.
 
-**Variants are matched by price and interval, never by name.** A name is something
-somebody types; a price and a billing interval are what the customer is agreeing
-to and what `/pricing` publishes. It also skips `status: "pending"` variants —
-Lemon Squeezy auto-creates a hidden default variant behind every single-variant
-product, carrying the product's own price, and those would otherwise match and be
-written into `.env`, where they 404 at checkout.
+## Webhooks in development
 
-Run it **twice over the store's life**: once in test mode and again in live mode,
-because the two have separate products and the API key decides which you see.
+```
+stripe login
+stripe listen --events customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.subscription.paused,customer.subscription.resumed,invoice.paid,invoice.payment_failed \
+  --forward-to localhost:3000/api/webhooks/billing               # prints whsec_… for .env
+stripe events resend evt_…                                        # one event again
+stripe trigger customer.subscription.updated                      # a fake one
+```
 
-## Replaying webhooks
+This replaces Lemon's `npm run billing:replay`, which had to sign payloads itself and
+therefore could not prove the provider's own signature verified. `stripe listen`
+forwards Stripe's real, signed events, needs no tunnel, and also answers "a local dev
+server never hears a webhook". A `stripe trigger` subscription is on a price that is
+none of ours, so it answers `handled: false` — make a real test checkout to exercise
+the write.
 
-`npm run billing:replay -- <event> --email <address>` POSTs a correctly-signed
-payload at a running server. `--plan`, `--cadence`, `--url`, `--subscription`
-and `--dry-run` are the rest; `--email` resolves to a user id through Appwrite,
-because nothing in the product ever shows one.
-
-**Ten of the eleven events cannot be produced any other way.** A test purchase
-fires `subscription_created`; there is no button that makes the provider emit
-`subscription_expired` or a failed renewal, and waiting a month is not a test. It
-also needs no public URL, so it is the only way to exercise the activation half
-before the app is deployed.
-
-It reads the same `LEMON_VARIANT_*` the app reads, deliberately: a wrong id makes
-the replay fail exactly as production would, rather than passing a test that
-production then fails.
-
-**What it cannot prove** is that the provider's *own* POST verifies against our
-secret — it signs the way `verifyWebhook` checks, so the two would agree even if
-both were wrong. One real purchase over a tunnel settles that, once.
-
-A `subscription_payment_*` replay is the exception that needs a real
-`--subscription`: those carry an invoice, so the route asks the live API what the
-subscription says, and an invented id comes back 404 → `handled: false`.
-
-## Receiving a real webhook before deploying
-
-The provider has to reach us from the internet, so this needs a tunnel.
-
-1. `ngrok http 3000`, and take the `https://` URL.
-2. Set `APP_URL` to it in `.env`, then **restart `next dev`** — `next.config.ts`
-   already allows `*.ngrok-free.app` in `allowedDevOrigins`, without which the
-   dev server refuses to serve `/_next/*` to that hostname and the page arrives
-   unstyled with no hydration.
-3. `npm run setup:lemon`. `APP_URL` is public now, so it repoints the webhook at
-   the tunnel instead of skipping it.
-4. **Browse the tunnel URL, not `localhost`** — the buyer returns to
-   `${APP_URL}/checkout/done`, and the session cookie has to exist on that
-   origin.
-5. **Sign in with email and password, not Google.** `lib/appwrite/browser.ts` is
-   the app's only browser→Appwrite call and it is Google-only; its `success` URL
-   is validated against Appwrite's registered platforms, which will not include a
-   tunnel. Everything else goes through our own routes on the API key, so the
-   tunnel needs no Appwrite configuration at all.
-6. Pay. Watch ngrok's inspector on `127.0.0.1:4040` for the inbound POST.
-
-**Then put it back.** `APP_URL` and the webhook both still point at a tunnel that
-is now dead. Set `APP_URL=https://pinglide.com` and re-run `npm run setup:lemon`.
-Setting it to `http://localhost:3000` will *not* do this — the script refuses to
-write a localhost webhook and leaves the tunnel URL in place, which is worth
-naming because it looks exactly like success.
+The deployed site keeps its own endpoint secret (the one `setup:stripe` wrote); never
+put the `stripe listen` one on the Appwrite Site.
 
 ## Verifying it by hand
 
@@ -609,28 +574,29 @@ naming because it looks exactly like success.
 3. **The analytics gate.** On a free account the tab shows the upgrade panel and
    `POST /api/collect` writes nothing. Flip the subscription row to `starter`;
    both resume.
-4. **Checkout**, in test mode: `/pricing` → Yearly → Start on Starter → `/upgrade`
-   → provider checkout → their test card → `/checkout/done` → `/maps/<last map>` with the
-   "Welcome to Starter" dialog ("Activating" first if the webhook is behind). **A login form anywhere in that tail is the SameSite bug returning**
-   — see `docs/notes/auth.md`.
-5. **The webhook.** Their dashboard re-sends events, or `npm run billing:replay`.
-   A bad signature must 401, a good one must write `subscriptions`, and a replay
-   must change nothing.
+4. **Checkout**, in test mode with `stripe listen` running: `/pricing` → Yearly →
+   Start on Starter → `/upgrade` → Stripe Checkout → `4242 4242 4242 4242` →
+   `/checkout/done` → `/maps/<last map>` with the "Welcome to Starter" dialog
+   ("Activating" first if the webhook is behind). **A login form anywhere in that tail
+   is the SameSite bug returning** — see `docs/notes/auth.md`.
+5. **The webhook.** A bad signature must 401, a good one must write `subscriptions`,
+   and `stripe events resend` must change nothing.
 6. **Cancellation.** Cancel plan on Settings → Billing: the row stays `active`
    with `currentPeriodEnd` set, the plan is kept, the Plan card says "Ends …",
    and every plan column offers only Resume. Resume plan: "Renews …" again. Then
    cancel once more and hand-set that date to yesterday — `getUserPlan` must drop
    to `free`.
-7. **Switching.** Link a test-mode Pro monthly subscription to your local account
-   first (the invariant about webhooks). *Downgrade to Starter*: the provider shows
-   Starter with the same `renews_at` and no new invoice, the page keeps Pro marked
-   with *Keep Pro*, and the notice names the date. *Keep Pro*: back to Pro, still
-   no invoice. Then flip to Yearly and *Switch to yearly billing*. Then open
-   `/pricing` → *Start on Starter*: it must land on `/settings/billing`, not a checkout.
-8. **Discounts**, in test mode. `/admin/discounts` → *New discount*: `TEST20`, 20%,
-   2 uses, Pro yearly only, expiring next week. It must appear in the provider's
-   dashboard with those fields, and a second `TEST20` must be refused under the
-   Code field. *Share link* → open it signed in as a test customer: the checkout
-   opens on Pro yearly with the code applied. Pay with the test card; the row
-   reads 1 / 2 and *Who used it* names the buyer. *Delete*: the code is refused at
-   the checkout.
+7. **Switching.** On Pro monthly, *Downgrade to Starter*: the Dashboard shows a
+   schedule with Starter from the renewal, no new invoice, and the page keeps Pro
+   with *Keep Pro* and the notice naming the date. *Keep Pro*: the schedule is
+   released. *Upgrade* Starter → Pro: prorated onto the next invoice. Monthly →
+   yearly: invoiced today. Then `/pricing` → *Start on Starter* must land on
+   `/settings/billing`, not a checkout.
+8. **Card and portal.** Update card → Stripe's portal on the payment-method page →
+   its back link → `/billing/return` → Settings → Billing, still signed in.
+9. **Discounts.** `/admin/discounts` → *New discount*: `TEST20`, 20%, 2 uses, Pro
+   yearly only, expiring next week. It must appear in the Dashboard as a promotion code
+   on its own coupon, and a second `TEST20` must be refused under the Code field.
+   *Share link* → the checkout opens on Pro yearly with the code applied. Pay; the row
+   reads 1 / 2 and *Who used it* names the buyer. *Delete*: the code is inactive and
+   refused at the checkout.

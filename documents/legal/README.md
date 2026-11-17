@@ -6,7 +6,7 @@ advice.** They were published early because Google sign-in's consent screen need
 policy and terms; every placeholder was filled and every `[VERIFY]` closed from the providers'
 published pages, softening the sentence wherever a figure could not be confirmed. The lawyer
 review (step 2) is still owed — especially the questions listed near the end — and so is one
-check: **`billing.merchantOfRecord` was read off lemonsqueezy.com, not off a real invoice**
+check: **`billing.merchantOfRecord` was read off link.com/terms, not off a real receipt**
 (`lib/legal/values.ts`). `lib/legal/placeholders.test.ts` fails if an edit makes any of the five a
 draft again, which would 404 it in production. **Version 1.1 (19 October 2026)** added the Refund
 Policy and Terms §6.5 / §6.9; it took effect on publish without the §21.2 notice because nobody was
@@ -17,7 +17,12 @@ notice: it describes a new way in and changes nothing for an existing customer (
 independent controller), Cookie §4, Terms §3.1 and §10.1, DPA Annex III's "Not Sub-processors" —
 on publish and without notice, for the same reason as 1.2. It also corrected the documents' quotes
 of the sign-in buttons, which had read "Continue with Google" where the button says "Sign in with
-Google".
+Google". **Version 1.4 (17 November 2026)** changed the Merchant of Record from Lemon Squeezy to
+Stripe Managed Payments ("Sold through Link"), because Lemon Squeezy stopped taking new stores. Only
+`billing.merchantOfRecord` and `billing.merchantOfRecordTermsUrl` changed — every document already
+says "the Merchant of Record" — and nobody was on a paid Plan, so it took effect on publish. Still
+owed: the seller's exact name off a real test receipt, and the Link-specific rows below marked
+[VERIFY], which carry over Lemon Squeezy's research until Stripe's are read.
 
 | File | What it is | Page (`brand.json` link) | Where the app links it |
 |---|---|---|---|
@@ -107,7 +112,7 @@ Change one of these and change it everywhere it appears.
 | Billing error reported within (mitigation only) | 60 days | Refund §7.2 |
 | Refund requests answered within | 14 days | Refund §7.1 |
 | Uncorrected billing error that excuses a chargeback | 14 days after notice | Refund §9.3; Terms §6.9 |
-| Lemon Squeezy's own refund discretion (theirs, not ours) | 60 days from purchase | Refund §8.2 — from LS's seller docs |
+| The Merchant of Record's own refund discretion (theirs, not ours) | [VERIFY] for Link — Lemon Squeezy's was 60 days from purchase | Refund §8.2 |
 
 ## `[VERIFY]` items
 
@@ -240,10 +245,10 @@ Each row is a rule that limits how one-sided the documents may be, and what it c
 | **Late Payment Directive** — ECB rate + 8 points, EUR 40 per invoice, B2B | Your Europe; EUR-Lex | Terms §6.6, only where we invoice directly |
 | **Accounting records** — 10 years in Lithuania | Leinonen; RoboLabs | Privacy §2 |
 | **Civil Code 6.237** — unjust enrichment: what was received without a legal basis must be returned | General principle | Refund §4.2: duplicate charges and charges after a confirmed cancellation are refunded as of right, not as goodwill |
-| **Civil Code 6.71, 6.73** — a contractual penalty may be reduced by a court if excessive | General principle | Chargeback recovery (Refund §9.2(b), Terms §6.9) is limited to actual loss, not a fixed penalty like Lemon Squeezy's $100 |
+| **Civil Code 6.71, 6.73** — a contractual penalty may be reduced by a court if excessive | General principle | Chargeback recovery (Refund §9.2(b), Terms §6.9) is limited to actual loss, not a fixed penalty (Lemon Squeezy, the earlier MoR, charged $100) |
 | **Consumer Rights Directive 2011/83/EU** — 14-day right of withdrawal | Applies to consumers only | Not offered, since the Service is B2B only (Terms §3.2); Refund §1.3 keeps mandatory consumer law intact if a consumer buys anyway |
 | **Data Act Art. 13(5)(a)** — terms that inappropriately limit remedies for non-performance are presumed unfair | eu-data-act.com | Refund §4.3, the narrow refund for a failure that is our fault, so that "no refunds" is not "no remedy" |
-| **Lemon Squeezy refunds and chargebacks** — LS may refund within 60 days at its own discretion to prevent chargebacks, and charges the seller the amount plus a $15 dispute fee | docs.lemonsqueezy.com; LS buyer terms | Refund §8 says so rather than promising a strictness we cannot enforce; §6.3 ends the paid period for whatever LS refunds |
+| **Merchant of Record refunds and chargebacks** — [VERIFY] for Stripe Managed Payments / Link (its fee covers "dispute responses"; the seller-side dispute fee is not yet read). Lemon Squeezy, before it, refunded within 60 days at its own discretion and charged a $15 dispute fee | link.com/terms; stripe.com/managed-payments | Refund §8 says so rather than promising a strictness we cannot enforce; §6.3 ends the paid period for whatever the MoR refunds |
 | **EU-US Data Privacy Framework** — valid; upheld by the General Court on 3 Sep 2025; appeal C-703/25 P pending | IAPP; WilmerHale | SCCs relied on as well, so transfers survive if it falls |
 
 ## Rivals compared
@@ -267,7 +272,7 @@ Free Plan is the trial (Refund §2).
 | **Stockist** | Any payment refunded within 30 days; after that at its discretion; "quota has no value, does not accrue, is not refundable" | Allowances have no value and do not roll over (Refund §3.1(g)) | The 30-day refund |
 | **StoreRocket** | Within 30 days, case by case, "subject to fair usage"; cancelling is the customer's job | Fair use as a ground to refuse goodwill (§5.3); cancelling is the customer's job (§3.1(c)) | The 30-day window |
 | **Atlist** | Silent on refunds; fees incurred on day 1; charges "deemed accurate" unless disputed within 10 days | Fees earned on day 1 (§3.1) | The 10-day deeming, which works as a shortened limitation period (Civil Code 1.125); Refund §7.2 is a mitigation-only notice, like Terms §18.4 |
-| **Lemon Squeezy** (our MoR) | Buyer terms: refunds at its sole discretion, none for unused subscription periods, contact it before a chargeback | Contact us before a chargeback (§9.1) | — its own 60-day discretion cannot be overridden, so §8.2 says so |
+| **Link / Stripe Managed Payments** (our MoR since v1.4) | [VERIFY] — read the Sold Through Link Terms. Lemon Squeezy's buyer terms, before: refunds at its sole discretion, none for unused periods, contact it before a chargeback | Contact us before a chargeback (§9.1) | — its own discretion cannot be overridden, so §8.2 says so |
 
 ## Sources
 
@@ -275,8 +280,10 @@ Free Plan is the trial (Refund §2).
 - Storemapper terms — https://www.storemapper.com/terms
 - Stockist terms — https://stockist.co/terms
 - StoreRocket terms — https://storerocket.io/terms
-- Lemon Squeezy refunds and chargebacks — https://docs.lemonsqueezy.com/help/payments/refunds-chargebacks ·
-  buyer terms — https://www.lemonsqueezy.com/buyer-terms
+- Link consumer terms (Sold Through Link Terms) — https://link.com/terms · contracting entity —
+  https://link.com/terms/contracting-entity · Managed Payments — https://stripe.com/managed-payments
+- Lemon Squeezy (MoR until v1.4) refunds and chargebacks —
+  https://docs.lemonsqueezy.com/help/payments/refunds-chargebacks · buyer terms — https://www.lemonsqueezy.com/buyer-terms
 - Civil Code 6.185 — https://www.temidy.lt/kodeksai/civilinis-kodeksas/6-185-straipsnis
 - Civil Code 6.186 — https://www.temidy.lt/kodeksai/civilinis-kodeksas/6-186-straipsnis
 - Civil Code 6.252 — https://www.temidy.lt/kodeksai/civilinis-kodeksas/6-252-straipsnis

@@ -7,7 +7,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  *
  * Raw bytes, never a re-serialised parse — `JSON.stringify(JSON.parse(body))`
  * does not reproduce the bytes Shopify signed, which is the same trap
- * `app/api/webhooks/billing` documents for Lemon Squeezy.
+ * `app/api/webhooks/billing` documents for Stripe.
  *
  * False for an unset secret, so an unconfigured deploy refuses every webhook
  * rather than accepting them unsigned.

@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
 import type {
@@ -23,11 +23,17 @@ import { queryKeys } from "./keys";
  * those, and the route has already written the new row by the time it answers,
  * so the refresh reads the new plan rather than racing the webhook for it.
  *
+ * **The invoices are the exception**, and are invalidated too: a monthly → yearly
+ * change is invoiced on the spot (`upgradeProration`), and the table keeps its
+ * cached first page for five minutes, so the refreshed server page alone left the
+ * new invoice off it until a reload.
+ *
  * `import type` from `lib/billing/types` only — that module is plain types, but
  * the folder's `index.ts` builds the provider and is server-only.
  */
 export function useChangePlan() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (input: ChangePlanInput) =>
@@ -36,7 +42,10 @@ export function useChangePlan() {
         "/api/account/subscription",
         { method: "PATCH", body: JSON.stringify(input) },
       ),
-    onSuccess: () => router.refresh(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      router.refresh();
+    },
   });
 }
 

@@ -11,7 +11,7 @@ import { ChangePlanButton } from "./change-plan-button";
  * "Billing"): which plan, what Shopify charges for it, and one button to
  * Shopify's plan page.
  *
- * **Nothing here is Lemon Squeezy's.** No checkout link, no cancel, no card, no
+ * **Nothing here is Stripe's.** No checkout link, no cancel, no card, no
  * invoices: Shopify bills the shop, so every one of those is on Shopify's side,
  * and showing ours would be off-platform billing (App Store requirement 1.2.1).
  * **Change plan is offered on every plan, Pro included**, because downgrading
