@@ -215,8 +215,9 @@ npm run setup:appwrite  # create missing tables/columns/indexes from scripts/app
 npm run setup:r2        # snapshot bucket: custom domain, CORS, zone cache + header rules
 npm run deploy:cdn      # embed + gazetteer -> cdn.pinglide.com (skips unchanged files)
 npm run deploy:site     # build + upload to Appwrite Sites; the Deploy workflow runs it (musl only; --no-upload locally)
-npm run setup:stripe    # products + prices by lookup key, customer portal, webhook (writes STRIPE_WEBHOOK_SECRET on create)
-npm run setup:stripe -- --verify  # check prices, webhook and .env against the app; non-zero if they disagree
+npm run setup:stripe    # products + prices by lookup key, customer portal, webhook (prints its secret on create)
+npm run setup:stripe https://pinglide.com  # the same, pointing the webhook at production (options are plain words: PowerShell eats `--`)
+npm run setup:stripe verify [https://pinglide.com]  # check prices, webhook and .env against the app; non-zero if they disagree
 stripe listen --events <BILLING_EVENTS, comma-separated> --forward-to localhost:3000/api/webhooks/billing  # dev webhooks (Stripe CLI) — full command in docs/notes/billing.md
 npm run setup:sheet-sync  # configure + deploy the googleSheetsUpdate function (hourly)
 

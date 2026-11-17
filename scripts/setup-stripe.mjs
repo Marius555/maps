@@ -3,14 +3,20 @@
  * and prices, the webhook, and the customer portal.
  *
  * - `npm run setup:stripe` — create whatever is missing, point the webhook at
- *   `${APP_URL}/api/webhooks/billing`, and write `STRIPE_WEBHOOK_SECRET` into
- *   `.env` when the endpoint is new.
- * - `--dry-run` — say what it would do and change nothing.
- * - `--verify` — read only: check the four prices behind the lookup keys, the
+ *   `${APP_URL}/api/webhooks/billing`, and print the endpoint's secret when it
+ *   is new (writing it into `.env` only when `.env` has none).
+ * - `npm run setup:stripe https://pinglide.com` — that origin instead of
+ *   `APP_URL`: the production webhook from a development `.env`.
+ * - `dry-run` — say what it would do and change nothing.
+ * - `verify` — read only: check the four prices behind the lookup keys, the
  *   webhook and `.env` against what the app expects, and exit non-zero on any
  *   disagreement, so it can gate a deploy. It writes no file and touches no
  *   object; that is guaranteed by where it sits in this script, not by a flag
  *   checked in several places.
+ *
+ * Options are plain words (`npm run setup:stripe verify https://pinglide.com`)
+ * because PowerShell eats the `--` that `--verify` would need — see `flag`.
+ * The `--verify`, `--dry-run` and `--app-url <origin>` forms still work in bash.
  *
  * Idempotent, and to be run **twice over the account's life**: once with the
  * test key and again with the live key, because test and live mode hold
@@ -51,8 +57,22 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 import Stripe from "stripe";
 
-const dryRun = process.argv.includes("--dry-run");
-const verify = process.argv.includes("--verify");
+/*
+ * Every option is also a plain word: `npm run setup:stripe verify`. That is not
+ * style. **PowerShell strips a bare `--` itself**, so `npm run setup:stripe --
+ * --verify` reaches npm as `--verify`, which npm 11 swallows as one of its own
+ * settings and never passes on — and the script then does a full run instead of
+ * a read-only check. A plain word is the one thing every shell and npm pass
+ * through unchanged. The `--flag` forms still work from bash.
+ */
+const words = process.argv.slice(2);
+
+function flag(name) {
+  return words.includes(`--${name}`) || words.includes(name);
+}
+
+const dryRun = flag("dry-run");
+const verify = flag("verify");
 
 const key = process.env.STRIPE_SECRET_KEY ?? "";
 if (!key) {
@@ -89,7 +109,24 @@ const WEBHOOK_EVENTS = [
   "invoice.payment_failed",
 ];
 
-const appUrl = (process.env.APP_URL || "").replace(/\/+$/, "");
+/**
+ * `--app-url https://pinglide.com` beats `APP_URL`, so pointing the webhook at
+ * production needs no shell-specific `VAR=value` prefix (PowerShell has none).
+ */
+function appUrlFlag() {
+  const index = words.indexOf("--app-url");
+  // `--app-url https://…` from bash; a bare origin from any shell (see `flag`).
+  const value = index !== -1 ? (words[index + 1] ?? "") : words.find((word) => /^https?:\/\//.test(word));
+  if (value === undefined) return null;
+
+  if (!/^https:\/\/[^/\s]+\/?$/.test(value)) {
+    console.error(`The site address must be an https origin, like https://pinglide.com (got "${value}").`);
+    process.exit(1);
+  }
+  return value;
+}
+
+const appUrl = (appUrlFlag() ?? process.env.APP_URL ?? "").replace(/\/+$/, "");
 const webhookUrl = appUrl ? `${appUrl}/api/webhooks/billing` : null;
 const publicWebhook = webhookUrl && !/^http:\/\/(localhost|127\.0\.0\.1)/.test(webhookUrl);
 
@@ -292,8 +329,10 @@ const portalSettings = {
 if (!publicWebhook) {
   console.log(
     `\nAPP_URL is ${appUrl || "unset"}, which Stripe cannot reach, so no webhook endpoint was touched.\n` +
-      "  For development: stripe listen --forward-to localhost:3000/api/webhooks/billing\n" +
-      "  and put the whsec_… it prints into .env as STRIPE_WEBHOOK_SECRET.",
+      `  For development: stripe listen --events ${WEBHOOK_EVENTS.join(",")} --forward-to localhost:3000/api/webhooks/billing\n` +
+      "    and put the whsec_… it prints into .env as STRIPE_WEBHOOK_SECRET.\n" +
+      "  For the live site: npm run setup:stripe https://pinglide.com\n" +
+      "    and put the whsec_… it prints on the Appwrite Site.",
   );
   process.exit(0);
 }

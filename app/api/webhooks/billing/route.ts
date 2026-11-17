@@ -114,7 +114,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
        */
       console.error(
         fetched
-          ? `Billing webhook ${event.type}: subscription ${subscriptionId}'s price matches no pinglide_* lookup key. Run npm run setup:stripe -- --verify.`
+          ? `Billing webhook ${event.type}: subscription ${subscriptionId}'s price matches no pinglide_* lookup key. Run npm run setup:stripe verify.`
           : `Billing webhook ${event.type}: subscription ${subscriptionId} could not be read.`,
       );
 

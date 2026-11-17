@@ -118,9 +118,9 @@ handles VAT. Switch Managed Payments on in the Stripe Dashboard first.
 
 | Command | What it does | Needs |
 |---|---|---|
-| `npm run setup:stripe` | Creates the four plans (Starter and Pro, monthly and yearly) as products and prices, sets up the customer portal and, when `APP_URL` is public, the webhook. When it creates the webhook it prints its secret once (put that on the Appwrite Site); it only writes it into `.env` if `.env` has none. For the live site run `APP_URL=https://pinglide.com npm run setup:stripe`. Run it once with the test key and once with the live key. | `.env` (`STRIPE_SECRET_KEY`) |
-| `npm run setup:stripe -- --dry-run` | Shows what `setup:stripe` would change, without changing anything. | `.env` |
-| `npm run setup:stripe -- --verify` | Checks the prices, the webhook and `.env` against what the app expects. Fails if they disagree. | `.env` |
+| `npm run setup:stripe` | Creates the four plans (Starter and Pro, monthly and yearly) as products and prices, sets up the customer portal and, when `APP_URL` is public, the webhook. When it creates the webhook it prints its secret once (put that on the Appwrite Site); it only writes it into `.env` if `.env` has none. For the live site run `npm run setup:stripe https://pinglide.com`. Run it once with the test key and once with the live key. | `.env` (`STRIPE_SECRET_KEY`) |
+| `npm run setup:stripe dry-run` | Shows what `setup:stripe` would change, without changing anything. | `.env` |
+| `npm run setup:stripe verify` | Checks the prices, the webhook and `.env` against what the app expects. Fails if they disagree. Add `https://pinglide.com` to check the live site's webhook too. Options are plain words — in PowerShell, `-- --verify` does not reach the script. | `.env` |
 
 **Test payments on your own computer** with the [Stripe CLI](https://docs.stripe.com/stripe-cli)
 (Windows: `winget install Stripe.StripeCLI` or `scoop install stripe`):

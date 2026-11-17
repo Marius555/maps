@@ -79,7 +79,7 @@ dropped. `getBilling()` in `lib/billing/index.ts` is the one place that names th
   anything raised there turns a successful geocode into a failed request.
 - **Prices live in two systems.** `lib/marketing/plans.ts` is what a page says and
   the Stripe price behind each lookup key is what a card is charged. No test can hold
-  them together; `npm run setup:stripe -- --verify` compares the amounts. Change
+  them together; `npm run setup:stripe verify` compares the amounts. Change
   both in one sitting.
 - **`/pricing` is statically rendered and must stay so.** Nothing on it may read a
   session. That is the entire reason `/upgrade` exists.
@@ -530,8 +530,10 @@ through to a paid subscription.
    the only time the script has it. It **prints** it, and writes it into `.env` only when
    `.env` has no `STRIPE_WEBHOOK_SECRET` — in development `.env` holds the `stripe listen`
    one, which a production endpoint's must not overwrite. For production:
-   `APP_URL=https://pinglide.com npm run setup:stripe` (a shell variable beats
-   `--env-file`), then put the printed value on the Appwrite Site. An existing
+   `npm run setup:stripe https://pinglide.com` (the origin beats `APP_URL`), then put the
+   printed value on the Appwrite Site. **Options are plain words** — `verify`, `dry-run`, an
+   origin — because PowerShell strips the `--` in `npm run x -- --verify` and npm 11 then
+   swallows `--verify` itself, so the script does a full run instead of a read-only check. An existing
    endpoint with no secret in `.env` is reported, never silently recreated — rotating
    would leave ours and theirs disagreeing and every webhook 401ing. Reveal it in the
    Dashboard, or delete the endpoint and re-run.
