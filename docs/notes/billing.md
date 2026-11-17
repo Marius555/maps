@@ -4,6 +4,7 @@
 `app/api/webhooks/billing/**`, `app/api/account/subscription/**`, `app/(marketing)/upgrade/**`,
 `app/(dashboard)/settings/billing/**` (and `/account`, now a redirect to it),
 `app/api/account/{invoices,subscription/resume,billing-portal}/**`, `app/(marketing)/billing/return/**`,
+`app/(handoff)/checkout/done/**`, `app/api/checkout/return/**`,
 `components/marketing/plans/**`, `components/account/**`, `components/user-settings/billing/**`,
 `components/billing/**`, and the discount codes: `app/admin/discounts/**`,
 `app/api/admin/discounts/**`, `components/admin/sections/discounts/**`.
@@ -49,10 +50,18 @@ dropped. `getBilling()` in `lib/billing/index.ts` is the one place that names th
   returns from `checkout.stripe.com` / `billing.stripe.com`, so a return straight to
   `/settings/billing` answers a completed purchase with a login form. `/checkout/done`
   and `/billing/return` exist for this and `lib/billing/stripe.test.ts` asserts the
-  first. From `/checkout/done` the client hops to `/maps?checkout=done`, which
-  forwards to the last-opened map, where `PurchaseCelebration` (mounted in the
-  dashboard shell) opens — "Activating" until the webhook lands, then "Welcome to
-  Starter" — and strips the param on close.
+  first. From `/checkout/done` the client does a **document** navigation
+  (`location.replace`) to `/api/checkout/return`, which 307s to the last-opened map
+  with `?checkout=done` (or `/maps?checkout=done` with no map), where
+  `PurchaseCelebration` (mounted in the dashboard shell) opens — "Activating" until
+  the webhook lands, then "Welcome to Starter" — and strips the param on close.
+- **The hop back from a checkout is a document navigation to a route handler, never a
+  soft navigation to `/maps`.** It was `router.replace("/maps?checkout=done")` plus a
+  `redirect()` in the list page, and the buyer watched the marketing-chrome
+  `/checkout/done`, then the maps-list skeleton (a soft navigation paints `loading.tsx`
+  at once, and the redirect, thrown after that shell flushed, became a client one),
+  then the editor. Now `/checkout/done` sits in the bare `app/(handoff)` group and the
+  handler's 307 has no shell to flush, so the next thing painted is the editor.
 - **The account is on the subscription's metadata, nowhere else.** Checkout sets
   `subscription_data.metadata.user_id` (and `client_reference_id`, for the Dashboard's
   eyes only). The webhook reads `subscription.metadata.user_id`, falling back to
@@ -578,9 +587,11 @@ put the `stripe listen` one on the Appwrite Site.
    both resume.
 4. **Checkout**, in test mode with `stripe listen` running: `/pricing` → Yearly →
    Start on Starter → `/upgrade` → Stripe Checkout → `4242 4242 4242 4242` →
-   `/checkout/done` → `/maps/<last map>` with the "Welcome to Starter" dialog
-   ("Activating" first if the webhook is behind). **A login form anywhere in that tail
-   is the SameSite bug returning** — see `docs/notes/auth.md`.
+   `/checkout/done` → `/api/checkout/return` (307) → `/maps/<last map>` with the
+   "Welcome to Starter" dialog ("Activating" first if the webhook is behind). **A login
+   form anywhere in that tail is the SameSite bug returning** — see `docs/notes/auth.md`.
+   **The marketing navbar or the maps-list skeleton in that tail is the soft-navigation
+   hop returning** — see the `success_url` invariant above.
 5. **The webhook.** A bad signature must 401, a good one must write `subscriptions`,
    and `stripe events resend` must change nothing.
 6. **Cancellation.** Cancel plan on Settings → Billing: the row stays `active`

@@ -102,8 +102,10 @@ columns. Forms that should stay narrow cap themselves (`sm:max-w-md`,
 | Map Settings page itself | Deleted, with its sidebar item. One "Settings" in the app, the person's |
 
 `/account` still exists as a redirect, carrying `?checkout=` through, because
-the address is in bookmarks and old emails. `/checkout/done` replaces straight
-to `/settings/billing?checkout=done`. `proxy.ts` matches `/settings/:path*`.
+the address is in bookmarks and old emails. `/checkout/done` no longer comes
+here — it goes on to the buyer's last map (`docs/notes/billing.md`) — but
+`/settings/billing?checkout=done` still answers with `ActivationWatch`.
+`proxy.ts` matches `/settings/:path*`.
 
 ## Why a theme store, and not HeroUI's `useTheme`
 

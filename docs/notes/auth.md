@@ -212,8 +212,10 @@ a Strict cookie.
 - OAuth: `/auth/success` is a client page. The exchange is a same-origin `fetch`
   (so the `Set-Cookie` lands) and the hop to `/maps` is `router.replace` (so the
   cookie goes with it).
-- Billing: `/checkout/done` is a marketing-group page, and `CheckoutReturn` does
-  `router.replace("/maps?checkout=done")` from the client. The billing portal's
+- Billing: `/checkout/done` is a bare `(handoff)`-group page, and `CheckoutReturn`
+  does `window.location.replace("/api/checkout/return")` from the client — a
+  document navigation our page starts, so the cookie goes with it, to a handler
+  whose 307 lands on the last map without painting the maps list first. The billing portal's
   back link lands on `/billing/return` and `PortalReturn` hops to `/settings/billing`.
 
 **Billing walked into this a third time, and it is worth saying why it got

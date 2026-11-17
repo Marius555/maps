@@ -1,13 +1,14 @@
 "use client";
 
-import { Spinner } from "@heroui/react";
+import { buttonVariants, Spinner } from "@heroui/react";
 import { CircleCheck } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { EmptyState } from "@/components/ui/empty-state";
-import { LinkButton } from "@/components/ui/link-button";
 import { track } from "@/lib/posthog/client";
+
+/** The route handler that 307s on to the buyer's last map. */
+const CONTINUE_URL = "/api/checkout/return";
 
 /**
  * The hop from the provider's domain back into the dashboard.
@@ -20,53 +21,51 @@ import { track } from "@/lib/posthog/client";
  * cookie on it and bounced somebody who had just paid us onto the login page.
  *
  * `components/auth/oauth-callback.tsx` exists for the identical reason and
- * `docs/notes/auth.md` has the post-mortem; this is the third arrival from
- * off-site in the app and the last one to get the fix. The shape is the same:
- * land on a page **outside `proxy.ts`'s matcher**, which renders whatever cookie
- * is visible, then navigate on from here — because a navigation our own
- * same-site page initiates does carry a Strict cookie.
+ * `docs/notes/auth.md` has the post-mortem. The shape is the same: land on a
+ * page **outside `proxy.ts`'s matcher**, which renders whatever cookie is
+ * visible, then navigate on from here — because a navigation our own same-site
+ * page initiates does carry a Strict cookie.
  *
- * **It goes on to `/maps`, not back to Settings → Billing.** The buyer came to
- * build a map; `/maps` forwards them to the one they were last on, where
+ * **A document navigation to a route handler, never `router.replace("/maps")`.**
+ * It used to be the latter, and a soft navigation paints the destination's
+ * `loading.tsx` at once: the buyer saw the maps-list skeleton, then the list
+ * page's `redirect()` (thrown after that shell had flushed, so a client
+ * redirect) moved them on to the editor. `/api/checkout/return` answers with a
+ * real 307 to the last map, so the next thing painted is the editor, where
  * `PurchaseCelebration` opens on `?checkout=done` and waits for the webhook if
- * the plan has not landed yet.
- *
- * `router.refresh()` after the `replace` is load bearing, not belt and braces:
- * `/maps` is server-rendered, so the cookie has to reach the *server* before
- * the destination paints.
+ * the plan has not landed yet. `replace`, so Back does not return here.
  *
  * **The link is not a fallback afterthought.** With JavaScript off the effect
  * never runs, and an auto-navigation alone would strand a paying customer on a
- * dead end. The link is the page's real content; the effect is an optimisation
- * on top of it.
+ * dead end. A plain `<a>`, not `LinkButton`: `next/link` would try to
+ * soft-navigate to a route handler.
  */
 export function CheckoutReturn() {
-  const router = useRouter();
   const moved = useRef(false);
 
   useEffect(() => {
-    // StrictMode remounts this in development, and navigating twice would push
-    // a second entry that Back lands on.
+    // StrictMode remounts this in development; one navigation is enough.
     if (moved.current) return;
     moved.current = true;
 
     track("checkout_completed");
-    router.replace("/maps?checkout=done");
-    router.refresh();
-  }, [router]);
+    window.location.replace(CONTINUE_URL);
+  }, []);
 
   return (
     <EmptyState
       icon={CircleCheck}
       title="Payment received"
-      description="Thank you — taking you to your map now."
+      description="Thank you — opening your map now."
       action={
         <div className="flex flex-col items-center gap-4">
           <div className="flex justify-center" aria-live="polite">
             <Spinner aria-label="Opening your map" />
           </div>
 
-          <LinkButton href="/maps?checkout=done">Go to your map</LinkButton>
+          <a className={buttonVariants()} href={CONTINUE_URL}>
+            Go to your map
+          </a>
         </div>
       }
     />

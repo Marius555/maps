@@ -11,10 +11,11 @@ import { useActivationPoll } from "./use-activation-poll";
 /**
  * "You're in" — the first thing a buyer sees back on their map.
  *
- * The provider returns the buyer to `/checkout/done`, which hops to
- * `/maps?checkout=done`, which forwards to their last map with the parameter
- * kept (`CheckoutReturn`, `app/(dashboard)/maps/(list)/page.tsx`). This is
- * mounted once in the dashboard shell and opens wherever that lands.
+ * The provider returns the buyer to `/checkout/done`, which hops (a document
+ * navigation) to `/api/checkout/return`, which 307s to their last map with
+ * `?checkout=done` — or to `/maps?checkout=done` when they have none
+ * (`CheckoutReturn`, `app/api/checkout/return/route.ts`). This is mounted once
+ * in the dashboard shell and opens wherever that lands.
  *
  * `accountPlan` is the person's own plan, read by the dashboard layout — the
  * account that paid, whatever team they are looking at. While it is still Free
